@@ -12,6 +12,7 @@ export default function UpdateCheckScreen() {
   const [urls, setUrls] = useState<string[]>([])
   const [index, setIndex] = useState(0)
   const [done, setDone] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const snapshotsRef = useRef<CourseSnapshotMap>({})
   const [summary, setSummary] = useState<{ url: string; added: number; removed: number }[]>([])
 
@@ -21,6 +22,7 @@ export default function UpdateCheckScreen() {
       snapshotsRef.current = await loadCourseSnapshots()
       const unique = [...new Set(Object.values(map).map((c) => c.url))]
       setUrls(unique)
+      setLoaded(true)
     })()
   }, [])
 
@@ -56,11 +58,11 @@ export default function UpdateCheckScreen() {
   }
 
   useEffect(() => {
-    if (urls.length > 0 && index >= urls.length && !done) {
+    if (loaded && index >= urls.length && !done) {
       setDone(true)
-      saveCourseSnapshots(snapshotsRef.current)
+      if (urls.length > 0) saveCourseSnapshots(snapshotsRef.current)
     }
-  }, [index, urls, done])
+  }, [loaded, index, urls, done])
 
   const changed = useMemo(() => summary.filter((s) => s.added + s.removed > 0), [summary])
 
@@ -79,7 +81,11 @@ export default function UpdateCheckScreen() {
         <Text style={styles.heading}>
           {done ? `完了（${urls.length}コース確認・${changed.length}コース更新あり）` : `確認中… ${Math.min(index + 1, urls.length)}/${urls.length}`}
         </Text>
-        {done && changed.length === 0 ? <Text style={styles.info}>更新はありませんでした。</Text> : null}
+        {done && urls.length === 0 ? (
+          <Text style={styles.info}>コースがありません。先に「コース収集」を実行してください。</Text>
+        ) : done && changed.length === 0 ? (
+          <Text style={styles.info}>更新はありませんでした。</Text>
+        ) : null}
         {changed.map((c) => (
           <Text key={c.url} style={styles.row}>{`+${c.added} / -${c.removed}  ${c.url}`}</Text>
         ))}
