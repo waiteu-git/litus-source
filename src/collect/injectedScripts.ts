@@ -94,10 +94,13 @@ export const OPEN_ATTENDANCE_JS = `(function(){
 export const DETECT_ATTENDANCE_JS = `(function(){
   try {
     var body = document.body ? (document.body.innerText || document.body.textContent || '') : '';
+    var courseName = '';
+    var m = body.match(/\\d{1,2}:\\d{2}\\s*[～~]\\s*\\d{1,2}:\\d{2}\\s+([^\\n]{2,40})/);
+    if (m) courseName = m[1].trim();
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'attendance',
       text: body,
-      courseName: ''
+      courseName: courseName
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));

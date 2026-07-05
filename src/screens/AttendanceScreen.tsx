@@ -61,9 +61,10 @@ export default function AttendanceScreen() {
       setBanner(r.error)
       return
     }
+    const name = r.courseName ?? ''
     setBanner(
       r.accepting
-        ? `受付中: ${r.courseName ?? ''}`
+        ? `受付中${name && name.length <= 40 ? `: ${name}` : ''}（コードを入れて「出席する」）`
         : '受付中の授業はありません',
     )
   }
