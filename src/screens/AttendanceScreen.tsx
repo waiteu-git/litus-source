@@ -1,25 +1,20 @@
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { useFocusEffect } from '@react-navigation/native'
-import { DESKTOP_UA, ATTENDANCE_URL, DETECT_ATTENDANCE_JS } from '../collect/injectedScripts'
+import { DESKTOP_UA, DETECT_ATTENDANCE_JS } from '../collect/injectedScripts'
 import { parseAttendanceMessage } from '../collect/attendanceMessage'
+
+// CLASSのJSFページは直リンク不可（セッション/ViewState無しだと保証人ポータル等へ飛ぶ）。
+// 時間割収集画面と同じくCLASSトップを開き、ユーザーがログイン→出席ページへ遷移する。
+const CLASS_URL = 'https://class.admin.tus.ac.jp/'
 
 export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
-  const [ready, setReady] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
 
-  const check = useCallback(() => {
+  function check() {
     webviewRef.current?.injectJavaScript(DETECT_ATTENDANCE_JS)
-  }, [])
-
-  // 層2: 画面を開いた時にその場で受付状況をチェック。
-  useFocusEffect(
-    useCallback(() => {
-      if (ready) check()
-    }, [ready, check]),
-  )
+  }
 
   function onMessage(data: string) {
     const r = parseAttendanceMessage(data)
@@ -27,7 +22,11 @@ export default function AttendanceScreen() {
       setBanner(r.error)
       return
     }
-    setBanner(r.accepting ? `受付中: ${r.courseName ?? ''}（コードを入力してください）` : '受付中の授業はありません')
+    setBanner(
+      r.accepting
+        ? `受付中: ${r.courseName ?? ''}（コードを入力してください）`
+        : '受付中の授業はありません',
+    )
   }
 
   return (
@@ -36,9 +35,8 @@ export default function AttendanceScreen() {
       <View style={styles.webviewBox}>
         <WebView
           ref={webviewRef}
-          source={{ uri: ATTENDANCE_URL }}
+          source={{ uri: CLASS_URL }}
           userAgent={DESKTOP_UA}
-          onLoadEnd={() => setReady(true)}
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>
