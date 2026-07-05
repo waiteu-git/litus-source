@@ -49,3 +49,25 @@ export const OPEN_TIMETABLE_JS = `(function(){
   }
   true;
 })();`
+
+/** モバイル出席登録ページ [Xua001]。当該授業時間中に開くとCLASSが自動でこのページを出す。 */
+export const ATTENDANCE_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut113/Xut11301.xhtml'
+
+/**
+ * 出席ページの受付状態テキストを抽出して postMessage する（抽出のみ）。
+ * 受付なしのときは本文に「出席確認中の履修授業はありません」が含まれる。
+ * 受付中科目名の厳密なセレクタは実DOMで確認して調整する（まずは本文innerTextで判定可能）。
+ */
+export const DETECT_ATTENDANCE_JS = `(function(){
+  try {
+    var body = document.body ? (document.body.innerText || document.body.textContent || '') : '';
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'attendance',
+      text: body,
+      courseName: ''
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
