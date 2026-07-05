@@ -68,3 +68,26 @@ function extractTeachers(cell: HTMLElement, name: string, courseCode: string): s
   }
   return []
 }
+
+export function parsePeriodTimes(jigenText: string): CampusPeriodTimes | null {
+  const text = jigenText.trim()
+  if (!text) return null
+
+  const campusMatch = text.match(/^([^（(]+)[（(]/)
+  const campus = campusMatch ? campusMatch[1].trim() : ''
+
+  const periods: PeriodTime[] = []
+  const re = /(\d+)\s*限\s*(\d{1,2}:\d{2})\s*[～~]\s*(\d{1,2}:\d{2})/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    periods.push({ period: Number(m[1]), start: normalizeTime(m[2]), end: normalizeTime(m[3]) })
+  }
+
+  if (periods.length === 0) return null
+  return { campus, periods }
+}
+
+function normalizeTime(t: string): string {
+  const [h, min] = t.split(':')
+  return `${h.padStart(2, '0')}:${min}`
+}

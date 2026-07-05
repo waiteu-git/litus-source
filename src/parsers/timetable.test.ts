@@ -33,3 +33,29 @@ describe('parseClassCell', () => {
     expect(parseClassCell(CELL_EMPTY)).toBeNull()
   })
 })
+
+import { parsePeriodTimes } from './timetable'
+import { JIGEN_AREA_NODA } from './timetable.fixtures'
+
+describe('parsePeriodTimes', () => {
+  it('野田キャンパスの時限時刻を全7限パースする', () => {
+    const r = parsePeriodTimes(JIGEN_AREA_NODA)
+    expect(r).not.toBeNull()
+    expect(r!.campus).toBe('野田')
+    expect(r!.periods).toHaveLength(7)
+    expect(r!.periods[0]).toEqual({ period: 1, start: '08:50', end: '10:20' })
+    expect(r!.periods[6]).toEqual({ period: 7, start: '19:50', end: '21:20' })
+  })
+
+  it('全角チルダ ～ と半角 ~ の両方を許容する', () => {
+    const r = parsePeriodTimes('神楽坂（1限 09:00~10:30）')
+    expect(r).not.toBeNull()
+    expect(r!.campus).toBe('神楽坂')
+    expect(r!.periods[0]).toEqual({ period: 1, start: '09:00', end: '10:30' })
+  })
+
+  it('パースできない入力は null', () => {
+    expect(parsePeriodTimes('')).toBeNull()
+    expect(parsePeriodTimes('時間割情報なし')).toBeNull()
+  })
+})
