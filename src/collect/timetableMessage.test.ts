@@ -36,4 +36,13 @@ describe('parseCollectionMessage', () => {
     expect(r.periodTimes).toBeNull()
     expect(r.error).toBeNull()
   })
+
+  it('JSONがnullや非オブジェクトならクラッシュせず解析エラーを返す', () => {
+    for (const raw of ['null', '42', 'true', '"str"']) {
+      const r = parseCollectionMessage(raw)
+      expect(r.slots).toEqual([])
+      expect(r.periodTimes).toBeNull()
+      expect(r.error).toBe('メッセージを解析できませんでした')
+    }
+  })
 })

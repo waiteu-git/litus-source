@@ -16,15 +16,19 @@ export type TimetableCollection = {
  * パース判断はここ（RN側）に集約し、注入JSはテキスト抽出だけに保つ。
  */
 export function parseCollectionMessage(raw: string): TimetableCollection {
-  let payload: { table?: unknown; jigen?: unknown }
+  let payload: unknown
   try {
     payload = JSON.parse(raw)
   } catch {
     return { slots: [], periodTimes: null, error: 'メッセージを解析できませんでした' }
   }
 
-  const table = typeof payload.table === 'string' ? payload.table : ''
-  const jigen = typeof payload.jigen === 'string' ? payload.jigen : ''
+  if (typeof payload !== 'object' || payload === null) {
+    return { slots: [], periodTimes: null, error: 'メッセージを解析できませんでした' }
+  }
+
+  const table = typeof (payload as any).table === 'string' ? (payload as any).table : ''
+  const jigen = typeof (payload as any).jigen === 'string' ? (payload as any).jigen : ''
   if (!table.trim()) {
     return { slots: [], periodTimes: null, error: '時間割テーブルが見つかりませんでした' }
   }
