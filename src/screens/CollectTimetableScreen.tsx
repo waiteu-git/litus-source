@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { parseCollectionMessage } from '../collect/timetableMessage'
 import { DESKTOP_UA, COLLECT_TIMETABLE_JS, OPEN_TIMETABLE_JS } from '../collect/injectedScripts'
 import { saveTimetable } from '../storage/timetableStore'
+import { refreshAttendanceAlarms } from '../notifications/attendanceSync'
 import type { TimetableStackParamList } from '../navigation/types'
 
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
@@ -34,6 +35,7 @@ export default function CollectTimetableScreen() {
     if (!result.error && result.collections.length > 0) {
       try {
         await saveTimetable(result.collections)
+        await refreshAttendanceAlarms()
       } catch {
         setError('保存に失敗しました')
         return
