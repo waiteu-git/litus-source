@@ -30,8 +30,12 @@ export default function SettingsScreen() {
   async function toggle(courseCode: string, enabled: boolean) {
     const next = { ...settings, [courseCode]: enabled }
     setSettings(next)
-    await saveAttendanceSettings(next)
-    await refreshAttendanceAlarms()
+    try {
+      await saveAttendanceSettings(next)
+      await refreshAttendanceAlarms()
+    } catch (e) {
+      console.warn('出席アラーム設定の保存/同期に失敗しました', e)
+    }
   }
 
   async function onClear() {

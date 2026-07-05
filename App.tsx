@@ -9,8 +9,12 @@ import { refreshAttendanceAlarms } from './src/notifications/attendanceSync'
 export default function App() {
   useEffect(() => {
     ;(async () => {
-      await requestNotificationPermission()
-      await refreshAttendanceAlarms()
+      try {
+        await requestNotificationPermission()
+        await refreshAttendanceAlarms()
+      } catch (e) {
+        console.warn('起動時の出席アラーム同期に失敗しました', e)
+      }
     })()
   }, [])
 
