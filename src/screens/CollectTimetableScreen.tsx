@@ -1,5 +1,5 @@
-import { useRef } from 'react'
-import { Button, StyleSheet, View } from 'react-native'
+import { useRef, useState } from 'react'
+import { Button, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -13,6 +13,7 @@ const CLASS_URL = 'https://class.admin.tus.ac.jp/'
 export default function CollectTimetableScreen() {
   const webviewRef = useRef<WebView>(null)
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
+  const [error, setError] = useState<string | null>(null)
 
   function collect() {
     webviewRef.current?.injectJavaScript(COLLECT_TIMETABLE_JS)
@@ -31,9 +32,17 @@ export default function CollectTimetableScreen() {
     }
     const result = parseCollectionMessage(data)
     if (!result.error && result.collections.length > 0) {
-      await saveTimetable(result.collections)
+      try {
+        await saveTimetable(result.collections)
+      } catch {
+        setError('保存に失敗しました')
+        return
+      }
+      setError(null)
       navigation.goBack()
+      return
     }
+    setError(result.error ?? '収集できませんでした')
   }
 
   return (
@@ -50,6 +59,7 @@ export default function CollectTimetableScreen() {
         <Button title="時間割を開く" onPress={openTimetable} />
         <Button title="収集" onPress={collect} />
       </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   )
 }
@@ -58,4 +68,5 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   webviewBox: { flex: 1 },
   controls: { padding: 8 },
+  error: { color: '#b00020', padding: 8 },
 })
