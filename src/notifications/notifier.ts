@@ -2,31 +2,39 @@
  * expo-notifications への予約/キャンセルを行う薄い端末層。
  * 判断ロジックは attendanceSchedule.ts（純粋）に置き、ここはI/Oのみ。
  *
- * Expo Go(SDK53+)では expo-notifications がモジュール読み込み時点で例外を投げる
- * （Android push が Expo Go から削除されたため）。静的 import すると起動時にアプリごと
- * クラッシュするので、**遅延 import（dynamic import）＋try/catch** でロードする。
- * ロードできない環境（Expo Go）では通知系は no-op になり、他機能（時間割・出席WebView・
- * 設定）は動く。**実際の通知発火の検証は開発ビルド（expo run:android / EAS dev build）が必要。**
+ * Expo Go(SDK53+)では expo-notifications がモジュール評価時に例外を投げる
+ * （Android push が Expo Go から削除され、`DevicePushTokenAutoRegistration` の
+ * トップレベル副作用が throw する）。遅延 import でも「読み込めば落ちる」ため、
+ * **Expo Go では expo-notifications を一切ロードしない**。判定は expo-constants の
+ * executionEnvironment（StoreClient = Expo Go）で行う。
+ * Expo Go では通知系は no-op になり、他機能（時間割・出席WebView・設定）は動く。
+ * **実際の通知発火の検証は開発ビルド（expo run:android / EAS dev build）が必要。**
  */
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 import type { AttendanceAlarm } from './attendanceSchedule'
 import { buildAttendanceNotificationContent } from './attendanceSchedule'
 
 const TAG = 'attendance-alarm'
 
+/** Expo Go では expo-notifications を読み込めない（読むと落ちる）。 */
+const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
+
 type NotificationsModule = typeof import('expo-notifications')
 
 let cached: NotificationsModule | null | undefined
 
-/** expo-notifications を遅延ロードする。Expo Goなど利用不可な環境では null。 */
+/** expo-notifications を遅延ロードする。Expo Go では読み込まず null（no-op）。 */
 async function loadNotifications(): Promise<NotificationsModule | null> {
   if (cached !== undefined) return cached
+  if (IS_EXPO_GO) {
+    console.warn('Expo Goでは通知は動作しません（実発火の確認には開発ビルドが必要です）')
+    cached = null
+    return cached
+  }
   try {
     cached = await import('expo-notifications')
   } catch (e) {
-    console.warn(
-      '通知モジュールを利用できません（Expo Goでは通知は動作しません。開発ビルドが必要です）',
-      e,
-    )
+    console.warn('通知モジュールを利用できませんでした', e)
     cached = null
   }
   return cached
