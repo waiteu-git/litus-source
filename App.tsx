@@ -1,14 +1,15 @@
-import { SafeAreaView, StyleSheet } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
-import TimetableCollectScreen from './src/screens/TimetableCollectScreen'
+import RootTabs from './src/navigation/RootTabs'
 
 export default function App() {
   return (
-    <SafeAreaView style={styles.container}>
-      <TimetableCollectScreen />
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <RootTabs />
+      </NavigationContainer>
       <StatusBar style="auto" />
-    </SafeAreaView>
+    </SafeAreaProvider>
   )
 }
-
-const styles = StyleSheet.create({ container: { flex: 1 } })
