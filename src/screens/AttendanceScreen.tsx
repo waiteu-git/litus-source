@@ -9,7 +9,13 @@ import { parseAttendanceMessage } from '../collect/attendanceMessage'
 // 到達後、上のコード欄に認証コードを入れて「出席する」でWebView内フォームへ流し込み送信する。
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
 
-type SubmitDiag = { type?: string; inputCount?: number; filled?: number; clicked?: boolean }
+type SubmitDiag = {
+  type?: string
+  inputCount?: number
+  filled?: number
+  clicked?: boolean
+  values?: string[]
+}
 
 export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
@@ -44,8 +50,9 @@ export default function AttendanceScreen() {
       // 後段の parseAttendanceMessage がエラーを表現する
     }
     if (parsed && parsed.type === 'submit') {
+      const vals = parsed.values ? parsed.values.join(',') : ''
       setBanner(
-        `送信: 入力欄${parsed.inputCount ?? 0}個 / 埋めた${parsed.filled ?? 0} / 出席登録ボタン${parsed.clicked ? '押下' : '無し'}`,
+        `送信: 欄${parsed.inputCount ?? 0}個 / 埋${parsed.filled ?? 0} / 値[${vals}] / ボタン${parsed.clicked ? '押下' : '無'}`,
       )
       return
     }

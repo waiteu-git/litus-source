@@ -134,12 +134,22 @@ export function buildSubmitAttendanceJs(code: string): string {
       var small = codeInputs.filter(function(el){ return el.maxLength === 1 || el.maxLength === 2; });
       if (small.length > 0) codeInputs = small;
     }
+    function nativeSet(el, v){
+      try {
+        var d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        if (d && d.set) { d.set.call(el, v); return; }
+      } catch (e) {}
+      el.value = v;
+    }
     function setVal(el, v){
       el.focus();
-      el.value = v;
+      nativeSet(el, v);
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: v, bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent('keypress', { key: v, bubbles: true }));
       el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { key: v, bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.dispatchEvent(new Event('keyup', { bubbles: true }));
+      el.blur();
     }
     var filled = 0;
     if (codeInputs.length <= 1) {
@@ -147,14 +157,17 @@ export function buildSubmitAttendanceJs(code: string): string {
     } else {
       for (var i = 0; i < codeInputs.length && i < code.length; i++) { setVal(codeInputs[i], code.charAt(i)); filled++; }
     }
-    var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a,span'));
-    var submitBtn = btns.find(function(b){ return ((b.textContent || b.value) || '').indexOf('出席登録') >= 0; });
-    var clicked = false;
-    if (submitBtn) { submitBtn.click(); clicked = true; }
     var ids = codeInputs.map(function(el){ return el.id || el.name || '(no-id)'; });
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'submit', inputCount: codeInputs.length, inputIds: ids, filled: filled, clicked: clicked
-    }));
+    setTimeout(function(){
+      var values = codeInputs.map(function(el){ return el.value; });
+      var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a,span'));
+      var submitBtn = btns.find(function(b){ return ((b.textContent || b.value) || '').indexOf('出席登録') >= 0; });
+      var clicked = false;
+      if (submitBtn) { submitBtn.click(); clicked = true; }
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled, clicked: clicked
+      }));
+    }, 450);
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }
