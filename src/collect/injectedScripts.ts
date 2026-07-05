@@ -104,3 +104,35 @@ export const DETECT_ATTENDANCE_JS = `(function(){
   }
   true;
 })();`
+
+/** LETUSマイコース。全履修コースの名前(コード入り)＋course/view.php URL が並ぶ。 */
+export const MYCOURSES_URL = 'https://letus.ed.tus.ac.jp/my/courses.php'
+
+/** マイコース本文HTMLを抽出して postMessage（抽出のみ）。 */
+export const COLLECT_MYCOURSES_JS = `(function(){
+  try {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'mycourses',
+      html: document.body ? document.body.innerHTML : '',
+      origin: location.origin
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
+/** コースページ本文HTMLを抽出して postMessage（抽出のみ）。 */
+export const COLLECT_COURSE_PAGE_JS = `(function(){
+  try {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'coursepage',
+      html: document.body ? document.body.innerHTML : '',
+      origin: location.origin,
+      url: location.href
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`

@@ -1,4 +1,7 @@
 export type TimetableStackParamList = {
   TimetableHome: undefined
   Collect: undefined
+  CollectCourses: undefined
+  UpdateCheck: undefined
+  SubjectDetail: { courseCode: string; name: string }
 }

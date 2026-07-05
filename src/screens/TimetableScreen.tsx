@@ -30,6 +30,7 @@ export default function TimetableScreen() {
     <View style={styles.root}>
       <View style={styles.controls}>
         <Button title="更新" onPress={() => navigation.navigate('Collect')} />
+        <Button title="コース収集" onPress={() => navigation.navigate('CollectCourses')} />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         {!collections || collections.length === 0 ? (
