@@ -24,7 +24,7 @@ export default function TimetableCollectScreen() {
   function onMessage(data: string) {
     try {
       const parsed = JSON.parse(data)
-      if (parsed && parsed.type !== 'timetable') return
+      if (parsed && parsed.type === 'nav') return
     } catch {
       // 後段の parseCollectionMessage がエラーを表現する
     }
