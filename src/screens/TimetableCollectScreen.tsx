@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { Button, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { parseCollectionMessage, type TimetableCollection } from '../collect/timetableMessage'
-import { DESKTOP_UA, EXTRACT_TIMETABLE_JS, OPEN_TIMETABLE_JS } from '../collect/injectedScripts'
+import { parseCollectionMessage, type CollectionResult } from '../collect/timetableMessage'
+import { DESKTOP_UA, COLLECT_TIMETABLE_JS, OPEN_TIMETABLE_JS } from '../collect/injectedScripts'
 
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
 const DAY_LABEL: Record<string, string> = {
@@ -11,10 +11,10 @@ const DAY_LABEL: Record<string, string> = {
 
 export default function TimetableCollectScreen() {
   const webviewRef = useRef<WebView>(null)
-  const [result, setResult] = useState<TimetableCollection | null>(null)
+  const [result, setResult] = useState<CollectionResult | null>(null)
 
   function collect() {
-    webviewRef.current?.injectJavaScript(EXTRACT_TIMETABLE_JS)
+    webviewRef.current?.injectJavaScript(COLLECT_TIMETABLE_JS)
   }
 
   function openTimetable() {
@@ -47,14 +47,19 @@ export default function TimetableCollectScreen() {
       </View>
       <ScrollView style={styles.output} contentContainerStyle={styles.outputContent}>
         {result?.error ? <Text style={styles.error}>{result.error}</Text> : null}
-        {result?.periodTimes ? (
-          <Text style={styles.campus}>キャンパス: {result.periodTimes.campus}</Text>
-        ) : null}
-        {result?.slots.map((s) => (
-          <Text key={`${s.day}-${s.period}`} style={styles.row}>
-            {DAY_LABEL[s.day]}
-            {s.period}: {s.classes.map((c) => `${c.name}（${c.room}）`).join(' / ')}
-          </Text>
+        {result?.collections.map((c, i) => (
+          <View key={i} style={styles.collection}>
+            <Text style={styles.campus}>
+              時間割{i + 1}（{c.slots.length}コマ）
+              {c.periodTimes ? ` ・ ${c.periodTimes.campus}` : ''}
+            </Text>
+            {c.slots.map((s) => (
+              <Text key={`${i}-${s.day}-${s.period}`} style={styles.row}>
+                {DAY_LABEL[s.day]}
+                {s.period}: {s.classes.map((cl) => `${cl.name}（${cl.room}）`).join(' / ')}
+              </Text>
+            ))}
+          </View>
         ))}
       </ScrollView>
     </View>
@@ -65,8 +70,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   webviewBox: { flex: 1 },
   controls: { padding: 8 },
-  output: { maxHeight: 220, borderTopWidth: 1, borderTopColor: '#ddd' },
+  output: { maxHeight: 280, borderTopWidth: 1, borderTopColor: '#ddd' },
   outputContent: { padding: 12 },
+  collection: { marginBottom: 12 },
   campus: { fontWeight: '600', marginBottom: 6 },
   row: { marginBottom: 4 },
   error: { color: '#b00020', marginBottom: 6 },
