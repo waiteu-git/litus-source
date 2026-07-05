@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Button, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { parseCollectionMessage, type TimetableCollection } from '../collect/timetableMessage'
-import { DESKTOP_UA, EXTRACT_TIMETABLE_JS } from '../collect/injectedScripts'
+import { DESKTOP_UA, EXTRACT_TIMETABLE_JS, OPEN_TIMETABLE_JS } from '../collect/injectedScripts'
 
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
 const DAY_LABEL: Record<string, string> = {
@@ -17,7 +17,17 @@ export default function TimetableCollectScreen() {
     webviewRef.current?.injectJavaScript(EXTRACT_TIMETABLE_JS)
   }
 
+  function openTimetable() {
+    webviewRef.current?.injectJavaScript(OPEN_TIMETABLE_JS)
+  }
+
   function onMessage(data: string) {
+    try {
+      const parsed = JSON.parse(data)
+      if (parsed && parsed.type !== 'timetable') return
+    } catch {
+      // 後段の parseCollectionMessage がエラーを表現する
+    }
     setResult(parseCollectionMessage(data))
   }
 
@@ -32,6 +42,7 @@ export default function TimetableCollectScreen() {
         />
       </View>
       <View style={styles.controls}>
+        <Button title="時間割を開く" onPress={openTimetable} />
         <Button title="収集" onPress={collect} />
       </View>
       <ScrollView style={styles.output} contentContainerStyle={styles.outputContent}>
