@@ -24,7 +24,7 @@ export function parseClassCell(cellHtml: string): TimetableClass | null {
   const name = nameEl.text.trim()
   if (!name) return null
 
-  const codeMatch = cell.text.match(/\b\d{7}\b/)
+  const codeMatch = cell.text.match(/\d{7}/)
   const courseCode = codeMatch ? codeMatch[0] : ''
 
   const roomEl = cell.querySelector('span')
@@ -90,4 +90,34 @@ export function parsePeriodTimes(jigenText: string): CampusPeriodTimes | null {
 function normalizeTime(t: string): string {
   const [h, min] = t.split(':')
   return `${h.padStart(2, '0')}:${min}`
+}
+
+const DAY_ORDER: DayOfWeek[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
+export function parseTimetable(tableHtml: string): TimetableSlot[] {
+  const root = parse(tableHtml)
+  const table = root.querySelector('table.classTable') ?? root.querySelector('table')
+  if (!table) return []
+
+  const slots: TimetableSlot[] = []
+  for (const row of table.querySelectorAll('tr')) {
+    if (row.querySelector('th.headerYobi')) continue
+
+    const jigenCell = row.querySelector('td.colJigen')
+    const periodText = jigenCell ? jigenCell.text.trim() : ''
+    const period = Number(periodText)
+    if (!periodText || Number.isNaN(period)) continue
+
+    row.querySelectorAll('td.colYobi').forEach((cell: HTMLElement, index: number) => {
+      const day = DAY_ORDER[index]
+      if (!day) return
+      const classes = cell
+        .querySelectorAll('.jugyo-info')
+        .map((el: HTMLElement) => parseClassCell(el.outerHTML))
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+      if (classes.length > 0) slots.push({ day, period, classes })
+    })
+  }
+
+  return slots
 }

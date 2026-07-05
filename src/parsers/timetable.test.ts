@@ -59,3 +59,28 @@ describe('parsePeriodTimes', () => {
     expect(parsePeriodTimes('時間割情報なし')).toBeNull()
   })
 })
+
+import { parseTimetable } from './timetable'
+import { TABLE_MINIMAL } from './timetable.fixtures'
+
+describe('parseTimetable', () => {
+  it('授業のあるスロットだけを返す（昼休み・空きコマは除外）', () => {
+    expect(parseTimetable(TABLE_MINIMAL)).toHaveLength(2)
+  })
+
+  it('月1に基礎電気数学を配置する', () => {
+    const slots = parseTimetable(TABLE_MINIMAL)
+    const mon1 = slots.find((s) => s.day === 'mon' && s.period === 1)
+    expect(mon1).toBeDefined()
+    expect(mon1!.classes[0].name).toBe('基礎電気数学及び演習 （１組）')
+    expect(mon1!.classes[0].courseCode).toBe('9973337')
+  })
+
+  it('火4に物理学実験を配置する（昼休み行を挟んでも時限を取り違えない）', () => {
+    const slots = parseTimetable(TABLE_MINIMAL)
+    const tue4 = slots.find((s) => s.day === 'tue' && s.period === 4)
+    expect(tue4).toBeDefined()
+    expect(tue4!.classes[0].name).toBe('物理学実験Ａ')
+    expect(tue4!.classes[0].courseCode).toBe('9973344')
+  })
+})
