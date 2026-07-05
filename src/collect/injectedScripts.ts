@@ -50,8 +50,40 @@ export const OPEN_TIMETABLE_JS = `(function(){
   true;
 })();`
 
-/** モバイル出席登録ページ [Xua001]。当該授業時間中に開くとCLASSが自動でこのページを出す。 */
-export const ATTENDANCE_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut113/Xut11301.xhtml'
+/**
+ * 出席登録ページ（PC版 [Xut124] = xut124/Xut12401.xhtml、実測2026-07-06）。
+ * 直リンクはセッション/ViewState無しで保証人ポータル等へ飛ぶため不可。到達はメニュー
+ * 「出欠管理」→「モバイル出席登録」を .click() 駆動する（OPEN_ATTENDANCE_JS）。当該授業時間中は
+ * CLASSがこのページで受付中科目を自動表示する。認証コード入力もこのページで行う（軽量案）。
+ */
+export const ATTENDANCE_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut124/Xut12401.xhtml'
+
+/**
+ * CLASSトップから「出欠管理」→「モバイル出席登録」へ遷移する（JSFメニューを .click() 駆動）。
+ * リンクはテキスト一致で探索。親メニューを開いてから子を押す2段階（実DOMで要微調整）。
+ */
+export const OPEN_ATTENDANCE_JS = `(function(){
+  function findByText(text){
+    var els = Array.prototype.slice.call(document.querySelectorAll('a,button,span,li'));
+    return els.find(function(e){ return (e.textContent || '').trim().indexOf(text) >= 0; });
+  }
+  function clickText(text){ var el = findByText(text); if (el) { el.click(); return true; } return false; }
+  try {
+    if (clickText('モバイル出席登録')) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: true, stage: 'attendance' }));
+    } else if (clickText('出欠管理')) {
+      setTimeout(function(){
+        clickText('モバイル出席登録');
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: true, stage: 'menu-opened' }));
+      }, 400);
+    } else {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: false, stage: 'menu' }));
+    }
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
 
 /**
  * 出席ページの受付状態テキストを抽出して postMessage する（抽出のみ）。

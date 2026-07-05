@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Button, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { DESKTOP_UA, DETECT_ATTENDANCE_JS } from '../collect/injectedScripts'
+import { DESKTOP_UA, DETECT_ATTENDANCE_JS, OPEN_ATTENDANCE_JS } from '../collect/injectedScripts'
 import { parseAttendanceMessage } from '../collect/attendanceMessage'
 
 // CLASSのJSFページは直リンク不可（セッション/ViewState無しだと保証人ポータル等へ飛ぶ）。
@@ -12,11 +12,28 @@ export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
   const [banner, setBanner] = useState<string | null>(null)
 
+  function openAttendance() {
+    webviewRef.current?.injectJavaScript(OPEN_ATTENDANCE_JS)
+  }
+
   function check() {
     webviewRef.current?.injectJavaScript(DETECT_ATTENDANCE_JS)
   }
 
+  // 保証人ページ等に飛ばされて詰まった時の復帰: CLASSトップへ戻す。
+  function reset() {
+    setBanner(null)
+    webviewRef.current?.injectJavaScript(`window.location.href='${CLASS_URL}';true;`)
+  }
+
   function onMessage(data: string) {
+    // 遷移(nav)メッセージは受付判定に流さない。
+    try {
+      const parsed = JSON.parse(data)
+      if (parsed && parsed.type === 'nav') return
+    } catch {
+      // 後段の parseAttendanceMessage がエラーを表現する
+    }
     const r = parseAttendanceMessage(data)
     if (r.error) {
       setBanner(r.error)
@@ -41,7 +58,9 @@ export default function AttendanceScreen() {
         />
       </View>
       <View style={styles.controls}>
+        <Button title="出席ページを開く" onPress={openAttendance} />
         <Button title="受付状況を確認" onPress={check} />
+        <Button title="読み込み直す" onPress={reset} />
       </View>
     </View>
   )
