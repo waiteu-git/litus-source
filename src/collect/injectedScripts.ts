@@ -51,12 +51,13 @@ export const OPEN_TIMETABLE_JS = `(function(){
 })();`
 
 /**
- * 出席登録ページ（PC版 [Xut124] = xut124/Xut12401.xhtml、実測2026-07-06）。
- * 直リンクはセッション/ViewState無しで保証人ポータル等へ飛ぶため不可。到達はメニュー
- * 「出欠管理」→「モバイル出席登録」を .click() 駆動する（OPEN_ATTENDANCE_JS）。当該授業時間中は
- * CLASSがこのページで受付中科目を自動表示する。認証コード入力もこのページで行う（軽量案）。
+ * モバイル出席登録ページ [Xua001] = xua001/Xua00101.xhtml（実測2026-07-06）。
+ * 直リンクはセッション/ViewState無しで保証人ポータル等へ飛ぶため不可。到達はCLASSトップに
+ * ログイン後、メニュー「出欠管理」→「モバイル出席登録」へ手動遷移する（.click()自動遷移は
+ * 不安定なため採用しない）。**PC-UA(DESKTOP_UA)でのPCログインが安定**（実測確認）。当該授業
+ * 時間中はこのページに受付中科目が表示され、認証コード入力もここで行う（軽量案）。
  */
-export const ATTENDANCE_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut124/Xut12401.xhtml'
+export const ATTENDANCE_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xua001/Xua00101.xhtml'
 
 /**
  * CLASSトップから「出欠管理」→「モバイル出席登録」へ遷移する（JSFメニューを .click() 駆動）。
