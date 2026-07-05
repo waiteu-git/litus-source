@@ -2,14 +2,21 @@
   "name": "@lms-task-watcher/app",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "main": "index.ts",
   "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "node-html-parser": "^7.0.1"
+    "expo": "~57.0.2",
+    "expo-status-bar": "~57.0.0",
+    "node-html-parser": "^7.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-webview": "13.16.1"
   },
   "devDependencies": {
     "typescript": "~5.9.2",

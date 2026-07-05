@@ -1,15 +1,8 @@
 {
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "bundler",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "types": ["vitest/globals"]
   },
-  "include": ["src"]
+  "include": ["src", "App.tsx", "index.ts"]
 }
