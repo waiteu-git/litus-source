@@ -64,7 +64,7 @@ function extractTeachers(cell: HTMLElement, name: string, courseCode: string): s
     if (/^\d{7}$/.test(t)) continue
     if (/単位/.test(t)) continue
     if (t.includes('ui-button')) continue
-    return t.split(/[　\s]+/).filter((x) => x.length > 0)
+    return t.split('／').map((x) => x.trim()).filter((x) => x.length > 0)
   }
   return []
 }
