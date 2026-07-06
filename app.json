@@ -12,7 +12,6 @@
     },
     "android": {
       "package": "dev.waiteu.litus",
-      "usesCleartextTraffic": false,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -31,6 +30,14 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#0e7c5e"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": false
+          }
         }
       ]
     ],
