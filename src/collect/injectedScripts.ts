@@ -109,9 +109,11 @@ export const DETECT_ATTENDANCE_JS = `(function(){
 })();`
 
 /**
- * 認証コードをCLASSの出席登録フォームに流し込み「出席登録する」を押す（独自UI入力用）。
- * 認証コード欄の実DOMが未確定のためベストエフォート: 「認証コード」ラベル以降の可視入力を候補にし、
- * 複数なら1〜2文字幅の箱に1文字ずつ、単一なら全体を流す。結果を診断付き(inputIds等)でpostMessageする。
+ * 認証コードをCLASSの出席登録フォームの認証コード欄に流し込む（独自UI入力用・送信はしない）。
+ * `.click()` ではPrimeFacesの本物のJSF送信が発火しないため、送信はユーザーがWebView内の
+ * 本物の「出席登録する」を押す。認証コード欄の実DOMが未確定のためベストエフォート:
+ * 「認証コード」ラベル以降の可視入力を候補にし、複数なら1〜2文字幅の箱に実キー入力風で1文字ずつ、
+ * 単一なら全体を流す。結果を診断付き(inputIds/values)でpostMessage(type:'fill')する。
  */
 export function buildSubmitAttendanceJs(code: string): string {
   const c = JSON.stringify(String(code))
@@ -144,15 +146,22 @@ export function buildSubmitAttendanceJs(code: string): string {
       } catch (e) {}
       el.value = v;
     }
+    function fireKey(el, type, ch){
+      var e = new KeyboardEvent(type, { key: ch, bubbles: true, cancelable: true });
+      try {
+        Object.defineProperty(e, 'keyCode', { get: function(){ return ch.charCodeAt(0); } });
+        Object.defineProperty(e, 'which', { get: function(){ return ch.charCodeAt(0); } });
+      } catch (e2) {}
+      el.dispatchEvent(e);
+    }
     function setVal(el, v){
       el.focus();
+      fireKey(el, 'keydown', v);
+      fireKey(el, 'keypress', v);
       nativeSet(el, v);
-      el.dispatchEvent(new KeyboardEvent('keydown', { key: v, bubbles: true }));
-      el.dispatchEvent(new KeyboardEvent('keypress', { key: v, bubbles: true }));
       el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new KeyboardEvent('keyup', { key: v, bubbles: true }));
+      fireKey(el, 'keyup', v);
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.blur();
     }
     var filled = 0;
     if (codeInputs.length <= 1) {
@@ -161,16 +170,11 @@ export function buildSubmitAttendanceJs(code: string): string {
       for (var i = 0; i < codeInputs.length && i < code.length; i++) { setVal(codeInputs[i], code.charAt(i)); filled++; }
     }
     var ids = codeInputs.map(function(el){ return el.id || el.name || '(no-id)'; });
-    setTimeout(function(){
-      var values = codeInputs.map(function(el){ return el.value; });
-      var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a,span'));
-      var submitBtn = btns.find(function(b){ return ((b.textContent || b.value) || '').indexOf('出席登録') >= 0; });
-      var clicked = false;
-      if (submitBtn) { submitBtn.click(); clicked = true; }
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled, clicked: clicked
-      }));
-    }, 450);
+    var values = codeInputs.map(function(el){ return el.value; });
+    // 送信はしない。CLASSの本物の「出席登録する」をユーザーが押す（.click()では本物のJSF送信が発火しないため）。
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'fill', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled
+    }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }
