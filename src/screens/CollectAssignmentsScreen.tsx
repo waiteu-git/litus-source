@@ -10,7 +10,7 @@ import { filterAssignmentCandidates } from '../updates/assignmentCandidates'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
 import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
-import { refreshAssignmentReminders } from '../notifications/assignmentSync'
+import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import type { AssignmentsStackParamList } from '../navigation/types'
 
 type Candidate = { url: string; title: string; courseName: string; courseCode: string | null }
@@ -92,7 +92,7 @@ export default function CollectAssignmentsScreen() {
         if (collectedRef.current.length > 0) {
           const existing = await loadAssignments()
           await saveAssignments(upsertAssignments(existing, collectedRef.current, new Date()))
-          await refreshAssignmentReminders()
+          await refreshAllNotifications()
         }
       })()
     }

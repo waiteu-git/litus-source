@@ -4,16 +4,14 @@ import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import RootTabs from './src/navigation/RootTabs'
 import { requestNotificationPermission } from './src/notifications/notifier'
-import { refreshAttendanceAlarms } from './src/notifications/attendanceSync'
-import { refreshAssignmentReminders } from './src/notifications/assignmentSync'
+import { refreshAllNotifications } from './src/notifications/notificationRefresh'
 
 export default function App() {
   useEffect(() => {
     ;(async () => {
       try {
         await requestNotificationPermission()
-        await refreshAttendanceAlarms()
-        await refreshAssignmentReminders()
+        await refreshAllNotifications()
       } catch (e) {
         console.warn('起動時の通知同期に失敗しました', e)
       }
