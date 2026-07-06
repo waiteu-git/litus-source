@@ -20,6 +20,9 @@ importers:
       '@react-navigation/native-stack':
         specifier: ^7.17.9
         version: 7.17.9(@react-navigation/native@7.3.7(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native-safe-area-context@5.7.0(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native-screens@4.25.2(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      babel-preset-expo:
+        specifier: ~57.0.1
+        version: 57.0.1(@babel/core@7.29.7)(@babel/runtime@7.29.7)(expo@57.0.2)(react-refresh@0.14.2)
       expo:
         specifier: ~57.0.2
         version: 57.0.2(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(react-native-webview@13.16.1(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
