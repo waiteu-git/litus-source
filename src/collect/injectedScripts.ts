@@ -109,12 +109,13 @@ export const DETECT_ATTENDANCE_JS = `(function(){
 })();`
 
 /**
- * 認証コードをCLASSの出席登録フォームの認証コード欄に流し込み、本物の「出席登録する」を押す（独自UI入力）。
+ * 認証コードをCLASSの出席登録フォームの認証コード欄に流し込む（独自UI入力・送信はしない）。
  * 流し込みは実キー入力風（ネイティブvalueセッター＋keydown/keypress/input/keyup、keyCode付与）で
- * ウィジェットにコミットさせる。認証コード欄の実DOM未確定のためベストエフォート:「認証コード」ラベル
- * 以降の可視入力を候補にし、複数なら1〜2文字幅の箱に1文字ずつ、単一なら全体。流し込み確定後に本物の
- * button/a（spanラベルではない）をクリック。結果を診断付き(inputIds/values/clicked)でpostMessage(type:'submit')。
- * 万一自動送信が効かなくても箱は埋まっているので手動で本物ボタンを押せる（フォールバック）。
+ * ウィジェットにコミットさせる（単なる .value 代入だと空送信扱いになる、を実機で確認）。送信は合成
+ * .click() では本物のJSF送信が発火しない（isTrusted等で無視・エラーも出ない、実機確認済み）ため、
+ * ユーザーがWebView内の本物「出席登録する」を押す。認証コード欄の実DOM未確定のためベストエフォート:
+ * 「認証コード」ラベル以降の可視入力を候補にし、複数なら1〜2文字幅の箱に1文字ずつ、単一なら全体。
+ * 結果を診断付き(inputIds/values)でpostMessage(type:'fill')。流し込みが効けば手押し送信で登録できる。
  */
 export function buildSubmitAttendanceJs(code: string): string {
   const c = JSON.stringify(String(code))
@@ -171,17 +172,12 @@ export function buildSubmitAttendanceJs(code: string): string {
       for (var i = 0; i < codeInputs.length && i < code.length; i++) { setVal(codeInputs[i], code.charAt(i)); filled++; }
     }
     var ids = codeInputs.map(function(el){ return el.id || el.name || '(no-id)'; });
-    // 流し込みが確定してから本物の「出席登録する」(button/a、spanラベルではなく)をクリックする。
-    setTimeout(function(){
-      var values = codeInputs.map(function(el){ return el.value; });
-      var els = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
-      var submitBtn = els.find(function(b){ return ((b.textContent || b.value) || '').indexOf('出席登録') >= 0; });
-      var clicked = false;
-      if (submitBtn) { submitBtn.click(); clicked = true; }
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled, clicked: clicked
-      }));
-    }, 300);
+    var values = codeInputs.map(function(el){ return el.value; });
+    // 送信はしない。合成 .click() ではPrimeFacesの本物のJSF送信が発火しない（isTrusted等で無視され
+    // エラーすら出ない＝実機確認済み）ため、送信はユーザーがWebView内の本物「出席登録する」を押す。
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'fill', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled
+    }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }
