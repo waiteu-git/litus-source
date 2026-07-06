@@ -17,3 +17,11 @@ pnpm typecheck    # tsc --noEmit
 
 - React Native（Expo managed・TypeScript）
 - 引継ぎ・設計資料: `docs/handover.md` から辿る
+
+## ライセンス
+
+本リポジトリは、ユーザーがアプリの動作（取得するデータや送信先）を自ら確認できるようにするため、ソースコードを公開しています（source-available）。**オープンソースソフトウェアではありません。**
+
+閲覧・監査、および動作確認目的での自身の環境でのビルド・実行のみ許可しています。コードの複製・他ソフトウェアへの転用・再配布（アプリストアへの公開を含む）・商用利用は禁止です。詳細は [LICENSE](LICENSE) を参照してください。
+
+Copyright © 2026 waiteu. All rights reserved.／本ライセンス適用日: **2026-07-06 (JST)**

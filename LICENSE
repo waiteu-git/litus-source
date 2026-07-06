@@ -1,15 +1,14 @@
 リタス (Litus) — Source-Available License
-Copyright (c) 2025-2026 waiteu. All rights reserved.
-本ライセンス適用日 / License effective date: 2026-07-04 (JST)
+Copyright (c) 2026 waiteu. All rights reserved.
+本ライセンス適用日 / License effective date: 2026-07-06 (JST)
 
 本ソフトウェアのコードは、東京理科大学のLMS「LETUS」向けブラウザ拡張機能
 「LETUS Task Watcher」リポジトリから分離（git subtree split で履歴保持）した
-派生物であり、分離元では2026-07-04より同一の source-available ライセンスの下に
-あります。したがって本コードも同日より本ライセンスが適用されています。
+派生物です。分離元「LETUS Task Watcher」も、複製・転用・再配布を禁止する同一の
+source-available ライセンスの下にあります。
 This software's code was split (via git subtree split, preserving history) from
-the "LETUS Task Watcher" browser-extension repository, where it has been under
-this same source-available license since 2026-07-04 (JST). This code is therefore
-covered by this license as of that same date.
+the "LETUS Task Watcher" browser-extension repository, which is under the same
+source-available license.
 
 【日本語】
 
