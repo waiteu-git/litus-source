@@ -1,16 +1,16 @@
 {
   "expo": {
     "name": "リタス",
-    "slug": "litas",
+    "slug": "litus",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "dev.waiteu.litas"
+      "bundleIdentifier": "dev.waiteu.litus"
     },
     "android": {
-      "package": "dev.waiteu.litas",
+      "package": "dev.waiteu.litus",
       "usesCleartextTraffic": false,
       "predictiveBackGestureEnabled": false
     },
