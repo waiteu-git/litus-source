@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar'
 import RootTabs from './src/navigation/RootTabs'
 import { requestNotificationPermission } from './src/notifications/notifier'
 import { refreshAttendanceAlarms } from './src/notifications/attendanceSync'
+import { refreshAssignmentReminders } from './src/notifications/assignmentSync'
 
 export default function App() {
   useEffect(() => {
@@ -12,8 +13,9 @@ export default function App() {
       try {
         await requestNotificationPermission()
         await refreshAttendanceAlarms()
+        await refreshAssignmentReminders()
       } catch (e) {
-        console.warn('起動時の出席アラーム同期に失敗しました', e)
+        console.warn('起動時の通知同期に失敗しました', e)
       }
     })()
   }, [])

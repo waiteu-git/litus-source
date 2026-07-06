@@ -13,8 +13,11 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants'
 import type { AttendanceAlarm } from './attendanceSchedule'
 import { buildAttendanceNotificationContent } from './attendanceSchedule'
+import type { ScheduledNotification } from './schedule'
+import { buildAssignmentNotificationContent } from './assignmentContent'
 
 const TAG = 'attendance-alarm'
+const ASSIGNMENT_TAG = 'assignment-reminder'
 
 /** Expo Go では expo-notifications を読み込めない（読むと落ちる）。 */
 const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
@@ -63,6 +66,26 @@ export async function syncAttendanceAlarms(alarms: AttendanceAlarm[]): Promise<v
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { tag: TAG, courseCode: alarm.courseCode, kind: alarm.kind } },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(alarm.fireAt) },
+    })
+  }
+}
+
+/** 課題の締切前リマインダー＋朝まとめを貼り直す（既存の課題通知を全キャンセルしてから予約）。 */
+export async function syncAssignmentReminders(notifications: ScheduledNotification[]): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync()
+  for (const n of scheduled) {
+    const data = n.content.data as { tag?: string } | null
+    if (data?.tag === ASSIGNMENT_TAG) {
+      await Notifications.cancelScheduledNotificationAsync(n.identifier)
+    }
+  }
+  for (const n of notifications) {
+    const { title, body } = buildAssignmentNotificationContent(n)
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, data: { tag: ASSIGNMENT_TAG, kind: n.kind } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(n.fireAt) },
     })
   }
 }
