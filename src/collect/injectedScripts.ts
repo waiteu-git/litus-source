@@ -109,11 +109,12 @@ export const DETECT_ATTENDANCE_JS = `(function(){
 })();`
 
 /**
- * 認証コードをCLASSの出席登録フォームの認証コード欄に流し込む（独自UI入力用・送信はしない）。
- * `.click()` ではPrimeFacesの本物のJSF送信が発火しないため、送信はユーザーがWebView内の
- * 本物の「出席登録する」を押す。認証コード欄の実DOMが未確定のためベストエフォート:
- * 「認証コード」ラベル以降の可視入力を候補にし、複数なら1〜2文字幅の箱に実キー入力風で1文字ずつ、
- * 単一なら全体を流す。結果を診断付き(inputIds/values)でpostMessage(type:'fill')する。
+ * 認証コードをCLASSの出席登録フォームの認証コード欄に流し込み、本物の「出席登録する」を押す（独自UI入力）。
+ * 流し込みは実キー入力風（ネイティブvalueセッター＋keydown/keypress/input/keyup、keyCode付与）で
+ * ウィジェットにコミットさせる。認証コード欄の実DOM未確定のためベストエフォート:「認証コード」ラベル
+ * 以降の可視入力を候補にし、複数なら1〜2文字幅の箱に1文字ずつ、単一なら全体。流し込み確定後に本物の
+ * button/a（spanラベルではない）をクリック。結果を診断付き(inputIds/values/clicked)でpostMessage(type:'submit')。
+ * 万一自動送信が効かなくても箱は埋まっているので手動で本物ボタンを押せる（フォールバック）。
  */
 export function buildSubmitAttendanceJs(code: string): string {
   const c = JSON.stringify(String(code))
@@ -170,11 +171,17 @@ export function buildSubmitAttendanceJs(code: string): string {
       for (var i = 0; i < codeInputs.length && i < code.length; i++) { setVal(codeInputs[i], code.charAt(i)); filled++; }
     }
     var ids = codeInputs.map(function(el){ return el.id || el.name || '(no-id)'; });
-    var values = codeInputs.map(function(el){ return el.value; });
-    // 送信はしない。CLASSの本物の「出席登録する」をユーザーが押す（.click()では本物のJSF送信が発火しないため）。
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'fill', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled
-    }));
+    // 流し込みが確定してから本物の「出席登録する」(button/a、spanラベルではなく)をクリックする。
+    setTimeout(function(){
+      var values = codeInputs.map(function(el){ return el.value; });
+      var els = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
+      var submitBtn = els.find(function(b){ return ((b.textContent || b.value) || '').indexOf('出席登録') >= 0; });
+      var clicked = false;
+      if (submitBtn) { submitBtn.click(); clicked = true; }
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled, clicked: clicked
+      }));
+    }, 300);
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }
