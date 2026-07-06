@@ -202,6 +202,31 @@ export function buildSubmitAttendanceJs(code: string): string {
 })();`
 }
 
+/**
+ * 現在ページのログイン状態シグナルを抽出して postMessage する（抽出のみ・classifyAuthState で判定）。
+ * パスワード入力欄=ログイン要求、ログアウトリンク(ログアウト/logout)=ログイン済み。CLASS/LETUS 双方で成立。
+ */
+export const DETECT_AUTH_JS = `(function(){
+  try {
+    var hasPassword = !!document.querySelector('input[type=password]');
+    var links = Array.prototype.slice.call(document.querySelectorAll('a,button,input[type=submit]'));
+    var hasLogout = links.some(function(el){
+      var t = ((el.textContent || el.value) || '');
+      var href = (el.getAttribute && (el.getAttribute('href') || '')) || '';
+      return t.indexOf('ログアウト') >= 0 || /logout|logoff|signout/i.test(t) || /logout|logoff|signout/i.test(href);
+    });
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'auth', hasPasswordInput: hasPassword, hasLogoutLink: hasLogout, url: location.href
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
+/** SSOセッションを黙って温める先読み対象（CLASS=出席/時間割、LETUS=課題）。 */
+export const CLASS_TOP_URL = 'https://class.admin.tus.ac.jp/'
+
 /** LETUSマイコース。全履修コースの名前(コード入り)＋course/view.php URL が並ぶ。 */
 export const MYCOURSES_URL = 'https://letus.ed.tus.ac.jp/my/courses.php'
 

@@ -72,6 +72,8 @@ export default function UpdateCheckScreen() {
         <WebView
           ref={webviewRef}
           source={{ uri: currentUrl }}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
           onLoadEnd={() => webviewRef.current?.injectJavaScript(COLLECT_COURSE_PAGE_JS)}
           onMessage={(e) => onMessage(e.nativeEvent.data)}
           style={styles.hiddenWebview}

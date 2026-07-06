@@ -106,6 +106,8 @@ export default function CollectAssignmentsScreen() {
         <WebView
           ref={webviewRef}
           source={{ uri: current.url }}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
           onLoadEnd={() => webviewRef.current?.injectJavaScript(COLLECT_COURSE_PAGE_JS)}
           onMessage={(e) => onMessage(e.nativeEvent.data)}
           style={styles.hiddenWebview}

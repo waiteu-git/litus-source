@@ -3,6 +3,7 @@ import { Button, StyleSheet, Text, TextInput, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { DESKTOP_UA, DETECT_ATTENDANCE_JS, buildSubmitAttendanceJs } from '../collect/injectedScripts'
 import { parseAttendanceMessage } from '../collect/attendanceMessage'
+import { useAuth } from '../auth/AuthProvider'
 
 // CLASSのJSFページは直リンク不可（ViewState無しだと保証人ポータルへ飛び詰まる）。
 // CLASSトップを開いてユーザーが手動で「出欠管理」→「モバイル出席登録」へ進む。
@@ -21,6 +22,7 @@ type SubmitDiag = {
 
 export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
+  const auth = useAuth()
   const [banner, setBanner] = useState<string | null>(null)
   const [code, setCode] = useState('')
   // key を変えると WebView を作り直してCLASSトップから再開する（詰まりからの確実な復帰）。
@@ -42,7 +44,15 @@ export default function AttendanceScreen() {
   function reset() {
     setBanner(null)
     setWebviewKey((k) => k + 1)
+    auth.refresh()
   }
+
+  const authNote =
+    auth.class === 'authenticated'
+      ? 'ログイン済み'
+      : auth.class === 'needsLogin'
+        ? 'ログインが必要です（下のWebViewでログインしてください）'
+        : 'ログイン状態を確認中…'
 
   function onMessage(data: string) {
     let parsed: SubmitDiag | null = null
@@ -98,6 +108,7 @@ export default function AttendanceScreen() {
       <Text style={styles.hint}>
         出欠管理→モバイル出席登録 を開き、コードを入れて「出席する」で登録まで完結
       </Text>
+      <Text style={auth.class === 'needsLogin' ? styles.authWarn : styles.authOk}>{authNote}</Text>
       {banner ? <Text style={styles.banner}>{banner}</Text> : null}
       <View style={styles.webviewBox}>
         <WebView
@@ -105,6 +116,8 @@ export default function AttendanceScreen() {
           ref={webviewRef}
           source={{ uri: CLASS_URL }}
           userAgent={DESKTOP_UA}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>
@@ -127,6 +140,8 @@ const styles = StyleSheet.create({
   },
   btn: { flex: 1, paddingHorizontal: 4 },
   hint: { paddingHorizontal: 8, paddingBottom: 6, color: '#666', fontSize: 12 },
+  authOk: { paddingHorizontal: 8, paddingBottom: 4, color: '#0b6b2f', fontSize: 12 },
+  authWarn: { paddingHorizontal: 8, paddingBottom: 4, color: '#b26a00', fontSize: 12, fontWeight: '600' },
   banner: { backgroundColor: '#e6f4ea', color: '#0b6b2f', padding: 10, fontWeight: '600' },
   webviewBox: { flex: 1 },
 })

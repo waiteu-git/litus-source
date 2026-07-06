@@ -38,6 +38,8 @@ export default function CollectCoursesScreen() {
         <WebView
           ref={webviewRef}
           source={{ uri: MYCOURSES_URL }}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>

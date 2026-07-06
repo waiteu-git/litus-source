@@ -3,6 +3,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import RootTabs from './src/navigation/RootTabs'
+import { AuthProvider } from './src/auth/AuthProvider'
 import { requestNotificationPermission } from './src/notifications/notifier'
 import { refreshAllNotifications } from './src/notifications/notificationRefresh'
 
@@ -20,10 +21,12 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <RootTabs />
-      </NavigationContainer>
-      <StatusBar style="auto" />
+      <AuthProvider>
+        <NavigationContainer>
+          <RootTabs />
+        </NavigationContainer>
+        <StatusBar style="auto" />
+      </AuthProvider>
     </SafeAreaProvider>
   )
 }

@@ -54,6 +54,8 @@ export default function CollectTimetableScreen() {
           ref={webviewRef}
           source={{ uri: CLASS_URL }}
           userAgent={DESKTOP_UA}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>
