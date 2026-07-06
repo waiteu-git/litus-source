@@ -1,0 +1,62 @@
+リタス (Litus) — Source-Available License
+Copyright (c) 2025-2026 waiteu. All rights reserved.
+本ライセンス適用日 / License effective date: 2026-07-04 (JST)
+
+本ソフトウェアのコードは、東京理科大学のLMS「LETUS」向けブラウザ拡張機能
+「LETUS Task Watcher」リポジトリから分離（git subtree split で履歴保持）した
+派生物であり、分離元では2026-07-04より同一の source-available ライセンスの下に
+あります。したがって本コードも同日より本ライセンスが適用されています。
+This software's code was split (via git subtree split, preserving history) from
+the "LETUS Task Watcher" browser-extension repository, where it has been under
+this same source-available license since 2026-07-04 (JST). This code is therefore
+covered by this license as of that same date.
+
+【日本語】
+
+本ソフトウェア「リタス（Litus）」は、東京理科大学のLMS「LETUS」および履修
+システム「CLASS」の情報をスマートフォンで管理するための、iOS / Android 向け
+モバイルアプリです。本ソフトウェアのソースコードは、アプリの動作（収集する
+データの内容や送信先など）を自ら検証できるようにする透明性の確保を目的として
+公開されています。本ソフトウェアはオープンソースソフトウェアではありません。
+
+■ 許可される行為
+1. 本リポジトリのソースコードを閲覧・検証・監査すること
+2. 本ソフトウェアの動作確認・安全性検証を目的として、自身の環境で
+   ビルド・実行すること
+
+■ 禁止される行為（著作権者の書面による事前の許可がない限り）
+1. ソースコードの全部または一部を複製し、他のソフトウェアに組み込むこと
+2. 本ソフトウェアまたはその派生物を頒布・再配布・公開すること
+   （アプリストア、拡張機能ストア等への公開を含む）
+3. 本ソフトウェアの全部または一部を商用利用すること
+4. 上記の許可される行為の範囲を超えて本ソフトウェアを利用すること
+
+本ソフトウェアは現状有姿で提供され、著作権者はいかなる保証も行わず、
+本ソフトウェアの使用に起因する損害について一切の責任を負いません。
+
+【English】
+
+"リタス (Litus)" is an iOS / Android mobile application for managing information
+from Tokyo University of Science's LMS "LETUS" and course system "CLASS" on a
+smartphone. The source code of this software is made publicly viewable for
+transparency, so that users can verify for themselves how the app behaves (e.g.
+what data it collects and where it is sent). This software is NOT open source.
+
+PERMITTED:
+1. Viewing, inspecting, and auditing the source code in this repository.
+2. Building and running the software in your own environment for the sole
+   purpose of verifying its behavior and safety.
+
+PROHIBITED (without prior written permission from the copyright holder):
+1. Copying the source code, in whole or in part, into other software.
+2. Distributing, redistributing, or publishing this software or any
+   derivative work (including publishing to any app or extension store).
+3. Any commercial use of this software, in whole or in part.
+4. Any use of this software beyond the permissions granted above.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. IN NO EVENT
+SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+In case of any discrepancy between the Japanese and English texts, the
+Japanese text shall prevail.
