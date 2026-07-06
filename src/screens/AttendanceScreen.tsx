@@ -9,11 +9,14 @@ import { parseAttendanceMessage } from '../collect/attendanceMessage'
 // 到達後、上のコード欄に認証コードを入れて「出席する」でWebView内フォームへ流し込み送信する。
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
 
-type FillDiag = {
+type SubmitDiag = {
   type?: string
   inputCount?: number
   filled?: number
   values?: string[]
+  btnFound?: boolean
+  method?: string
+  onclick?: string
 }
 
 export default function AttendanceScreen() {
@@ -27,7 +30,7 @@ export default function AttendanceScreen() {
     webviewRef.current?.injectJavaScript(DETECT_ATTENDANCE_JS)
   }
 
-  function fill() {
+  function submit() {
     const c = code.trim()
     if (!c) {
       setBanner('認証コードを入力してください')
@@ -42,15 +45,17 @@ export default function AttendanceScreen() {
   }
 
   function onMessage(data: string) {
-    let parsed: FillDiag | null = null
+    let parsed: SubmitDiag | null = null
     try {
       parsed = JSON.parse(data)
     } catch {
       // 後段の parseAttendanceMessage がエラーを表現する
     }
-    if (parsed && parsed.type === 'fill') {
+    if (parsed && parsed.type === 'submit') {
       const vals = parsed.values ? parsed.values.join(',') : ''
-      setBanner(`入力しました 値[${vals}] → 下の「出席登録する」を押してください`)
+      setBanner(
+        `送信 値[${vals}] / method:${parsed.method ?? '-'} / onclick:${parsed.onclick || '無'}`,
+      )
       return
     }
     const r = parseAttendanceMessage(data)
@@ -87,11 +92,11 @@ export default function AttendanceScreen() {
           returnKeyType="done"
         />
         <View style={styles.btn}>
-          <Button title="コードを入れる" onPress={fill} />
+          <Button title="出席する" onPress={submit} />
         </View>
       </View>
       <Text style={styles.hint}>
-        出欠管理→モバイル出席登録 を開き、コードを入れて「コードを入れる」→ 下の本物「出席登録する」を押す
+        出欠管理→モバイル出席登録 を開き、コードを入れて「出席する」で登録まで完結
       </Text>
       {banner ? <Text style={styles.banner}>{banner}</Text> : null}
       <View style={styles.webviewBox}>

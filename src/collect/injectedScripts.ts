@@ -109,13 +109,14 @@ export const DETECT_ATTENDANCE_JS = `(function(){
 })();`
 
 /**
- * 認証コードをCLASSの出席登録フォームの認証コード欄に流し込む（独自UI入力・送信はしない）。
+ * 認証コードをCLASSの出席登録フォームへ流し込み、独自UIのボタンだけで送信まで完結させる。
  * 流し込みは実キー入力風（ネイティブvalueセッター＋keydown/keypress/input/keyup、keyCode付与）で
  * ウィジェットにコミットさせる（単なる .value 代入だと空送信扱いになる、を実機で確認）。送信は合成
- * .click() では本物のJSF送信が発火しない（isTrusted等で無視・エラーも出ない、実機確認済み）ため、
- * ユーザーがWebView内の本物「出席登録する」を押す。認証コード欄の実DOM未確定のためベストエフォート:
- * 「認証コード」ラベル以降の可視入力を候補にし、複数なら1〜2文字幅の箱に1文字ずつ、単一なら全体。
- * 結果を診断付き(inputIds/values)でpostMessage(type:'fill')。流し込みが効けば手押し送信で登録できる。
+ * .click() が無視されるため、「出席登録する」ボタンの onclick 属性（PrimeFacesの本物のJSF送信呼び出し）を
+ * new Function で直接実行する（無ければ .click() にフォールバック）。認証コード欄の実DOM未確定のため
+ * ベストエフォート:「認証コード」ラベル以降の可視入力(1〜2文字箱)に1文字ずつ。結果を診断付き
+ * (values/method/onclick)でpostMessage(type:'submit')。onclickが取れない/効かない場合は診断のonclickを
+ * 見て正しい送信呼び出しを組む。
  */
 export function buildSubmitAttendanceJs(code: string): string {
   const c = JSON.stringify(String(code))
@@ -172,12 +173,28 @@ export function buildSubmitAttendanceJs(code: string): string {
       for (var i = 0; i < codeInputs.length && i < code.length; i++) { setVal(codeInputs[i], code.charAt(i)); filled++; }
     }
     var ids = codeInputs.map(function(el){ return el.id || el.name || '(no-id)'; });
-    var values = codeInputs.map(function(el){ return el.value; });
-    // 送信はしない。合成 .click() ではPrimeFacesの本物のJSF送信が発火しない（isTrusted等で無視され
-    // エラーすら出ない＝実機確認済み）ため、送信はユーザーがWebView内の本物「出席登録する」を押す。
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'fill', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled
-    }));
+    // 流し込み確定後に「出席登録する」を発火する。合成 .click() は無視されるため、ボタンの onclick
+    // 属性（PrimeFacesの本物のJSF送信呼び出し）を直接実行する。無ければ .click() にフォールバック。
+    setTimeout(function(){
+      var values = codeInputs.map(function(el){ return el.value; });
+      var els = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
+      var btn = els.find(function(b){ return ((b.textContent || b.value) || '').indexOf('出席登録') >= 0; });
+      var method = 'none';
+      var onclickStr = '';
+      if (btn) {
+        var oc = btn.getAttribute('onclick');
+        onclickStr = oc ? String(oc).slice(0, 100) : '';
+        try {
+          if (oc) { new Function('event', oc).call(btn, new MouseEvent('click', { bubbles: true })); method = 'onclick'; }
+          else { btn.click(); method = 'click'; }
+        } catch (err) {
+          try { btn.click(); method = 'click-fb'; } catch (e2) { method = 'err'; }
+        }
+      }
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled, btnFound: !!btn, method: method, onclick: onclickStr
+      }));
+    }, 350);
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }
