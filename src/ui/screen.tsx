@@ -2,21 +2,24 @@ import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, useThemeVariant } from '../theme'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
-/** 全画面共通の背景（テーマに応じて翠グラデ or 薄地）。中身は padding 済みの領域。 */
+/** 全画面共通の背景（テーマに応じて翠グラデ or 薄地）。上部はセーフエリア分を確保しノッチ/ステータスバー被りを防ぐ。 */
 export function ScreenBg({ children }: { children: ReactNode }) {
   const { variant } = useThemeVariant()
+  const insets = useSafeAreaInsets()
+  const pad = { paddingTop: insets.top + 10 }
   if (variant === 'glass') {
     return (
-      <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={ui.root}>
+      <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={[ui.root, pad]}>
         {children}
       </LinearGradient>
     )
   }
-  return <View style={[ui.root, { backgroundColor: COLORS.tint }]}>{children}</View>
+  return <View style={[ui.root, pad, { backgroundColor: COLORS.tint }]}>{children}</View>
 }
 
 /** ヘッダー行（アイコン＋タイトル＋右側のアクションチップ群）。 */
@@ -123,43 +126,43 @@ export function useUi() {
 }
 
 const ui = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: 14, paddingTop: 16 },
+  root: { flex: 1, paddingHorizontal: 14 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   hTitle: { fontSize: 20, fontWeight: '600' },
   headerRight: { flexDirection: 'row', gap: 6 },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  action: { backgroundColor: COLORS.emerald, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center' },
+  action: { backgroundColor: COLORS.emerald, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 11, alignItems: 'center' },
   actionText: { color: '#ffffff', fontSize: 14, fontWeight: '500' },
   chipGlass: {
     backgroundColor: 'rgba(255,255,255,0.42)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.5)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
+    borderRadius: 999,
+    paddingHorizontal: 12,
     paddingVertical: 6,
   },
   chipSolid: {
     backgroundColor: '#d6efe4',
-    borderRadius: 12,
-    paddingHorizontal: 10,
+    borderRadius: 999,
+    paddingHorizontal: 12,
     paddingVertical: 6,
   },
   section: { fontSize: 12, fontWeight: '500', marginTop: 14, marginBottom: 8, marginLeft: 2 },
   segRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
-  seg: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 11, borderWidth: 1 },
+  seg: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 16, borderWidth: 1 },
   cardGlass: {
     backgroundColor: 'rgba(255,255,255,0.36)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.55)',
-    borderRadius: 14,
-    padding: 13,
+    borderRadius: 18,
+    padding: 14,
   },
   cardSolid: {
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: '#e3ece8',
-    borderRadius: 14,
-    padding: 13,
+    borderRadius: 18,
+    padding: 14,
   },
 })

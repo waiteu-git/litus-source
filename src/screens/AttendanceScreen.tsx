@@ -1,8 +1,8 @@
-import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
+import { ScreenBg } from '../ui/screen'
 import {
   DESKTOP_UA,
   DETECT_ATTENDANCE_JS,
@@ -154,8 +154,6 @@ export default function AttendanceScreen() {
 
   const digits = [0, 1, 2, 3].map((i) => code[i] ?? '')
 
-  const Bg = glass ? GlassBg : SolidBg
-
   const cardStyle = glass
     ? { backgroundColor: 'rgba(255,255,255,0.34)', borderColor: 'rgba(255,255,255,0.55)', borderWidth: 1 }
     : { backgroundColor: c.white, borderColor: '#e3ece8', borderWidth: 1 }
@@ -164,7 +162,7 @@ export default function AttendanceScreen() {
 
   return (
     <View style={styles.wrap}>
-      <Bg>
+      <ScreenBg>
         <View style={styles.header}>
           <View style={styles.hLeft}>
             <Ionicons name="flash-outline" size={22} color={glass ? c.white : c.emeraldDark} />
@@ -231,7 +229,7 @@ export default function AttendanceScreen() {
             <Text style={[styles.resultText, { color: resultBanner.fg }]}>{resultBanner.text}</Text>
           </View>
         ) : null}
-      </Bg>
+      </ScreenBg>
 
       {/* WebViewに直接absoluteを当てても効かず画面を占有するため、位置指定した親Viewで包む。
           非表示時は画面外1x1、オーバーレイ時のみ全画面に出す。 */}
@@ -266,21 +264,8 @@ export default function AttendanceScreen() {
   )
 }
 
-function GlassBg({ children }: { children: ReactNode }) {
-  return (
-    <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={styles.root}>
-      {children}
-    </LinearGradient>
-  )
-}
-
-function SolidBg({ children }: { children: ReactNode }) {
-  return <View style={[styles.root, { backgroundColor: COLORS.tint }]}>{children}</View>
-}
-
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  root: { flex: 1, padding: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   hTitle: { fontSize: 20, fontWeight: '600' },
@@ -288,26 +273,26 @@ const styles = StyleSheet.create({
   pillGlass: { backgroundColor: 'rgba(255,255,255,0.42)', color: '#04322a' },
   pillSolid: { backgroundColor: '#d6efe4', color: '#0a6650' },
   toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  toggle: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  toggle: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   toggleOn: { backgroundColor: 'rgba(255,255,255,0.6)' },
   toggleText: { fontSize: 13, color: '#eafff7' },
   toggleTextOn: { color: '#04322a', fontWeight: '600' },
-  card: { borderRadius: 16, padding: 16 },
+  card: { borderRadius: 18, padding: 16 },
   status: { fontSize: 16, fontWeight: '600' },
   tiles: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  tile: { flex: 1, borderRadius: 12, padding: 10, backgroundColor: '#f1f8f5' },
+  tile: { flex: 1, borderRadius: 14, padding: 10, backgroundColor: '#f1f8f5' },
   tileGlass: { backgroundColor: 'rgba(255,255,255,0.30)' },
   tileLabel: { fontSize: 12, marginBottom: 2 },
   tileValue: { fontSize: 15, fontWeight: '600' },
   inputLabel: { fontSize: 13, marginBottom: 10 },
   segRow: { flexDirection: 'row', gap: 9 },
-  seg: { flex: 1, height: 54, borderRadius: 12, borderWidth: 1.5, borderColor: '#b9ddcd', backgroundColor: '#f1f8f5', alignItems: 'center', justifyContent: 'center' },
+  seg: { flex: 1, height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: '#b9ddcd', backgroundColor: '#f1f8f5', alignItems: 'center', justifyContent: 'center' },
   segGlass: { backgroundColor: 'rgba(255,255,255,0.42)', borderColor: 'rgba(255,255,255,0.7)' },
   segText: { fontSize: 24, fontWeight: '600' },
   hiddenInput: { position: 'absolute', opacity: 0, height: 54, left: 16, right: 16, top: 40 },
-  cta: { marginTop: 16, height: 54, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  cta: { marginTop: 16, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   ctaText: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
-  result: { marginTop: 12, borderRadius: 12, padding: 11 },
+  result: { marginTop: 12, borderRadius: 14, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
   webviewHiddenBox: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
   webviewOverlayBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 56, backgroundColor: '#ffffff' },
