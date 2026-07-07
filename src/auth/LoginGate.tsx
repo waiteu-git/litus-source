@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -58,6 +58,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const lastResultRef = useRef<GateVerdict | null>(null)
   // setup での時間割メニュー再試行回数（無限リトライ防止）。
   const setupTriesRef = useRef(0)
+  // 自動復帰（ロード失敗/クラッシュ/SAML stale/LETUS迷子）の回数上限（無限ループ防止）。
+  const recoverTriesRef = useRef(0)
 
   useEffect(() => {
     loadOnboardingDone()
@@ -98,6 +100,21 @@ export function LoginGate({ children }: { children: ReactNode }) {
     setState('checking')
   }
 
+  /**
+   * WebViewの自動復帰: nonce を上げて作り直す（probe URLもキャッシュバスターが変わる）。
+   * ロード失敗（chrome-error）・レンダラクラッシュ・SAML「過去のリクエスト」・LETUS迷子で使う。
+   * 上限を超えたら needsLogin（可視WebView＋再読み込みボタン）に落として手動復帰へ。
+   */
+  function recover() {
+    if (recoverTriesRef.current >= 3) {
+      setState('needsLogin')
+      return
+    }
+    recoverTriesRef.current += 1
+    setNonce((n) => n + 1)
+    setState((s) => (s === 'firstRun' || s === 'loading' ? s : 'checking'))
+  }
+
   /** ログイン確認後の入場処理。時間割が未保存なら setup（自動取り込み）を挟む。 */
   function proceedToEntry() {
     loadTimetable()
@@ -134,10 +151,17 @@ export function LoginGate({ children }: { children: ReactNode }) {
         hasPasswordInput: !!p.hasPasswordInput,
         hasClassMenu: !!p.hasClassMenu,
         hasEnterSplash: !!p.hasEnterSplash,
+        hasSsoStale: !!p.hasSsoStale,
         url: typeof p.url === 'string' ? p.url : undefined,
       })
       if (verdict === 'pending') return // リダイレクト途中は待つ
+      if (verdict === 'stale' || verdict === 'stray') {
+        // SAMLリプレイ拒否 or SSO混線でLETUS着地 → WebViewを作り直して新しいSAMLフローで再試行。
+        recover()
+        return
+      }
       lastResultRef.current = verdict
+      if (verdict === 'authed') recoverTriesRef.current = 0
       const s = stateRef.current
       if (s === 'checking') {
         if (verdict === 'authed') proceedToEntry()
@@ -188,20 +212,41 @@ export function LoginGate({ children }: { children: ReactNode }) {
       <View style={styles.root}>
         {showLoginUi ? (
           <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-            <Text style={styles.title}>ログイン</Text>
-            <Text style={styles.sub}>TUSアカウントでログインしてください（認証情報は保存しません）</Text>
+            <View style={styles.headerRow}>
+              <View style={styles.headerText}>
+                <Text style={styles.title}>ログイン</Text>
+                <Text style={styles.sub}>TUSアカウントでログインしてください（認証情報は保存しません）</Text>
+              </View>
+              <Pressable
+                style={styles.reloadBtn}
+                onPress={() => {
+                  recoverTriesRef.current = 0
+                  requireLogin()
+                }}
+              >
+                <Text style={styles.reloadBtnText}>再読み込み</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
         <View style={showLoginUi ? styles.webBox : styles.webHidden}>
           <WebView
             key={nonce}
             ref={webviewRef}
-            source={{ uri: CLASS_PC_LOGIN_URL }}
+            // キャッシュ無効＋nonceのキャッシュバスター: ShibbolethAuthServletの302（SAMLRequest付き）が
+            // キャッシュ再生されると IdP が「過去のリクエスト」で恒久拒否するため（実機で確認）。
+            source={{ uri: `${CLASS_PC_LOGIN_URL}?litus=${nonce}` }}
+            cacheEnabled={false}
             userAgent={DESKTOP_UA}
             sharedCookiesEnabled
             thirdPartyCookiesEnabled
             onLoadEnd={onLoadEnd}
             onMessage={(e) => onMessage(e.nativeEvent.data)}
+            onError={() => recover()}
+            onHttpError={(e) => {
+              if (e.nativeEvent.statusCode >= 500) recover()
+            }}
+            onRenderProcessGone={() => recover()}
             style={styles.webviewFill}
           />
         </View>
@@ -226,8 +271,17 @@ export function LoginGate({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#ffffff' },
   header: { backgroundColor: COLORS.emerald, paddingHorizontal: 16, paddingBottom: 14 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerText: { flex: 1 },
   title: { color: '#ffffff', fontSize: 20, fontWeight: '600' },
   sub: { color: '#eafff7', fontSize: 13, marginTop: 4 },
+  reloadBtn: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  reloadBtnText: { color: '#ffffff', fontSize: 13 },
   webBox: { flex: 1 },
   // 判定用に読み込みは続けるが画面には出さない（サイズ0だと読み込まれない端末があるため1x1）。
   webHidden: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },

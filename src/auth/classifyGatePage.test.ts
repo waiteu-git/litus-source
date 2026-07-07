@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classifyGatePage } from './classifyGatePage'
 
-const base = { hasPasswordInput: false, hasClassMenu: false, hasEnterSplash: false }
+const base = { hasPasswordInput: false, hasClassMenu: false, hasEnterSplash: false, hasSsoStale: false }
 
 describe('classifyGatePage', () => {
   it('CLASSメニュー到達は authed', () => {
@@ -22,5 +22,11 @@ describe('classifyGatePage', () => {
     expect(classifyGatePage({ ...base, url: 'https://class.admin.tus.ac.jp/uprx/ShibbolethAuthServlet' })).toBe(
       'pending',
     )
+  })
+  it('IdPの「過去のリクエスト」エラーページは stale（キャッシュ破棄して再試行させる）', () => {
+    expect(classifyGatePage({ ...base, hasSsoStale: true })).toBe('stale')
+  })
+  it('LETUSに迷い込んだら stray（SSOリレー混線→CLASSへ誘導し直す）', () => {
+    expect(classifyGatePage({ ...base, url: 'https://letus.ed.tus.ac.jp/my/' })).toBe('stray')
   })
 })

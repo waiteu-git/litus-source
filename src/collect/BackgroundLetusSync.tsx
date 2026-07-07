@@ -8,6 +8,7 @@ import { loadCourseMap, saveCourseMap } from '../storage/courseMapStore'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
 import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { CourseSnapshotMap } from '../storage/courseSnapshotSerialize'
+import { useAuth } from '../auth/AuthProvider'
 import AssignmentCollector from './AssignmentCollector'
 
 // 各ステージ/ページの読込がハングした場合の保険。
@@ -15,6 +16,10 @@ const COURSES_TIMEOUT_MS = 25000
 const PAGE_TIMEOUT_MS = 15000
 // タブ入場直後の描画と競合しないよう開始を遅らせる。
 const START_DELAY_MS = 2000
+// LETUSのSSO確立を待つ上限。超えたら（判定unknownでも）ダメ元で開始する。
+const AUTH_WAIT_MS = 30000
+// コース収集の空振り（SSOリダイレクト途中など）リトライ回数。
+const COURSES_MAX_TRIES = 3
 
 type Stage = 'idle' | 'courses' | 'snapshots' | 'assignments' | 'done'
 
@@ -29,25 +34,34 @@ export default function BackgroundLetusSync() {
   const [stage, setStage] = useState<Stage>('idle')
   const stageRef = useRef<Stage>('idle')
   stageRef.current = stage
+  const auth = useAuth()
 
   const coursesWebviewRef = useRef<WebView>(null)
   const pageWebviewRef = useRef<WebView>(null)
   const [urls, setUrls] = useState<string[]>([])
   const [index, setIndex] = useState(0)
+  const [coursesTry, setCoursesTry] = useState(0)
   const snapshotsRef = useRef<CourseSnapshotMap>({})
   const snapshotsSavedRef = useRef(false)
 
+  // LETUSのSSO確立（AuthProviderのウォームアップ完了）を待ってから開始する。
+  // 早すぎるとマイコースの代わりにSSOリダイレクト途中を掴んで空振りする（実機で確認）。
   useEffect(() => {
-    const t = setTimeout(() => setStage('courses'), START_DELAY_MS)
+    if (stage !== 'idle') return
+    if (auth.letus === 'authenticated') {
+      const t = setTimeout(() => setStage('courses'), START_DELAY_MS)
+      return () => clearTimeout(t)
+    }
+    const t = setTimeout(() => setStage((s) => (s === 'idle' ? 'courses' : s)), AUTH_WAIT_MS)
     return () => clearTimeout(t)
-  }, [])
+  }, [stage, auth.letus])
 
   // courses: マイコースを1ページ収集して courseMap を更新（失敗しても既存mapで先へ）。
   useEffect(() => {
     if (stage !== 'courses') return
     const t = setTimeout(() => setStage((s) => (s === 'courses' ? 'snapshots' : s)), COURSES_TIMEOUT_MS)
     return () => clearTimeout(t)
-  }, [stage])
+  }, [stage, coursesTry])
 
   async function onCoursesMessage(data: string) {
     if (stageRef.current !== 'courses') return
@@ -58,8 +72,17 @@ export default function BackgroundLetusSync() {
       } catch {
         // 保存失敗でも既存mapで続行
       }
+      setStage('snapshots')
+      return
     }
-    setStage('snapshots')
+    // 空振り（SSOリダイレクト途中・未ログイン等）→ 少し待ってWebViewを作り直して再試行。
+    if (coursesTry < COURSES_MAX_TRIES) {
+      setTimeout(() => {
+        if (stageRef.current === 'courses') setCoursesTry((n) => n + 1)
+      }, 3000)
+    } else {
+      setStage('snapshots')
+    }
   }
 
   // snapshots: courseMap のコースページを逐次巡回してスナップショット（更新差分）を貯める。
@@ -126,6 +149,7 @@ export default function BackgroundLetusSync() {
     <View style={styles.box}>
       {stage === 'courses' ? (
         <WebView
+          key={`courses-${coursesTry}`}
           ref={coursesWebviewRef}
           source={{ uri: MYCOURSES_URL }}
           sharedCookiesEnabled

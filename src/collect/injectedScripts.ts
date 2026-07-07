@@ -465,10 +465,11 @@ export const DETECT_PAGE_JS = `(function(){
     var hasEnterSplash = btns.some(function(b){ var t=txt(b); return t.indexOf('PC')>=0 && /ENTER/i.test(t); });
     var hasClassMenu = body.indexOf('出欠管理') >= 0;
     var hasSystemError = /システムエラー|ViewExpired|この画面を閉じてください|別の画面で操作|複数の画面でご利用/.test(body);
+    var hasSsoStale = /過去のリクエスト/.test(body);
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'page', hasPasswordInput: hasPassword, hasAttendanceForm: hasAttendanceForm,
       hasEnterSplash: hasEnterSplash, hasClassMenu: hasClassMenu, hasSystemError: hasSystemError,
-      url: location.href
+      hasSsoStale: hasSsoStale, url: location.href
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));

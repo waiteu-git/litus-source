@@ -12,10 +12,12 @@ export interface GatePageSignal {
   hasPasswordInput: boolean
   hasClassMenu: boolean
   hasEnterSplash: boolean
+  /** IdPの「過去のリクエスト」エラーページ（SAMLリプレイ拒否）。キャッシュ破棄して再試行が必要 */
+  hasSsoStale?: boolean
   url?: string
 }
 
-export type GateVerdict = 'authed' | 'needsLogin' | 'pending'
+export type GateVerdict = 'authed' | 'needsLogin' | 'stale' | 'stray' | 'pending'
 
 const SSO_LOGIN_URL_RE = /login\.microsoftonline\.com|login\.live\.com|login\.microsoft\.com/i
 
@@ -25,8 +27,11 @@ export function isSsoLoginUrl(url?: string): boolean {
 }
 
 export function classifyGatePage(s: GatePageSignal): GateVerdict {
+  if (s.hasSsoStale) return 'stale'
   if (s.hasPasswordInput) return 'needsLogin'
   if (isSsoLoginUrl(s.url)) return 'needsLogin'
+  // SSOフロー混線などでLETUS側に着地したら、CLASSのprobeへ誘導し直す
+  if (/letus\.ed\.tus\.ac\.jp/i.test(s.url ?? '')) return 'stray'
   if (s.hasClassMenu) return 'authed'
   return 'pending'
 }

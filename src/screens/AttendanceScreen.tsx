@@ -313,7 +313,10 @@ export default function AttendanceScreen() {
           <WebView
             key={webviewKey}
             ref={webviewRef}
-            source={{ uri: CLASS_URL }}
+            // キャッシュ無効＋キー毎のキャッシュバスター: SSOの302がキャッシュ再生されると
+            // IdPが「過去のリクエスト」で拒否するため（ゲートと同じ対策）。
+            source={{ uri: `${CLASS_URL}?litus=a${webviewKey}` }}
+            cacheEnabled={false}
             userAgent={DESKTOP_UA}
             sharedCookiesEnabled
             thirdPartyCookiesEnabled

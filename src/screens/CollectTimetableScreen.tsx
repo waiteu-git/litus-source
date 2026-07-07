@@ -78,6 +78,7 @@ export default function CollectTimetableScreen() {
           <WebView
             ref={webviewRef}
             source={{ uri: CLASS_URL }}
+            cacheEnabled={false}
             userAgent={DESKTOP_UA}
             sharedCookiesEnabled
             thirdPartyCookiesEnabled

@@ -33,17 +33,20 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AuthProvider>
-          <AssignmentsVersionProvider>
-            <NavigationContainer>
-              <LoginGate>
+        {/* AuthProvider（LETUSウォームアップ）はLoginGateの内側に置く: 起動直後から裏SSOを走らせると、
+            可視ログインのSSOフローと同一Cookie jarで並走してリレー先が混線し、ログイン後にLETUSへ
+            着地して詰む実機バグがあった。ログイン完了後にのみ裏SSOを開始する。 */}
+        <AssignmentsVersionProvider>
+          <NavigationContainer>
+            <LoginGate>
+              <AuthProvider>
                 <RootTabs />
                 <BackgroundLetusSync />
-              </LoginGate>
-            </NavigationContainer>
-          </AssignmentsVersionProvider>
+              </AuthProvider>
+            </LoginGate>
+          </NavigationContainer>
           <StatusBar style="auto" />
-        </AuthProvider>
+        </AssignmentsVersionProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   )
