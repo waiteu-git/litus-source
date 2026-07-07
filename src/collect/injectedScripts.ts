@@ -396,6 +396,31 @@ export const DETECT_AUTH_JS = `(function(){
   true;
 })();`
 
+/**
+ * 非表示WebViewの現在ページ種別シグナルを抽出して postMessage する（抽出のみ・classifyClassPage で判定）。
+ * パスワード欄=ログイン / 認証コード欄＋出席登録するボタン=出席フォーム / PC・スマホ ENTER=入口スプラッシュ /
+ * 「出欠管理」メニュー=CLASSポータル。
+ */
+export const DETECT_PAGE_JS = `(function(){
+  try {
+    var body = document.body ? (document.body.innerText || '') : '';
+    var hasPassword = !!document.querySelector('input[type=password]');
+    var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
+    function txt(e){ return ((e.textContent||e.value)||'').replace(/\\s+/g,''); }
+    var hasSubmitBtn = btns.some(function(b){ var idn=(b.id||b.name||''); if(idn.indexOf('menuForm')>=0||idn.indexOf('mainMenu')>=0)return false; return txt(b).indexOf('出席登録する')>=0; });
+    var hasAttendanceForm = hasSubmitBtn && body.indexOf('認証コード') >= 0;
+    var hasEnterSplash = btns.some(function(b){ var t=txt(b); return t.indexOf('PC')>=0 && /ENTER/i.test(t); });
+    var hasClassMenu = body.indexOf('出欠管理') >= 0;
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'page', hasPasswordInput: hasPassword, hasAttendanceForm: hasAttendanceForm,
+      hasEnterSplash: hasEnterSplash, hasClassMenu: hasClassMenu, url: location.href
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
 /** SSOセッションを黙って温める先読み対象（CLASS=出席/時間割、LETUS=課題）。 */
 export const CLASS_TOP_URL = 'https://class.admin.tus.ac.jp/'
 
