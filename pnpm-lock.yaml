@@ -26,9 +26,6 @@ importers:
       expo:
         specifier: ~57.0.2
         version: 57.0.2(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(react-native-webview@13.16.1(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
-      expo-blur:
-        specifier: ~57.0.0
-        version: 57.0.0(expo@57.0.2)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       expo-build-properties:
         specifier: ~57.0.3
         version: 57.0.3(expo@57.0.2)
@@ -1627,13 +1624,6 @@ packages:
 
   expo-asset@57.0.3:
     resolution: {integrity: sha512-6E08JDuYrktY5pKNn2WiFBPBfj6bvFb++ccuBTijK8BUk/afSoy6n35h583LmC2YHgHTepWHHWNfr61nYcMd8Q==}
-    peerDependencies:
-      expo: '*'
-      react: '*'
-      react-native: '*'
-
-  expo-blur@57.0.0:
-    resolution: {integrity: sha512-cn+LlmOdf7swx80v6yngW9AVl7m1F4cQGpfeJx/Jckgb6C4/sdA5jy/f4wBJCGCZs+2qpPEjlUkQ2Q2+7LQiuA==}
     peerDependencies:
       expo: '*'
       react: '*'
@@ -4747,12 +4737,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
-
-  expo-blur@57.0.0(expo@57.0.2)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3):
-    dependencies:
-      expo: 57.0.2(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(react-native-webview@13.16.1(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
-      react: 19.2.3
-      react-native: 0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
 
   expo-build-properties@57.0.3(expo@57.0.2):
     dependencies:
