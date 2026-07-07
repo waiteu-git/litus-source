@@ -6,13 +6,14 @@ import RootTabs from './src/navigation/RootTabs'
 import { AuthProvider } from './src/auth/AuthProvider'
 import { LoginGate } from './src/auth/LoginGate'
 import { ThemeProvider } from './src/theme'
-import { requestNotificationPermission } from './src/notifications/notifier'
+import { configureNotifications, requestNotificationPermission } from './src/notifications/notifier'
 import { refreshAllNotifications } from './src/notifications/notificationRefresh'
 
 export default function App() {
   useEffect(() => {
     ;(async () => {
       try {
+        await configureNotifications()
         await requestNotificationPermission()
         await refreshAllNotifications()
       } catch (e) {

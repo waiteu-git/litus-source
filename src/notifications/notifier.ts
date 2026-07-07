@@ -10,6 +10,7 @@
  * Expo Go では通知系は no-op になり、他機能（時間割・出席WebView・設定）は動く。
  * **実際の通知発火の検証は開発ビルド（expo run:android / EAS dev build）が必要。**
  */
+import { Platform } from 'react-native'
 import Constants, { ExecutionEnvironment } from 'expo-constants'
 import type { AttendanceAlarm } from './attendanceSchedule'
 import { buildAttendanceNotificationContent } from './attendanceSchedule'
@@ -18,6 +19,9 @@ import { buildAssignmentNotificationContent } from './assignmentContent'
 
 const TAG = 'attendance-alarm'
 const ASSIGNMENT_TAG = 'assignment-reminder'
+
+export const ATTENDANCE_CHANNEL_ID = 'attendance'
+export const ASSIGNMENT_CHANNEL_ID = 'assignments'
 
 /** Expo Go では expo-notifications を読み込めない（読むと落ちる）。 */
 const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
@@ -43,6 +47,35 @@ async function loadNotifications(): Promise<NotificationsModule | null> {
   return cached
 }
 
+/**
+ * 通知の表示方針とAndroidチャンネルを設定する。App起動時に権限要求より先に1回呼ぶ。
+ * ハンドラ未設定だとフォアグラウンド中の通知が一切表示されない（授業直前にアプリを
+ * 開いていると出席ナッジが消える）ため必須。チャンネルは出席=MAX（音＋ヘッドアップ）、
+ * 課題=HIGH。Expo Go では loadNotifications が null を返し no-op。
+ */
+export async function configureNotifications(): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  })
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(ATTENDANCE_CHANNEL_ID, {
+      name: '出席リマインド',
+      importance: Notifications.AndroidImportance.MAX,
+    })
+    await Notifications.setNotificationChannelAsync(ASSIGNMENT_CHANNEL_ID, {
+      name: '課題リマインド',
+      importance: Notifications.AndroidImportance.HIGH,
+    })
+  }
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
   const Notifications = await loadNotifications()
   if (!Notifications) return false
@@ -65,7 +98,11 @@ export async function syncAttendanceAlarms(alarms: AttendanceAlarm[]): Promise<v
     const { title, body } = buildAttendanceNotificationContent(alarm)
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { tag: TAG, courseCode: alarm.courseCode, kind: alarm.kind } },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(alarm.fireAt) },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(alarm.fireAt),
+        channelId: ATTENDANCE_CHANNEL_ID,
+      },
     })
   }
 }
@@ -85,7 +122,11 @@ export async function syncAssignmentReminders(notifications: ScheduledNotificati
     const { title, body } = buildAssignmentNotificationContent(n)
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { tag: ASSIGNMENT_TAG, kind: n.kind } },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(n.fireAt) },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(n.fireAt),
+        channelId: ASSIGNMENT_CHANNEL_ID,
+      },
     })
   }
 }
