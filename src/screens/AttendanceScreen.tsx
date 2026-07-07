@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useIsFocused } from '@react-navigation/native'
 import { WebView } from 'react-native-webview'
 import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg } from '../ui/screen'
@@ -41,6 +42,10 @@ export default function AttendanceScreen() {
   const { variant } = useThemeVariant()
   const glass = variant === 'glass'
   const loginGate = useLoginGate()
+  // CLASSは同一セッションの複数画面を禁止するため、このタブがフォーカス中のみWebViewをマウント
+  // する（アプリ内のCLASS viewを常に最大1枚に保つ）。他画面から戻ると自動遷移が再走する。
+  const isFocused = useIsFocused()
+  const firstFocusRef = useRef(true)
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
   const [code, setCode] = useState('')
   const [expanded, setExpanded] = useState(true)
@@ -59,6 +64,19 @@ export default function AttendanceScreen() {
   }, [state.phase])
 
   phaseRef.current = state.phase
+
+  // タブ再訪でWebViewが再マウントされる際、エンジンを booting に戻す（reception は保持して
+  // キャッシュ表示）。初回マウントは初期状態が booting なので何もしない。
+  useEffect(() => {
+    if (!isFocused) return
+    if (firstFocusRef.current) {
+      firstFocusRef.current = false
+      return
+    }
+    portalTriesRef.current = 0
+    errorRetryRef.current = 0
+    dispatch({ kind: 'reboot' })
+  }, [isFocused])
 
   // フォアグラウンド復帰時にページを再判定する（長時間放置でセッション切れ/古いページのまま
   // 固まるのを防ぐ）。送信中はWebView状態を壊さないようスキップ。判定結果は通常の onMessage
@@ -184,12 +202,16 @@ export default function AttendanceScreen() {
   const isOverlay = overlayVisible(state.phase)
   const c = COLORS
 
+  // booting中でも前回の受付状況をキャッシュ表示し、裏の再遷移を待たせない（（更新中…）を添える）。
+  const updating = state.phase === 'booting' && state.reception != null
   const statusLine =
     state.reception && state.reception.accepting
-      ? `受付中: ${state.reception.courseName ?? ''}`
+      ? `受付中: ${state.reception.courseName ?? ''}${updating ? '（更新中…）' : ''}`
       : state.phase === 'ready'
         ? '受付中の授業はありません'
-        : '受付状況を確認しています…'
+        : updating
+          ? '受付状況を更新しています…'
+          : '受付状況を確認しています…'
 
   const resultBanner = state.result
     ? {
@@ -284,17 +306,19 @@ export default function AttendanceScreen() {
         style={isOverlay ? styles.webviewOverlayBox : styles.webviewHiddenBox}
         pointerEvents={isOverlay ? 'auto' : 'none'}
       >
-        <WebView
-          key={webviewKey}
-          ref={webviewRef}
-          source={{ uri: CLASS_URL }}
-          userAgent={DESKTOP_UA}
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          onLoadEnd={onLoadEnd}
-          onMessage={(e) => onMessage(e.nativeEvent.data)}
-          style={styles.webviewFill}
-        />
+        {isFocused ? (
+          <WebView
+            key={webviewKey}
+            ref={webviewRef}
+            source={{ uri: CLASS_URL }}
+            userAgent={DESKTOP_UA}
+            sharedCookiesEnabled
+            thirdPartyCookiesEnabled
+            onLoadEnd={onLoadEnd}
+            onMessage={(e) => onMessage(e.nativeEvent.data)}
+            style={styles.webviewFill}
+          />
+        ) : null}
       </View>
 
       {isOverlay ? (

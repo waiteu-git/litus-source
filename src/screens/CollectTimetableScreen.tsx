@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { useNavigation } from '@react-navigation/native'
+import { useIsFocused, useNavigation } from '@react-navigation/native'
 import { ActionButton } from '../ui/screen'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { parseCollectionMessage } from '../collect/timetableMessage'
@@ -26,6 +26,9 @@ export default function CollectTimetableScreen() {
   const webviewRef = useRef<WebView>(null)
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const auth = useAuth()
+  // CLASSは複数画面同時操作を禁止。タブ切替などでフォーカスを失ったらWebViewを畳み、
+  // 出席タブ等の他のCLASS viewと競合しないようにする（戻ると最初からやり直し）。
+  const isFocused = useIsFocused()
   const [error, setError] = useState<string | null>(null)
 
   function collect() {
@@ -71,15 +74,17 @@ export default function CollectTimetableScreen() {
   return (
     <View style={styles.root}>
       <View style={styles.webviewBox}>
-        <WebView
-          ref={webviewRef}
-          source={{ uri: CLASS_URL }}
-          userAgent={DESKTOP_UA}
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          onLoadEnd={() => webviewRef.current?.injectJavaScript(CLASS_ON_LOAD_JS)}
-          onMessage={(e) => onMessage(e.nativeEvent.data)}
-        />
+        {isFocused ? (
+          <WebView
+            ref={webviewRef}
+            source={{ uri: CLASS_URL }}
+            userAgent={DESKTOP_UA}
+            sharedCookiesEnabled
+            thirdPartyCookiesEnabled
+            onLoadEnd={() => webviewRef.current?.injectJavaScript(CLASS_ON_LOAD_JS)}
+            onMessage={(e) => onMessage(e.nativeEvent.data)}
+          />
+        ) : null}
       </View>
       <View style={styles.controls}>
         <View style={{ flex: 1 }}>

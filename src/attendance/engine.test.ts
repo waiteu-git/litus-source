@@ -49,6 +49,17 @@ describe('attendanceReducer', () => {
     const s = attendanceReducer({ ...initialEngineState, phase: 'navFailed' }, { kind: 'page', page: 'attendance' })
     expect(s.phase).toBe('booting')
   })
+  it('reboot は booting に戻すが reception は保持する（タブ再訪のキャッシュ表示用）', () => {
+    const start = {
+      phase: 'ready' as const,
+      reception,
+      result: { result: 'x', ok: true, wrong: false, err: false },
+    }
+    const s = attendanceReducer(start, { kind: 'reboot' })
+    expect(s.phase).toBe('booting')
+    expect(s.reception).toBe(reception)
+    expect(s.result).toBeNull()
+  })
   it('errorPage で navFailed へ（自動復帰1回を使い切った後の最終フォールバック）', () => {
     const s = attendanceReducer({ ...initialEngineState, phase: 'ready' }, { kind: 'errorPage' })
     expect(s.phase).toBe('navFailed')

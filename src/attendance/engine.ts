@@ -23,6 +23,7 @@ export type EngineEvent =
   | { kind: 'submitResult'; result: SubmitResult }
   | { kind: 'navTimeout' }
   | { kind: 'errorPage' }
+  | { kind: 'reboot' }
   | { kind: 'retry' }
 
 export const initialEngineState: EngineState = { phase: 'booting', reception: null, result: null }
@@ -53,6 +54,9 @@ export function attendanceReducer(state: EngineState, event: EngineEvent): Engin
     case 'errorPage':
       // システムエラーページで自動復帰を使い切った後の最終フォールバック（手動やり直しへ）
       return { ...state, phase: 'navFailed' }
+    case 'reboot':
+      // タブ再訪などのWebView再起動。前回の受付状況をキャッシュ表示するため reception は保持する
+      return { ...state, phase: 'booting', result: null }
     case 'retry':
       return { ...initialEngineState }
     default:
