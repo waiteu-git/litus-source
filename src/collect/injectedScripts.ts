@@ -252,6 +252,71 @@ export function buildSubmitAttendanceJs(code: string): string {
 })();`
 }
 
+/** 実験ラボ用: 使える送信パターンの識別子。UIのボタンと1:1対応。 */
+export type AttendanceStrategy =
+  | 'onclick-yes'
+  | 'click-yes'
+  | 'events-yes'
+  | 'ab-direct'
+  | 'no-modified'
+  | 'widget-form'
+
+/**
+ * 実験ラボ用: 認証コードを流し込み、指定の送信パターンで「出席登録する」を発火し、1.5秒後に結果を
+ * スナップショットして postMessage(type:'lab') する。どのパターンで登録が通るかを実機で切り分けるための
+ * 開発用。各パターンは buildSubmitAttendanceJs の知見（PrimeFaces.confirmの「はい」自動クリック等）を土台にする。
+ */
+export function buildAttendanceLabJs(code: string, strategy: string): string {
+  const c = JSON.stringify(String(code))
+  const s = JSON.stringify(String(strategy))
+  return `(function(){
+  try {
+    var code = ${c}; var strategy = ${s};
+    function post(o){ o.type='lab'; o.strategy=strategy; window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
+    function nativeSet(el,v){ try{var d=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value'); if(d&&d.set){d.set.call(el,v);return;}}catch(e){} el.value=v; }
+    function fireKey(el,type,ch){ var e=new KeyboardEvent(type,{key:ch,bubbles:true,cancelable:true}); try{Object.defineProperty(e,'keyCode',{get:function(){return ch.charCodeAt(0)}});Object.defineProperty(e,'which',{get:function(){return ch.charCodeAt(0)}});}catch(e2){} el.dispatchEvent(e); }
+    function setVal(el,v){ el.focus(); fireKey(el,'keydown',v); fireKey(el,'keypress',v); nativeSet(el,v); el.dispatchEvent(new Event('input',{bubbles:true})); fireKey(el,'keyup',v); el.dispatchEvent(new Event('change',{bubbles:true})); }
+    function codeInputs(){
+      var all=Array.prototype.slice.call(document.querySelectorAll('input')).filter(function(el){var t=(el.getAttribute('type')||'text').toLowerCase(); if(['hidden','submit','button','checkbox','radio','file','image','reset'].indexOf(t)>=0)return false; if(el.disabled||el.readOnly||!el.offsetParent)return false; return true;});
+      var label=Array.prototype.slice.call(document.querySelectorAll('*')).find(function(e){return e.children.length===0&&(e.textContent||'').indexOf('認証コード')>=0;});
+      var ins=all; if(label){var after=all.filter(function(el){return (label.compareDocumentPosition(el)&4)!==0;}); if(after.length>0)ins=after;}
+      if(ins.length>1){var sm=ins.filter(function(el){return el.maxLength===1||el.maxLength===2;}); if(sm.length>0)ins=sm;}
+      return ins;
+    }
+    var ins=codeInputs(); var filled=0;
+    if(ins.length<=1){ if(ins[0]){setVal(ins[0],code);filled=1;} } else { for(var i=0;i<ins.length&&i<code.length;i++){setVal(ins[i],code.charAt(i));filled++;} }
+    function findBtn(){ var els=Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a')); return els.find(function(b){return ((b.textContent||b.value)||'').indexOf('出席登録')>=0;}); }
+    function clickYes(){ var y=document.querySelector('.ui-confirmdialog-yes'); if(!y){var bs=Array.prototype.slice.call(document.querySelectorAll('.ui-confirm-dialog button,.ui-confirmdialog button,.ui-dialog button,.ui-dialog a')); y=bs.filter(function(b){return !!b.offsetParent;}).find(function(b){var t=((b.textContent||b.value)||'').trim(); return t==='はい'||t==='OK'||/^(yes|ok)$/i.test(t);});} if(y){try{var oc=y.getAttribute('onclick'); if(oc){new Function('event',oc).call(y,new MouseEvent('click',{bubbles:true}));}else{y.click();} return true;}catch(e){try{y.click();return true;}catch(e2){}}} return false; }
+    function snap(){
+      var dlg=document.querySelector('.ui-confirmdialog'); var dialogOpen=!!(dlg&&dlg.offsetParent);
+      var msg=''; Array.prototype.slice.call(document.querySelectorAll('.ui-growl-item,.ui-messages,.ui-message,.ui-growl')).forEach(function(m){var t=(m.innerText||m.textContent||'').replace(/\\s+/g,' ').trim(); if(t)msg+=t+' | ';});
+      var body=(document.body?(document.body.innerText||''):'');
+      var hasErr=/システムエラー|エラーが発生|ViewExpired|失敗しました/.test(body+' '+msg);
+      var hasOk=/登録しました|出席しました|受付を完了|登録が完了|出席登録が完了/.test(body+' '+msg);
+      var vals=ins.map(function(el){return el.value;}).join(',');
+      var st=body.match(/出席確認中|出席済|未提出|受付中/);
+      return {dialogOpen:dialogOpen,msg:msg.slice(0,160),hasErr:hasErr,hasOk:hasOk,vals:vals,status:st?st[0]:''};
+    }
+    var btn=findBtn(); var onclick=btn?String(btn.getAttribute('onclick')||'').slice(0,300):''; var method='none';
+    setTimeout(function(){
+      try{
+        if(strategy==='onclick-yes'){ if(btn){var a=btn.getAttribute('onclick'); if(a)new Function('event',a).call(btn,new MouseEvent('click',{bubbles:true})); else btn.click();} method='onclick'; setTimeout(clickYes,500); }
+        else if(strategy==='click-yes'){ if(btn)btn.click(); method='click'; setTimeout(clickYes,500); }
+        else if(strategy==='events-yes'){ if(btn){['pointerdown','mousedown','mouseup','click'].forEach(function(t){try{btn.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window}));}catch(e){}});} method='events'; setTimeout(clickYes,500); }
+        else if(strategy==='ab-direct'){ var m=onclick.match(/PrimeFaces\\.ab\\([\\s\\S]*\\)/); if(m){ try{ new Function(m[0]).call(btn); method='ab'; }catch(e){ method='ab-err:'+String(e).slice(0,40); } } else { method='ab-none(onclickにabなし)'; } }
+        else if(strategy==='no-modified'){ try{window.isModified=function(){return false};}catch(e){} if(btn){var b2=btn.getAttribute('onclick'); if(b2)new Function('event',b2).call(btn,new MouseEvent('click',{bubbles:true})); else btn.click();} method='no-modified'; setTimeout(clickYes,500); }
+        else if(strategy==='widget-form'){ var done=false; try{ if(btn&&btn.id&&window.PrimeFaces&&PrimeFaces.widgets){ for(var k in PrimeFaces.widgets){var w=PrimeFaces.widgets[k]; if(w&&w.id&&btn.id.indexOf(w.id)>=0&&w.jq){w.jq.trigger('click');done=true;break;}} } }catch(e){} if(!done){var f=btn&&btn.closest?btn.closest('form'):null; if(f){try{ if(f.requestSubmit)f.requestSubmit(); else f.submit(); done=true;}catch(e){}}} method=done?'widget-form':'widget-none(発火先なし)'; setTimeout(clickYes,500); }
+        else { method='unknown-strategy'; }
+      }catch(err){ method='throw:'+String(err).slice(0,60); }
+      setTimeout(function(){ var sp=snap(); post({filled:filled,btnFound:!!btn,method:method,onclick:onclick,dialogOpen:sp.dialogOpen,msg:sp.msg,hasErr:sp.hasErr,hasOk:sp.hasOk,vals:sp.vals,status:sp.status}); }, 1500);
+    }, 300);
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type:'lab', strategy:strategy, method:'outer-throw:'+String(e).slice(0,80) }));
+  }
+  true;
+})();`
+}
+
 /**
  * 現在ページのログイン状態シグナルを抽出して postMessage する（抽出のみ・classifyAuthState で判定）。
  * パスワード入力欄=ログイン要求、ログアウトリンク(ログアウト/logout)=ログイン済み。CLASS/LETUS 双方で成立。
