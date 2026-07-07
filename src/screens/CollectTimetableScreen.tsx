@@ -61,7 +61,7 @@ export default function CollectTimetableScreen() {
           userAgent={DESKTOP_UA}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
-          injectedJavaScript={ENTER_CLASS_PC_JS}
+          onLoadEnd={() => webviewRef.current?.injectJavaScript(ENTER_CLASS_PC_JS)}
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>
