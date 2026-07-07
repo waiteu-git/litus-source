@@ -4,7 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import RootTabs from './src/navigation/RootTabs'
-import BackgroundAssignmentRefresh from './src/collect/BackgroundAssignmentRefresh'
+import BackgroundLetusSync from './src/collect/BackgroundLetusSync'
 import { AuthProvider } from './src/auth/AuthProvider'
 import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion'
 import { LoginGate } from './src/auth/LoginGate'
@@ -38,7 +38,7 @@ export default function App() {
             <NavigationContainer>
               <LoginGate>
                 <RootTabs />
-                <BackgroundAssignmentRefresh />
+                <BackgroundLetusSync />
               </LoginGate>
             </NavigationContainer>
           </AssignmentsVersionProvider>
