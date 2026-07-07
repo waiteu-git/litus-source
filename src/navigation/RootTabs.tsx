@@ -15,11 +15,11 @@ export default function RootTabs() {
       screenOptions={{
         tabBarActiveTintColor: COLORS.white,
         tabBarInactiveTintColor: '#0b5c48',
+        // position:absolute にすると全画面でコンテンツに被って押せなくなるため、レイアウト領域を
+        // 確保したまま余白＋角丸＋影で「浮遊」させる。
         tabBarStyle: {
-          position: 'absolute',
-          left: 12,
-          right: 12,
-          bottom: 12,
+          marginHorizontal: 12,
+          marginBottom: 10,
           height: 62,
           borderRadius: 20,
           backgroundColor: COLORS.white,

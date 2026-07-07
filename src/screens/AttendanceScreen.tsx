@@ -205,17 +205,24 @@ export default function AttendanceScreen() {
         ) : null}
       </Bg>
 
-      <WebView
-        key={webviewKey}
-        ref={webviewRef}
-        source={{ uri: CLASS_URL }}
-        userAgent={DESKTOP_UA}
-        sharedCookiesEnabled
-        thirdPartyCookiesEnabled
-        onLoadEnd={onLoadEnd}
-        onMessage={(e) => onMessage(e.nativeEvent.data)}
-        style={isOverlay ? styles.webviewOverlay : styles.webviewHidden}
-      />
+      {/* WebViewに直接absoluteを当てても効かず画面を占有するため、位置指定した親Viewで包む。
+          非表示時は画面外1x1、オーバーレイ時のみ全画面に出す。 */}
+      <View
+        style={isOverlay ? styles.webviewOverlayBox : styles.webviewHiddenBox}
+        pointerEvents={isOverlay ? 'auto' : 'none'}
+      >
+        <WebView
+          key={webviewKey}
+          ref={webviewRef}
+          source={{ uri: CLASS_URL }}
+          userAgent={DESKTOP_UA}
+          sharedCookiesEnabled
+          thirdPartyCookiesEnabled
+          onLoadEnd={onLoadEnd}
+          onMessage={(e) => onMessage(e.nativeEvent.data)}
+          style={styles.webviewFill}
+        />
+      </View>
 
       {isOverlay ? (
         <View style={styles.overlayBar}>
@@ -273,9 +280,10 @@ const styles = StyleSheet.create({
   ctaText: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
   result: { marginTop: 12, borderRadius: 12, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
-  webviewHidden: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
-  webviewOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 60 },
-  overlayBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 60, backgroundColor: '#0a6650', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
+  webviewHiddenBox: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
+  webviewOverlayBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 56, backgroundColor: '#ffffff' },
+  webviewFill: { flex: 1 },
+  overlayBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 56, backgroundColor: '#0a6650', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
   overlayText: { color: '#ffffff', fontSize: 13, flex: 1 },
   overlayBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   overlayBtnText: { color: '#ffffff', fontSize: 13 },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { loadTheme, saveTheme } from './storage/themeStore'
 import type { ThemeVariant } from './storage/themeSerialize'
 
@@ -24,15 +24,28 @@ export const COLORS = {
   dangerBg: '#fdecea',
 }
 
-/** テーマ選択（glass/solid）を保持・永続化するフック。初回は AsyncStorage から復元。 */
-export function useThemeVariant(): { variant: ThemeVariant; setVariant: (v: ThemeVariant) => void } {
+type ThemeCtx = { variant: ThemeVariant; setVariant: (v: ThemeVariant) => void }
+
+const ThemeContext = createContext<ThemeCtx>({ variant: 'glass', setVariant: () => {} })
+
+/**
+ * テーマ選択（glass/solid）をアプリ全体で共有・永続化する。全画面が同じContextを読むため、
+ * 設定での切替が出席画面など他画面にも即反映される。初回は AsyncStorage から復元。
+ */
+export function ThemeProvider({ children }: { children: ReactNode }) {
   const [variant, setVariantState] = useState<ThemeVariant>('glass')
   useEffect(() => {
-    loadTheme().then(setVariantState).catch(() => undefined)
+    loadTheme()
+      .then(setVariantState)
+      .catch(() => undefined)
   }, [])
   function setVariant(v: ThemeVariant) {
     setVariantState(v)
     saveTheme(v).catch(() => undefined)
   }
-  return { variant, setVariant }
+  return <ThemeContext.Provider value={{ variant, setVariant }}>{children}</ThemeContext.Provider>
+}
+
+export function useThemeVariant(): ThemeCtx {
+  return useContext(ThemeContext)
 }
