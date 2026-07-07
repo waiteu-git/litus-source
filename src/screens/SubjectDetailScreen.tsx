@@ -1,7 +1,8 @@
 // app/src/screens/SubjectDetailScreen.tsx
 import { useEffect, useState } from 'react'
-import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useRoute, type RouteProp } from '@react-navigation/native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ActionButton } from '../ui/screen'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
@@ -11,6 +12,7 @@ import type { CourseSnapshot } from '../storage/courseSnapshotSerialize'
 
 export default function SubjectDetailScreen() {
   const route = useRoute<RouteProp<TimetableStackParamList, 'SubjectDetail'>>()
+  const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const { courseCode, name } = route.params
   const [letusUrl, setLetusUrl] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<CourseSnapshot | null>(null)
@@ -36,13 +38,19 @@ export default function SubjectDetailScreen() {
 
       <View style={styles.section}>
         {letusUrl ? (
-          <ActionButton label="LETUSコースを開く" onPress={() => Linking.openURL(letusUrl)} />
+          <ActionButton
+            label="LETUSコースを開く"
+            onPress={() => navigation.navigate('Web', { url: letusUrl, title: name })}
+          />
         ) : (
           <Text style={styles.muted}>LETUSコース未突合（「コース収集」を実行してください）</Text>
         )}
       </View>
       <View style={styles.section}>
-        <ActionButton label="シラバスを開く" onPress={() => Linking.openURL(syllabusUrl)} />
+        <ActionButton
+          label="シラバスを開く"
+          onPress={() => navigation.navigate('Web', { url: syllabusUrl, title: 'シラバス' })}
+        />
       </View>
 
       <Text style={styles.heading}>更新状況</Text>

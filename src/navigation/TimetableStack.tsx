@@ -4,6 +4,7 @@ import CollectTimetableScreen from '../screens/CollectTimetableScreen'
 import CollectCoursesScreen from '../screens/CollectCoursesScreen'
 import UpdateCheckScreen from '../screens/UpdateCheckScreen'
 import SubjectDetailScreen from '../screens/SubjectDetailScreen'
+import WebViewerScreen from '../screens/WebViewerScreen'
 import type { TimetableStackParamList } from './types'
 import { COLORS } from '../theme'
 
@@ -23,6 +24,11 @@ export default function TimetableStack() {
       <Stack.Screen name="CollectCourses" component={CollectCoursesScreen} options={{ title: 'コース収集' }} />
       <Stack.Screen name="UpdateCheck" component={UpdateCheckScreen} options={{ title: '更新チェック' }} />
       <Stack.Screen name="SubjectDetail" component={SubjectDetailScreen} options={{ title: '科目' }} />
+      <Stack.Screen
+        name="Web"
+        component={WebViewerScreen}
+        options={({ route }) => ({ title: route.params.title ?? 'ページ' })}
+      />
     </Stack.Navigator>
   )
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useIsFocused, useNavigation } from '@react-navigation/native'
@@ -16,6 +16,7 @@ import { saveTimetable } from '../storage/timetableStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAuth } from '../auth/AuthProvider'
 import { classifyAuthState } from '../auth/classifyAuthState'
+import { useClassView } from '../collect/classViewArbiter'
 import type { TimetableStackParamList } from '../navigation/types'
 
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
@@ -26,10 +27,16 @@ export default function CollectTimetableScreen() {
   const webviewRef = useRef<WebView>(null)
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const auth = useAuth()
-  // CLASSは複数画面同時操作を禁止。タブ切替などでフォーカスを失ったらWebViewを畳み、
-  // 出席タブ等の他のCLASS viewと競合しないようにする（戻ると最初からやり直し）。
+  // CLASSは複数画面同時操作を禁止。この画面がフォーカス中は調停（classViewArbiter）で
+  // CLASSの使用権を取り、出席タブの持続WebViewに譲ってもらう。離れたら返す。
   const isFocused = useIsFocused()
+  const { setCollectActive } = useClassView()
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setCollectActive(isFocused)
+    return () => setCollectActive(false)
+  }, [isFocused, setCollectActive])
 
   function collect() {
     webviewRef.current?.injectJavaScript(COLLECT_TIMETABLE_JS)

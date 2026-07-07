@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { ActionButton } from '../ui/screen'
 import { loadCourseMap } from '../storage/courseMapStore'
-import { COLLECT_COURSE_PAGE_JS } from '../collect/injectedScripts'
+import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from '../collect/injectedScripts'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
 import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { CourseSnapshotMap } from '../storage/courseSnapshotSerialize'
@@ -73,6 +73,7 @@ export default function UpdateCheckScreen() {
         <WebView
           ref={webviewRef}
           source={{ uri: currentUrl }}
+          userAgent={DESKTOP_UA}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
           onLoadEnd={() => webviewRef.current?.injectJavaScript(COLLECT_COURSE_PAGE_JS)}

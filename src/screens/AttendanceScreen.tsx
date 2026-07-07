@@ -16,6 +16,7 @@ import {
 } from '../collect/injectedScripts'
 import { parseAttendanceMessage } from '../collect/attendanceMessage'
 import { classifyClassPage } from '../attendance/classifyClassPage'
+import { useClassView } from '../collect/classViewArbiter'
 import { countdownText } from '../attendance/countdown'
 import { normalizeAttendanceCode } from '../attendance/normalizeCode'
 import {
@@ -44,8 +45,11 @@ export default function AttendanceScreen() {
   const { variant } = useThemeVariant()
   const glass = variant === 'glass'
   const loginGate = useLoginGate()
-  // CLASSは同一セッションの複数画面を禁止するため、このタブがフォーカス中のみWebViewをマウント
-  // する（アプリ内のCLASS viewを常に最大1枚に保つ）。他画面から戻ると自動遷移が再走する。
+  // CLASSは同一セッションの複数画面を禁止する。出席のWebViewは**一度開いたら持続**させ
+  // （タブ切替で破棄しない＝再訪ゼロ秒・「別の画面」エラーも出ない）、時間割収集など他の
+  // CLASS利用者がフォーカスされている間だけ譲る（classViewArbiter）。
+  const { collectActive } = useClassView()
+  const prevCollectRef = useRef(false)
   const isFocused = useIsFocused()
   const firstFocusRef = useRef(true)
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
@@ -67,17 +71,27 @@ export default function AttendanceScreen() {
 
   phaseRef.current = state.phase
 
-  // タブ再訪でWebViewが再マウントされる際、エンジンを booting に戻す（reception は保持して
-  // キャッシュ表示）。初回マウントは初期状態が booting なので何もしない。
+  // 時間割収集がCLASSを使い終わったら、WebViewを作り直して出席を再開する（使用中は譲って
+  // アンマウントされている）。reception は保持してキャッシュ表示。
+  useEffect(() => {
+    if (prevCollectRef.current && !collectActive) {
+      portalTriesRef.current = 0
+      errorRetryRef.current = 0
+      dispatch({ kind: 'reboot' })
+      setWebviewKey((k) => k + 1)
+    }
+    prevCollectRef.current = collectActive
+  }, [collectActive])
+
+  // タブ再訪時はWebViewが持続しているため再読込せず、静かに再判定だけ行う
+  // （サーバ側でセッションが動いていた場合のズレを検知して通常経路で立て直す）。
   useEffect(() => {
     if (!isFocused) return
     if (firstFocusRef.current) {
       firstFocusRef.current = false
       return
     }
-    portalTriesRef.current = 0
-    errorRetryRef.current = 0
-    dispatch({ kind: 'reboot' })
+    webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
   }, [isFocused])
 
   // フォアグラウンド復帰時にページを再判定する（長時間放置でセッション切れ/古いページのまま
@@ -111,6 +125,21 @@ export default function AttendanceScreen() {
   function armNavTimeout() {
     if (navTimerRef.current) clearTimeout(navTimerRef.current)
     navTimerRef.current = setTimeout(() => dispatch({ kind: 'navTimeout' }), NAV_TIMEOUT_MS)
+  }
+
+  /**
+   * 自動やり直し: WebViewを作り直して最初から遷移し直す（手動「やり直す」の自動版）。
+   * エラーページ検知・CLASSホーム滞留の双方から呼ばれる。上限2回、超えたら手動オーバーレイへ。
+   */
+  function autoRestart() {
+    if (errorRetryRef.current < 2) {
+      errorRetryRef.current += 1
+      portalTriesRef.current = 0
+      dispatch({ kind: 'reboot' })
+      setWebviewKey((k) => k + 1)
+    } else {
+      dispatch({ kind: 'errorPage' })
+    }
   }
 
   function onLoadEnd() {
@@ -153,17 +182,13 @@ export default function AttendanceScreen() {
           // メニュー発火がAJAX部分更新だと onLoadEnd が来ないため、少し待って再判定（粘り）。
           // まだ portal なら上の試行上限内で再試行、attendance に変わっていれば受付検出へ進む。
           setTimeout(() => inject(DETECT_PAGE_JS), 1500)
+        } else {
+          // メニュー遷移が効かずCLASSホームに留まる場合も自動やり直しの対象（ユーザー要望）。
+          autoRestart()
         }
       } else if (kind === 'error') {
-        // JSFのViewExpired等。1回だけWebViewを作り直して自動復帰、ダメなら手動オーバーレイへ。
-        if (errorRetryRef.current < 1) {
-          errorRetryRef.current += 1
-          portalTriesRef.current = 0
-          dispatch({ kind: 'retry' })
-          setWebviewKey((k) => k + 1)
-        } else {
-          dispatch({ kind: 'errorPage' })
-        }
+        // JSFのViewExpired・「別の画面で操作された」等 → 自動やり直し。
+        autoRestart()
       }
       return
     }
@@ -309,7 +334,7 @@ export default function AttendanceScreen() {
         style={isOverlay ? styles.webviewOverlayBox : styles.webviewHiddenBox}
         pointerEvents={isOverlay ? 'auto' : 'none'}
       >
-        {isFocused ? (
+        {!collectActive ? (
           <WebView
             key={webviewKey}
             ref={webviewRef}

@@ -15,6 +15,8 @@ import { loadTimetable, saveTimetable } from '../storage/timetableStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { loadOnboardingDone, saveOnboardingDone } from '../storage/onboardingStore'
 import { classifyGatePage, type GateVerdict } from './classifyGatePage'
+import { syncSession } from '../collect/syncSession'
+import LetusSyncEngine from '../collect/LetusSyncEngine'
 import OnboardingSlides from '../screens/OnboardingSlides'
 import { COLORS } from '../theme'
 
@@ -24,8 +26,10 @@ const CHECK_TIMEOUT_MS = 12000
 const SETUP_TIMEOUT_MS = 25000
 // setup中、ページ読込後に時間割テーブル抽出を試みるまでの待ち。
 const SETUP_COLLECT_DELAY_MS = 900
+// 初回フル同期（コース→スナップショット→課題）の上限。超えたら入場し裏で再試行に任せる。
+const SYNC_TIMEOUT_MS = 180000
 
-type GateState = 'loading' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'authed'
+type GateState = 'loading' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'sync' | 'authed'
 
 const LoginContext = createContext<{ requireLogin: () => void }>({ requireLogin: () => {} })
 
@@ -60,10 +64,17 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const setupTriesRef = useRef(0)
   // 自動復帰（ロード失敗/クラッシュ/SAML stale/LETUS迷子）の回数上限（無限ループ防止）。
   const recoverTriesRef = useRef(0)
+  // この起動が初回チュートリアル経由か（初回のみフル同期を可視で行う）。
+  const wasFirstRunRef = useRef(false)
+  // 初回フル同期の進捗表示。
+  const [syncLabel, setSyncLabel] = useState('データを取り込んでいます…')
 
   useEffect(() => {
     loadOnboardingDone()
-      .then((done) => setState(done ? 'checking' : 'firstRun'))
+      .then((done) => {
+        if (!done) wasFirstRunRef.current = true
+        setState(done ? 'checking' : 'firstRun')
+      })
       .catch(() => setState('checking'))
   }, [])
 
@@ -73,9 +84,18 @@ export function LoginGate({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
   }, [state, nonce])
 
-  // ログイン成功（setup到達含む）＝チュートリアル完了として永続化。
+  // ログイン成功（setup/sync到達含む）＝チュートリアル完了として永続化。
   useEffect(() => {
-    if (state === 'authed' || state === 'setup') saveOnboardingDone().catch(() => undefined)
+    if (state === 'authed' || state === 'setup' || state === 'sync') {
+      saveOnboardingDone().catch(() => undefined)
+    }
+  }, [state])
+
+  // sync: 初回フル同期が進まない場合は諦めて入場（裏のBackgroundLetusSyncが後で再試行）。
+  useEffect(() => {
+    if (state !== 'sync') return
+    const t = setTimeout(() => setState((s) => (s === 'sync' ? 'authed' : s)), SYNC_TIMEOUT_MS)
+    return () => clearTimeout(t)
   }, [state])
 
   // setup: 時間割ページへ自動遷移して取り込み。タイムアウトで諦めて入場（ブロックしない）。
@@ -87,7 +107,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
       () => webviewRef.current?.injectJavaScript(COLLECT_TIMETABLE_JS),
       2500,
     )
-    const giveUp = setTimeout(() => setState((s) => (s === 'setup' ? 'authed' : s)), SETUP_TIMEOUT_MS)
+    const giveUp = setTimeout(() => setState((s) => (s === 'setup' ? afterSetup() : s)), SETUP_TIMEOUT_MS)
     return () => {
       clearTimeout(collect)
       clearTimeout(giveUp)
@@ -115,10 +135,15 @@ export function LoginGate({ children }: { children: ReactNode }) {
     setState((s) => (s === 'firstRun' || s === 'loading' ? s : 'checking'))
   }
 
+  /** setup（時間割）完了後の遷移先。初回はフル同期（コース→課題）も可視で済ませる。 */
+  function afterSetup(): GateState {
+    return wasFirstRunRef.current && !syncSession.didFullSync ? 'sync' : 'authed'
+  }
+
   /** ログイン確認後の入場処理。時間割が未保存なら setup（自動取り込み）を挟む。 */
   function proceedToEntry() {
     loadTimetable()
-      .then((t) => setState(t && t.length > 0 ? 'authed' : 'setup'))
+      .then((t) => setState(t && t.length > 0 ? afterSetup() : 'setup'))
       .catch(() => setState('authed'))
   }
 
@@ -182,14 +207,14 @@ export function LoginGate({ children }: { children: ReactNode }) {
           } catch {
             // 保存失敗でも入場は続行（手動収集で補える）
           }
-          setState((s) => (s === 'setup' ? 'authed' : s))
+          setState((s) => (s === 'setup' ? afterSetup() : s))
         })()
       } else if (setupTriesRef.current < 3) {
         // まだ時間割ページに居ない（テーブル0件）→ メニュー発火をやり直す。
         setupTriesRef.current += 1
         webviewRef.current?.injectJavaScript(OPEN_TIMETABLE_JS)
       } else {
-        setState((s) => (s === 'setup' ? 'authed' : s))
+        setState((s) => (s === 'setup' ? afterSetup() : s))
       }
       return
     }
@@ -206,7 +231,9 @@ export function LoginGate({ children }: { children: ReactNode }) {
       ? '起動しています…'
       : state === 'setup'
         ? '時間割を取り込んでいます…'
-        : 'CLASSに接続しています…'
+        : state === 'sync'
+          ? syncLabel
+          : 'CLASSに接続しています…'
   return (
     <LoginContext.Provider value={{ requireLogin }}>
       <View style={styles.root}>
@@ -250,12 +277,24 @@ export function LoginGate({ children }: { children: ReactNode }) {
             style={styles.webviewFill}
           />
         </View>
-        {state === 'loading' || state === 'checking' || state === 'setup' ? (
+        {state === 'sync' ? (
+          <LetusSyncEngine
+            onProgress={setSyncLabel}
+            onFinished={() => {
+              syncSession.didFullSync = true
+              setState((s) => (s === 'sync' ? 'authed' : s))
+            }}
+          />
+        ) : null}
+        {state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' ? (
           <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={styles.boot}>
             <Text style={styles.bootLogo}>リタス</Text>
             <Text style={styles.bootSub}>Litus — 東京理科大 非公式アプリ</Text>
             <ActivityIndicator color="#ffffff" style={styles.bootSpin} />
             <Text style={styles.bootStatus}>{bootStatus}</Text>
+            {state === 'sync' ? (
+              <Text style={styles.bootHint}>初回のみ・少し時間がかかります</Text>
+            ) : null}
           </LinearGradient>
         ) : null}
         {state === 'firstRun' ? (
@@ -299,4 +338,5 @@ const styles = StyleSheet.create({
   bootSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 6 },
   bootSpin: { marginTop: 28 },
   bootStatus: { color: '#eafff7', fontSize: 13, marginTop: 10 },
+  bootHint: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 6 },
 })

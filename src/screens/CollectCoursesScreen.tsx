@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useNavigation } from '@react-navigation/native'
 import { ActionButton } from '../ui/screen'
-import { MYCOURSES_URL, COLLECT_MYCOURSES_JS } from '../collect/injectedScripts'
+import { DESKTOP_UA, MYCOURSES_URL, COLLECT_MYCOURSES_JS } from '../collect/injectedScripts'
 import { parseMyCoursesMessage } from '../collect/myCoursesMessage'
 import { buildCourseCodeMap } from '../parsers/letusCourses'
 import { saveCourseMap } from '../storage/courseMapStore'
@@ -39,6 +39,7 @@ export default function CollectCoursesScreen() {
         <WebView
           ref={webviewRef}
           source={{ uri: MYCOURSES_URL }}
+          userAgent={DESKTOP_UA}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
           onMessage={(e) => onMessage(e.nativeEvent.data)}

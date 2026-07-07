@@ -40,7 +40,8 @@ export default function RootTabs() {
           paddingTop: 8,
         },
         tabBarActiveBackgroundColor: COLORS.emerald,
-        tabBarItemStyle: { borderRadius: 14, marginHorizontal: 6 },
+        // overflow:hidden が無いとアクティブ背景が角丸で切り抜かれず四角く見える。外枠(20)に合わせる。
+        tabBarItemStyle: { borderRadius: 16, marginHorizontal: 6, overflow: 'hidden' },
       }}
     >
       <Tab.Screen name="時間割" component={TimetableStack} options={{ tabBarIcon: icon('calendar-outline') }} />

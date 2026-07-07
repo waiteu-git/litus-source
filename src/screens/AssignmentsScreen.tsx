@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
@@ -134,7 +134,7 @@ export default function AssignmentsScreen() {
                 return (
                   <Pressable
                     key={a.url}
-                    onPress={() => Linking.openURL(a.url)}
+                    onPress={() => navigation.navigate('Web', { url: a.url, title: a.title })}
                     onLongPress={() => hide(a)}
                     style={[ui.card, URGENT.has(k) && styles.urgent, styles.card, done && { opacity: 0.72 }]}
                   >

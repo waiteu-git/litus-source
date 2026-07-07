@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
-import { COLLECT_COURSE_PAGE_JS } from './injectedScripts'
+import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from './injectedScripts'
 import { filterAssignmentCandidates } from '../updates/assignmentCandidates'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
@@ -126,6 +126,9 @@ export default function AssignmentCollector({
       <WebView
         ref={webviewRef}
         source={{ uri: current.url }}
+        // パーサのfixtureはデスクトップDOM実測。モバイルUAだとLETUSのDOMが変わり
+        // 提出状態などの解析に失敗する（実機で「状態不明」の原因）。
+        userAgent={DESKTOP_UA}
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
         onLoadEnd={() => webviewRef.current?.injectJavaScript(COLLECT_COURSE_PAGE_JS)}
