@@ -39,7 +39,8 @@
             "usesCleartextTraffic": false
           }
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
