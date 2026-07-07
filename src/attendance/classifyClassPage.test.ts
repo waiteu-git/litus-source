@@ -10,11 +10,14 @@ describe('classifyClassPage', () => {
   it('出席フォームがあれば attendance', () => {
     expect(classifyClassPage({ ...base, hasAttendanceForm: true })).toBe('attendance')
   })
-  it('ENTERスプラッシュは portal', () => {
-    expect(classifyClassPage({ ...base, hasEnterSplash: true })).toBe('portal')
+  it('ENTERスプラッシュは splash（URL直遷移で入場するため portal と区別）', () => {
+    expect(classifyClassPage({ ...base, hasEnterSplash: true })).toBe('splash')
   })
   it('CLASSメニューありは portal', () => {
     expect(classifyClassPage({ ...base, hasClassMenu: true })).toBe('portal')
+  })
+  it('スプラッシュ判定はメニューより優先（両方立ったら splash）', () => {
+    expect(classifyClassPage({ ...base, hasEnterSplash: true, hasClassMenu: true })).toBe('splash')
   })
   it('どれも無ければ other', () => {
     expect(classifyClassPage({ ...base })).toBe('other')

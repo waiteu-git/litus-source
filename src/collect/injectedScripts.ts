@@ -53,32 +53,56 @@ export const OPEN_TIMETABLE_JS = `(function(){
 /**
  * モバイル出席登録ページ [Xua001] = xua001/Xua00101.xhtml（実測2026-07-06）。
  * 直リンクはセッション/ViewState無しで保証人ポータル等へ飛ぶため不可。到達はCLASSトップに
- * ログイン後、メニュー「出欠管理」→「モバイル出席登録」へ手動遷移する（.click()自動遷移は
- * 不安定なため採用しない）。**PC-UA(DESKTOP_UA)でのPCログインが安定**（実測確認）。当該授業
- * 時間中はこのページに受付中科目が表示され、認証コード入力もここで行う（軽量案）。
+ * ログイン後、メニュー「出欠管理」→「モバイル出席登録」を OPEN_ATTENDANCE_JS で自動遷移する
+ * （旧実装の .click() が不安定だった真因は外側 <li> を掴む誤要素クリック。a要素＋onclick直接実行に修正）。
+ * **PC-UA(DESKTOP_UA)でのPCログインが安定**（実測確認）。当該授業時間中はこのページに受付中科目が
+ * 表示され、認証コード入力もここで行う（軽量案）。
  */
 export const ATTENDANCE_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xua001/Xua00101.xhtml'
 
 /**
- * CLASSトップから「出欠管理」→「モバイル出席登録」へ遷移する（JSFメニューを .click() 駆動）。
- * リンクはテキスト一致で探索。親メニューを開いてから子を押す2段階（実DOMで要微調整）。
+ * CLASSトップから「出欠管理」→「モバイル出席登録」へ遷移する。
+ * 旧実装は a,button,span,li を文書順テキスト探索していたため、ハンドラを持たない外側の <li>（PrimeFaces
+ * メニューは <li><a><span>ラベル</span></a></li>）を掴んで無反応クリックになっていた（出席送信ボタンの
+ * 「間違った要素」バグと同型）。**a 要素のみ**を対象にメニューアンカーを掴み、onclick属性を new Function で
+ * 直接実行する（送信ボタンで実証済みのJSF発火パターン。無ければ .click() フォールバック）。
  */
 export const OPEN_ATTENDANCE_JS = `(function(){
-  function findByText(text){
-    var els = Array.prototype.slice.call(document.querySelectorAll('a,button,span,li'));
-    return els.find(function(e){ return (e.textContent || '').trim().indexOf(text) >= 0; });
+  function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
+  function findAnchor(text){
+    var as = Array.prototype.slice.call(document.querySelectorAll('a'));
+    var hits = as.filter(function(a){ return ((a.textContent || '').replace(/\\s+/g, '')).indexOf(text) >= 0; });
+    // メニュー本体(menuForm/mainMenu)のアンカーを優先（他所の同名テキスト対策）
+    var menu = hits.filter(function(a){ var idn = (a.id || a.name || ''); return idn.indexOf('menuForm') >= 0 || idn.indexOf('mainMenu') >= 0; });
+    return (menu.length ? menu : hits)[0] || null;
   }
-  function clickText(text){ var el = findByText(text); if (el) { el.click(); return true; } return false; }
+  function fire(el){
+    var oc = el.getAttribute('onclick');
+    try {
+      if (oc) { new Function('event', oc).call(el, new MouseEvent('click', { bubbles: true })); return 'onclick'; }
+      el.click(); return 'click';
+    } catch (e) {
+      try { el.click(); return 'click-fb'; } catch (e2) { return 'err'; }
+    }
+  }
   try {
-    if (clickText('モバイル出席登録')) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: true, stage: 'attendance' }));
-    } else if (clickText('出欠管理')) {
-      setTimeout(function(){
-        clickText('モバイル出席登録');
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: true, stage: 'menu-opened' }));
-      }, 400);
+    var target = findAnchor('モバイル出席登録');
+    if (target) {
+      var m = fire(target);
+      post({ type: 'nav', ok: m !== 'err', stage: 'attendance-click', method: m, id: target.id || '' });
     } else {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: false, stage: 'menu' }));
+      var parent = findAnchor('出欠管理');
+      if (parent) {
+        var m2 = fire(parent);
+        post({ type: 'nav', ok: m2 !== 'err', stage: 'menu-opened', method: m2, id: parent.id || '' });
+        setTimeout(function(){
+          var t2 = findAnchor('モバイル出席登録');
+          if (t2) { var m3 = fire(t2); post({ type: 'nav', ok: m3 !== 'err', stage: 'attendance-click', method: m3, id: t2.id || '' }); }
+          else { post({ type: 'nav', ok: false, stage: 'submenu' }); }
+        }, 500);
+      } else {
+        post({ type: 'nav', ok: false, stage: 'menu' });
+      }
     }
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
@@ -109,20 +133,28 @@ export const DETECT_ATTENDANCE_JS = `(function(){
 })();`
 
 /**
- * CLASSの入口スプラッシュ（CLASSロゴ＋「スマートフォン ENTER」「PC ENTER」）で「PC ENTER」を自動クリックし、
- * ポータル内部まで自動で入る（DESKTOP_UA＝PCログインが安定なのでPC側を選ぶ）。該当ボタンが無ければ何もしない。
- * 各ページ読込時に流しても入口以外では no-op。
+ * 入口スプラッシュのPC ENTER先（実DOM確認 2026-07-07: 静的HTMLの素の <a href>。PC幅は「ENTER」1個、
+ * モバイル幅は「スマートフォン ENTER」「PC ENTER」の2個で、PC側は同じこのURL）。
+ */
+export const CLASS_PC_LOGIN_URL = 'https://class.admin.tus.ac.jp/uprx/ShibbolethAuthServlet'
+
+/**
+ * CLASSの入口スプラッシュ（CLASSロゴ＋「スマートフォン ENTER」「PC ENTER」）からPC側で自動入場する
+ * （DESKTOP_UA＝PCログインが安定なのでPC側を選ぶ）。スプラッシュは静的HTMLでPC ENTERは素の <a href> のため、
+ * クリック合成ではなく **href（無ければ既知URL）への location.replace** で確実に遷移する。
+ * スプラッシュ以外（ENTERアンカー無し）では no-op なので各ページ読込時に流してよい。
  */
 export const ENTER_CLASS_PC_JS = `(function(){
   try {
-    var els = Array.prototype.slice.call(document.querySelectorAll('a,button,input[type=submit],input[type=button]'));
+    var els = Array.prototype.slice.call(document.querySelectorAll('a'));
     var btn = els.find(function(e){
-      var t = ((e.textContent || e.value) || '').replace(/\\s+/g, '');
-      return t.indexOf('PC') >= 0 && /ENTER/i.test(t);
+      var t = (e.textContent || '').replace(/\\s+/g, '');
+      return /ENTER/i.test(t) && (t.indexOf('PC') >= 0 || t.replace(/ENTER/i, '') === '');
     });
     if (btn) {
-      btn.click();
       window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: true, stage: 'class-pc-enter' }));
+      var href = btn.getAttribute('href');
+      location.replace(href || ${JSON.stringify(CLASS_PC_LOGIN_URL)});
     }
   } catch (e) {}
   true;

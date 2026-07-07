@@ -101,13 +101,23 @@ export default function AttendanceScreen() {
       } else if (kind === 'attendance') {
         portalTriesRef.current = 0
         inject(DETECT_ATTENDANCE_JS)
+      } else if (kind === 'splash') {
+        // 入口スプラッシュ → PC側へURL直遷移（遷移すれば次の onLoadEnd で再判定される）。
+        inject(ENTER_CLASS_PC_JS)
       } else if (kind === 'portal') {
         if (portalTriesRef.current < 3) {
           portalTriesRef.current += 1
-          inject(ENTER_CLASS_PC_JS)
-          setTimeout(() => inject(OPEN_ATTENDANCE_JS), 600)
+          inject(OPEN_ATTENDANCE_JS)
+          // メニュー発火がAJAX部分更新だと onLoadEnd が来ないため、少し待って再判定（粘り）。
+          // まだ portal なら上の試行上限内で再試行、attendance に変わっていれば受付検出へ進む。
+          setTimeout(() => inject(DETECT_PAGE_JS), 1500)
         }
       }
+      return
+    }
+    if (parsed.type === 'nav') {
+      // 自動遷移の段階ログ（実機切り分け用）。stage: class-pc-enter / menu-opened / attendance-click / menu 等
+      console.log('[attendance nav]', data)
       return
     }
     if (parsed.type === 'attendance') {
