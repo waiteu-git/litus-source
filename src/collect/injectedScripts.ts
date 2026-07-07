@@ -261,6 +261,7 @@ export type AttendanceStrategy =
   | 'no-modified'
   | 'widget-form'
   | 'touch-click'
+  | 'pfconfirm-cmd'
 
 /**
  * 実験ラボ用: 認証コードを流し込み、指定の送信パターンで「出席登録する」を発火し、1.5秒後に結果を
@@ -309,6 +310,7 @@ export function buildAttendanceLabJs(code: string, strategy: string): string {
         else if(strategy==='no-modified'){ try{window.isModified=function(){return false};}catch(e){} if(btn){var b2=btn.getAttribute('onclick'); if(b2)new Function('event',b2).call(btn,new MouseEvent('click',{bubbles:true})); else btn.click();} method='no-modified'; setTimeout(clickYes,500); }
         else if(strategy==='widget-form'){ var done=false; try{ if(btn&&btn.id&&window.PrimeFaces&&PrimeFaces.widgets){ for(var k in PrimeFaces.widgets){var w=PrimeFaces.widgets[k]; if(w&&w.id&&btn.id.indexOf(w.id)>=0&&w.jq){w.jq.trigger('click');done=true;break;}} } }catch(e){} if(!done){var f=btn&&btn.closest?btn.closest('form'):null; if(f){try{ if(f.requestSubmit)f.requestSubmit(); else f.submit(); done=true;}catch(e){}}} method=done?'widget-form':'widget-none(発火先なし)'; setTimeout(clickYes,500); }
         else if(strategy==='touch-click'){ if(btn){ try{btn.focus();}catch(e){} ['pointerover','pointerenter','pointerdown','pointerup','mouseover','mousedown','mouseup','click'].forEach(function(t){ try{ var Ctor=(t.indexOf('pointer')===0&&window.PointerEvent)?window.PointerEvent:window.MouseEvent; btn.dispatchEvent(new Ctor(t,{bubbles:true,cancelable:true,view:window})); }catch(e){ try{ btn.dispatchEvent(new MouseEvent(t.replace('pointer','mouse'),{bubbles:true,cancelable:true,view:window})); }catch(e2){} } }); try{ btn.dispatchEvent(new Event('touchstart',{bubbles:true,cancelable:true})); btn.dispatchEvent(new Event('touchend',{bubbles:true,cancelable:true})); }catch(e){} } method='touch'; setTimeout(clickYes,500); }
+        else if(strategy==='pfconfirm-cmd'){ var cmd=btn?btn.getAttribute('data-pfconfirmcommand'):null; if(cmd){ try{ new Function('event', cmd).call(btn, (window.event||new MouseEvent('click',{bubbles:true}))); method='pfcmd'; }catch(e){ method='pfcmd-err:'+String(e).slice(0,50); } } else { method='pfcmd-none(data-pfconfirmcommand無し)'; } }
         else { method='unknown-strategy'; }
       }catch(err){ method='throw:'+String(err).slice(0,60); }
       setTimeout(function(){ var sp=snap(); var xf=(window.__litusXhr||[]).slice(xhrBefore); post({filled:filled,btnFound:!!btn,method:method,onclick:onclick,dialogOpen:sp.dialogOpen,msg:sp.msg,hasErr:sp.hasErr,hasOk:sp.hasOk,vals:sp.vals,status:sp.status,xhrFired:xf.length,xhrUrl:xf.length?xf[xf.length-1].url:''}); }, 1800);
@@ -349,7 +351,11 @@ export const DUMP_DIAG_JS = `(function(){
     var all=Array.prototype.slice.call(document.querySelectorAll('input'));
     var near=all; if(label){ var af=all.filter(function(el){return (label.compareDocumentPosition(el)&4)!==0;}); if(af.length>0)near=af; }
     var inputs=near.slice(0,12).map(function(el){ return (el.getAttribute('type')||'text')+' '+(el.name||el.id||'?')+'="'+String(el.value||'').slice(0,10)+'" ml='+el.maxLength+(el.offsetParent?'':' [hidden]'); });
-    window.ReactNativeWebView.postMessage(JSON.stringify({type:'diag', cim:cim, cim4:cim4, inputs:inputs}));
+    var bs=Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
+    var btn=bs.find(function(b){return ((b.textContent||b.value)||'').indexOf('出席登録')>=0;});
+    var pfcmd=btn?String(btn.getAttribute('data-pfconfirmcommand')||'(なし)').slice(0,500):'(ボタン無し)';
+    var bonclick=btn?String(btn.getAttribute('onclick')||'').slice(0,200):'';
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'diag', cim:cim, cim4:cim4, inputs:inputs, pfcmd:pfcmd, bonclick:bonclick}));
   }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'diag', err:String(e).slice(0,140)})); }
   true;
 })();`

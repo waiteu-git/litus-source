@@ -29,6 +29,7 @@ const STRATEGIES: { id: AttendanceStrategy; label: string }[] = [
   { id: 'no-modified', label: 'P5 isModified無効' },
   { id: 'widget-form', label: 'P6 widget/form' },
   { id: 'touch-click', label: 'P7 touch列' },
+  { id: 'pfconfirm-cmd', label: 'P8 pfcmd直実行' },
 ]
 
 type LabMsg = {
@@ -50,6 +51,8 @@ type LabMsg = {
   cim?: string
   cim4?: string
   inputs?: string[]
+  pfcmd?: string
+  bonclick?: string
   err?: string
 }
 
@@ -110,9 +113,10 @@ export default function AttendanceLabScreen() {
         addLog(`診断エラー: ${parsed.err}`)
         return
       }
+      addLog(`診断 pfconfirmcommand: ${parsed.pfcmd || '（なし）'}`)
+      addLog(`診断 button onclick: ${parsed.bonclick || '（なし）'}`)
       addLog(`診断 inputs: ${(parsed.inputs ?? []).join(' | ') || '（なし）'}`)
-      addLog(`診断 confirmIfModified: ${parsed.cim || '（未定義）'}`)
-      if (parsed.cim4) addLog(`診断 confirmIfModified4M: ${parsed.cim4}`)
+      if (parsed.cim) addLog(`診断 confirmIfModified: ${parsed.cim}`)
       return
     }
     if (parsed && parsed.type === 'lab') {
