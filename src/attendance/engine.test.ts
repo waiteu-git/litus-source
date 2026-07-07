@@ -41,4 +41,18 @@ describe('attendanceReducer', () => {
     expect(overlayVisible('navFailed')).toBe(true)
     expect(overlayVisible('ready')).toBe(false)
   })
+  it('needsLogin中に非ログインページ(portal)を検知したら booting へ復帰', () => {
+    const s = attendanceReducer({ ...initialEngineState, phase: 'needsLogin' }, { kind: 'page', page: 'portal' })
+    expect(s.phase).toBe('booting')
+  })
+  it('navFailed中に attendance を検知したら booting へ復帰', () => {
+    const s = attendanceReducer({ ...initialEngineState, phase: 'navFailed' }, { kind: 'page', page: 'attendance' })
+    expect(s.phase).toBe('booting')
+  })
+  it('result表示中のreceptionは結果を消さずphaseを維持', () => {
+    const start = { phase: 'result' as const, reception, result: { result: '出席登録しました', ok: true, wrong: false, err: false } }
+    const s = attendanceReducer(start, { kind: 'reception', reception })
+    expect(s.phase).toBe('result')
+    expect(s.result?.ok).toBe(true)
+  })
 })

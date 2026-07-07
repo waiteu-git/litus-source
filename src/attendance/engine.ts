@@ -34,8 +34,13 @@ export function attendanceReducer(state: EngineState, event: EngineEvent): Engin
   switch (event.kind) {
     case 'page':
       if (event.page === 'login') return { ...state, phase: 'needsLogin' }
+      // 要ログイン/遷移失敗から非ログインページを検知したら通常フロー(booting)へ復帰
+      if (state.phase === 'needsLogin' || state.phase === 'navFailed') return { ...state, phase: 'booting' }
       return state
     case 'reception':
+      // 送信結果表示中/送信中は結果を消さないよう phase を維持し、受付状況だけ更新
+      if (state.phase === 'result' || state.phase === 'submitting')
+        return { ...state, reception: event.reception }
       return { ...state, phase: 'ready', reception: event.reception }
     case 'submitStart':
       return { ...state, phase: 'submitting', result: null }
