@@ -1,192 +1,273 @@
-import { useRef, useState } from 'react'
-import { Button, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { WebView } from 'react-native-webview'
+import { LinearGradient } from 'expo-linear-gradient'
 import {
   DESKTOP_UA,
   DETECT_ATTENDANCE_JS,
-  DETECT_AUTH_JS,
+  DETECT_PAGE_JS,
   ENTER_CLASS_PC_JS,
+  OPEN_ATTENDANCE_JS,
   buildSubmitAttendanceJs,
 } from '../collect/injectedScripts'
 import { parseAttendanceMessage } from '../collect/attendanceMessage'
-import { useAuth } from '../auth/AuthProvider'
-import { classifyAuthState } from '../auth/classifyAuthState'
+import { classifyClassPage } from '../attendance/classifyClassPage'
+import { normalizeAttendanceCode } from '../attendance/normalizeCode'
+import {
+  attendanceReducer,
+  initialEngineState,
+  overlayVisible,
+  type SubmitResult,
+} from '../attendance/engine'
+import { COLORS, useThemeVariant } from '../theme'
 
-// 可視CLASS WebViewの読込ごとに: PC ENTER自動入場 + ログイン状態判定 を注入する。
-const CLASS_ON_LOAD_JS = `${ENTER_CLASS_PC_JS}\n${DETECT_AUTH_JS}`
-
-// CLASSのJSFページは直リンク不可（ViewState無しだと保証人ポータルへ飛び詰まる）。
-// CLASSトップを開いてユーザーが手動で「出欠管理」→「モバイル出席登録」へ進む。
-// 到達後、上のコード欄に認証コードを入れて「出席する」でWebView内フォームへ流し込み送信する。
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
-
-type SubmitDiag = {
-  type?: string
-  inputCount?: number
-  filled?: number
-  values?: string[]
-  btnFound?: boolean
-  method?: string
-  onclick?: string
-  result?: string
-  ok?: boolean
-  wrong?: boolean
-  err?: boolean
-  hasPasswordInput?: boolean
-  hasLogoutLink?: boolean
-}
+const NAV_TIMEOUT_MS = 8000
 
 export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
-  const auth = useAuth()
-  const [banner, setBanner] = useState<string | null>(null)
-  // 送信結果の色分け（成功=緑/失敗=橙）。
-  const [bannerKind, setBannerKind] = useState<'ok' | 'warn' | 'info'>('info')
+  const { variant } = useThemeVariant()
+  const glass = variant === 'glass'
+  const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
   const [code, setCode] = useState('')
-  // key を変えると WebView を作り直してCLASSトップから再開する（詰まりからの確実な復帰）。
+  const [expanded, setExpanded] = useState(true)
   const [webviewKey, setWebviewKey] = useState(0)
 
-  function check() {
-    webviewRef.current?.injectJavaScript(DETECT_ATTENDANCE_JS)
+  useEffect(() => {
+    if (state.phase !== 'booting') return
+    const t = setTimeout(() => dispatch({ kind: 'navTimeout' }), NAV_TIMEOUT_MS)
+    return () => clearTimeout(t)
+  }, [state.phase, webviewKey])
+
+  // 受付状況に連動して展開/集約を自動化（受付中＝展開／受付なし＝集約）。以後は手動トグルで上書き可。
+  useEffect(() => {
+    if (state.reception) setExpanded(state.reception.accepting)
+  }, [state.reception])
+
+  function inject(js: string) {
+    webviewRef.current?.injectJavaScript(js)
   }
 
-  function submit() {
-    const c = code.trim()
-    if (!c) {
-      setBanner('認証コードを入力してください')
-      return
-    }
-    webviewRef.current?.injectJavaScript(buildSubmitAttendanceJs(c))
+  function onLoadEnd() {
+    inject(DETECT_PAGE_JS)
   }
-
-  function reset() {
-    setBanner(null)
-    setWebviewKey((k) => k + 1)
-    auth.refresh()
-  }
-
-  const authNote =
-    auth.class === 'authenticated'
-      ? 'ログイン済み'
-      : auth.class === 'needsLogin'
-        ? 'ログインが必要です（下のWebViewでログインしてください）'
-        : 'ログイン状態を確認中…'
 
   function onMessage(data: string) {
-    let parsed: SubmitDiag | null = null
+    let parsed: Record<string, unknown> | null = null
     try {
       parsed = JSON.parse(data)
     } catch {
-      // 後段の parseAttendanceMessage がエラーを表現する
-    }
-    // PC ENTER 自動クリック等のナビ通知は無視（バナーに出さない）。
-    if (parsed && parsed.type === 'nav') return
-    // 可視CLASSページのログイン状態を反映（CLASSは背景ウォームアップしないためここで判定）。
-    if (parsed && parsed.type === 'auth') {
-      auth.setClass(
-        classifyAuthState({
-          hasPasswordInput: !!parsed.hasPasswordInput,
-          hasLogoutLink: !!parsed.hasLogoutLink,
-        }),
-      )
       return
     }
-    if (parsed && parsed.type === 'submit') {
-      setBannerKind(parsed.ok ? 'ok' : parsed.wrong || parsed.err ? 'warn' : 'info')
-      setBanner(parsed.result ?? '送信しました')
+    if (!parsed) return
+    if (parsed.type === 'page') {
+      const kind = classifyClassPage({
+        hasPasswordInput: !!parsed.hasPasswordInput,
+        hasAttendanceForm: !!parsed.hasAttendanceForm,
+        hasEnterSplash: !!parsed.hasEnterSplash,
+        hasClassMenu: !!parsed.hasClassMenu,
+      })
+      dispatch({ kind: 'page', page: kind })
+      if (kind === 'attendance') inject(DETECT_ATTENDANCE_JS)
+      else if (kind === 'portal') {
+        inject(ENTER_CLASS_PC_JS)
+        setTimeout(() => inject(OPEN_ATTENDANCE_JS), 600)
+      }
       return
     }
-    const r = parseAttendanceMessage(data)
-    if (r.error) {
-      setBannerKind('warn')
-      setBanner(r.error)
+    if (parsed.type === 'attendance') {
+      dispatch({ kind: 'reception', reception: parseAttendanceMessage(data) })
       return
     }
-    const name = r.courseName ?? ''
-    setBannerKind('info')
-    setBanner(
-      r.accepting
-        ? `受付中${name && name.length <= 40 ? `: ${name}` : ''}（コードを入れて「出席する」）`
-        : '受付中の授業はありません',
-    )
+    if (parsed.type === 'submit') {
+      const result: SubmitResult = {
+        result: typeof parsed.result === 'string' ? parsed.result : '送信しました',
+        ok: !!parsed.ok,
+        wrong: !!parsed.wrong,
+        err: !!parsed.err,
+      }
+      dispatch({ kind: 'submitResult', result })
+    }
   }
 
+  function submit() {
+    const c = normalizeAttendanceCode(code)
+    if (!c) return
+    dispatch({ kind: 'submitStart' })
+    inject(buildSubmitAttendanceJs(c))
+  }
+
+  function retry() {
+    setCode('')
+    dispatch({ kind: 'retry' })
+    setWebviewKey((k) => k + 1)
+  }
+
+  const isOverlay = overlayVisible(state.phase)
+  const c = COLORS
+
+  const statusLine =
+    state.reception && state.reception.accepting
+      ? `受付中: ${state.reception.courseName ?? ''}`
+      : state.phase === 'ready'
+        ? '受付中の授業はありません'
+        : '受付状況を確認しています…'
+
+  const resultBanner = state.result
+    ? {
+        text: state.result.result,
+        bg: state.result.ok ? c.successBg : c.dangerBg,
+        fg: state.result.ok ? c.success : c.danger,
+      }
+    : null
+
+  const digits = [0, 1, 2, 3].map((i) => code[i] ?? '')
+
+  const Bg = glass ? GlassBg : SolidBg
+
+  const cardStyle = glass
+    ? { backgroundColor: 'rgba(255,255,255,0.34)', borderColor: 'rgba(255,255,255,0.55)', borderWidth: 1 }
+    : { backgroundColor: c.white, borderColor: '#e3ece8', borderWidth: 1 }
+  const labelColor = glass ? c.labelOnGlass : c.emeraldDark
+  const valueColor = glass ? c.inkOnGlass : c.ink
+
   return (
-    <View style={styles.root}>
-      <View style={styles.bar}>
-        <View style={styles.btn}>
-          <Button title="受付状況を確認" onPress={check} />
+    <View style={styles.wrap}>
+      <Bg>
+        <View style={styles.header}>
+          <Text style={[styles.hTitle, { color: glass ? c.white : c.emeraldDark }]}>出席</Text>
+          <Text style={[styles.pill, glass ? styles.pillGlass : styles.pillSolid]}>
+            {state.phase === 'needsLogin' ? 'ログインが必要' : 'ログイン済み'}
+          </Text>
         </View>
-        <View style={styles.btn}>
-          <Button title="最初に戻る" onPress={reset} />
+
+        <View style={styles.toggleRow}>
+          <Pressable onPress={() => setExpanded(true)} style={[styles.toggle, expanded && styles.toggleOn]}>
+            <Text style={[styles.toggleText, expanded && styles.toggleTextOn]}>展開</Text>
+          </Pressable>
+          <Pressable onPress={() => setExpanded(false)} style={[styles.toggle, !expanded && styles.toggleOn]}>
+            <Text style={[styles.toggleText, !expanded && styles.toggleTextOn]}>集約</Text>
+          </Pressable>
         </View>
-      </View>
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          value={code}
-          onChangeText={setCode}
-          placeholder="認証コード"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="done"
-        />
-        <View style={styles.btn}>
-          <Button title="出席する" onPress={submit} />
+
+        <View style={[styles.card, cardStyle]}>
+          <Text style={[styles.status, { color: valueColor }]}>{statusLine}</Text>
+          {expanded && state.reception?.accepting ? (
+            <View style={styles.tiles}>
+              <View style={[styles.tile, glass && styles.tileGlass]}>
+                <Text style={[styles.tileLabel, { color: labelColor }]}>出席確認時間</Text>
+                <Text style={[styles.tileValue, { color: valueColor }]}>{state.reception.confirmWindow ?? '—'}</Text>
+              </View>
+              <View style={[styles.tile, glass && styles.tileGlass]}>
+                <Text style={[styles.tileLabel, { color: labelColor }]}>残り時間</Text>
+                <Text style={[styles.tileValue, { color: valueColor }]}>{state.reception.remaining ?? '—'}</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
-      </View>
-      <Text style={styles.hint}>
-        出欠管理→モバイル出席登録 を開き、コードを入れて「出席する」で登録まで完結
-      </Text>
-      <Text style={auth.class === 'needsLogin' ? styles.authWarn : styles.authOk}>{authNote}</Text>
-      {banner ? (
-        <Text
-          style={
-            bannerKind === 'ok'
-              ? styles.bannerOk
-              : bannerKind === 'warn'
-                ? styles.bannerWarn
-                : styles.bannerInfo
-          }
-        >
-          {banner}
-        </Text>
+
+        <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
+          <Text style={[styles.inputLabel, { color: labelColor }]}>認証コード（半角数字）</Text>
+          <View style={styles.segRow}>
+            {digits.map((d, i) => (
+              <View key={i} style={[styles.seg, glass && styles.segGlass]}>
+                <Text style={[styles.segText, { color: valueColor }]}>{d}</Text>
+              </View>
+            ))}
+          </View>
+          <TextInput
+            style={styles.hiddenInput}
+            value={code}
+            onChangeText={(t) => setCode(normalizeAttendanceCode(t).slice(0, 4))}
+            keyboardType="number-pad"
+            maxLength={4}
+            autoFocus={false}
+          />
+        </View>
+
+        <Pressable style={[styles.cta, { backgroundColor: c.cta }]} onPress={submit}>
+          <Text style={styles.ctaText}>{state.phase === 'submitting' ? '送信中…' : '出席する'}</Text>
+        </Pressable>
+
+        {resultBanner ? (
+          <View style={[styles.result, { backgroundColor: resultBanner.bg }]}>
+            <Text style={[styles.resultText, { color: resultBanner.fg }]}>{resultBanner.text}</Text>
+          </View>
+        ) : null}
+      </Bg>
+
+      <WebView
+        key={webviewKey}
+        ref={webviewRef}
+        source={{ uri: CLASS_URL }}
+        userAgent={DESKTOP_UA}
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
+        onLoadEnd={onLoadEnd}
+        onMessage={(e) => onMessage(e.nativeEvent.data)}
+        style={isOverlay ? styles.webviewOverlay : styles.webviewHidden}
+      />
+
+      {isOverlay ? (
+        <View style={styles.overlayBar}>
+          <Text style={styles.overlayText}>
+            {state.phase === 'needsLogin' ? '初回のみログインしてください' : '画面を進めてください（自動で戻ります）'}
+          </Text>
+          <Pressable style={styles.overlayBtn} onPress={retry}>
+            <Text style={styles.overlayBtnText}>やり直す</Text>
+          </Pressable>
+        </View>
       ) : null}
-      <View style={styles.webviewBox}>
-        <WebView
-          key={webviewKey}
-          ref={webviewRef}
-          source={{ uri: CLASS_URL }}
-          userAgent={DESKTOP_UA}
-          sharedCookiesEnabled
-          thirdPartyCookiesEnabled
-          onLoadEnd={() => webviewRef.current?.injectJavaScript(CLASS_ON_LOAD_JS)}
-          onMessage={(e) => onMessage(e.nativeEvent.data)}
-        />
-      </View>
     </View>
   )
 }
 
+function GlassBg({ children }: { children: ReactNode }) {
+  return (
+    <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={styles.root}>
+      {children}
+    </LinearGradient>
+  )
+}
+
+function SolidBg({ children }: { children: ReactNode }) {
+  return <View style={[styles.root, { backgroundColor: COLORS.tint }]}>{children}</View>
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  bar: { flexDirection: 'row', padding: 8, paddingBottom: 0 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', padding: 8 },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#bbb',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginRight: 8,
-  },
-  btn: { flex: 1, paddingHorizontal: 4 },
-  hint: { paddingHorizontal: 8, paddingBottom: 6, color: '#666', fontSize: 12 },
-  authOk: { paddingHorizontal: 8, paddingBottom: 4, color: '#0b6b2f', fontSize: 12 },
-  authWarn: { paddingHorizontal: 8, paddingBottom: 4, color: '#b26a00', fontSize: 12, fontWeight: '600' },
-  bannerOk: { backgroundColor: '#e6f4ea', color: '#0b6b2f', padding: 10, fontWeight: '700' },
-  bannerWarn: { backgroundColor: '#fdecea', color: '#b3261e', padding: 10, fontWeight: '700' },
-  bannerInfo: { backgroundColor: '#eef2f6', color: '#33475b', padding: 10, fontWeight: '600' },
-  webviewBox: { flex: 1 },
+  wrap: { flex: 1 },
+  root: { flex: 1, padding: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  hTitle: { fontSize: 20, fontWeight: '600' },
+  pill: { fontSize: 12, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
+  pillGlass: { backgroundColor: 'rgba(255,255,255,0.42)', color: '#04322a' },
+  pillSolid: { backgroundColor: '#d6efe4', color: '#0a6650' },
+  toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  toggle: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  toggleOn: { backgroundColor: 'rgba(255,255,255,0.6)' },
+  toggleText: { fontSize: 13, color: '#eafff7' },
+  toggleTextOn: { color: '#04322a', fontWeight: '600' },
+  card: { borderRadius: 16, padding: 16 },
+  status: { fontSize: 16, fontWeight: '600' },
+  tiles: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  tile: { flex: 1, borderRadius: 12, padding: 10, backgroundColor: '#f1f8f5' },
+  tileGlass: { backgroundColor: 'rgba(255,255,255,0.30)' },
+  tileLabel: { fontSize: 12, marginBottom: 2 },
+  tileValue: { fontSize: 15, fontWeight: '600' },
+  inputLabel: { fontSize: 13, marginBottom: 10 },
+  segRow: { flexDirection: 'row', gap: 9 },
+  seg: { flex: 1, height: 54, borderRadius: 12, borderWidth: 1.5, borderColor: '#b9ddcd', backgroundColor: '#f1f8f5', alignItems: 'center', justifyContent: 'center' },
+  segGlass: { backgroundColor: 'rgba(255,255,255,0.42)', borderColor: 'rgba(255,255,255,0.7)' },
+  segText: { fontSize: 24, fontWeight: '600' },
+  hiddenInput: { position: 'absolute', opacity: 0, height: 54, left: 16, right: 16, top: 40 },
+  cta: { marginTop: 16, height: 54, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  ctaText: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
+  result: { marginTop: 12, borderRadius: 12, padding: 11 },
+  resultText: { fontSize: 15, fontWeight: '600' },
+  webviewHidden: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
+  webviewOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 60 },
+  overlayBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 60, backgroundColor: '#0a6650', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
+  overlayText: { color: '#ffffff', fontSize: 13, flex: 1 },
+  overlayBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  overlayBtnText: { color: '#ffffff', fontSize: 13 },
 })
