@@ -15,7 +15,7 @@
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0e7c5e"
+        "backgroundColor": "#ffffff"
       }
     },
     "web": {
@@ -29,7 +29,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#0e7c5e"
+          "backgroundColor": "#ffffff"
         }
       ],
       [
