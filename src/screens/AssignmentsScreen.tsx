@@ -107,7 +107,8 @@ export default function AssignmentsScreen() {
     <ScreenBg>
       <ScreenHeader
         title="課題"
-        right={<Chip label="更新" onPress={() => navigation.navigate('CollectAssignments')} />}
+        icon="checkbox-outline"
+        right={<Chip label="更新" icon="refresh" onPress={() => navigation.navigate('CollectAssignments')} />}
       />
       {total === 0 ? (
         <View style={[ui.card, { marginTop: 16 }]}>

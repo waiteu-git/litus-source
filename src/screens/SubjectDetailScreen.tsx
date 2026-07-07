@@ -1,7 +1,8 @@
 // app/src/screens/SubjectDetailScreen.tsx
 import { useEffect, useState } from 'react'
-import { Button, Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useRoute, type RouteProp } from '@react-navigation/native'
+import { ActionButton } from '../ui/screen'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { buildSyllabusUrl } from '../links/syllabus'
@@ -35,13 +36,13 @@ export default function SubjectDetailScreen() {
 
       <View style={styles.section}>
         {letusUrl ? (
-          <Button title="LETUSコースを開く" onPress={() => Linking.openURL(letusUrl)} />
+          <ActionButton label="LETUSコースを開く" onPress={() => Linking.openURL(letusUrl)} />
         ) : (
           <Text style={styles.muted}>LETUSコース未突合（「コース収集」を実行してください）</Text>
         )}
       </View>
       <View style={styles.section}>
-        <Button title="シラバスを開く" onPress={() => Linking.openURL(syllabusUrl)} />
+        <ActionButton label="シラバスを開く" onPress={() => Linking.openURL(syllabusUrl)} />
       </View>
 
       <Text style={styles.heading}>更新状況</Text>

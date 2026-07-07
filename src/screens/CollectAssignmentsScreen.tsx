@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useNavigation } from '@react-navigation/native'
+import { ActionButton } from '../ui/screen'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
@@ -126,9 +127,9 @@ export default function CollectAssignmentsScreen() {
             課題候補がありません。先に時間割タブで「コース収集」→「更新チェック」を実行してください。
           </Text>
         ) : null}
-        {done ? <Button title="課題一覧へ戻る" onPress={() => navigation.goBack()} /> : null}
+        {done ? <ActionButton label="課題一覧へ戻る" onPress={() => navigation.goBack()} /> : null}
       </ScrollView>
-      {done ? null : <Button title="中断" onPress={() => setDone(true)} />}
+      {done ? null : <ActionButton label="中断" onPress={() => setDone(true)} />}
     </View>
   )
 }

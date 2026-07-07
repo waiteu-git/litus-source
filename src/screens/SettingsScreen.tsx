@@ -49,7 +49,7 @@ export default function SettingsScreen() {
 
   return (
     <ScreenBg>
-      <ScreenHeader title="設定" />
+      <ScreenHeader title="設定" icon="settings-outline" />
       <ScrollView contentContainerStyle={styles.list}>
         <SectionLabel>テーマ</SectionLabel>
         <Segmented

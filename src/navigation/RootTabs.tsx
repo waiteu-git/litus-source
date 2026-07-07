@@ -1,4 +1,5 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
+import { Ionicons } from '@expo/vector-icons'
 import TimetableStack from './TimetableStack'
 import AssignmentsStack from './AssignmentsStack'
 import AttendanceScreen from '../screens/AttendanceScreen'
@@ -9,10 +10,16 @@ import { COLORS } from '../theme'
 
 const Tab = createBottomTabNavigator()
 
+type IconName = keyof typeof Ionicons.glyphMap
+const icon =
+  (name: IconName) =>
+  ({ color, size }: { color: string; size: number }) => <Ionicons name={name} size={size} color={color} />
+
 export default function RootTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
+        headerShown: false,
         tabBarActiveTintColor: COLORS.white,
         tabBarInactiveTintColor: '#0b5c48',
         // position:absolute にすると全画面でコンテンツに被って押せなくなるため、レイアウト領域を
@@ -36,10 +43,10 @@ export default function RootTabs() {
         tabBarItemStyle: { borderRadius: 14, marginHorizontal: 6 },
       }}
     >
-      <Tab.Screen name="時間割" component={TimetableStack} options={{ headerShown: false }} />
-      <Tab.Screen name="課題" component={AssignmentsStack} options={{ headerShown: false }} />
-      <Tab.Screen name="出席" component={AttendanceScreen} />
-      <Tab.Screen name="設定" component={SettingsScreen} />
+      <Tab.Screen name="時間割" component={TimetableStack} options={{ tabBarIcon: icon('calendar-outline') }} />
+      <Tab.Screen name="課題" component={AssignmentsStack} options={{ tabBarIcon: icon('checkbox-outline') }} />
+      <Tab.Screen name="出席" component={AttendanceScreen} options={{ tabBarIcon: icon('flash-outline') }} />
+      <Tab.Screen name="設定" component={SettingsScreen} options={{ tabBarIcon: icon('settings-outline') }} />
     </Tab.Navigator>
   )
 }

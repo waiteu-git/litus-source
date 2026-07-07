@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
+import { ActionButton } from '../ui/screen'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { COLLECT_COURSE_PAGE_JS } from '../collect/injectedScripts'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
@@ -92,7 +93,7 @@ export default function UpdateCheckScreen() {
           <Text key={c.url} style={styles.row}>{`+${c.added} / -${c.removed}  ${c.url}`}</Text>
         ))}
       </ScrollView>
-      {done ? null : <Button title="中断" onPress={() => setDone(true)} />}
+      {done ? null : <ActionButton label="中断" onPress={() => setDone(true)} />}
     </View>
   )
 }

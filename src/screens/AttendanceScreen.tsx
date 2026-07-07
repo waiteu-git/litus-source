@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { LinearGradient } from 'expo-linear-gradient'
+import { Ionicons } from '@expo/vector-icons'
 import {
   DESKTOP_UA,
   DETECT_ATTENDANCE_JS,
@@ -165,7 +166,10 @@ export default function AttendanceScreen() {
     <View style={styles.wrap}>
       <Bg>
         <View style={styles.header}>
-          <Text style={[styles.hTitle, { color: glass ? c.white : c.emeraldDark }]}>出席</Text>
+          <View style={styles.hLeft}>
+            <Ionicons name="flash-outline" size={22} color={glass ? c.white : c.emeraldDark} />
+            <Text style={[styles.hTitle, { color: glass ? c.white : c.emeraldDark }]}>出席</Text>
+          </View>
           <Text style={[styles.pill, glass ? styles.pillGlass : styles.pillSolid]}>
             {state.phase === 'needsLogin' ? 'ログインが必要' : state.reception ? 'ログイン済み' : '確認中…'}
           </Text>
@@ -278,6 +282,7 @@ const styles = StyleSheet.create({
   wrap: { flex: 1 },
   root: { flex: 1, padding: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   hTitle: { fontSize: 20, fontWeight: '600' },
   pill: { fontSize: 12, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
   pillGlass: { backgroundColor: 'rgba(255,255,255,0.42)', color: '#04322a' },

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { Button, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useNavigation } from '@react-navigation/native'
+import { ActionButton } from '../ui/screen'
 import { MYCOURSES_URL, COLLECT_MYCOURSES_JS } from '../collect/injectedScripts'
 import { parseMyCoursesMessage } from '../collect/myCoursesMessage'
 import { buildCourseCodeMap } from '../parsers/letusCourses'
@@ -44,7 +45,7 @@ export default function CollectCoursesScreen() {
         />
       </View>
       <View style={styles.controls}>
-        <Button title="コースを収集" onPress={collect} />
+        <ActionButton label="コースを収集" onPress={collect} />
       </View>
       {status ? <Text style={styles.status}>{status}</Text> : null}
     </View>

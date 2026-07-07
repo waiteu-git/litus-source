@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import { Ionicons } from '@expo/vector-icons'
 import { COLORS, useThemeVariant } from '../theme'
+
+type IconName = keyof typeof Ionicons.glyphMap
 
 /** 全画面共通の背景（テーマに応じて翠グラデ or 薄地）。中身は padding 済みの領域。 */
 export function ScreenBg({ children }: { children: ReactNode }) {
@@ -17,24 +20,38 @@ export function ScreenBg({ children }: { children: ReactNode }) {
 }
 
 /** ヘッダー行（アイコン＋タイトル＋右側のアクションチップ群）。 */
-export function ScreenHeader({ title, right }: { title: string; right?: ReactNode }) {
+export function ScreenHeader({ title, icon, right }: { title: string; icon?: IconName; right?: ReactNode }) {
   const { variant } = useThemeVariant()
   const color = variant === 'glass' ? COLORS.white : COLORS.emeraldDark
   return (
     <View style={ui.header}>
-      <Text style={[ui.hTitle, { color }]}>{title}</Text>
+      <View style={ui.hLeft}>
+        {icon ? <Ionicons name={icon} size={22} color={color} /> : null}
+        <Text style={[ui.hTitle, { color }]}>{title}</Text>
+      </View>
       {right ? <View style={ui.headerRight}>{right}</View> : null}
     </View>
   )
 }
 
-/** 押せる翠チップ（ヘッダーのアクション用）。 */
-export function Chip({ label, onPress }: { label: string; onPress?: () => void }) {
+/** 押せる翠チップ（ヘッダーのアクション用）。任意で先頭アイコン。 */
+export function Chip({ label, icon, onPress }: { label: string; icon?: IconName; onPress?: () => void }) {
   const { variant } = useThemeVariant()
   const glass = variant === 'glass'
+  const color = glass ? '#04322a' : COLORS.emeraldDark
   return (
-    <Pressable style={glass ? ui.chipGlass : ui.chipSolid} onPress={onPress}>
-      <Text style={{ color: glass ? '#04322a' : COLORS.emeraldDark, fontSize: 12 }}>{label}</Text>
+    <Pressable style={[glass ? ui.chipGlass : ui.chipSolid, ui.chipRow]} onPress={onPress}>
+      {icon ? <Ionicons name={icon} size={14} color={color} /> : null}
+      <Text style={{ color, fontSize: 12 }}>{label}</Text>
+    </Pressable>
+  )
+}
+
+/** 翠塗りのアクションボタン（収集画面などの操作用）。 */
+export function ActionButton({ label, onPress }: { label: string; onPress?: () => void }) {
+  return (
+    <Pressable style={ui.action} onPress={onPress}>
+      <Text style={ui.actionText}>{label}</Text>
     </Pressable>
   )
 }
@@ -108,8 +125,12 @@ export function useUi() {
 const ui = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 14, paddingTop: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   hTitle: { fontSize: 20, fontWeight: '600' },
   headerRight: { flexDirection: 'row', gap: 6 },
+  chipRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  action: { backgroundColor: COLORS.emerald, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center' },
+  actionText: { color: '#ffffff', fontSize: 14, fontWeight: '500' },
   chipGlass: {
     backgroundColor: 'rgba(255,255,255,0.42)',
     borderWidth: 1,

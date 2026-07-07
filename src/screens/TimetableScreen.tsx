@@ -55,6 +55,7 @@ export default function TimetableScreen() {
     <ScreenBg>
       <ScreenHeader
         title="時間割"
+        icon="calendar-outline"
         right={
           <>
             <Chip label="更新" onPress={() => navigation.navigate('Collect')} />

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { Button, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useNavigation } from '@react-navigation/native'
+import { ActionButton } from '../ui/screen'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { parseCollectionMessage } from '../collect/timetableMessage'
 import {
@@ -81,8 +82,12 @@ export default function CollectTimetableScreen() {
         />
       </View>
       <View style={styles.controls}>
-        <Button title="時間割を開く" onPress={openTimetable} />
-        <Button title="収集" onPress={collect} />
+        <View style={{ flex: 1 }}>
+          <ActionButton label="時間割を開く" onPress={openTimetable} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ActionButton label="収集" onPress={collect} />
+        </View>
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
@@ -92,6 +97,6 @@ export default function CollectTimetableScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   webviewBox: { flex: 1 },
-  controls: { padding: 8 },
+  controls: { padding: 8, flexDirection: 'row', gap: 8 },
   error: { color: '#b00020', padding: 8 },
 })
