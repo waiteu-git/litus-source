@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg } from '../ui/screen'
@@ -20,6 +20,7 @@ import {
   attendanceReducer,
   initialEngineState,
   overlayVisible,
+  type EnginePhase,
   type SubmitResult,
 } from '../attendance/engine'
 import { COLORS, useThemeVariant } from '../theme'
@@ -34,6 +35,8 @@ export default function AttendanceScreen() {
   const portalTriesRef = useRef(0)
   // システムエラー（ViewExpired等）からの自動復帰は1回だけ（ループ防止）。
   const errorRetryRef = useRef(0)
+  // AppStateリスナーから最新phaseを参照するためのref（リスナー再登録を避ける）。
+  const phaseRef = useRef<EnginePhase>('booting')
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { variant } = useThemeVariant()
   const glass = variant === 'glass'
@@ -54,6 +57,20 @@ export default function AttendanceScreen() {
       if (navTimerRef.current) clearTimeout(navTimerRef.current)
     }
   }, [state.phase])
+
+  phaseRef.current = state.phase
+
+  // フォアグラウンド復帰時にページを再判定する（長時間放置でセッション切れ/古いページのまま
+  // 固まるのを防ぐ）。送信中はWebView状態を壊さないようスキップ。判定結果は通常の onMessage
+  // 経路に乗る（login→ゲート、portal→自動遷移、error→自動復帰）。
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && phaseRef.current !== 'submitting') {
+        webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
+      }
+    })
+    return () => sub.remove()
+  }, [])
 
   // 受付中かつ確認時間が取れていれば毎秒 now を更新してカウントダウン表示。
   useEffect(() => {

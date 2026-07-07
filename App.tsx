@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { AppState } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
@@ -20,6 +21,11 @@ export default function App() {
         console.warn('起動時の通知同期に失敗しました', e)
       }
     })()
+    // 復帰時に貼り直す（日付を跨いだ古い予約の残留対策）。
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') refreshAllNotifications().catch(() => undefined)
+    })
+    return () => sub.remove()
   }, [])
 
   return (
