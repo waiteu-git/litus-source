@@ -25,6 +25,7 @@ const STRATEGIES: { id: AttendanceStrategy; label: string }[] = [
   { id: 'ab-direct', label: 'P4 ab直呼び' },
   { id: 'no-modified', label: 'P5 isModified無効' },
   { id: 'widget-form', label: 'P6 widget/form' },
+  { id: 'touch-click', label: 'P7 touch列' },
 ]
 
 type LabMsg = {
