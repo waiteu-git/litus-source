@@ -5,7 +5,9 @@ import {
   DESKTOP_UA,
   DETECT_ATTENDANCE_JS,
   DETECT_AUTH_JS,
+  DUMP_DIAG_JS,
   ENTER_CLASS_PC_JS,
+  INSTALL_XHR_HOOK_JS,
   buildAttendanceLabJs,
   type AttendanceStrategy,
 } from '../collect/injectedScripts'
@@ -16,7 +18,8 @@ import { classifyAuthState } from '../auth/classifyAuthState'
 // 出席登録ボタンの発火方法だけを検証する開発用ラボ。CLASSのモバイル出席登録ページを開いた状態で、
 // パターン別ボタンを押す→流し込み＋各戦略で送信→結果をログに積む。どのパターンで登録が通るかを切り分ける。
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
-const CLASS_ON_LOAD_JS = `${ENTER_CLASS_PC_JS}\n${DETECT_AUTH_JS}`
+// 読込ごとに: XHRフック設置(計器) → PC ENTER自動入場 → ログイン状態判定。
+const CLASS_ON_LOAD_JS = `${INSTALL_XHR_HOOK_JS}\n${ENTER_CLASS_PC_JS}\n${DETECT_AUTH_JS}`
 
 const STRATEGIES: { id: AttendanceStrategy; label: string }[] = [
   { id: 'onclick-yes', label: 'P1 onclick→はい' },
@@ -42,6 +45,12 @@ type LabMsg = {
   btnFound?: boolean
   hasPasswordInput?: boolean
   hasLogoutLink?: boolean
+  xhrFired?: number
+  xhrUrl?: string
+  cim?: string
+  cim4?: string
+  inputs?: string[]
+  err?: string
 }
 
 export default function AttendanceLabScreen() {
@@ -69,6 +78,10 @@ export default function AttendanceLabScreen() {
     webviewRef.current?.injectJavaScript(DETECT_ATTENDANCE_JS)
   }
 
+  function dumpDiag() {
+    webviewRef.current?.injectJavaScript(DUMP_DIAG_JS)
+  }
+
   function reset() {
     setWebviewKey((k) => k + 1)
     auth.refresh()
@@ -92,6 +105,16 @@ export default function AttendanceLabScreen() {
       )
       return
     }
+    if (parsed && parsed.type === 'diag') {
+      if (parsed.err) {
+        addLog(`診断エラー: ${parsed.err}`)
+        return
+      }
+      addLog(`診断 inputs: ${(parsed.inputs ?? []).join(' | ') || '（なし）'}`)
+      addLog(`診断 confirmIfModified: ${parsed.cim || '（未定義）'}`)
+      if (parsed.cim4) addLog(`診断 confirmIfModified4M: ${parsed.cim4}`)
+      return
+    }
     if (parsed && parsed.type === 'lab') {
       const label = STRATEGIES.find((s) => s.id === parsed!.strategy)?.label ?? parsed.strategy
       const verdict = parsed.hasOk
@@ -102,7 +125,9 @@ export default function AttendanceLabScreen() {
             ? '⏸確認ダイアログ残'
             : '要目視'
       addLog(
-        `${label}: ${verdict} / m:${parsed.method ?? '-'} / val[${parsed.vals ?? ''}] / ${
+        `${label}: ${verdict} / xhr:${parsed.xhrFired ?? '?'}${
+          parsed.xhrUrl ? `(${parsed.xhrUrl})` : ''
+        } / m:${parsed.method ?? '-'} / val[${parsed.vals ?? ''}] / ${
           parsed.msg || parsed.status || '（メッセージなし）'
         }`,
       )
@@ -137,6 +162,9 @@ export default function AttendanceLabScreen() {
         />
         <View style={styles.topBtn}>
           <Button title="受付確認" onPress={check} />
+        </View>
+        <View style={styles.topBtn}>
+          <Button title="診断" onPress={dumpDiag} />
         </View>
         <View style={styles.topBtn}>
           <Button title="最初に戻る" onPress={reset} />

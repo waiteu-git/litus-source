@@ -300,6 +300,7 @@ export function buildAttendanceLabJs(code: string, strategy: string): string {
     }
     var btn=findBtn(); var onclick=btn?String(btn.getAttribute('onclick')||'').slice(0,300):''; var method='none';
     setTimeout(function(){
+      var xhrBefore=(window.__litusXhr?window.__litusXhr.length:0);
       try{
         if(strategy==='onclick-yes'){ if(btn){var a=btn.getAttribute('onclick'); if(a)new Function('event',a).call(btn,new MouseEvent('click',{bubbles:true})); else btn.click();} method='onclick'; setTimeout(clickYes,500); }
         else if(strategy==='click-yes'){ if(btn)btn.click(); method='click'; setTimeout(clickYes,500); }
@@ -310,7 +311,7 @@ export function buildAttendanceLabJs(code: string, strategy: string): string {
         else if(strategy==='touch-click'){ if(btn){ try{btn.focus();}catch(e){} ['pointerover','pointerenter','pointerdown','pointerup','mouseover','mousedown','mouseup','click'].forEach(function(t){ try{ var Ctor=(t.indexOf('pointer')===0&&window.PointerEvent)?window.PointerEvent:window.MouseEvent; btn.dispatchEvent(new Ctor(t,{bubbles:true,cancelable:true,view:window})); }catch(e){ try{ btn.dispatchEvent(new MouseEvent(t.replace('pointer','mouse'),{bubbles:true,cancelable:true,view:window})); }catch(e2){} } }); try{ btn.dispatchEvent(new Event('touchstart',{bubbles:true,cancelable:true})); btn.dispatchEvent(new Event('touchend',{bubbles:true,cancelable:true})); }catch(e){} } method='touch'; setTimeout(clickYes,500); }
         else { method='unknown-strategy'; }
       }catch(err){ method='throw:'+String(err).slice(0,60); }
-      setTimeout(function(){ var sp=snap(); post({filled:filled,btnFound:!!btn,method:method,onclick:onclick,dialogOpen:sp.dialogOpen,msg:sp.msg,hasErr:sp.hasErr,hasOk:sp.hasOk,vals:sp.vals,status:sp.status}); }, 1500);
+      setTimeout(function(){ var sp=snap(); var xf=(window.__litusXhr||[]).slice(xhrBefore); post({filled:filled,btnFound:!!btn,method:method,onclick:onclick,dialogOpen:sp.dialogOpen,msg:sp.msg,hasErr:sp.hasErr,hasOk:sp.hasOk,vals:sp.vals,status:sp.status,xhrFired:xf.length,xhrUrl:xf.length?xf[xf.length-1].url:''}); }, 1800);
     }, 300);
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type:'lab', strategy:strategy, method:'outer-throw:'+String(e).slice(0,80) }));
@@ -318,6 +319,40 @@ export function buildAttendanceLabJs(code: string, strategy: string): string {
   true;
 })();`
 }
+
+/**
+ * 実験ラボ用計器: XMLHttpRequest.send / fetch をフックし、送信されたリクエストを window.__litusXhr に記録する。
+ * 各パターン実行で「送信AJAXが実際に飛んだか」を切り分けるため。ページ読込ごとに冪等に注入する。
+ */
+export const INSTALL_XHR_HOOK_JS = `(function(){
+  if(window.__litusHooked) return true;
+  window.__litusHooked = true; window.__litusXhr = [];
+  try {
+    var oO=XMLHttpRequest.prototype.open, oS=XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open=function(m,u){ this.__u=u; return oO.apply(this,arguments); };
+    XMLHttpRequest.prototype.send=function(){ try{ window.__litusXhr.push({t:Date.now(),url:String(this.__u||'').slice(0,140)}); }catch(e){} return oS.apply(this,arguments); };
+  } catch(e){}
+  try { if(window.fetch){ var of=window.fetch; window.fetch=function(u){ try{ window.__litusXhr.push({t:Date.now(),url:String((u&&u.url)||u||'').slice(0,140)}); }catch(e){} return of.apply(this,arguments); }; } } catch(e){}
+  return true;
+})();`
+
+/**
+ * 実験ラボ用計器: 送信の真相を掴む深掘りダンプ。confirmIfModified/4M の全文（elseの本当の送信呼び出し）と、
+ * 認証コード欄まわりの全input（隠しフィールド含む name/value/maxLength）を postMessage(type:'diag') する。
+ */
+export const DUMP_DIAG_JS = `(function(){
+  try{
+    function src(fn){ try{ return fn?String(fn).replace(/\\s+/g,' '):''; }catch(e){ return ''; } }
+    var cim=src(window.confirmIfModified).slice(0,900);
+    var cim4=src(window.confirmIfModified4M).slice(0,900);
+    var label=Array.prototype.slice.call(document.querySelectorAll('*')).find(function(e){return e.children.length===0&&(e.textContent||'').indexOf('認証コード')>=0;});
+    var all=Array.prototype.slice.call(document.querySelectorAll('input'));
+    var near=all; if(label){ var af=all.filter(function(el){return (label.compareDocumentPosition(el)&4)!==0;}); if(af.length>0)near=af; }
+    var inputs=near.slice(0,12).map(function(el){ return (el.getAttribute('type')||'text')+' '+(el.name||el.id||'?')+'="'+String(el.value||'').slice(0,10)+'" ml='+el.maxLength+(el.offsetParent?'':' [hidden]'); });
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'diag', cim:cim, cim4:cim4, inputs:inputs}));
+  }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'diag', err:String(e).slice(0,140)})); }
+  true;
+})();`
 
 /**
  * 現在ページのログイン状態シグナルを抽出して postMessage する（抽出のみ・classifyAuthState で判定）。
