@@ -12,6 +12,7 @@ import {
 } from '../collect/injectedScripts'
 import { parseAttendanceMessage } from '../collect/attendanceMessage'
 import { classifyClassPage } from '../attendance/classifyClassPage'
+import { countdownText } from '../attendance/countdown'
 import { normalizeAttendanceCode } from '../attendance/normalizeCode'
 import {
   attendanceReducer,
@@ -22,24 +23,39 @@ import {
 import { COLORS, useThemeVariant } from '../theme'
 
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
-const NAV_TIMEOUT_MS = 8000
+// 自動遷移が進んでいる間はオーバーレイを出さないよう、ページ読込ごとにこの秒数へ再アームする。
+const NAV_TIMEOUT_MS = 10000
 
 export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
   const inputRef = useRef<TextInput>(null)
   const portalTriesRef = useRef(0)
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { variant } = useThemeVariant()
   const glass = variant === 'glass'
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
   const [code, setCode] = useState('')
   const [expanded, setExpanded] = useState(true)
   const [webviewKey, setWebviewKey] = useState(0)
+  const [now, setNow] = useState(() => new Date())
 
+  // booting を抜けたらナビタイマーを止める（アンマウント時も）。
   useEffect(() => {
-    if (state.phase !== 'booting') return
-    const t = setTimeout(() => dispatch({ kind: 'navTimeout' }), NAV_TIMEOUT_MS)
-    return () => clearTimeout(t)
-  }, [state.phase, webviewKey])
+    if (state.phase !== 'booting' && navTimerRef.current) {
+      clearTimeout(navTimerRef.current)
+      navTimerRef.current = null
+    }
+    return () => {
+      if (navTimerRef.current) clearTimeout(navTimerRef.current)
+    }
+  }, [state.phase])
+
+  // 受付中かつ確認時間が取れていれば毎秒 now を更新してカウントダウン表示。
+  useEffect(() => {
+    if (!(state.reception?.accepting && state.reception.confirmWindow)) return
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [state.reception])
 
   // 受付状況に連動して展開/集約を自動化（受付中＝展開／受付なし＝集約）。以後は手動トグルで上書き可。
   useEffect(() => {
@@ -50,7 +66,13 @@ export default function AttendanceScreen() {
     webviewRef.current?.injectJavaScript(js)
   }
 
+  function armNavTimeout() {
+    if (navTimerRef.current) clearTimeout(navTimerRef.current)
+    navTimerRef.current = setTimeout(() => dispatch({ kind: 'navTimeout' }), NAV_TIMEOUT_MS)
+  }
+
   function onLoadEnd() {
+    if (state.phase === 'booting') armNavTimeout()
     inject(DETECT_PAGE_JS)
   }
 
@@ -168,7 +190,9 @@ export default function AttendanceScreen() {
               </View>
               <View style={[styles.tile, glass && styles.tileGlass]}>
                 <Text style={[styles.tileLabel, { color: labelColor }]}>残り時間</Text>
-                <Text style={[styles.tileValue, { color: valueColor }]}>{state.reception.remaining ?? '—'}</Text>
+                <Text style={[styles.tileValue, { color: valueColor }]}>
+                  {countdownText(state.reception.confirmWindow, now) ?? state.reception.remaining ?? '—'}
+                </Text>
               </View>
             </View>
           ) : null}
