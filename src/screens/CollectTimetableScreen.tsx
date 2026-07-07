@@ -4,7 +4,12 @@ import { WebView } from 'react-native-webview'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { parseCollectionMessage } from '../collect/timetableMessage'
-import { DESKTOP_UA, COLLECT_TIMETABLE_JS, OPEN_TIMETABLE_JS } from '../collect/injectedScripts'
+import {
+  DESKTOP_UA,
+  COLLECT_TIMETABLE_JS,
+  ENTER_CLASS_PC_JS,
+  OPEN_TIMETABLE_JS,
+} from '../collect/injectedScripts'
 import { saveTimetable } from '../storage/timetableStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import type { TimetableStackParamList } from '../navigation/types'
@@ -56,6 +61,7 @@ export default function CollectTimetableScreen() {
           userAgent={DESKTOP_UA}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
+          injectedJavaScript={ENTER_CLASS_PC_JS}
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>

@@ -109,6 +109,26 @@ export const DETECT_ATTENDANCE_JS = `(function(){
 })();`
 
 /**
+ * CLASSの入口スプラッシュ（CLASSロゴ＋「スマートフォン ENTER」「PC ENTER」）で「PC ENTER」を自動クリックし、
+ * ポータル内部まで自動で入る（DESKTOP_UA＝PCログインが安定なのでPC側を選ぶ）。該当ボタンが無ければ何もしない。
+ * 各ページ読込時に流しても入口以外では no-op。
+ */
+export const ENTER_CLASS_PC_JS = `(function(){
+  try {
+    var els = Array.prototype.slice.call(document.querySelectorAll('a,button,input[type=submit],input[type=button]'));
+    var btn = els.find(function(e){
+      var t = ((e.textContent || e.value) || '').replace(/\\s+/g, '');
+      return t.indexOf('PC') >= 0 && /ENTER/i.test(t);
+    });
+    if (btn) {
+      btn.click();
+      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: true, stage: 'class-pc-enter' }));
+    }
+  } catch (e) {}
+  true;
+})();`
+
+/**
  * 認証コードをCLASSの出席登録フォームへ流し込み、独自UIのボタンだけで送信まで完結させる。
  * 流し込みは実キー入力風（ネイティブvalueセッター＋keydown/keypress/input/keyup、keyCode付与）で
  * ウィジェットにコミットさせる（単なる .value 代入だと空送信扱いになる、を実機で確認）。送信は合成
@@ -181,9 +201,18 @@ export function buildSubmitAttendanceJs(code: string): string {
       var btn = els.find(function(b){ return ((b.textContent || b.value) || '').indexOf('出席登録') >= 0; });
       var method = 'none';
       var onclickStr = '';
+      var confirmSrc = '';
+      // ユーザー操作(gesture)なしの注入JSでは window.confirm が抑制されて false を返し、confirmIfModified系が
+      // そこで送信を中断する（実機で「手押しなら登録ポップアップが出るがアプリボタンでは出ない」を確認）。
+      // ダイアログを自動承認して確認ゲートを通す。
+      try { window.confirm = function(){ return true }; window.alert = function(){}; window.onbeforeunload = null; } catch (e0) {}
+      try {
+        var cf = window.confirmIfModified || window.confirmIfModified4M;
+        if (cf) confirmSrc = String(cf).replace(/\\s+/g, ' ').slice(0, 200);
+      } catch (e1) {}
       if (btn) {
         var oc = btn.getAttribute('onclick');
-        onclickStr = oc ? String(oc).slice(0, 100) : '';
+        onclickStr = oc ? String(oc).slice(0, 300) : '';
         try {
           if (oc) { new Function('event', oc).call(btn, new MouseEvent('click', { bubbles: true })); method = 'onclick'; }
           else { btn.click(); method = 'click'; }
@@ -192,7 +221,7 @@ export function buildSubmitAttendanceJs(code: string): string {
         }
       }
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled, btnFound: !!btn, method: method, onclick: onclickStr
+        type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled, btnFound: !!btn, method: method, onclick: onclickStr, confirmSrc: confirmSrc
       }));
     }, 350);
   } catch (e) {

@@ -1,7 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { AppState, StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { CLASS_TOP_URL, DESKTOP_UA, DETECT_AUTH_JS, MYCOURSES_URL } from '../collect/injectedScripts'
+import {
+  CLASS_TOP_URL,
+  DESKTOP_UA,
+  DETECT_AUTH_JS,
+  ENTER_CLASS_PC_JS,
+  MYCOURSES_URL,
+} from '../collect/injectedScripts'
 import { classifyAuthState, type AuthStatus } from './classifyAuthState'
 
 type Service = 'class' | 'letus'
@@ -9,6 +15,12 @@ type Service = 'class' | 'letus'
 const SERVICE_URL: Record<Service, string> = {
   class: CLASS_TOP_URL,
   letus: MYCOURSES_URL,
+}
+
+// CLASSは入口スプラッシュで止まるので、先に「PC ENTER」を自動クリックしてから認証状態を判定する。
+const SERVICE_INJECT: Record<Service, string> = {
+  class: `${ENTER_CLASS_PC_JS}\n${DETECT_AUTH_JS}`,
+  letus: DETECT_AUTH_JS,
 }
 
 interface AuthContextValue {
@@ -78,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             sharedCookiesEnabled
             thirdPartyCookiesEnabled
             javaScriptEnabled
-            injectedJavaScript={DETECT_AUTH_JS}
+            injectedJavaScript={SERVICE_INJECT[service]}
             onMessage={(e) => onMessage(service, e.nativeEvent.data)}
           />
         ))}

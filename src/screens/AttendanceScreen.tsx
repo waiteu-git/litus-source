@@ -1,7 +1,12 @@
 import { useRef, useState } from 'react'
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { DESKTOP_UA, DETECT_ATTENDANCE_JS, buildSubmitAttendanceJs } from '../collect/injectedScripts'
+import {
+  DESKTOP_UA,
+  DETECT_ATTENDANCE_JS,
+  ENTER_CLASS_PC_JS,
+  buildSubmitAttendanceJs,
+} from '../collect/injectedScripts'
 import { parseAttendanceMessage } from '../collect/attendanceMessage'
 import { useAuth } from '../auth/AuthProvider'
 
@@ -18,6 +23,7 @@ type SubmitDiag = {
   btnFound?: boolean
   method?: string
   onclick?: string
+  confirmSrc?: string
 }
 
 export default function AttendanceScreen() {
@@ -61,10 +67,14 @@ export default function AttendanceScreen() {
     } catch {
       // 後段の parseAttendanceMessage がエラーを表現する
     }
+    // PC ENTER 自動クリック等のナビ通知は無視（バナーに出さない）。
+    if (parsed && parsed.type === 'nav') return
     if (parsed && parsed.type === 'submit') {
       const vals = parsed.values ? parsed.values.join(',') : ''
       setBanner(
-        `送信 値[${vals}] / method:${parsed.method ?? '-'} / onclick:${parsed.onclick || '無'}`,
+        `送信 値[${vals}] / method:${parsed.method ?? '-'} / onclick:${parsed.onclick || '無'}${
+          parsed.confirmSrc ? ` / cf:${parsed.confirmSrc}` : ''
+        }`,
       )
       return
     }
@@ -118,6 +128,7 @@ export default function AttendanceScreen() {
           userAgent={DESKTOP_UA}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
+          injectedJavaScript={ENTER_CLASS_PC_JS}
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>
