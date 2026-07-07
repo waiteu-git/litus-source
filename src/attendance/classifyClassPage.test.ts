@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { classifyClassPage } from './classifyClassPage'
 
-const base = { hasPasswordInput: false, hasAttendanceForm: false, hasEnterSplash: false, hasClassMenu: false }
+const base = {
+  hasPasswordInput: false,
+  hasAttendanceForm: false,
+  hasEnterSplash: false,
+  hasClassMenu: false,
+  hasSystemError: false,
+}
 
 describe('classifyClassPage', () => {
   it('パスワード欄があれば login（最優先）', () => {
@@ -21,5 +27,11 @@ describe('classifyClassPage', () => {
   })
   it('どれも無ければ other', () => {
     expect(classifyClassPage({ ...base })).toBe('other')
+  })
+  it('システムエラー文言があれば error（login以外に優先）', () => {
+    expect(classifyClassPage({ ...base, hasSystemError: true, hasClassMenu: true })).toBe('error')
+  })
+  it('パスワード欄はエラーより優先（ログインページにエラー文言が乗っても login）', () => {
+    expect(classifyClassPage({ ...base, hasPasswordInput: true, hasSystemError: true })).toBe('login')
   })
 })

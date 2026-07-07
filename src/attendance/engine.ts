@@ -22,6 +22,7 @@ export type EngineEvent =
   | { kind: 'submitStart' }
   | { kind: 'submitResult'; result: SubmitResult }
   | { kind: 'navTimeout' }
+  | { kind: 'errorPage' }
   | { kind: 'retry' }
 
 export const initialEngineState: EngineState = { phase: 'booting', reception: null, result: null }
@@ -49,6 +50,9 @@ export function attendanceReducer(state: EngineState, event: EngineEvent): Engin
     case 'navTimeout':
       if (state.phase === 'booting') return { ...state, phase: 'navFailed' }
       return state
+    case 'errorPage':
+      // システムエラーページで自動復帰を使い切った後の最終フォールバック（手動やり直しへ）
+      return { ...state, phase: 'navFailed' }
     case 'retry':
       return { ...initialEngineState }
     default:

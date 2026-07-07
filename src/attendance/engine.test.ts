@@ -49,6 +49,10 @@ describe('attendanceReducer', () => {
     const s = attendanceReducer({ ...initialEngineState, phase: 'navFailed' }, { kind: 'page', page: 'attendance' })
     expect(s.phase).toBe('booting')
   })
+  it('errorPage で navFailed へ（自動復帰1回を使い切った後の最終フォールバック）', () => {
+    const s = attendanceReducer({ ...initialEngineState, phase: 'ready' }, { kind: 'errorPage' })
+    expect(s.phase).toBe('navFailed')
+  })
   it('result表示中のreceptionは結果を消さずphaseを維持', () => {
     const start = { phase: 'result' as const, reception, result: { result: '出席登録しました', ok: true, wrong: false, err: false } }
     const s = attendanceReducer(start, { kind: 'reception', reception })

@@ -32,6 +32,8 @@ export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
   const inputRef = useRef<TextInput>(null)
   const portalTriesRef = useRef(0)
+  // システムエラー（ViewExpired等）からの自動復帰は1回だけ（ループ防止）。
+  const errorRetryRef = useRef(0)
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { variant } = useThemeVariant()
   const glass = variant === 'glass'
@@ -93,6 +95,7 @@ export default function AttendanceScreen() {
         hasAttendanceForm: !!parsed.hasAttendanceForm,
         hasEnterSplash: !!parsed.hasEnterSplash,
         hasClassMenu: !!parsed.hasClassMenu,
+        hasSystemError: !!parsed.hasSystemError,
       })
       dispatch({ kind: 'page', page: kind })
       if (kind === 'login') {
@@ -100,6 +103,7 @@ export default function AttendanceScreen() {
         loginGate.requireLogin()
       } else if (kind === 'attendance') {
         portalTriesRef.current = 0
+        errorRetryRef.current = 0
         inject(DETECT_ATTENDANCE_JS)
       } else if (kind === 'splash') {
         // 入口スプラッシュ → PC側へURL直遷移（遷移すれば次の onLoadEnd で再判定される）。
@@ -111,6 +115,16 @@ export default function AttendanceScreen() {
           // メニュー発火がAJAX部分更新だと onLoadEnd が来ないため、少し待って再判定（粘り）。
           // まだ portal なら上の試行上限内で再試行、attendance に変わっていれば受付検出へ進む。
           setTimeout(() => inject(DETECT_PAGE_JS), 1500)
+        }
+      } else if (kind === 'error') {
+        // JSFのViewExpired等。1回だけWebViewを作り直して自動復帰、ダメなら手動オーバーレイへ。
+        if (errorRetryRef.current < 1) {
+          errorRetryRef.current += 1
+          portalTriesRef.current = 0
+          dispatch({ kind: 'retry' })
+          setWebviewKey((k) => k + 1)
+        } else {
+          dispatch({ kind: 'errorPage' })
         }
       }
       return
@@ -145,6 +159,7 @@ export default function AttendanceScreen() {
   function retry() {
     setCode('')
     portalTriesRef.current = 0
+    errorRetryRef.current = 0
     dispatch({ kind: 'retry' })
     setWebviewKey((k) => k + 1)
   }
