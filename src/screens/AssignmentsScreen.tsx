@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { Button, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
@@ -7,6 +7,7 @@ import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
 import { bucketAssignments, BUCKET_ORDER, type BucketKey } from '../assignments/buckets'
 import type { AssignmentsStackParamList } from '../navigation/types'
+import { Chip, ScreenBg, ScreenHeader, SectionLabel, useUi } from '../ui/screen'
 
 const SECTION_LABEL: Record<BucketKey, string> = {
   within24h: '24時間以内',
@@ -25,6 +26,8 @@ const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
   unknown: '状態不明',
 }
 
+const URGENT: Set<BucketKey> = new Set(['within24h', 'overdue'])
+
 function formatDeadline(iso: string | null): string {
   if (!iso) return '締切未設定'
   const d = new Date(iso)
@@ -36,9 +39,35 @@ function formatDeadline(iso: string | null): string {
   return `${mm}/${dd} ${hh}:${mi}`
 }
 
+function relDue(iso: string | null, now: Date): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const sec = Math.floor((d.getTime() - now.getTime()) / 1000)
+  if (sec <= 0) return '締切超過'
+  const day = Math.floor(sec / 86400)
+  if (day >= 1) return `あと${day}日`
+  const h = Math.floor(sec / 3600)
+  if (h >= 1) return `あと${h}時間`
+  return `あと${Math.max(1, Math.floor(sec / 60))}分`
+}
+
+function StatusChip({ status }: { status: AssignmentSubmissionStatus }) {
+  const submitted = status === 'submitted' || status === 'completed'
+  return (
+    <View style={[styles.chip, submitted ? styles.chipOk : styles.chipNg]}>
+      <Text style={[styles.chipText, submitted ? styles.chipTextOk : styles.chipTextNg]}>
+        {STATUS_LABEL[status]}
+      </Text>
+    </View>
+  )
+}
+
 export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
+  const ui = useUi()
   const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [now, setNow] = useState(() => new Date())
 
   const reload = useCallback(async () => {
     const map = await loadAssignments()
@@ -57,6 +86,11 @@ export default function AssignmentsScreen() {
     }, []),
   )
 
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(id)
+  }, [])
+
   async function hide(a: Assignment) {
     const map = await loadAssignments()
     if (map[a.url]) {
@@ -66,52 +100,72 @@ export default function AssignmentsScreen() {
     }
   }
 
-  const buckets = bucketAssignments(assignments, new Date())
+  const buckets = bucketAssignments(assignments, now)
   const total = BUCKET_ORDER.reduce((n, k) => n + buckets[k].length, 0)
 
   return (
-    <View style={styles.root}>
-      <View style={styles.controls}>
-        <Button title="課題を収集" onPress={() => navigation.navigate('CollectAssignments')} />
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
-        {total === 0 ? (
-          <Text style={styles.empty}>
-            表示できる課題がありません。「課題を収集」から取得してください。
+    <ScreenBg>
+      <ScreenHeader
+        title="課題"
+        right={<Chip label="更新" onPress={() => navigation.navigate('CollectAssignments')} />}
+      />
+      {total === 0 ? (
+        <View style={[ui.card, { marginTop: 16 }]}>
+          <Text style={{ color: ui.valueColor }}>
+            表示できる課題がありません。「更新」から取得してください。
           </Text>
-        ) : (
-          BUCKET_ORDER.filter((k) => buckets[k].length > 0).map((k) => (
-            <View key={k} style={styles.section}>
-              <Text style={styles.sectionTitle}>{SECTION_LABEL[k]}</Text>
-              {buckets[k].map((a) => (
-                <Pressable
-                  key={a.url}
-                  onPress={() => Linking.openURL(a.url)}
-                  onLongPress={() => hide(a)}
-                  style={styles.card}
-                >
-                  <Text style={styles.cardTitle}>{a.title}</Text>
-                  <Text style={styles.cardMeta}>
-                    {a.courseName || '科目不明'} ・ {formatDeadline(a.deadline)} ・ {STATUS_LABEL[a.submissionStatus]}
-                  </Text>
-                </Pressable>
-              ))}
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.list}>
+          {BUCKET_ORDER.filter((k) => buckets[k].length > 0).map((k) => (
+            <View key={k}>
+              <SectionLabel>{SECTION_LABEL[k]}</SectionLabel>
+              {buckets[k].map((a) => {
+                const rel = relDue(a.deadline, now)
+                const done = k === 'submitted'
+                return (
+                  <Pressable
+                    key={a.url}
+                    onPress={() => Linking.openURL(a.url)}
+                    onLongPress={() => hide(a)}
+                    style={[ui.card, URGENT.has(k) && styles.urgent, styles.card, done && { opacity: 0.72 }]}
+                  >
+                    <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
+                      {a.courseName || '科目不明'}
+                    </Text>
+                    <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={2}>
+                      {a.title}
+                    </Text>
+                    <View style={styles.meta}>
+                      <Text style={[styles.due, { color: ui.labelColor }]} numberOfLines={1}>
+                        {formatDeadline(a.deadline)}
+                        {rel ? ` ・ ${rel}` : ''}
+                      </Text>
+                      <StatusChip status={a.submissionStatus} />
+                    </View>
+                  </Pressable>
+                )
+              })}
             </View>
-          ))
-        )}
-      </ScrollView>
-    </View>
+          ))}
+        </ScrollView>
+      )}
+    </ScreenBg>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  controls: { padding: 8, flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  content: { padding: 12 },
-  empty: { color: '#666' },
-  section: { marginBottom: 16 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 6, color: '#1a4d8f' },
-  card: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ddd' },
-  cardTitle: { fontSize: 15 },
-  cardMeta: { color: '#666', marginTop: 2, fontSize: 13 },
+  list: { paddingTop: 4, paddingBottom: 12 },
+  card: { marginBottom: 9 },
+  urgent: { borderLeftWidth: 4, borderLeftColor: '#ff7a5c' },
+  course: { fontSize: 11 },
+  title: { fontSize: 14, fontWeight: '500', marginTop: 2 },
+  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  due: { fontSize: 12, flex: 1, paddingRight: 8 },
+  chip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  chipNg: { backgroundColor: '#ffdcd4' },
+  chipOk: { backgroundColor: 'rgba(255,255,255,0.6)' },
+  chipText: { fontSize: 11 },
+  chipTextNg: { color: '#a33417' },
+  chipTextOk: { color: '#0a5c48' },
 })

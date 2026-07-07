@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { clearTimetable, loadTimetable } from '../storage/timetableStore'
 import { loadAttendanceSettings, saveAttendanceSettings } from '../storage/attendanceSettingsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
-import { useThemeVariant } from '../theme'
+import { ScreenBg, ScreenHeader, SectionLabel, Segmented, useUi } from '../ui/screen'
+import { COLORS, useThemeVariant, type ThemeVariant } from '../theme'
 
 type Course = { courseCode: string; name: string }
 
 export default function SettingsScreen() {
+  const ui = useUi()
+  const { variant, setVariant } = useThemeVariant()
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
 
@@ -45,64 +48,68 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.root}>
-      <Text style={styles.heading}>出席アラーム（科目別）</Text>
-      {courses.length === 0 ? (
-        <Text style={styles.info}>時間割を収集すると科目が表示されます。</Text>
-      ) : (
-        courses.map((c) => (
-          <View key={c.courseCode} style={styles.row}>
-            <Text style={styles.courseName}>{c.name}</Text>
-            <Switch
-              value={settings[c.courseCode] !== false}
-              onValueChange={(v) => toggle(c.courseCode, v)}
-            />
-          </View>
-        ))
-      )}
-      <View style={{ marginTop: 24 }}>
-        <Text style={styles.heading}>テーマ</Text>
-        <ThemeToggle />
-      </View>
-      <View style={styles.spacer} />
-      <Button title="時間割データを消去" onPress={onClear} />
-      <Text style={styles.info}>リタス v1.0.0（開発版）</Text>
-    </ScrollView>
-  )
-}
+    <ScreenBg>
+      <ScreenHeader title="設定" />
+      <ScrollView contentContainerStyle={styles.list}>
+        <SectionLabel>テーマ</SectionLabel>
+        <Segmented
+          options={[
+            { key: 'glass', label: 'グラス（透明感）' },
+            { key: 'solid', label: '不透明（フラット）' },
+          ]}
+          value={variant}
+          onChange={(k) => setVariant(k as ThemeVariant)}
+        />
 
-function ThemeToggle() {
-  const { variant, setVariant } = useThemeVariant()
-  return (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      {(['glass', 'solid'] as const).map((v) => (
-        <Pressable
-          key={v}
-          onPress={() => setVariant(v)}
-          style={{
-            flex: 1,
-            alignItems: 'center',
-            paddingVertical: 10,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: variant === v ? '#0aa579' : '#cfe0d9',
-            backgroundColor: variant === v ? '#e6f4ea' : '#ffffff',
-          }}
-        >
-          <Text style={{ color: '#0a6650', fontWeight: variant === v ? '600' : '400' }}>
-            {v === 'glass' ? 'グラス（透明感）' : '不透明（フラット）'}
-          </Text>
+        <SectionLabel>出席アラーム（科目別）</SectionLabel>
+        {courses.length === 0 ? (
+          <View style={ui.card}>
+            <Text style={{ color: ui.valueColor }}>時間割を収集すると科目が表示されます。</Text>
+          </View>
+        ) : (
+          <View style={ui.card}>
+            {courses.map((c, i) => (
+              <View
+                key={c.courseCode}
+                style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
+              >
+                <Text style={[styles.rowLabel, { color: ui.valueColor }]} numberOfLines={1}>
+                  {c.name}
+                </Text>
+                <Switch
+                  value={settings[c.courseCode] !== false}
+                  onValueChange={(v) => toggle(c.courseCode, v)}
+                  trackColor={{ true: COLORS.emerald, false: '#c9d6d0' }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            ))}
+          </View>
+        )}
+
+        <SectionLabel>データ</SectionLabel>
+        <Pressable style={[ui.card, styles.rowBetween]} onPress={onClear}>
+          <Text style={[styles.rowLabel, { color: ui.valueColor }]}>時間割データを消去</Text>
+          <Text style={styles.danger}>消去</Text>
         </Pressable>
-      ))}
-    </View>
+
+        <SectionLabel>アプリ情報</SectionLabel>
+        <View style={ui.card}>
+          <Text style={{ color: ui.valueColor, fontWeight: '500' }}>リタス v1.0.0（開発版）</Text>
+          <Pressable onPress={() => Linking.openURL('https://lms.waiteu.dev/app')}>
+            <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </ScreenBg>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { padding: 16 },
-  heading: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
-  courseName: { flex: 1, paddingRight: 12 },
-  spacer: { height: 24 },
-  info: { color: '#666', marginTop: 16 },
+  list: { paddingBottom: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowLabel: { fontSize: 14, flex: 1, paddingRight: 12 },
+  danger: { color: '#b3261e', fontSize: 14, fontWeight: '500' },
+  link: { fontSize: 13, textDecorationLine: 'underline', marginTop: 8 },
 })
