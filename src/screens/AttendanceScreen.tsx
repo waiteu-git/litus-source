@@ -26,6 +26,8 @@ const NAV_TIMEOUT_MS = 8000
 
 export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
+  const inputRef = useRef<TextInput>(null)
+  const portalTriesRef = useRef(0)
   const { variant } = useThemeVariant()
   const glass = variant === 'glass'
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
@@ -68,10 +70,15 @@ export default function AttendanceScreen() {
         hasClassMenu: !!parsed.hasClassMenu,
       })
       dispatch({ kind: 'page', page: kind })
-      if (kind === 'attendance') inject(DETECT_ATTENDANCE_JS)
-      else if (kind === 'portal') {
-        inject(ENTER_CLASS_PC_JS)
-        setTimeout(() => inject(OPEN_ATTENDANCE_JS), 600)
+      if (kind === 'attendance') {
+        portalTriesRef.current = 0
+        inject(DETECT_ATTENDANCE_JS)
+      } else if (kind === 'portal') {
+        if (portalTriesRef.current < 3) {
+          portalTriesRef.current += 1
+          inject(ENTER_CLASS_PC_JS)
+          setTimeout(() => inject(OPEN_ATTENDANCE_JS), 600)
+        }
       }
       return
     }
@@ -99,6 +106,7 @@ export default function AttendanceScreen() {
 
   function retry() {
     setCode('')
+    portalTriesRef.current = 0
     dispatch({ kind: 'retry' })
     setWebviewKey((k) => k + 1)
   }
@@ -137,7 +145,7 @@ export default function AttendanceScreen() {
         <View style={styles.header}>
           <Text style={[styles.hTitle, { color: glass ? c.white : c.emeraldDark }]}>出席</Text>
           <Text style={[styles.pill, glass ? styles.pillGlass : styles.pillSolid]}>
-            {state.phase === 'needsLogin' ? 'ログインが必要' : 'ログイン済み'}
+            {state.phase === 'needsLogin' ? 'ログインが必要' : state.reception ? 'ログイン済み' : '確認中…'}
           </Text>
         </View>
 
@@ -168,14 +176,15 @@ export default function AttendanceScreen() {
 
         <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
           <Text style={[styles.inputLabel, { color: labelColor }]}>認証コード（半角数字）</Text>
-          <View style={styles.segRow}>
+          <Pressable style={styles.segRow} onPress={() => inputRef.current?.focus()}>
             {digits.map((d, i) => (
               <View key={i} style={[styles.seg, glass && styles.segGlass]}>
                 <Text style={[styles.segText, { color: valueColor }]}>{d}</Text>
               </View>
             ))}
-          </View>
+          </Pressable>
           <TextInput
+            ref={inputRef}
             style={styles.hiddenInput}
             value={code}
             onChangeText={(t) => setCode(normalizeAttendanceCode(t).slice(0, 4))}
