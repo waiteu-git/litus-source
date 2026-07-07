@@ -28,8 +28,10 @@ type SubmitDiag = {
   btnFound?: boolean
   method?: string
   onclick?: string
-  confirmSrc?: string
-  yesClicked?: boolean
+  result?: string
+  ok?: boolean
+  wrong?: boolean
+  err?: boolean
   hasPasswordInput?: boolean
   hasLogoutLink?: boolean
 }
@@ -38,6 +40,8 @@ export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
   const auth = useAuth()
   const [banner, setBanner] = useState<string | null>(null)
+  // 送信結果の色分け（成功=緑/失敗=橙）。
+  const [bannerKind, setBannerKind] = useState<'ok' | 'warn' | 'info'>('info')
   const [code, setCode] = useState('')
   // key を変えると WebView を作り直してCLASSトップから再開する（詰まりからの確実な復帰）。
   const [webviewKey, setWebviewKey] = useState(0)
@@ -88,20 +92,18 @@ export default function AttendanceScreen() {
       return
     }
     if (parsed && parsed.type === 'submit') {
-      const vals = parsed.values ? parsed.values.join(',') : ''
-      setBanner(
-        `送信 値[${vals}] / yes:${parsed.yesClicked ? '押' : '無'} / method:${
-          parsed.method ?? '-'
-        } / onclick:${parsed.onclick || '無'}${parsed.confirmSrc ? ` / cf:${parsed.confirmSrc}` : ''}`,
-      )
+      setBannerKind(parsed.ok ? 'ok' : parsed.wrong || parsed.err ? 'warn' : 'info')
+      setBanner(parsed.result ?? '送信しました')
       return
     }
     const r = parseAttendanceMessage(data)
     if (r.error) {
+      setBannerKind('warn')
       setBanner(r.error)
       return
     }
     const name = r.courseName ?? ''
+    setBannerKind('info')
     setBanner(
       r.accepting
         ? `受付中${name && name.length <= 40 ? `: ${name}` : ''}（コードを入れて「出席する」）`
@@ -137,7 +139,19 @@ export default function AttendanceScreen() {
         出欠管理→モバイル出席登録 を開き、コードを入れて「出席する」で登録まで完結
       </Text>
       <Text style={auth.class === 'needsLogin' ? styles.authWarn : styles.authOk}>{authNote}</Text>
-      {banner ? <Text style={styles.banner}>{banner}</Text> : null}
+      {banner ? (
+        <Text
+          style={
+            bannerKind === 'ok'
+              ? styles.bannerOk
+              : bannerKind === 'warn'
+                ? styles.bannerWarn
+                : styles.bannerInfo
+          }
+        >
+          {banner}
+        </Text>
+      ) : null}
       <View style={styles.webviewBox}>
         <WebView
           key={webviewKey}
@@ -171,6 +185,8 @@ const styles = StyleSheet.create({
   hint: { paddingHorizontal: 8, paddingBottom: 6, color: '#666', fontSize: 12 },
   authOk: { paddingHorizontal: 8, paddingBottom: 4, color: '#0b6b2f', fontSize: 12 },
   authWarn: { paddingHorizontal: 8, paddingBottom: 4, color: '#b26a00', fontSize: 12, fontWeight: '600' },
-  banner: { backgroundColor: '#e6f4ea', color: '#0b6b2f', padding: 10, fontWeight: '600' },
+  bannerOk: { backgroundColor: '#e6f4ea', color: '#0b6b2f', padding: 10, fontWeight: '700' },
+  bannerWarn: { backgroundColor: '#fdecea', color: '#b3261e', padding: 10, fontWeight: '700' },
+  bannerInfo: { backgroundColor: '#eef2f6', color: '#33475b', padding: 10, fontWeight: '600' },
   webviewBox: { flex: 1 },
 })

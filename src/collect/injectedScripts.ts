@@ -220,9 +220,9 @@ export function buildSubmitAttendanceJs(code: string): string {
           try { btn.click(); method = 'click-fb'; } catch (e2) { method = 'err'; }
         }
       }
-      // PrimeFaces 確認ダイアログの「はい」を自動クリック（少し待ってダイアログ描画を待つ）。
+      // 保険: 確認ダイアログが出る画面なら「はい」を自動クリック（この出席登録ボタンは onclick 直の
+      // PrimeFaces.ab 送信で通常ダイアログ無し。念のため残す・無害）。
       setTimeout(function(){
-        var yesClicked = false;
         var yes = document.querySelector('.ui-confirmdialog-yes');
         if (!yes) {
           var dlgBtns = Array.prototype.slice.call(
@@ -233,19 +233,24 @@ export function buildSubmitAttendanceJs(code: string): string {
             return t === 'はい' || t === 'OK' || /^(yes|ok)$/i.test(t);
           });
         }
-        if (yes) {
-          try {
-            var oc2 = yes.getAttribute('onclick');
-            if (oc2) { new Function('event', oc2).call(yes, new MouseEvent('click', { bubbles: true })); }
-            else { yes.click(); }
-            yesClicked = true;
-          } catch (e3) { try { yes.click(); yesClicked = true; } catch (e4) {} }
-        }
+        if (yes) { try { var oc2 = yes.getAttribute('onclick'); if (oc2) { new Function('event', oc2).call(yes, new MouseEvent('click', { bubbles: true })); } else { yes.click(); } } catch (e3) { try { yes.click(); } catch (e4) {} } }
+      }, 400);
+      // 送信レスポンスを待って結果を判定して返す。
+      setTimeout(function(){
+        var body = document.body ? (document.body.innerText || '') : '';
+        var wrong = /認証コードが違います|コードが違います/.test(body);
+        var ok = /出席しました|登録しました|受付を完了|出席登録が完了|出席済/.test(body);
+        var err = /システムエラー|エラーが発生|ViewExpired/.test(body);
+        var result = !btn ? '「出席登録する」ボタンが見つかりません'
+          : ok ? '出席登録しました'
+          : wrong ? '認証コードが違います（コードを確認してください）'
+          : err ? 'エラーが発生しました。「最初に戻る」で再試行してください'
+          : '送信しました（下の画面で結果をご確認ください）';
         window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled,
-          btnFound: !!btn, method: method, onclick: onclickStr, confirmSrc: confirmSrc, yesClicked: yesClicked
+          type: 'submit', result: result, ok: ok, wrong: wrong, err: err, btnFound: !!btn,
+          values: values, method: method, onclick: onclickStr
         }));
-      }, 500);
+      }, 1600);
     }, 350);
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
