@@ -19,9 +19,14 @@ export type GateVerdict = 'authed' | 'needsLogin' | 'pending'
 
 const SSO_LOGIN_URL_RE = /login\.microsoftonline\.com|login\.live\.com|login\.microsoft\.com/i
 
+/** SSO（Microsoft）ログインページのURLか。初画面はパスワード欄が無いためURLで判定する。 */
+export function isSsoLoginUrl(url?: string): boolean {
+  return SSO_LOGIN_URL_RE.test(url ?? '')
+}
+
 export function classifyGatePage(s: GatePageSignal): GateVerdict {
   if (s.hasPasswordInput) return 'needsLogin'
-  if (SSO_LOGIN_URL_RE.test(s.url ?? '')) return 'needsLogin'
+  if (isSsoLoginUrl(s.url)) return 'needsLogin'
   if (s.hasClassMenu) return 'authed'
   return 'pending'
 }

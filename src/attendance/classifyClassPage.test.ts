@@ -34,4 +34,9 @@ describe('classifyClassPage', () => {
   it('パスワード欄はエラーより優先（ログインページにエラー文言が乗っても login）', () => {
     expect(classifyClassPage({ ...base, hasPasswordInput: true, hasSystemError: true })).toBe('login')
   })
+  it('MicrosoftログインURLは login（MS初画面はパスワード欄が無いためURLで判定）', () => {
+    expect(
+      classifyClassPage({ ...base, url: 'https://login.microsoftonline.com/common/oauth2/authorize' }),
+    ).toBe('login')
+  })
 })

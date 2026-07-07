@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg } from '../ui/screen'
 import { useLoginGate } from '../auth/LoginGate'
 import {
+  CLASS_PC_LOGIN_URL,
   DESKTOP_UA,
   DETECT_ATTENDANCE_JS,
   DETECT_PAGE_JS,
@@ -26,7 +27,8 @@ import {
 } from '../attendance/engine'
 import { COLORS, useThemeVariant } from '../theme'
 
-const CLASS_URL = 'https://class.admin.tus.ac.jp/'
+// 入口スプラッシュを踏まずPC側SSOへ直行（再訪時の遷移を1ホップ短縮。スプラッシュ処理は保険で残す）。
+const CLASS_URL = CLASS_PC_LOGIN_URL
 // 自動遷移が進んでいる間はオーバーレイを出さないよう、ページ読込ごとにこの秒数へ再アームする。
 const NAV_TIMEOUT_MS = 10000
 
@@ -131,6 +133,7 @@ export default function AttendanceScreen() {
         hasEnterSplash: !!parsed.hasEnterSplash,
         hasClassMenu: !!parsed.hasClassMenu,
         hasSystemError: !!parsed.hasSystemError,
+        url: typeof parsed.url === 'string' ? parsed.url : undefined,
       })
       dispatch({ kind: 'page', page: kind })
       if (kind === 'login') {
