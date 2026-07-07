@@ -53,6 +53,7 @@ type LabMsg = {
   inputs?: string[]
   pfcmd?: string
   bonclick?: string
+  btnId?: string
   err?: string
 }
 
@@ -113,6 +114,7 @@ export default function AttendanceLabScreen() {
         addLog(`診断エラー: ${parsed.err}`)
         return
       }
+      addLog(`診断 btn: ${parsed.btnId || '?'}`)
       addLog(`診断 pfconfirmcommand: ${parsed.pfcmd || '（なし）'}`)
       addLog(`診断 button onclick: ${parsed.bonclick || '（なし）'}`)
       addLog(`診断 inputs: ${(parsed.inputs ?? []).join(' | ') || '（なし）'}`)

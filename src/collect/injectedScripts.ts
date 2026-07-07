@@ -200,7 +200,9 @@ export function buildSubmitAttendanceJs(code: string): string {
     setTimeout(function(){
       var values = codeInputs.map(function(el){ return el.value; });
       var els = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
-      var btn = els.find(function(b){ return ((b.textContent || b.value) || '').indexOf('出席登録') >= 0; });
+      // メニュー項目「モバイル出席登録」(menuForm:mainMenu)を除外し、フォームの「出席登録する」を掴む。
+      function okBtn(b,needle){ var t=((b.textContent||b.value)||'').replace(/\\s+/g,''); var idn=(b.id||b.name||''); if(idn.indexOf('menuForm')>=0||idn.indexOf('mainMenu')>=0)return false; return t.indexOf(needle)>=0; }
+      var btn = els.find(function(b){return okBtn(b,'出席登録する');}) || els.find(function(b){return okBtn(b,'出席登録');});
       var method = 'none';
       var onclickStr = '';
       var confirmSrc = '';
@@ -287,7 +289,12 @@ export function buildAttendanceLabJs(code: string, strategy: string): string {
     }
     var ins=codeInputs(); var filled=0;
     if(ins.length<=1){ if(ins[0]){setVal(ins[0],code);filled=1;} } else { for(var i=0;i<ins.length&&i<code.length;i++){setVal(ins[i],code.charAt(i));filled++;} }
-    function findBtn(){ var els=Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a')); return els.find(function(b){return ((b.textContent||b.value)||'').indexOf('出席登録')>=0;}); }
+    function findBtn(){
+      var els=Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
+      // メニュー項目「モバイル出席登録」(menuForm:mainMenu)ではなく、フォームの「出席登録する」を掴む。
+      function ok(b,needle){ var t=((b.textContent||b.value)||'').replace(/\\s+/g,''); var idn=(b.id||b.name||''); if(idn.indexOf('menuForm')>=0||idn.indexOf('mainMenu')>=0)return false; return t.indexOf(needle)>=0; }
+      return els.find(function(b){return ok(b,'出席登録する');}) || els.find(function(b){return ok(b,'出席登録');});
+    }
     function clickYes(){ var y=document.querySelector('.ui-confirmdialog-yes'); if(!y){var bs=Array.prototype.slice.call(document.querySelectorAll('.ui-confirm-dialog button,.ui-confirmdialog button,.ui-dialog button,.ui-dialog a')); y=bs.filter(function(b){return !!b.offsetParent;}).find(function(b){var t=((b.textContent||b.value)||'').trim(); return t==='はい'||t==='OK'||/^(yes|ok)$/i.test(t);});} if(y){try{var oc=y.getAttribute('onclick'); if(oc){new Function('event',oc).call(y,new MouseEvent('click',{bubbles:true}));}else{y.click();} return true;}catch(e){try{y.click();return true;}catch(e2){}}} return false; }
     function snap(){
       var dlg=document.querySelector('.ui-confirmdialog'); var dialogOpen=!!(dlg&&dlg.offsetParent);
@@ -352,10 +359,12 @@ export const DUMP_DIAG_JS = `(function(){
     var near=all; if(label){ var af=all.filter(function(el){return (label.compareDocumentPosition(el)&4)!==0;}); if(af.length>0)near=af; }
     var inputs=near.slice(0,12).map(function(el){ return (el.getAttribute('type')||'text')+' '+(el.name||el.id||'?')+'="'+String(el.value||'').slice(0,10)+'" ml='+el.maxLength+(el.offsetParent?'':' [hidden]'); });
     var bs=Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
-    var btn=bs.find(function(b){return ((b.textContent||b.value)||'').indexOf('出席登録')>=0;});
+    function okB(b,needle){ var t=((b.textContent||b.value)||'').replace(/\\s+/g,''); var idn=(b.id||b.name||''); if(idn.indexOf('menuForm')>=0||idn.indexOf('mainMenu')>=0)return false; return t.indexOf(needle)>=0; }
+    var btn=bs.find(function(b){return okB(b,'出席登録する');}) || bs.find(function(b){return okB(b,'出席登録');});
     var pfcmd=btn?String(btn.getAttribute('data-pfconfirmcommand')||'(なし)').slice(0,500):'(ボタン無し)';
     var bonclick=btn?String(btn.getAttribute('onclick')||'').slice(0,200):'';
-    window.ReactNativeWebView.postMessage(JSON.stringify({type:'diag', cim:cim, cim4:cim4, inputs:inputs, pfcmd:pfcmd, bonclick:bonclick}));
+    var btnId=btn?String(btn.id||btn.name||btn.tagName):'(ボタン無し)';
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'diag', cim:cim, cim4:cim4, inputs:inputs, pfcmd:pfcmd, bonclick:bonclick, btnId:btnId}));
   }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'diag', err:String(e).slice(0,140)})); }
   true;
 })();`
