@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg } from '../ui/screen'
+import { useLoginGate } from '../auth/LoginGate'
 import {
   DESKTOP_UA,
   DETECT_ATTENDANCE_JS,
@@ -34,6 +35,7 @@ export default function AttendanceScreen() {
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { variant } = useThemeVariant()
   const glass = variant === 'glass'
+  const loginGate = useLoginGate()
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
   const [code, setCode] = useState('')
   const [expanded, setExpanded] = useState(true)
@@ -93,7 +95,10 @@ export default function AttendanceScreen() {
         hasClassMenu: !!parsed.hasClassMenu,
       })
       dispatch({ kind: 'page', page: kind })
-      if (kind === 'attendance') {
+      if (kind === 'login') {
+        // セッション切れ → 専用ログインゲートへ（アプリ全体をログイン画面に切替）。
+        loginGate.requireLogin()
+      } else if (kind === 'attendance') {
         portalTriesRef.current = 0
         inject(DETECT_ATTENDANCE_JS)
       } else if (kind === 'portal') {
