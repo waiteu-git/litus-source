@@ -1,7 +1,7 @@
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
-  - '@expo/cli@57.0.5'
+  - '@expo/cli@57.0.5 || 57.0.6'
   - '@expo/config-plugins@57.0.3'
   - '@expo/fingerprint@0.20.3'
   - '@expo/inline-modules@0.1.2'
@@ -9,4 +9,7 @@ minimumReleaseAgeExclude:
   - '@expo/router-server@57.0.2'
   - babel-preset-expo@57.0.2
   - expo-modules-autolinking@57.0.5
-  - expo@57.0.3
+  - expo@57.0.3 || 57.0.4
+  - '@expo/config@57.0.3'
+  - expo-modules-core@57.0.3
+  - expo-modules-jsi@57.0.1
