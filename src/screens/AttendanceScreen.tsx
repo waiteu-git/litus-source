@@ -4,11 +4,16 @@ import { WebView } from 'react-native-webview'
 import {
   DESKTOP_UA,
   DETECT_ATTENDANCE_JS,
+  DETECT_AUTH_JS,
   ENTER_CLASS_PC_JS,
   buildSubmitAttendanceJs,
 } from '../collect/injectedScripts'
 import { parseAttendanceMessage } from '../collect/attendanceMessage'
 import { useAuth } from '../auth/AuthProvider'
+import { classifyAuthState } from '../auth/classifyAuthState'
+
+// 可視CLASS WebViewの読込ごとに: PC ENTER自動入場 + ログイン状態判定 を注入する。
+const CLASS_ON_LOAD_JS = `${ENTER_CLASS_PC_JS}\n${DETECT_AUTH_JS}`
 
 // CLASSのJSFページは直リンク不可（ViewState無しだと保証人ポータルへ飛び詰まる）。
 // CLASSトップを開いてユーザーが手動で「出欠管理」→「モバイル出席登録」へ進む。
@@ -24,6 +29,9 @@ type SubmitDiag = {
   method?: string
   onclick?: string
   confirmSrc?: string
+  yesClicked?: boolean
+  hasPasswordInput?: boolean
+  hasLogoutLink?: boolean
 }
 
 export default function AttendanceScreen() {
@@ -69,12 +77,22 @@ export default function AttendanceScreen() {
     }
     // PC ENTER 自動クリック等のナビ通知は無視（バナーに出さない）。
     if (parsed && parsed.type === 'nav') return
+    // 可視CLASSページのログイン状態を反映（CLASSは背景ウォームアップしないためここで判定）。
+    if (parsed && parsed.type === 'auth') {
+      auth.setClass(
+        classifyAuthState({
+          hasPasswordInput: !!parsed.hasPasswordInput,
+          hasLogoutLink: !!parsed.hasLogoutLink,
+        }),
+      )
+      return
+    }
     if (parsed && parsed.type === 'submit') {
       const vals = parsed.values ? parsed.values.join(',') : ''
       setBanner(
-        `送信 値[${vals}] / method:${parsed.method ?? '-'} / onclick:${parsed.onclick || '無'}${
-          parsed.confirmSrc ? ` / cf:${parsed.confirmSrc}` : ''
-        }`,
+        `送信 値[${vals}] / yes:${parsed.yesClicked ? '押' : '無'} / method:${
+          parsed.method ?? '-'
+        } / onclick:${parsed.onclick || '無'}${parsed.confirmSrc ? ` / cf:${parsed.confirmSrc}` : ''}`,
       )
       return
     }
@@ -128,7 +146,7 @@ export default function AttendanceScreen() {
           userAgent={DESKTOP_UA}
           sharedCookiesEnabled
           thirdPartyCookiesEnabled
-          onLoadEnd={() => webviewRef.current?.injectJavaScript(ENTER_CLASS_PC_JS)}
+          onLoadEnd={() => webviewRef.current?.injectJavaScript(CLASS_ON_LOAD_JS)}
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>

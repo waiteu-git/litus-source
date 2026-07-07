@@ -193,8 +193,10 @@ export function buildSubmitAttendanceJs(code: string): string {
       for (var i = 0; i < codeInputs.length && i < code.length; i++) { setVal(codeInputs[i], code.charAt(i)); filled++; }
     }
     var ids = codeInputs.map(function(el){ return el.id || el.name || '(no-id)'; });
-    // 流し込み確定後に「出席登録する」を発火する。合成 .click() は無視されるため、ボタンの onclick
-    // 属性（PrimeFacesの本物のJSF送信呼び出し）を直接実行する。無ければ .click() にフォールバック。
+    // 流し込み確定後に「出席登録する」の onclick（confirmIfModified→PrimeFaces.confirm）を実行し、
+    // 出てくる PrimeFaces 確認ダイアログの「はい」を自動クリックして送信を確定する。
+    // window.confirm も一応 true に上書き（別経路の素の confirm 用・PrimeFaces.confirm には無効だが無害）。
+    try { window.confirm = function(){ return true }; window.alert = function(){}; window.onbeforeunload = null; } catch (e0) {}
     setTimeout(function(){
       var values = codeInputs.map(function(el){ return el.value; });
       var els = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
@@ -202,10 +204,6 @@ export function buildSubmitAttendanceJs(code: string): string {
       var method = 'none';
       var onclickStr = '';
       var confirmSrc = '';
-      // ユーザー操作(gesture)なしの注入JSでは window.confirm が抑制されて false を返し、confirmIfModified系が
-      // そこで送信を中断する（実機で「手押しなら登録ポップアップが出るがアプリボタンでは出ない」を確認）。
-      // ダイアログを自動承認して確認ゲートを通す。
-      try { window.confirm = function(){ return true }; window.alert = function(){}; window.onbeforeunload = null; } catch (e0) {}
       try {
         var cf = window.confirmIfModified || window.confirmIfModified4M;
         if (cf) confirmSrc = String(cf).replace(/\\s+/g, ' ').slice(0, 200);
@@ -220,9 +218,32 @@ export function buildSubmitAttendanceJs(code: string): string {
           try { btn.click(); method = 'click-fb'; } catch (e2) { method = 'err'; }
         }
       }
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled, btnFound: !!btn, method: method, onclick: onclickStr, confirmSrc: confirmSrc
-      }));
+      // PrimeFaces 確認ダイアログの「はい」を自動クリック（少し待ってダイアログ描画を待つ）。
+      setTimeout(function(){
+        var yesClicked = false;
+        var yes = document.querySelector('.ui-confirmdialog-yes');
+        if (!yes) {
+          var dlgBtns = Array.prototype.slice.call(
+            document.querySelectorAll('.ui-confirm-dialog button, .ui-confirmdialog button, .ui-dialog button, .ui-dialog a'),
+          );
+          yes = dlgBtns.filter(function(b){ return !!b.offsetParent; }).find(function(b){
+            var t = ((b.textContent || b.value) || '').trim();
+            return t === 'はい' || t === 'OK' || /^(yes|ok)$/i.test(t);
+          });
+        }
+        if (yes) {
+          try {
+            var oc2 = yes.getAttribute('onclick');
+            if (oc2) { new Function('event', oc2).call(yes, new MouseEvent('click', { bubbles: true })); }
+            else { yes.click(); }
+            yesClicked = true;
+          } catch (e3) { try { yes.click(); yesClicked = true; } catch (e4) {} }
+        }
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'submit', inputCount: codeInputs.length, inputIds: ids, values: values, filled: filled,
+          btnFound: !!btn, method: method, onclick: onclickStr, confirmSrc: confirmSrc, yesClicked: yesClicked
+        }));
+      }, 500);
     }, 350);
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
