@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import RootTabs from './src/navigation/RootTabs'
 import { AuthProvider } from './src/auth/AuthProvider'
+import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion'
 import { LoginGate } from './src/auth/LoginGate'
 import { ThemeProvider } from './src/theme'
 import { configureNotifications, requestNotificationPermission } from './src/notifications/notifier'
@@ -32,11 +33,13 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <NavigationContainer>
-            <LoginGate>
-              <RootTabs />
-            </LoginGate>
-          </NavigationContainer>
+          <AssignmentsVersionProvider>
+            <NavigationContainer>
+              <LoginGate>
+                <RootTabs />
+              </LoginGate>
+            </NavigationContainer>
+          </AssignmentsVersionProvider>
           <StatusBar style="auto" />
         </AuthProvider>
       </ThemeProvider>

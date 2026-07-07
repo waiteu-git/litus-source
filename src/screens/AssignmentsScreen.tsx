@@ -6,6 +6,7 @@ import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
 import { bucketAssignments, BUCKET_ORDER, type BucketKey } from '../assignments/buckets'
+import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { Chip, ScreenBg, ScreenHeader, SectionLabel, useUi } from '../ui/screen'
 
@@ -85,6 +86,12 @@ export default function AssignmentsScreen() {
       }
     }, []),
   )
+
+  // バックグラウンド収集などの保存完了シグナルで、開きっぱなしでも一覧を自動更新。
+  const { version } = useAssignmentsVersion()
+  useEffect(() => {
+    reload()
+  }, [version, reload])
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000)
