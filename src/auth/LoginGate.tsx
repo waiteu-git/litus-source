@@ -3,16 +3,29 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { DESKTOP_UA, DETECT_PAGE_JS } from '../collect/injectedScripts'
+import {
+  CLASS_PC_LOGIN_URL,
+  COLLECT_TIMETABLE_JS,
+  DESKTOP_UA,
+  DETECT_PAGE_JS,
+  OPEN_TIMETABLE_JS,
+} from '../collect/injectedScripts'
+import { parseCollectionMessage } from '../collect/timetableMessage'
+import { loadTimetable, saveTimetable } from '../storage/timetableStore'
+import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { loadOnboardingDone, saveOnboardingDone } from '../storage/onboardingStore'
+import { classifyGatePage, type GateVerdict } from './classifyGatePage'
 import OnboardingSlides from '../screens/OnboardingSlides'
 import { COLORS } from '../theme'
 
-const CLASS_URL = 'https://class.admin.tus.ac.jp/'
 // checking中に本物のログイン状態が判定できない場合の保険（リダイレクト完了待ち）。
 const CHECK_TIMEOUT_MS = 12000
+// setup（時間割自動取り込み）が進まない場合は諦めて入場する（手動収集にフォールバック）。
+const SETUP_TIMEOUT_MS = 25000
+// setup中、ページ読込後に時間割テーブル抽出を試みるまでの待ち。
+const SETUP_COLLECT_DELAY_MS = 900
 
-type GateState = 'loading' | 'firstRun' | 'checking' | 'needsLogin' | 'authed'
+type GateState = 'loading' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'authed'
 
 const LoginContext = createContext<{ requireLogin: () => void }>({ requireLogin: () => {} })
 
@@ -23,18 +36,28 @@ export function useLoginGate() {
 
 /**
  * 起動ゲート。初回はチュートリアル（スライド→本物のSSOログイン全面表示・こちらのUIで包まない）、
- * 2回目以降は翠の起動画面でCLASSセッションを確認し、確認でき次第タブへ入場する。チュートリアル
- * 表示中も背後の1x1 WebViewがセッション確認を進め、結果は lastResultRef に貯めて完了時に即反映する。
- * CLASSとLETUSは同一SSOなので1回のログインで両方有効。認証情報は保存しない。
- * セッション切れは各画面が requireLogin() で再表示させる。
+ * 2回目以降は翠の起動画面でCLASSセッションを確認し、確認でき次第タブへ入場する。
+ *
+ * probe は入口スプラッシュを踏まず **ShibbolethAuthServlet（PC ENTERの行き先）を直接開く**:
+ * セッション有→ポータル到達=authed / 無→Microsoftログインへリダイレクト=needsLogin（URL判定）。
+ * スプラッシュは未ログインでも表示される公開ページなので判定に使わない（classifyGatePage参照）。
+ *
+ * ログイン完了後、時間割が未保存なら setup フェーズでゲートのWebView（この時点でアプリ唯一の
+ * CLASS view）から時間割を自動取り込みしてから入場する（失敗しても入場は続行・手動収集で補える）。
+ * 認証情報は保存しない。セッション切れは各画面が requireLogin() で再表示させる。
  */
 export function LoginGate({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets()
   const [state, setState] = useState<GateState>('loading')
   const [nonce, setNonce] = useState(0)
   const webviewRef = useRef<WebView>(null)
+  // コールバック（onLoadEnd/onMessage/タイマー）から最新stateを読むためのref。
+  const stateRef = useRef<GateState>('loading')
+  stateRef.current = state
   // firstRun 中に届いた判定を保持し、スライド完了時に即適用する。
-  const lastResultRef = useRef<'needsLogin' | 'authed' | null>(null)
+  const lastResultRef = useRef<GateVerdict | null>(null)
+  // setup での時間割メニュー再試行回数（無限リトライ防止）。
+  const setupTriesRef = useRef(0)
 
   useEffect(() => {
     loadOnboardingDone()
@@ -48,9 +71,25 @@ export function LoginGate({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
   }, [state, nonce])
 
-  // ログイン成功＝チュートリアル完了として永続化（途中離脱なら次回もチュートリアルから）。
+  // ログイン成功（setup到達含む）＝チュートリアル完了として永続化。
   useEffect(() => {
-    if (state === 'authed') saveOnboardingDone().catch(() => undefined)
+    if (state === 'authed' || state === 'setup') saveOnboardingDone().catch(() => undefined)
+  }, [state])
+
+  // setup: 時間割ページへ自動遷移して取り込み。タイムアウトで諦めて入場（ブロックしない）。
+  useEffect(() => {
+    if (state !== 'setup') return
+    setupTriesRef.current = 0
+    webviewRef.current?.injectJavaScript(OPEN_TIMETABLE_JS)
+    const collect = setTimeout(
+      () => webviewRef.current?.injectJavaScript(COLLECT_TIMETABLE_JS),
+      2500,
+    )
+    const giveUp = setTimeout(() => setState((s) => (s === 'setup' ? 'authed' : s)), SETUP_TIMEOUT_MS)
+    return () => {
+      clearTimeout(collect)
+      clearTimeout(giveUp)
+    }
   }, [state])
 
   function requireLogin() {
@@ -59,26 +98,78 @@ export function LoginGate({ children }: { children: ReactNode }) {
     setState('checking')
   }
 
+  /** ログイン確認後の入場処理。時間割が未保存なら setup（自動取り込み）を挟む。 */
+  function proceedToEntry() {
+    loadTimetable()
+      .then((t) => setState(t && t.length > 0 ? 'authed' : 'setup'))
+      .catch(() => setState('authed'))
+  }
+
   function onSlidesDone() {
-    if (lastResultRef.current === 'authed') setState('authed')
+    if (lastResultRef.current === 'authed') proceedToEntry()
     else if (lastResultRef.current === 'needsLogin') setState('needsLogin')
     else setState('checking')
   }
 
+  function onLoadEnd() {
+    webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
+    // setup中はメニュー遷移後のページで時間割テーブルの抽出も試みる。
+    if (stateRef.current === 'setup') {
+      setTimeout(() => {
+        if (stateRef.current === 'setup') webviewRef.current?.injectJavaScript(COLLECT_TIMETABLE_JS)
+      }, SETUP_COLLECT_DELAY_MS)
+    }
+  }
+
   function onMessage(data: string) {
-    let p: { type?: string; hasPasswordInput?: boolean; hasEnterSplash?: boolean; hasClassMenu?: boolean } | null =
-      null
+    let p: Record<string, unknown> | null = null
     try {
       p = JSON.parse(data)
     } catch {
       return
     }
-    if (!p || p.type !== 'page') return
-    const result = p.hasPasswordInput ? 'needsLogin' : p.hasEnterSplash || p.hasClassMenu ? 'authed' : null
-    if (!result) return // リダイレクト途中は checking のまま待つ
-    lastResultRef.current = result
-    // checking中は判定どおり遷移。needsLogin（可視ログイン）中はログイン完了(authed)のみ受け付ける。
-    setState((s) => (s === 'checking' || (s === 'needsLogin' && result === 'authed') ? result : s))
+    if (!p) return
+    if (p.type === 'page') {
+      const verdict = classifyGatePage({
+        hasPasswordInput: !!p.hasPasswordInput,
+        hasClassMenu: !!p.hasClassMenu,
+        hasEnterSplash: !!p.hasEnterSplash,
+        url: typeof p.url === 'string' ? p.url : undefined,
+      })
+      if (verdict === 'pending') return // リダイレクト途中は待つ
+      lastResultRef.current = verdict
+      const s = stateRef.current
+      if (s === 'checking') {
+        if (verdict === 'authed') proceedToEntry()
+        else setState('needsLogin')
+      } else if (s === 'needsLogin' && verdict === 'authed') {
+        // 可視ログイン完了を検知して入場へ。
+        proceedToEntry()
+      }
+      return
+    }
+    if (p.type === 'timetable' && stateRef.current === 'setup') {
+      const result = parseCollectionMessage(data)
+      if (!result.error && result.collections.length > 0) {
+        ;(async () => {
+          try {
+            await saveTimetable(result.collections)
+            await refreshAllNotifications()
+          } catch {
+            // 保存失敗でも入場は続行（手動収集で補える）
+          }
+          setState((s) => (s === 'setup' ? 'authed' : s))
+        })()
+      } else if (setupTriesRef.current < 3) {
+        // まだ時間割ページに居ない（テーブル0件）→ メニュー発火をやり直す。
+        setupTriesRef.current += 1
+        webviewRef.current?.injectJavaScript(OPEN_TIMETABLE_JS)
+      } else {
+        setState((s) => (s === 'setup' ? 'authed' : s))
+      }
+      return
+    }
+    // type:'nav' は診断用（段階ログ）。ゲートでは無視する。
   }
 
   if (state === 'authed') {
@@ -86,6 +177,12 @@ export function LoginGate({ children }: { children: ReactNode }) {
   }
 
   const showLoginUi = state === 'needsLogin'
+  const bootStatus =
+    state === 'loading'
+      ? '起動しています…'
+      : state === 'setup'
+        ? '時間割を取り込んでいます…'
+        : 'CLASSに接続しています…'
   return (
     <LoginContext.Provider value={{ requireLogin }}>
       <View style={styles.root}>
@@ -99,23 +196,21 @@ export function LoginGate({ children }: { children: ReactNode }) {
           <WebView
             key={nonce}
             ref={webviewRef}
-            source={{ uri: CLASS_URL }}
+            source={{ uri: CLASS_PC_LOGIN_URL }}
             userAgent={DESKTOP_UA}
             sharedCookiesEnabled
             thirdPartyCookiesEnabled
-            onLoadEnd={() => webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)}
+            onLoadEnd={onLoadEnd}
             onMessage={(e) => onMessage(e.nativeEvent.data)}
             style={styles.webviewFill}
           />
         </View>
-        {state === 'loading' || state === 'checking' ? (
+        {state === 'loading' || state === 'checking' || state === 'setup' ? (
           <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={styles.boot}>
             <Text style={styles.bootLogo}>リタス</Text>
             <Text style={styles.bootSub}>Litus — 東京理科大 非公式アプリ</Text>
             <ActivityIndicator color="#ffffff" style={styles.bootSpin} />
-            <Text style={styles.bootStatus}>
-              {state === 'loading' ? '起動しています…' : 'CLASSに接続しています…'}
-            </Text>
+            <Text style={styles.bootStatus}>{bootStatus}</Text>
           </LinearGradient>
         ) : null}
         {state === 'firstRun' ? (

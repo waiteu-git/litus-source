@@ -24,25 +24,46 @@ export const COLLECT_TIMETABLE_JS = `(function(){
 })();`
 
 /**
- * トップ→メニュー『履修』→『学生時間割表』へ遷移する（JSF onclick を .click() 発火）。
- * リンクはテキスト一致で探索する。実DOMに合わせセレクタ調整が必要な場合がある（実機で確認）。
+ * トップ→メニュー『履修』→『学生時間割表』へ遷移する。
+ * OPEN_ATTENDANCE_JS と同型: 旧実装のテキスト探索は外側要素（ハンドラ無し）を掴んで無反応に
+ * なるため、**a要素のみ**を対象にメニューアンカーを掴み、onclick属性を new Function で直接
+ * 実行する（無ければ .click() フォールバック）。
  */
 export const OPEN_TIMETABLE_JS = `(function(){
-  function clickByText(text){
-    var els = Array.prototype.slice.call(document.querySelectorAll('a,button,span'));
-    var el = els.find(function(e){ return (e.textContent || '').trim().indexOf(text) >= 0; });
-    if (el) { el.click(); return true; }
-    return false;
+  function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
+  function findAnchor(text){
+    var as = Array.prototype.slice.call(document.querySelectorAll('a'));
+    var hits = as.filter(function(a){ return ((a.textContent || '').replace(/\\s+/g, '')).indexOf(text) >= 0; });
+    var menu = hits.filter(function(a){ var idn = (a.id || a.name || ''); return idn.indexOf('menuForm') >= 0 || idn.indexOf('mainMenu') >= 0; });
+    return (menu.length ? menu : hits)[0] || null;
+  }
+  function fire(el){
+    var oc = el.getAttribute('onclick');
+    try {
+      if (oc) { new Function('event', oc).call(el, new MouseEvent('click', { bubbles: true })); return 'onclick'; }
+      el.click(); return 'click';
+    } catch (e) {
+      try { el.click(); return 'click-fb'; } catch (e2) { return 'err'; }
+    }
   }
   try {
-    if (!clickByText('学生時間割表')) {
-      if (!clickByText('履修')) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: false, stage: 'menu' }));
-      } else {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: true, stage: 'menu-opened' }));
-      }
+    var target = findAnchor('学生時間割表');
+    if (target) {
+      var m = fire(target);
+      post({ type: 'nav', ok: m !== 'err', stage: 'timetable-click', method: m, id: target.id || '' });
     } else {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'nav', ok: true, stage: 'timetable' }));
+      var parent = findAnchor('履修');
+      if (parent) {
+        var m2 = fire(parent);
+        post({ type: 'nav', ok: m2 !== 'err', stage: 'menu-opened', method: m2, id: parent.id || '' });
+        setTimeout(function(){
+          var t2 = findAnchor('学生時間割表');
+          if (t2) { var m3 = fire(t2); post({ type: 'nav', ok: m3 !== 'err', stage: 'timetable-click', method: m3, id: t2.id || '' }); }
+          else { post({ type: 'nav', ok: false, stage: 'submenu' }); }
+        }, 500);
+      } else {
+        post({ type: 'nav', ok: false, stage: 'menu' });
+      }
     }
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
