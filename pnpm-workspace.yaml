@@ -1,3 +1,5 @@
+# Windowsのローカルネイティブビルド（CMake/ninja）はsymlink＋長い.pnpmパスで壊れるため実体フラット配置に
+nodeLinker: hoisted
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
