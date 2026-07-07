@@ -3,3 +3,6 @@ dist/
 *.tsbuildinfo
 .expo/
 .superpowers/
+# expo prebuild の生成物（ローカルAPKビルド用。CNG: app.jsonが正）
+/android/
+/ios/

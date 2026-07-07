@@ -5,7 +5,7 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
