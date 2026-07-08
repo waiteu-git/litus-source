@@ -1,6 +1,9 @@
 /**
- * この起動でLETUSフル同期（コース→スナップショット→課題）を完走したかのプロセス内フラグ。
- * 初回セットアップ（ゲートのsyncフェーズ）が完走したら、入場後のBackgroundLetusSyncは重複
- * 実行しない。アプリ再起動でリセットされる（永続化しない）。
+ * この起動でのLETUSフル同期状態。didFullSyncは「今この瞬間、再同期不要か」。
+ * lastFullSyncAtは最後に完走したエポックms。フォアグラウンド復帰で一定時間経過していれば
+ * BackgroundLetusSyncがdidFullSyncを落として再同期を許可する（起動中の鮮度維持）。永続化しない。
  */
-export const syncSession = { didFullSync: false }
+export const syncSession: { didFullSync: boolean; lastFullSyncAt: number | null } = {
+  didFullSync: false,
+  lastFullSyncAt: null,
+}
