@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -26,24 +26,26 @@ export default function TimetableScreen() {
   const [selDay, setSelDay] = useState<DayKey>(TODAY_KEYS[new Date().getDay()])
   // 時間割の裏取得中フラグ。true の間だけ headless エンジンをマウントして収集する。
   const [syncing, setSyncing] = useState(false)
+  // 多重起動防止（非同期スロットル判定中の再入も弾く）。setSyncing更新関数の中で副作用を起こさない。
+  const syncingRef = useRef(false)
 
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
-  const startSync = useCallback(
-    (force: boolean) => {
-      setSyncing((cur) => {
-        if (cur) return cur // 実行中は多重起動しない
-        if (force) return true
-        // スロットル判定は非同期。ここでは開始せず、下の判定結果で setSyncing する。
-        loadTimetableRefreshedAt()
-          .then((at) => {
-            if (isTimetableStale(at)) setSyncing(true)
-          })
-          .catch(() => undefined)
-        return cur
+  const startSync = useCallback((force: boolean) => {
+    if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
+    const begin = () => {
+      syncingRef.current = true
+      setSyncing(true)
+    }
+    if (force) {
+      begin()
+      return
+    }
+    loadTimetableRefreshedAt()
+      .then((at) => {
+        if (!syncingRef.current && isTimetableStale(at)) begin()
       })
-    },
-    [],
-  )
+      .catch(() => undefined)
+  }, [])
 
   useFocusEffect(
     useCallback(() => {
@@ -141,6 +143,7 @@ export default function TimetableScreen() {
       {syncing ? (
         <TimetableSyncEngine
           onFinished={() => {
+            syncingRef.current = false
             setSyncing(false)
             loadTimetable().then(setCollections).catch(() => undefined)
           }}
