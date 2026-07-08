@@ -548,6 +548,11 @@ export function isDownloadableFileUrl(url: string): boolean {
   return /\.(pdf|docx?|pptx?|xlsx?|zip|csv)(\?|#|$)/i.test(url)
 }
 
+/** アプリ内pdf.jsビューアで表示できるPDFらしいURLか（pluginfileの.pdf含む）。 */
+export function isPdfLikeUrl(url: string): boolean {
+  return /\.pdf(\?|#|$)/i.test(url)
+}
+
 /**
  * コースページの各アクティビティ（/mod/* リンク）の隣に「＋追加」ボタンを差し込む（冪等）。
  * 押すと postMessage(type:'addActivity') で種別・URL・名称・科目名を返す。RN側で追跡に加える。

@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { useRoute, type RouteProp } from '@react-navigation/native'
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import type { AssignmentsStackParamList } from '../navigation/types'
 import {
   COLLECT_ASSIGNMENT_PAGE_JS,
   INJECT_COURSE_ADD_BUTTONS_JS,
   isAssignmentPageUrl,
   isCoursePageUrl,
   isDownloadableFileUrl,
+  isPdfLikeUrl,
 } from '../collect/injectedScripts'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
@@ -28,6 +31,7 @@ type Params = { Web: { url: string; title?: string } }
  */
 export default function WebViewerScreen() {
   const route = useRoute<RouteProp<Params, 'Web'>>()
+  const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const { url, title } = route.params
   const webviewRef = useRef<WebView>(null)
   const { bump } = useAssignmentsVersion()
@@ -134,10 +138,14 @@ export default function WebViewerScreen() {
         onLoadEnd={onLoadEnd}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
         onShouldStartLoadWithRequest={(req) => {
-          // ファイル(PDF等)は押した瞬間にダウンロードが始まるので、遷移自体を止める。
-          // アプリ内表示は次バージョン（pdf.js）で対応予定。
+          // PDFはアプリ内pdf.jsビューアで開く（同一オリジンfetch＋canvas描画・ログイン維持）。
+          if (isPdfLikeUrl(req.url)) {
+            navigation.navigate('PdfViewer', { url: req.url, title })
+            return false
+          }
+          // PDF以外のファイル(docx/zip等)は即ダウンロードを抑止（アプリ内表示は非対応）。
           if (isDownloadableFileUrl(req.url)) {
-            flash('ファイルのアプリ内表示は次回対応します（自動ダウンロードは抑止しました）')
+            flash('このファイル形式はアプリ内表示に非対応です（自動ダウンロードは抑止しました）')
             return false
           }
           return true
