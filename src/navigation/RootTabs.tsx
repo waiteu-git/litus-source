@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TimetableStack from './TimetableStack'
 import AssignmentsStack from './AssignmentsStack'
+import InfoStack from './InfoStack'
 import AttendanceScreen from '../screens/AttendanceScreen'
 // 開発用ラボ（出席登録ボタンの発火検証）。必要時は下の出席タブの component をこちらに差し替える。
 // import AttendanceLabScreen from '../screens/AttendanceLabScreen'
@@ -51,6 +52,7 @@ export default function RootTabs() {
       <Tab.Screen name="時間割" component={TimetableStack} options={{ tabBarIcon: icon('calendar-outline') }} />
       <Tab.Screen name="課題" component={AssignmentsStack} options={{ tabBarIcon: icon('checkbox-outline') }} />
       <Tab.Screen name="出席" component={AttendanceScreen} options={{ tabBarIcon: icon('flash-outline') }} />
+      <Tab.Screen name="インフォ" component={InfoStack} options={{ tabBarIcon: icon('newspaper-outline') }} />
       <Tab.Screen name="設定" component={SettingsScreen} options={{ tabBarIcon: icon('settings-outline') }} />
     </Tab.Navigator>
   )

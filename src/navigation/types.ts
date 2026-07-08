@@ -15,3 +15,9 @@ export type AssignmentsStackParamList = {
   Web: { url: string; title?: string }
   PdfViewer: { url: string; title?: string }
 }
+
+export type InfoStackParamList = {
+  InfoHome: undefined
+  Link: { url: string; title?: string; isClass?: boolean }
+  PdfViewer: { url: string; title?: string }
+}
