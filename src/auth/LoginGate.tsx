@@ -12,6 +12,11 @@ import {
 } from '../collect/injectedScripts'
 import { parseCollectionMessage } from '../collect/timetableMessage'
 import { loadTimetable, saveTimetable } from '../storage/timetableStore'
+import {
+  isTimetableStale,
+  loadTimetableRefreshedAt,
+  saveTimetableRefreshedAt,
+} from '../storage/refreshMetaStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { loadOnboardingDone, saveOnboardingDone } from '../storage/onboardingStore'
 import { classifyGatePage, type GateVerdict } from './classifyGatePage'
@@ -140,10 +145,17 @@ export function LoginGate({ children }: { children: ReactNode }) {
     return wasFirstRunRef.current && !syncSession.didFullSync ? 'sync' : 'authed'
   }
 
-  /** ログイン確認後の入場処理。時間割が未保存なら setup（自動取り込み）を挟む。 */
+  /**
+   * ログイン確認後の入場処理。時間割が未保存、または前回更新から時間が経っていれば setup
+   * （CLASS画面を見せない裏取得）を挟む。ここはタブ・出席WebViewが未マウントの段階なので
+   * CLASSの競合が起きない＝時間割の自動更新に最適なタイミング。
+   */
   function proceedToEntry() {
-    loadTimetable()
-      .then((t) => setState(t && t.length > 0 ? afterSetup() : 'setup'))
+    Promise.all([loadTimetable(), loadTimetableRefreshedAt()])
+      .then(([t, at]) => {
+        const need = !t || t.length === 0 || isTimetableStale(at)
+        setState(need ? 'setup' : afterSetup())
+      })
       .catch(() => setState('authed'))
   }
 
@@ -203,6 +215,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
         ;(async () => {
           try {
             await saveTimetable(result.collections)
+            await saveTimetableRefreshedAt()
             await refreshAllNotifications()
           } catch {
             // 保存失敗でも入場は続行（手動収集で補える）

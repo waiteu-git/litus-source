@@ -499,6 +499,33 @@ export const COLLECT_MYCOURSES_JS = `(function(){
   true;
 })();`
 
+/**
+ * 単一の課題ページ本文HTML＋パンくずの科目名を抽出して postMessage（手動追加用）。
+ * 科目名は Moodle パンくず（.breadcrumb 内の course/view.php リンク）から best-effort で取る。
+ */
+export const COLLECT_ASSIGNMENT_PAGE_JS = `(function(){
+  try {
+    var courseName = '';
+    var crumbs = Array.prototype.slice.call(document.querySelectorAll('.breadcrumb a, nav[aria-label] a, #page-navbar a'));
+    var courseLink = crumbs.filter(function(a){ return /\\/course\\/view\\.php/.test(a.getAttribute('href') || ''); }).pop();
+    if (courseLink) courseName = (courseLink.textContent || '').trim();
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'assignmentpage',
+      html: document.body ? document.body.innerHTML : '',
+      url: location.href,
+      courseName: courseName
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
+/** 課題らしいURLか（アプリ内ビューアで手動追加ボタンを出す判定に使う）。 */
+export function isAssignmentPageUrl(url: string): boolean {
+  return /\/mod\/(assign|quiz|turnitintool|turnitintooltwo|workshop|feedback|questionnaire)\/view\.php/i.test(url)
+}
+
 /** コースページ本文HTMLを抽出して postMessage（抽出のみ）。 */
 export const COLLECT_COURSE_PAGE_JS = `(function(){
   try {

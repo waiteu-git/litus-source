@@ -5,6 +5,7 @@ import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from './injectedScripts'
 import { filterAssignmentCandidates } from '../updates/assignmentCandidates'
+import { selectAssignmentsToVisit } from '../updates/assignmentWindow'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
 import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
@@ -62,7 +63,9 @@ export default function AssignmentCollector({
           })
         }
       }
-      setCandidates(list)
+      // ±2週間の窓で訪問対象を絞る（新規＋締切不明＋窓内のみ）。窓外の既知課題は保存済みを維持。
+      const existing = await loadAssignments()
+      setCandidates(selectAssignmentsToVisit(list, existing))
       setLoaded(true)
     })()
   }, [])

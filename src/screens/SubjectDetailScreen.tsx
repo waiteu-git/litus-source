@@ -49,7 +49,7 @@ export default function SubjectDetailScreen() {
       <View style={styles.section}>
         <ActionButton
           label="シラバスを開く"
-          onPress={() => navigation.navigate('Web', { url: syllabusUrl, title: 'シラバス' })}
+          onPress={() => navigation.navigate('Syllabus', { url: syllabusUrl, name })}
         />
       </View>
 

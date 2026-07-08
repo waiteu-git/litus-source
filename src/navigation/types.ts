@@ -4,6 +4,7 @@ export type TimetableStackParamList = {
   CollectCourses: undefined
   UpdateCheck: undefined
   SubjectDetail: { courseCode: string; name: string }
+  Syllabus: { url: string; name: string }
   Web: { url: string; title?: string }
 }
 
