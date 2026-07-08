@@ -4,9 +4,8 @@ import { clearTimetable, loadTimetable } from '../storage/timetableStore'
 import { loadAttendanceSettings, saveAttendanceSettings } from '../storage/attendanceSettingsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
-import { ScreenBg, ScreenHeader, SectionLabel, Segmented, useUi } from '../ui/screen'
-import { loadBootLogo, saveBootLogo } from '../storage/bootLogoStore'
-import type { BootLogoVariant } from '../storage/bootLogoSerialize'
+import { ScreenBg, ScreenHeader, Segmented, useUi } from '../ui/screen'
+import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemeVariant } from '../theme'
 
 type Course = { courseCode: string; name: string }
@@ -16,11 +15,9 @@ export default function SettingsScreen() {
   const { variant, setVariant } = useThemeVariant()
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
-  const [bootLogo, setBootLogo] = useState<BootLogoVariant>('green')
 
   useEffect(() => {
     ;(async () => {
-      setBootLogo(await loadBootLogo())
       const collections = await loadTimetable()
       const seen = new Map<string, string>()
       for (const col of collections ?? []) {
@@ -55,79 +52,73 @@ export default function SettingsScreen() {
     <ScreenBg>
       <ScreenHeader title="設定" icon="settings-outline" />
       <ScrollView contentContainerStyle={styles.list}>
-        <SectionLabel>テーマ</SectionLabel>
-        <Segmented
-          options={[
-            { key: 'glass', label: 'グラス（透明感）' },
-            { key: 'solid', label: '不透明（フラット）' },
-          ]}
-          value={variant}
-          onChange={(k) => setVariant(k as ThemeVariant)}
-        />
+        <Accordion title="テーマ" icon="color-palette-outline" defaultOpen>
+          <Segmented
+            options={[
+              { key: 'green', label: '翠' },
+              { key: 'white', label: '白' },
+            ]}
+            value={variant}
+            onChange={(k) => setVariant(k as ThemeVariant)}
+          />
+          <Text style={[styles.note, { color: ui.labelColor }]}>
+            UIと起動アニメーションが選んだテーマに合わせて切り替わります。
+          </Text>
+        </Accordion>
 
-        <SectionLabel>起動ロゴ</SectionLabel>
-        <Segmented
-          options={[
-            { key: 'green', label: '翠（グラデ）' },
-            { key: 'white', label: '白' },
-          ]}
-          value={bootLogo}
-          onChange={(k) => {
-            const v = k as BootLogoVariant
-            setBootLogo(v)
-            saveBootLogo(v).catch(() => undefined)
-          }}
-        />
+        <Accordion title="出席アラーム（科目別）" icon="notifications-outline">
+          {courses.length === 0 ? (
+            <View style={ui.card}>
+              <Text style={{ color: ui.valueColor }}>時間割を収集すると科目が表示されます。</Text>
+            </View>
+          ) : (
+            <View style={ui.card}>
+              {courses.map((c, i) => (
+                <View
+                  key={c.courseCode}
+                  style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
+                >
+                  <Text style={[styles.rowLabel, { color: ui.valueColor }]} numberOfLines={1}>
+                    {c.name}
+                  </Text>
+                  <Switch
+                    value={settings[c.courseCode] !== false}
+                    onValueChange={(v) => toggle(c.courseCode, v)}
+                    trackColor={{ true: COLORS.emerald, false: '#c9d6d0' }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </Accordion>
 
-        <SectionLabel>出席アラーム（科目別）</SectionLabel>
-        {courses.length === 0 ? (
-          <View style={ui.card}>
-            <Text style={{ color: ui.valueColor }}>時間割を収集すると科目が表示されます。</Text>
-          </View>
-        ) : (
-          <View style={ui.card}>
-            {courses.map((c, i) => (
-              <View
-                key={c.courseCode}
-                style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
-              >
-                <Text style={[styles.rowLabel, { color: ui.valueColor }]} numberOfLines={1}>
-                  {c.name}
-                </Text>
-                <Switch
-                  value={settings[c.courseCode] !== false}
-                  onValueChange={(v) => toggle(c.courseCode, v)}
-                  trackColor={{ true: COLORS.emerald, false: '#c9d6d0' }}
-                  thumbColor="#ffffff"
-                />
-              </View>
-            ))}
-          </View>
-        )}
-
-        <SectionLabel>データ</SectionLabel>
-        <Pressable style={[ui.card, styles.rowBetween]} onPress={onClear}>
-          <Text style={[styles.rowLabel, { color: ui.valueColor }]}>時間割データを消去</Text>
-          <Text style={styles.danger}>消去</Text>
-        </Pressable>
-
-        <SectionLabel>アプリ情報</SectionLabel>
-        <View style={ui.card}>
-          <Text style={{ color: ui.valueColor, fontWeight: '500' }}>リタス v1.0.0（開発版）</Text>
-          <Pressable onPress={() => Linking.openURL('https://lms.waiteu.dev/app')}>
-            <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
+        <Accordion title="データ" icon="server-outline">
+          <Pressable style={[ui.card, styles.rowBetween]} onPress={onClear}>
+            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>時間割データを消去</Text>
+            <Text style={styles.danger}>消去</Text>
           </Pressable>
-        </View>
+        </Accordion>
+
+        <Accordion title="アプリ情報" icon="information-circle-outline">
+          <View style={ui.card}>
+            <Text style={{ color: ui.valueColor, fontWeight: '500' }}>リタス v1.0.0（開発版）</Text>
+            <Pressable onPress={() => Linking.openURL('https://lms.waiteu.dev/app')}>
+              <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
+            </Pressable>
+          </View>
+        </Accordion>
       </ScrollView>
     </ScreenBg>
   )
 }
 
 const styles = StyleSheet.create({
-  list: { paddingBottom: 12 },
+  list: { paddingBottom: 24 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowLabel: { fontSize: 14, flex: 1, paddingRight: 12 },
   danger: { color: '#b3261e', fontSize: 14, fontWeight: '500' },
   link: { fontSize: 13, textDecorationLine: 'underline', marginTop: 8 },
+  note: { fontSize: 12, marginTop: 8, marginLeft: 2 },
 })
