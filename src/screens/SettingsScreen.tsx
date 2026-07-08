@@ -7,12 +7,14 @@ import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedul
 import { ScreenBg, ScreenHeader, Segmented, useUi } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemeVariant } from '../theme'
+import { useDisplaySettings } from '../displaySettings'
 
 type Course = { courseCode: string; name: string }
 
 export default function SettingsScreen() {
   const ui = useUi()
   const { variant, setVariant } = useThemeVariant()
+  const { timetableView, assignmentsView, setTimetableView, setAssignmentsView } = useDisplaySettings()
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
 
@@ -64,6 +66,27 @@ export default function SettingsScreen() {
           <Text style={[styles.note, { color: ui.labelColor }]}>
             UIと起動アニメーションが選んだテーマに合わせて切り替わります。
           </Text>
+        </Accordion>
+
+        <Accordion title="表示" icon="grid-outline" defaultOpen>
+          <Text style={[styles.fieldLabel, { color: ui.labelColor }]}>時間割の表示</Text>
+          <Segmented
+            options={[
+              { key: 'list', label: 'リスト' },
+              { key: 'grid', label: 'グリッド' },
+            ]}
+            value={timetableView}
+            onChange={setTimetableView}
+          />
+          <Text style={[styles.fieldLabel, { color: ui.labelColor, marginTop: 14 }]}>課題の並び</Text>
+          <Segmented
+            options={[
+              { key: 'bucket', label: 'バケット別' },
+              { key: 'flat', label: '締切順' },
+            ]}
+            value={assignmentsView}
+            onChange={setAssignmentsView}
+          />
         </Accordion>
 
         <Accordion title="出席アラーム（科目別）" icon="notifications-outline">
@@ -121,4 +144,5 @@ const styles = StyleSheet.create({
   danger: { color: '#b3261e', fontSize: 14, fontWeight: '500' },
   link: { fontSize: 13, textDecorationLine: 'underline', marginTop: 8 },
   note: { fontSize: 12, marginTop: 8, marginLeft: 2 },
+  fieldLabel: { fontSize: 13, marginLeft: 2, marginBottom: 2 },
 })

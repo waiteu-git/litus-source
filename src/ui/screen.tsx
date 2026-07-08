@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -51,7 +51,19 @@ export function Chip({ label, icon, onPress }: { label: string; icon?: IconName;
 }
 
 /** 翠塗りのアクションボタン（収集画面などの操作用）。 */
-export function ActionButton({ label, onPress }: { label: string; onPress?: () => void }) {
+export function ActionButton({ label, onPress, ghost }: { label: string; onPress?: () => void; ghost?: boolean }) {
+  const { variant } = useThemeVariant()
+  const green = variant === 'green'
+  if (ghost) {
+    return (
+      <Pressable
+        style={[ui.action, { backgroundColor: green ? 'rgba(255,255,255,0.5)' : '#dce9e3' }]}
+        onPress={onPress}
+      >
+        <Text style={[ui.actionText, { color: COLORS.emeraldDark }]}>{label}</Text>
+      </Pressable>
+    )
+  }
   return (
     <Pressable style={ui.action} onPress={onPress}>
       <Text style={ui.actionText}>{label}</Text>
@@ -66,7 +78,7 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   return <Text style={[ui.section, { color }]}>{children}</Text>
 }
 
-/** 選択ピル（曜日・学期・テーマ切替などに共通利用）。テーマに応じて配色を出し分ける。 */
+/** 選択ピル（曜日・学期・テーマ切替・表示形式切替などに共通利用）。テーマに応じて配色を出し分ける。 */
 export function Segmented<T extends string>({
   options,
   value,
@@ -108,6 +120,160 @@ export function Segmented<T extends string>({
           </Pressable>
         )
       })}
+    </View>
+  )
+}
+
+export type StepState = 'done' | 'active' | 'error' | 'pending'
+export type Step = { label: string; sub?: string; state: StepState }
+
+/**
+ * 収集フローなどの縦タイムライン進捗（Turn3で確定した3b案）。
+ * ドット色: done=翠 / active=cta / error=赤 / pending=グレー。線は前段のdoneを引き継いで繋がる。
+ */
+export function StepList({ steps }: { steps: Step[] }) {
+  const ui2 = useUi()
+  const { variant } = useThemeVariant()
+  const green = variant === 'green'
+  const trackColor = green ? 'rgba(255,255,255,0.22)' : '#e3ece8'
+  return (
+    <View>
+      {steps.map((s, i) => {
+        const last = i === steps.length - 1
+        const dotBg =
+          s.state === 'done' ? COLORS.emerald : s.state === 'active' ? COLORS.cta : s.state === 'error' ? COLORS.danger : trackColor
+        return (
+          <View key={i} style={ui.stepRow}>
+            <View style={ui.stepDotCol}>
+              <View style={[ui.stepDot, { backgroundColor: dotBg }]}>
+                {s.state === 'done' ? <Ionicons name="checkmark" size={14} color="#ffffff" /> : null}
+                {s.state === 'error' ? <Ionicons name="close" size={14} color="#ffffff" /> : null}
+                {s.state === 'active' ? <View style={ui.stepDotInner} /> : null}
+              </View>
+              {!last ? (
+                <View style={[ui.stepLine, { backgroundColor: s.state === 'done' ? COLORS.emerald : trackColor }]} />
+              ) : null}
+            </View>
+            <View style={{ flex: 1, paddingBottom: last ? 0 : 14 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: s.state === 'pending' ? '400' : '600',
+                  color: s.state === 'pending' ? ui2.labelColor : ui2.valueColor,
+                }}
+              >
+                {s.label}
+              </Text>
+              {s.sub ? (
+                <Text style={{ fontSize: 12, marginTop: 3, color: s.state === 'error' ? COLORS.danger : ui2.labelColor }}>
+                  {s.sub}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+/**
+ * 出席のライブ状態を大きく見せる円形バッジ（Turn1で確定した1d案）。実際の残り秒から動的な弧を
+ * 描くにはSVG依存が要るため、意図的に円周は装飾（固定リング）にとどめ、中央の大きな数値/文言で
+ * 情報量を担保する。センターは countdownText() 等の結果をそのまま渡す想定。
+ */
+export function CountdownRing({
+  centerText,
+  subText,
+  size = 188,
+  accent,
+}: {
+  centerText: string
+  subText?: string
+  size?: number
+  accent?: string
+}) {
+  const { variant } = useThemeVariant()
+  const green = variant === 'green'
+  const ringColor = accent ?? COLORS.cta
+  const inner = size - 44
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 7,
+        borderColor: ringColor,
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'center',
+        backgroundColor: green ? 'rgba(255,255,255,0.14)' : '#eef8f4',
+      }}
+    >
+      <View
+        style={{
+          width: inner,
+          height: inner,
+          borderRadius: inner / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: green ? 'rgba(6,58,44,0.28)' : '#ffffff',
+          borderWidth: 1,
+          borderColor: green ? 'rgba(255,255,255,0.4)' : '#e3ece8',
+        }}
+      >
+        <Text style={{ fontSize: inner * 0.2, fontWeight: '700', color: green ? '#ffffff' : COLORS.emeraldDark }}>
+          {centerText}
+        </Text>
+        {subText ? (
+          <Text style={{ fontSize: 12, marginTop: 4, color: green ? '#eafff7' : COLORS.emeraldDark }}>{subText}</Text>
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
+/**
+ * 汎用の自動スライドカルーセル（一定間隔でクロスフェード）。インフォタブのCLASS掲示など、
+ * 今後アイテム数が増減するモジュールをそのまま差し替えられるよう中身は ReactNode[] で受け取る。
+ */
+export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; intervalMs?: number }) {
+  const [idx, setIdx] = useState(0)
+  const opacity = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    if (items.length <= 1) return
+    const id = setInterval(() => {
+      Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => {
+        setIdx((i) => (i + 1) % items.length)
+        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }).start()
+      })
+    }, intervalMs)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, intervalMs])
+  useEffect(() => {
+    if (idx >= items.length) setIdx(0)
+  }, [items.length, idx])
+  const { variant } = useThemeVariant()
+  const green = variant === 'green'
+  return (
+    <View>
+      <Animated.View style={{ opacity }}>{items[idx] ?? null}</Animated.View>
+      {items.length > 1 ? (
+        <View style={ui.dotsRow}>
+          {items.map((_, i) => (
+            <View
+              key={i}
+              style={[
+                ui.dot,
+                { backgroundColor: green ? 'rgba(255,255,255,0.45)' : '#cfe0d9' },
+                i === idx && { width: 18, backgroundColor: COLORS.cta },
+              ]}
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -165,4 +331,11 @@ const ui = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
   },
+  stepRow: { flexDirection: 'row', gap: 12 },
+  stepDotCol: { alignItems: 'center' },
+  stepDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  stepDotInner: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#ffffff' },
+  stepLine: { width: 2, flex: 1, minHeight: 20, marginVertical: 4 },
+  dotsRow: { flexDirection: 'row', gap: 6, marginTop: 10, justifyContent: 'center' },
+  dot: { width: 6, height: 6, borderRadius: 3 },
 })
