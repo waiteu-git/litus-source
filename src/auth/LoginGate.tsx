@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   CLASS_PC_LOGIN_URL,
@@ -23,6 +22,9 @@ import { classifyGatePage, type GateVerdict } from './classifyGatePage'
 import { syncSession } from '../collect/syncSession'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
 import OnboardingSlides from '../screens/OnboardingSlides'
+import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from '../screens/bootLogoHtml'
+import { loadBootLogo } from '../storage/bootLogoStore'
+import type { BootLogoVariant } from '../storage/bootLogoSerialize'
 import { COLORS } from '../theme'
 
 // checking中に本物のログイン状態が判定できない場合の保険（リダイレクト完了待ち）。
@@ -73,8 +75,13 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const wasFirstRunRef = useRef(false)
   // 初回フル同期の進捗表示。
   const [syncLabel, setSyncLabel] = useState('データを取り込んでいます…')
+  // 起動ロゴアニメの背景バリアント（green=翠グラデ／white=白）。
+  const [bootLogo, setBootLogo] = useState<BootLogoVariant>('green')
 
   useEffect(() => {
+    loadBootLogo()
+      .then(setBootLogo)
+      .catch(() => undefined)
     loadOnboardingDone()
       .then((done) => {
         if (!done) wasFirstRunRef.current = true
@@ -300,15 +307,30 @@ export function LoginGate({ children }: { children: ReactNode }) {
           />
         ) : null}
         {state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' ? (
-          <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={styles.boot}>
-            <Text style={styles.bootLogo}>リタス</Text>
-            <Text style={styles.bootSub}>Litus — 東京理科大 非公式アプリ</Text>
-            <ActivityIndicator color="#ffffff" style={styles.bootSpin} />
-            <Text style={styles.bootStatus}>{bootStatus}</Text>
-            {state === 'sync' ? (
-              <Text style={styles.bootHint}>初回のみ・少し時間がかかります</Text>
-            ) : null}
-          </LinearGradient>
+          <View style={styles.boot}>
+            {/* 起動ロゴアニメ（純CSS・ローカルHTML）。裏でログイン/取得が進む間ずっと表示。
+                タッチは奪わない（下のオーバーレイ操作を妨げない）。 */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <WebView
+                source={{ html: bootLogo === 'white' ? BOOT_LOGO_WHITE : BOOT_LOGO_GREEN }}
+                scrollEnabled={false}
+                showsVerticalScrollIndicator={false}
+                overScrollMode="never"
+                // 翠版は自前でグラデ背景を描く。白版は白。読込中の一瞬の下地を合わせる。
+                style={{ backgroundColor: bootLogo === 'white' ? '#ffffff' : COLORS.gradBottom }}
+              />
+            </View>
+            {/* 接続状況（アニメ完了後も長い待ちで固まって見えないよう）。背景色に応じて可読色に。 */}
+            <View style={styles.bootStatusWrap} pointerEvents="none">
+              <ActivityIndicator color={bootLogo === 'white' ? '#8a968f' : 'rgba(255,255,255,0.9)'} />
+              <Text
+                style={[styles.bootStatusText, { color: bootLogo === 'white' ? '#8a968f' : 'rgba(255,255,255,0.92)' }]}
+              >
+                {bootStatus}
+                {state === 'sync' ? '（初回のみ・少し時間がかかります）' : ''}
+              </Text>
+            </View>
+          </View>
         ) : null}
         {state === 'firstRun' ? (
           <View style={StyleSheet.absoluteFill}>
@@ -344,12 +366,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  bootLogo: { color: '#ffffff', fontSize: 40, fontWeight: '800', letterSpacing: 2 },
-  bootSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 6 },
-  bootSpin: { marginTop: 28 },
-  bootStatus: { color: '#eafff7', fontSize: 13, marginTop: 10 },
-  bootHint: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 6 },
+  // 起動ロゴの © フッター（bottom ~40px）に被らないよう、その少し上に接続状況を出す。
+  bootStatusWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 84,
+    alignItems: 'center',
+    gap: 8,
+  },
+  bootStatusText: { fontSize: 12, letterSpacing: 0.04 * 12 },
 })

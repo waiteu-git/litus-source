@@ -5,6 +5,8 @@ import { loadAttendanceSettings, saveAttendanceSettings } from '../storage/atten
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
 import { ScreenBg, ScreenHeader, SectionLabel, Segmented, useUi } from '../ui/screen'
+import { loadBootLogo, saveBootLogo } from '../storage/bootLogoStore'
+import type { BootLogoVariant } from '../storage/bootLogoSerialize'
 import { COLORS, useThemeVariant, type ThemeVariant } from '../theme'
 
 type Course = { courseCode: string; name: string }
@@ -14,9 +16,11 @@ export default function SettingsScreen() {
   const { variant, setVariant } = useThemeVariant()
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
+  const [bootLogo, setBootLogo] = useState<BootLogoVariant>('green')
 
   useEffect(() => {
     ;(async () => {
+      setBootLogo(await loadBootLogo())
       const collections = await loadTimetable()
       const seen = new Map<string, string>()
       for (const col of collections ?? []) {
@@ -59,6 +63,20 @@ export default function SettingsScreen() {
           ]}
           value={variant}
           onChange={(k) => setVariant(k as ThemeVariant)}
+        />
+
+        <SectionLabel>起動ロゴ</SectionLabel>
+        <Segmented
+          options={[
+            { key: 'green', label: '翠（グラデ）' },
+            { key: 'white', label: '白' },
+          ]}
+          value={bootLogo}
+          onChange={(k) => {
+            const v = k as BootLogoVariant
+            setBootLogo(v)
+            saveBootLogo(v).catch(() => undefined)
+          }}
         />
 
         <SectionLabel>出席アラーム（科目別）</SectionLabel>
