@@ -39,4 +39,23 @@ describe('classifyClassPage', () => {
       classifyClassPage({ ...base, url: 'https://login.microsoftonline.com/common/oauth2/authorize' }),
     ).toBe('login')
   })
+  it('出席ページURL(Xua00101)は受付フォームが無くても attendance（受付中の授業なしでもportal誤判定しない）', () => {
+    // 受付中の授業が無いと出席ページにはフォームが無く hasClassMenu だけ立つ。URLで attendance と確定する。
+    expect(
+      classifyClassPage({
+        ...base,
+        hasClassMenu: true,
+        url: 'https://class.admin.tus.ac.jp/uprx/up/xu/xua001/Xua00101.xhtml',
+      }),
+    ).toBe('attendance')
+  })
+  it('出席ページURLでもパスワード欄(セッション切れ)があれば login 優先', () => {
+    expect(
+      classifyClassPage({
+        ...base,
+        hasPasswordInput: true,
+        url: 'https://class.admin.tus.ac.jp/uprx/up/xu/xua001/Xua00101.xhtml',
+      }),
+    ).toBe('login')
+  })
 })

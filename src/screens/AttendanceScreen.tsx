@@ -32,6 +32,8 @@ import { COLORS, useThemeVariant } from '../theme'
 const CLASS_URL = CLASS_PC_LOGIN_URL
 // 自動遷移が進んでいる間はオーバーレイを出さないよう、ページ読込ごとにこの秒数へ再アームする。
 const NAV_TIMEOUT_MS = 10000
+// 出席ページ滞在中に受付状況を取り直す間隔（開きっぱなしで授業開始を拾うため）。
+const ATTENDANCE_POLL_MS = 30000
 
 export default function AttendanceScreen() {
   const webviewRef = useRef<WebView>(null)
@@ -49,7 +51,11 @@ export default function AttendanceScreen() {
   // （タブ切替で破棄しない＝再訪ゼロ秒・「別の画面」エラーも出ない）、時間割収集など他の
   // CLASS利用者がフォーカスされている間だけ譲る（classViewArbiter）。
   const { collectActive } = useClassView()
+  const collectActiveRef = useRef(false)
+  collectActiveRef.current = collectActive
   const prevCollectRef = useRef(false)
+  // 出席ページに滞在中か（受付有無に関わらず）。定期リフレッシュの実行条件に使う。
+  const onAttendanceRef = useRef(false)
   const isFocused = useIsFocused()
   const firstFocusRef = useRef(true)
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
@@ -83,27 +89,39 @@ export default function AttendanceScreen() {
     prevCollectRef.current = collectActive
   }, [collectActive])
 
-  // タブ再訪時はWebViewが持続しているため再読込せず、静かに再判定だけ行う
-  // （サーバ側でセッションが動いていた場合のズレを検知して通常経路で立て直す）。
+  // タブ再訪時はWebViewが持続しているため再読込せず、静かに再判定だけ行う。出席ページに居るなら
+  // サーバから受付状況を取り直す（DOMは自動更新されないため、開始した授業を拾うにはリフレッシュ必須）。
   useEffect(() => {
     if (!isFocused) return
     if (firstFocusRef.current) {
       firstFocusRef.current = false
       return
     }
-    webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
+    if (onAttendanceRef.current) refreshAttendance()
+    else webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
   }, [isFocused])
 
-  // フォアグラウンド復帰時にページを再判定する（長時間放置でセッション切れ/古いページのまま
-  // 固まるのを防ぐ）。送信中はWebView状態を壊さないようスキップ。判定結果は通常の onMessage
-  // 経路に乗る（login→ゲート、portal→自動遷移、error→自動復帰）。
+  // フォアグラウンド復帰時に再判定/リフレッシュ（長時間放置でセッション切れ/古い受付状況のまま
+  // 固まるのを防ぐ）。送信中はWebView状態を壊さないようスキップ。
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active' && phaseRef.current !== 'submitting') {
-        webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
-      }
+      if (s !== 'active' || phaseRef.current === 'submitting') return
+      if (onAttendanceRef.current) refreshAttendance()
+      else webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
     })
     return () => sub.remove()
+  }, [])
+
+  // 出席ページ滞在中は定期的にサーバから受付状況を取り直す（開きっぱなしで授業が始まったら
+  // 自動で「受付中」に切り替わるように）。CLASSのページDOMは自動更新されないためポーリングが必須。
+  // 収集がCLASSを使用中・送信中は触らない。
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (onAttendanceRef.current && !collectActiveRef.current && phaseRef.current !== 'submitting') {
+        refreshAttendance()
+      }
+    }, ATTENDANCE_POLL_MS)
+    return () => clearInterval(id)
   }, [])
 
   // 受付中かつ確認時間が取れていれば毎秒 now を更新してカウントダウン表示。
@@ -142,6 +160,16 @@ export default function AttendanceScreen() {
     }
   }
 
+  /**
+   * 出席ページの受付状況をサーバから取り直す。メニュー「出欠管理→モバイル出席登録」を
+   * 再クリック（JSF再要求）してページを再レンダリングさせ、少し待って受付状況を再抽出する。
+   * 授業開始/終了でサーバ側の受付が変わっても、これで拾える（DOMは勝手に更新されないため）。
+   */
+  function refreshAttendance() {
+    inject(OPEN_ATTENDANCE_JS)
+    setTimeout(() => inject(DETECT_ATTENDANCE_JS), 1600)
+  }
+
   function onLoadEnd() {
     if (state.phase === 'booting') armNavTimeout()
     inject(DETECT_PAGE_JS)
@@ -165,6 +193,7 @@ export default function AttendanceScreen() {
         url: typeof parsed.url === 'string' ? parsed.url : undefined,
       })
       dispatch({ kind: 'page', page: kind })
+      onAttendanceRef.current = kind === 'attendance'
       if (kind === 'login') {
         // セッション切れ → 専用ログインゲートへ（アプリ全体をログイン画面に切替）。
         loginGate.requireLogin()
