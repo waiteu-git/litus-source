@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadTimetable } from '../storage/timetableStore'
@@ -7,6 +7,8 @@ import type { TimetableCollection } from '../collect/timetableMessage'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
+import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMetaStore'
+import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi } from '../ui/screen'
 import { COLORS } from '../theme'
 
@@ -22,6 +24,26 @@ export default function TimetableScreen() {
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
   const [selCol, setSelCol] = useState(0)
   const [selDay, setSelDay] = useState<DayKey>(TODAY_KEYS[new Date().getDay()])
+  // 時間割の裏取得中フラグ。true の間だけ headless エンジンをマウントして収集する。
+  const [syncing, setSyncing] = useState(false)
+
+  // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
+  const startSync = useCallback(
+    (force: boolean) => {
+      setSyncing((cur) => {
+        if (cur) return cur // 実行中は多重起動しない
+        if (force) return true
+        // スロットル判定は非同期。ここでは開始せず、下の判定結果で setSyncing する。
+        loadTimetableRefreshedAt()
+          .then((at) => {
+            if (isTimetableStale(at)) setSyncing(true)
+          })
+          .catch(() => undefined)
+        return cur
+      })
+    },
+    [],
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -39,10 +61,12 @@ export default function TimetableScreen() {
         }
         if (active) setUpdatedCodes(set)
       })()
+      // フォーカス時に古ければ自動で裏取得（ボタンレス）。
+      startSync(false)
       return () => {
         active = false
       }
-    }, []),
+    }, [startSync]),
   )
 
   const col = collections && collections.length > 0 ? collections[Math.min(selCol, collections.length - 1)] : null
@@ -51,77 +75,77 @@ export default function TimetableScreen() {
   const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
   const startTime = (period: number) => col?.periodTimes?.periods.find((p) => p.period === period)?.start ?? ''
 
+  const refresh = (
+    <RefreshControl refreshing={syncing} onRefresh={() => startSync(true)} tintColor={COLORS.emerald} colors={[COLORS.emerald]} />
+  )
+
   return (
     <ScreenBg>
       <ScreenHeader
         title="時間割"
         icon="calendar-outline"
-        right={
-          <>
-            <Chip label="更新" onPress={() => navigation.navigate('Collect')} />
-            <Chip label="コース" onPress={() => navigation.navigate('CollectCourses')} />
-            <Chip label="チェック" onPress={() => navigation.navigate('UpdateCheck')} />
-          </>
-        }
+        right={syncing ? <Chip label="更新中…" /> : undefined}
       />
 
-      {!col ? (
-        <View style={[ui.card, { marginTop: 16 }]}>
-          <Text style={{ color: ui.valueColor }}>まだ収集していません。「更新」から収集してください。</Text>
-        </View>
-      ) : (
-        <>
-          {collections && collections.length > 1 ? (
-            <Segmented
-              options={collections.map((_, i) => ({ key: String(i), label: `時間割${i + 1}` }))}
-              value={String(selCol)}
-              onChange={(k) => setSelCol(Number(k))}
-            />
-          ) : null}
-          <Segmented
-            options={days.map((d) => ({ key: d, label: DAY_LABEL[d] }))}
-            value={selDay}
-            onChange={setSelDay}
-          />
-          <ScrollView contentContainerStyle={styles.list}>
-            {daySlots.length === 0 ? (
-              <Text style={{ color: ui.labelColor, marginLeft: 2, marginTop: 10 }}>この曜日の授業はありません</Text>
-            ) : (
-              daySlots.map((s) => (
-                <View key={`${s.day}-${s.period}`} style={styles.trow}>
-                  <View style={styles.per}>
-                    <Text style={[styles.pnum, { color: ui.glass ? COLORS.white : COLORS.emeraldDark }]}>
-                      {s.period}
+      {collections && collections.length > 1 ? (
+        <Segmented
+          options={collections.map((_, i) => ({ key: String(i), label: `時間割${i + 1}` }))}
+          value={String(selCol)}
+          onChange={(k) => setSelCol(Number(k))}
+        />
+      ) : null}
+      {col ? (
+        <Segmented options={days.map((d) => ({ key: d, label: DAY_LABEL[d] }))} value={selDay} onChange={setSelDay} />
+      ) : null}
+
+      <ScrollView contentContainerStyle={styles.list} refreshControl={refresh}>
+        {!col ? (
+          <View style={[ui.card, { marginTop: 16 }]}>
+            <Text style={{ color: ui.valueColor }}>
+              {syncing ? '時間割を取り込んでいます…' : 'まだ収集していません。下に引っ張って更新できます。'}
+            </Text>
+          </View>
+        ) : daySlots.length === 0 ? (
+          <Text style={{ color: ui.labelColor, marginLeft: 2, marginTop: 10 }}>この曜日の授業はありません</Text>
+        ) : (
+          daySlots.map((s) => (
+            <View key={`${s.day}-${s.period}`} style={styles.trow}>
+              <View style={styles.per}>
+                <Text style={[styles.pnum, { color: ui.green ? COLORS.white : COLORS.emeraldDark }]}>{s.period}</Text>
+                <Text style={[styles.ptime, { color: ui.labelColor }]}>{startTime(s.period)}</Text>
+              </View>
+              <View style={styles.clsCol}>
+                {s.classes.map((cl) => (
+                  <Pressable
+                    key={cl.courseCode || cl.name}
+                    style={ui.card}
+                    onPress={() => navigation.navigate('SubjectDetail', { courseCode: cl.courseCode, name: cl.name })}
+                  >
+                    <Text style={[styles.clsname, { color: ui.valueColor }]} numberOfLines={2}>
+                      {cl.name}
+                      {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
                     </Text>
-                    <Text style={[styles.ptime, { color: ui.labelColor }]}>{startTime(s.period)}</Text>
-                  </View>
-                  <View style={styles.clsCol}>
-                    {s.classes.map((cl) => (
-                      <Pressable
-                        key={cl.courseCode || cl.name}
-                        style={ui.card}
-                        onPress={() =>
-                          navigation.navigate('SubjectDetail', { courseCode: cl.courseCode, name: cl.name })
-                        }
-                      >
-                        <Text style={[styles.clsname, { color: ui.valueColor }]} numberOfLines={2}>
-                          {cl.name}
-                          {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
-                        </Text>
-                        <Text style={[styles.clssub, { color: ui.labelColor }]} numberOfLines={1}>
-                          {cl.room}
-                          {cl.isRemote ? ' ・ 遠隔' : ''}
-                          {cl.teachers[0] ? ` ・ ${cl.teachers[0]}` : ''}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </>
-      )}
+                    <Text style={[styles.clssub, { color: ui.labelColor }]} numberOfLines={1}>
+                      {cl.room}
+                      {cl.isRemote ? ' ・ 遠隔' : ''}
+                      {cl.teachers[0] ? ` ・ ${cl.teachers[0]}` : ''}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      {syncing ? (
+        <TimetableSyncEngine
+          onFinished={() => {
+            setSyncing(false)
+            loadTimetable().then(setCollections).catch(() => undefined)
+          }}
+        />
+      ) : null}
     </ScreenBg>
   )
 }
