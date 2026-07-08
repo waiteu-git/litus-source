@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { ScreenBg, ScreenHeader, SectionLabel, useUi } from '../ui/screen'
@@ -31,7 +31,8 @@ export default function InfoScreen() {
 
   function openCafeteria(c: Cafeteria) {
     if (!c.url) return
-    navigation.navigate('Link', { url: c.url, title: c.name, isClass: false })
+    // 学食は決済フローがあるため、アプリ内WebViewではなく端末の既定ブラウザ（Chrome等）で開く。
+    Linking.openURL(c.url).catch(() => undefined)
   }
 
   function openBulletin() {
@@ -49,6 +50,7 @@ export default function InfoScreen() {
           <Text style={[styles.rowName, { color: disabled ? '#9bb3ab' : ui.valueColor }]}>
             {c.name}{disabled ? '（準備中）' : ''}
           </Text>
+          {!disabled ? <Ionicons name="open-outline" size={15} color="#9bb3ab" /> : null}
         </Pressable>
         {!disabled ? (
           <Pressable onPress={() => onToggle(c.id)} hitSlop={10}>
@@ -96,6 +98,6 @@ const styles = StyleSheet.create({
   campus: { marginTop: 6 },
   campusName: { fontSize: 13, fontWeight: '600', marginTop: 10, marginBottom: 6, marginLeft: 2 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  rowMain: { flex: 1 },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   rowName: { fontSize: 15, fontWeight: '500' },
 })
