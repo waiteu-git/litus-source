@@ -6,10 +6,12 @@ export type TimetableStackParamList = {
   SubjectDetail: { courseCode: string; name: string }
   Syllabus: { url: string; name: string }
   Web: { url: string; title?: string }
+  PdfViewer: { url: string; title?: string }
 }
 
 export type AssignmentsStackParamList = {
   AssignmentsHome: undefined
   CollectAssignments: undefined
   Web: { url: string; title?: string }
+  PdfViewer: { url: string; title?: string }
 }

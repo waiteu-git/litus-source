@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AssignmentsScreen from '../screens/AssignmentsScreen'
 import CollectAssignmentsScreen from '../screens/CollectAssignmentsScreen'
 import WebViewerScreen from '../screens/WebViewerScreen'
+import PdfViewerScreen from '../screens/PdfViewerScreen'
 import type { AssignmentsStackParamList } from './types'
 import { COLORS } from '../theme'
 
@@ -22,6 +23,11 @@ export default function AssignmentsStack() {
         name="Web"
         component={WebViewerScreen}
         options={({ route }) => ({ title: route.params.title ?? 'ページ' })}
+      />
+      <Stack.Screen
+        name="PdfViewer"
+        component={PdfViewerScreen}
+        options={({ route }) => ({ title: route.params.title ?? 'ファイル' })}
       />
     </Stack.Navigator>
   )

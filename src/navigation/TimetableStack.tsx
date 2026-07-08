@@ -5,6 +5,7 @@ import CollectCoursesScreen from '../screens/CollectCoursesScreen'
 import UpdateCheckScreen from '../screens/UpdateCheckScreen'
 import SubjectDetailScreen from '../screens/SubjectDetailScreen'
 import WebViewerScreen from '../screens/WebViewerScreen'
+import PdfViewerScreen from '../screens/PdfViewerScreen'
 import SyllabusScreen from '../screens/SyllabusScreen'
 import type { TimetableStackParamList } from './types'
 import { COLORS } from '../theme'
@@ -30,6 +31,11 @@ export default function TimetableStack() {
         name="Web"
         component={WebViewerScreen}
         options={({ route }) => ({ title: route.params.title ?? 'ページ' })}
+      />
+      <Stack.Screen
+        name="PdfViewer"
+        component={PdfViewerScreen}
+        options={({ route }) => ({ title: route.params.title ?? 'ファイル' })}
       />
     </Stack.Navigator>
   )
