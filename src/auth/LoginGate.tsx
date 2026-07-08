@@ -35,8 +35,10 @@ const SETUP_COLLECT_DELAY_MS = 900
 const SYNC_TIMEOUT_MS = 180000
 // 起動アニメの最小表示時間（約3.2秒の合体アニメを最後まで再生してから入場/スライドへ）。
 const BOOT_ANIM_MS = 3300
+// CLASS定時メンテナンス中、明けを検知して自動復帰するための再probe間隔。
+const MAINTENANCE_REPROBE_MS = 60000
 
-type GateState = 'loading' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'sync' | 'authed'
+type GateState = 'loading' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'sync' | 'authed' | 'maintenance'
 
 const LoginContext = createContext<{ requireLogin: () => void }>({ requireLogin: () => {} })
 
@@ -101,6 +103,16 @@ export function LoginGate({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
   }, [state, nonce])
 
+  // maintenance: 定時メンテ（〜4:00）が明けたら自動で復帰できるよう、一定間隔で再probeする。
+  useEffect(() => {
+    if (state !== 'maintenance') return
+    const t = setInterval(() => {
+      setNonce((n) => n + 1)
+      setState((s) => (s === 'maintenance' ? 'checking' : s))
+    }, MAINTENANCE_REPROBE_MS)
+    return () => clearInterval(t)
+  }, [state])
+
   // ログイン成功（setup/sync到達含む）＝チュートリアル完了として永続化。
   useEffect(() => {
     if (state === 'authed' || state === 'setup' || state === 'sync') {
@@ -158,6 +170,15 @@ export function LoginGate({ children }: { children: ReactNode }) {
   }
 
   /**
+   * メンテナンス中に「このまま開く」で入場する（既存ユーザー向け）。CLASSの setup/sync は
+   * 走らせず、キャッシュ済みの時間割・課題・インフォを閲覧できる状態でタブへ入る。
+   * 出席や時間割更新はCLASS復帰後に各画面で再試行される。
+   */
+  function enterDegraded() {
+    setState('authed')
+  }
+
+  /**
    * ログイン確認後の入場処理。時間割が未保存、または前回更新から時間が経っていれば setup
    * （CLASS画面を見せない裏取得）を挟む。ここはタブ・出席WebViewが未マウントの段階なので
    * CLASSの競合が起きない＝時間割の自動更新に最適なタイミング。
@@ -202,6 +223,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
         hasEnterSplash: !!p.hasEnterSplash,
         hasLogout: !!p.hasLogout,
         hasSsoStale: !!p.hasSsoStale,
+        hasMaintenance: !!p.hasMaintenance,
         url: typeof p.url === 'string' ? p.url : undefined,
       })
       if (verdict === 'pending') return // リダイレクト途中は待つ
@@ -213,6 +235,11 @@ export function LoginGate({ children }: { children: ReactNode }) {
       lastResultRef.current = verdict
       if (verdict === 'authed') recoverTriesRef.current = 0
       const s = stateRef.current
+      if (verdict === 'maintenance') {
+        // CLASS定時メンテナンス（2:00〜4:00）。ログインもできないので専用画面へ（詰まらせない）。
+        if (s === 'checking' || s === 'needsLogin') setState('maintenance')
+        return
+      }
       if (s === 'checking') {
         if (verdict === 'authed') proceedToEntry()
         else setState('needsLogin')
@@ -348,6 +375,34 @@ export function LoginGate({ children }: { children: ReactNode }) {
             <OnboardingSlides onDone={onSlidesDone} />
           </View>
         ) : null}
+        {state === 'maintenance' ? (
+          <View style={[styles.maintFill, { paddingTop: insets.top }]}>
+            <View style={styles.maintCard}>
+              <Text style={styles.maintTitle}>CLASSメンテナンス中</Text>
+              <Text style={styles.maintBody}>
+                CLASSは毎日 午前2:00〜4:00 がシステムメンテナンスのため利用できません。
+                時間をおいて再度お試しください。
+              </Text>
+              <Pressable
+                style={styles.maintPrimary}
+                onPress={() => {
+                  recoverTriesRef.current = 0
+                  requireLogin()
+                }}
+              >
+                <Text style={styles.maintPrimaryText}>再読み込み</Text>
+              </Pressable>
+              {!wasFirstRunRef.current ? (
+                <>
+                  <Pressable style={styles.maintGhost} onPress={enterDegraded}>
+                    <Text style={styles.maintGhostText}>このまま開く（時間割・課題は閲覧できます）</Text>
+                  </Pressable>
+                  <Text style={styles.maintNote}>※出席の受付確認と時間割の更新はCLASS復帰後に使えます。</Text>
+                </>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
       </View>
     </LoginContext.Provider>
   )
@@ -355,6 +410,49 @@ export function LoginGate({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#ffffff' },
+  maintFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.gradBottom,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  maintCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 22,
+    width: '100%',
+    maxWidth: 420,
+    alignItems: 'center',
+    gap: 12,
+  },
+  maintTitle: { color: COLORS.emeraldDark, fontSize: 18, fontWeight: '700' },
+  maintBody: { color: '#3a4b45', fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  maintPrimary: {
+    marginTop: 4,
+    backgroundColor: COLORS.cta,
+    borderRadius: 12,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  maintPrimaryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  maintGhost: {
+    backgroundColor: '#eef5f2',
+    borderWidth: 1,
+    borderColor: '#b9ddcd',
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  maintGhostText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
+  maintNote: { color: '#7c8b85', fontSize: 11, textAlign: 'center' },
   header: { backgroundColor: COLORS.emerald, paddingHorizontal: 16, paddingBottom: 14 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerText: { flex: 1 },

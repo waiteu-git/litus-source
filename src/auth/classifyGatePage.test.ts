@@ -32,4 +32,13 @@ describe('classifyGatePage', () => {
   it('ログアウトリンクがあれば authed（出欠管理メニューが無いポータルでもログイン済みと判定）', () => {
     expect(classifyGatePage({ ...base, hasLogout: true })).toBe('authed')
   })
+  it('システムメンテナンス画面は maintenance（pendingで詰まらせない）', () => {
+    expect(classifyGatePage({ ...base, hasMaintenance: true })).toBe('maintenance')
+  })
+  it('メンテナンスでもログイン済み（メニュー/ログアウト）なら authed を優先', () => {
+    expect(classifyGatePage({ ...base, hasMaintenance: true, hasClassMenu: true })).toBe('authed')
+  })
+  it('メンテナンスでもパスワード欄があれば needsLogin を優先', () => {
+    expect(classifyGatePage({ ...base, hasMaintenance: true, hasPasswordInput: true })).toBe('needsLogin')
+  })
 })
