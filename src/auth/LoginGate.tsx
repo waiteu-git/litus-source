@@ -23,9 +23,7 @@ import { syncSession } from '../collect/syncSession'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
 import OnboardingSlides from '../screens/OnboardingSlides'
 import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from '../screens/bootLogoHtml'
-import { loadBootLogo } from '../storage/bootLogoStore'
-import type { BootLogoVariant } from '../storage/bootLogoSerialize'
-import { COLORS } from '../theme'
+import { COLORS, useThemeVariant } from '../theme'
 
 // checking中に本物のログイン状態が判定できない場合の保険（リダイレクト完了待ち）。
 const CHECK_TIMEOUT_MS = 12000
@@ -35,6 +33,8 @@ const SETUP_TIMEOUT_MS = 25000
 const SETUP_COLLECT_DELAY_MS = 900
 // 初回フル同期（コース→スナップショット→課題）の上限。超えたら入場し裏で再試行に任せる。
 const SYNC_TIMEOUT_MS = 180000
+// 起動アニメの最小表示時間（約3.2秒の合体アニメを最後まで再生してから入場/スライドへ）。
+const BOOT_ANIM_MS = 3300
 
 type GateState = 'loading' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'sync' | 'authed'
 
@@ -75,13 +75,18 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const wasFirstRunRef = useRef(false)
   // 初回フル同期の進捗表示。
   const [syncLabel, setSyncLabel] = useState('データを取り込んでいます…')
-  // 起動ロゴアニメの背景バリアント（green=翠グラデ／white=白）。
-  const [bootLogo, setBootLogo] = useState<BootLogoVariant>('green')
+  // 起動アニメの背景バリアントはテーマ由来（green=翠グラデ／white=白）。
+  const { variant } = useThemeVariant()
+  const bootWhite = variant === 'white'
+  // 起動アニメを最後まで再生してから入場/スライドへ移すためのゲート。
+  const [bootAnimDone, setBootAnimDone] = useState(false)
 
   useEffect(() => {
-    loadBootLogo()
-      .then(setBootLogo)
-      .catch(() => undefined)
+    const t = setTimeout(() => setBootAnimDone(true), BOOT_ANIM_MS)
+    return () => clearTimeout(t)
+  }, [])
+
+  useEffect(() => {
     loadOnboardingDone()
       .then((done) => {
         if (!done) wasFirstRunRef.current = true
@@ -242,7 +247,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
     // type:'nav' は診断用（段階ログ）。ゲートでは無視する。
   }
 
-  if (state === 'authed') {
+  // 認証が早く終わっても起動アニメが完走するまでは入場させない（最後まで再生）。
+  if (state === 'authed' && bootAnimDone) {
     return <LoginContext.Provider value={{ requireLogin }}>{children}</LoginContext.Provider>
   }
 
@@ -308,33 +314,36 @@ export function LoginGate({ children }: { children: ReactNode }) {
             }}
           />
         ) : null}
-        {state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' ? (
+        {!bootAnimDone || state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' ? (
           <View style={styles.boot}>
-            {/* 起動ロゴアニメ（純CSS・ローカルHTML）。裏でログイン/取得が進む間ずっと表示。
-                タッチは奪わない（下のオーバーレイ操作を妨げない）。 */}
+            {/* 起動ロゴアニメ（純CSS・ローカルHTML）。起動直後は状態に関わらず最前面で完走させ、
+                以降も裏でログイン/取得が進む間は表示。タッチは奪わない。 */}
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
               <WebView
-                source={{ html: bootLogo === 'white' ? BOOT_LOGO_WHITE : BOOT_LOGO_GREEN }}
+                source={{ html: bootWhite ? BOOT_LOGO_WHITE : BOOT_LOGO_GREEN }}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
                 overScrollMode="never"
                 // 翠版は自前でグラデ背景を描く。白版は白。読込中の一瞬の下地を合わせる。
-                style={{ backgroundColor: bootLogo === 'white' ? '#ffffff' : COLORS.gradBottom }}
+                style={{ backgroundColor: bootWhite ? '#ffffff' : COLORS.gradBottom }}
               />
             </View>
-            {/* 接続状況（アニメ完了後も長い待ちで固まって見えないよう）。背景色に応じて可読色に。 */}
-            <View style={styles.bootStatusWrap} pointerEvents="none">
-              <ActivityIndicator color={bootLogo === 'white' ? '#8a968f' : 'rgba(255,255,255,0.9)'} />
-              <Text
-                style={[styles.bootStatusText, { color: bootLogo === 'white' ? '#8a968f' : 'rgba(255,255,255,0.92)' }]}
-              >
-                {bootStatus}
-                {state === 'sync' ? '（初回のみ・少し時間がかかります）' : ''}
-              </Text>
-            </View>
+            {/* 接続状況（アニメ完了後も長い待ちで固まって見えないよう）。背景色に応じて可読色に。
+                アニメ再生中（!bootAnimDone かつ通常フロー）は邪魔しないよう出さない。 */}
+            {bootAnimDone ? (
+              <View style={styles.bootStatusWrap} pointerEvents="none">
+                <ActivityIndicator color={bootWhite ? '#8a968f' : 'rgba(255,255,255,0.9)'} />
+                <Text
+                  style={[styles.bootStatusText, { color: bootWhite ? '#8a968f' : 'rgba(255,255,255,0.92)' }]}
+                >
+                  {bootStatus}
+                  {state === 'sync' ? '（初回のみ・少し時間がかかります）' : ''}
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
-        {state === 'firstRun' ? (
+        {state === 'firstRun' && bootAnimDone ? (
           <View style={StyleSheet.absoluteFill}>
             <OnboardingSlides onDone={onSlidesDone} />
           </View>
