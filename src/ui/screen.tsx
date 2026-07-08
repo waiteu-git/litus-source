@@ -12,20 +12,20 @@ export function ScreenBg({ children }: { children: ReactNode }) {
   const { variant } = useThemeVariant()
   const insets = useSafeAreaInsets()
   const pad = { paddingTop: insets.top + 10 }
-  if (variant === 'glass') {
+  if (variant === 'green') {
     return (
       <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={[ui.root, pad]}>
         {children}
       </LinearGradient>
     )
   }
-  return <View style={[ui.root, pad, { backgroundColor: COLORS.tint }]}>{children}</View>
+  return <View style={[ui.root, pad, { backgroundColor: '#ffffff' }]}>{children}</View>
 }
 
 /** ヘッダー行（アイコン＋タイトル＋右側のアクションチップ群）。 */
 export function ScreenHeader({ title, icon, right }: { title: string; icon?: IconName; right?: ReactNode }) {
   const { variant } = useThemeVariant()
-  const color = variant === 'glass' ? COLORS.white : COLORS.emeraldDark
+  const color = variant === 'green' ? COLORS.white : COLORS.emeraldDark
   return (
     <View style={ui.header}>
       <View style={ui.hLeft}>
@@ -40,10 +40,10 @@ export function ScreenHeader({ title, icon, right }: { title: string; icon?: Ico
 /** 押せる翠チップ（ヘッダーのアクション用）。任意で先頭アイコン。 */
 export function Chip({ label, icon, onPress }: { label: string; icon?: IconName; onPress?: () => void }) {
   const { variant } = useThemeVariant()
-  const glass = variant === 'glass'
-  const color = glass ? '#04322a' : COLORS.emeraldDark
+  const green = variant === 'green'
+  const color = green ? '#04322a' : COLORS.emeraldDark
   return (
-    <Pressable style={[glass ? ui.chipGlass : ui.chipSolid, ui.chipRow]} onPress={onPress}>
+    <Pressable style={[green ? ui.chipGlass : ui.chipSolid, ui.chipRow]} onPress={onPress}>
       {icon ? <Ionicons name={icon} size={14} color={color} /> : null}
       <Text style={{ color, fontSize: 12 }}>{label}</Text>
     </Pressable>
@@ -62,7 +62,7 @@ export function ActionButton({ label, onPress }: { label: string; onPress?: () =
 /** セクション見出し（薄い翠ラベル）。 */
 export function SectionLabel({ children }: { children: ReactNode }) {
   const { variant } = useThemeVariant()
-  const color = variant === 'glass' ? '#eafff7' : COLORS.emeraldDark
+  const color = variant === 'green' ? '#eafff7' : COLORS.emeraldDark
   return <Text style={[ui.section, { color }]}>{children}</Text>
 }
 
@@ -77,7 +77,7 @@ export function Segmented<T extends string>({
   onChange: (k: T) => void
 }) {
   const { variant } = useThemeVariant()
-  const glass = variant === 'glass'
+  const green = variant === 'green'
   return (
     <View style={ui.segRow}>
       {options.map((o) => {
@@ -88,9 +88,9 @@ export function Segmented<T extends string>({
             onPress={() => onChange(o.key)}
             style={[
               ui.seg,
-              { borderColor: glass ? 'rgba(255,255,255,0.4)' : '#cfe0d9' },
+              { borderColor: green ? 'rgba(255,255,255,0.4)' : '#cfe0d9' },
               on
-                ? glass
+                ? green
                   ? { backgroundColor: 'rgba(255,255,255,0.7)', borderColor: 'transparent' }
                   : { backgroundColor: COLORS.emerald, borderColor: 'transparent' }
                 : null,
@@ -100,7 +100,7 @@ export function Segmented<T extends string>({
               style={{
                 fontSize: 13,
                 fontWeight: on ? '600' : '400',
-                color: on ? (glass ? '#04322a' : COLORS.white) : glass ? '#eafff7' : COLORS.emeraldDark,
+                color: on ? (green ? '#04322a' : COLORS.white) : green ? '#eafff7' : COLORS.emeraldDark,
               }}
             >
               {o.label}
@@ -115,13 +115,13 @@ export function Segmented<T extends string>({
 /** テーマ別のスタイル片を返すフック（画面側で自由に組む）。 */
 export function useUi() {
   const { variant } = useThemeVariant()
-  const glass = variant === 'glass'
+  const green = variant === 'green'
   return {
-    glass,
-    card: glass ? ui.cardGlass : ui.cardSolid,
-    labelColor: glass ? COLORS.labelOnGlass : COLORS.emeraldDark,
-    valueColor: glass ? COLORS.inkOnGlass : COLORS.ink,
-    dividerColor: glass ? 'rgba(255,255,255,0.35)' : '#e3ece8',
+    green,
+    card: green ? ui.cardGlass : ui.cardSolid,
+    labelColor: green ? COLORS.labelOnGlass : COLORS.emeraldDark,
+    valueColor: green ? COLORS.inkOnGlass : COLORS.ink,
+    dividerColor: green ? 'rgba(255,255,255,0.35)' : '#e3ece8',
   }
 }
 

@@ -44,7 +44,8 @@ export default function AttendanceScreen() {
   const phaseRef = useRef<EnginePhase>('booting')
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { variant } = useThemeVariant()
-  const glass = variant === 'glass'
+  // green（翠グラデ）テーマか。白テーマではソリッド配色。変数名はスタイル名(glass系)との対応で温存。
+  const glass = variant === 'green'
   const loginGate = useLoginGate()
   // CLASSは同一セッションの複数画面を禁止する。出席のWebViewは**一度開いたら持続**させ
   // （タブ切替で破棄しない＝再訪ゼロ秒・「別の画面」エラーも出ない）、時間割収集など他の

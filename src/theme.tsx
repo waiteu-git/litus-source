@@ -4,7 +4,7 @@ import type { ThemeVariant } from './storage/themeSerialize'
 
 export type { ThemeVariant }
 
-/** 翠テーマの共通色トークン。glass/solid で一部の背景・文字色を出し分ける。 */
+/** 翠テーマの共通色トークン。green/white で一部の背景・文字色を出し分ける。 */
 export const COLORS = {
   emerald: '#0f9e75',
   emeraldDark: '#0a6650',
@@ -26,14 +26,14 @@ export const COLORS = {
 
 type ThemeCtx = { variant: ThemeVariant; setVariant: (v: ThemeVariant) => void }
 
-const ThemeContext = createContext<ThemeCtx>({ variant: 'glass', setVariant: () => {} })
+const ThemeContext = createContext<ThemeCtx>({ variant: 'green', setVariant: () => {} })
 
 /**
- * テーマ選択（glass/solid）をアプリ全体で共有・永続化する。全画面が同じContextを読むため、
+ * テーマ選択（green/white）をアプリ全体で共有・永続化する。全画面が同じContextを読むため、
  * 設定での切替が出席画面など他画面にも即反映される。初回は AsyncStorage から復元。
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [variant, setVariantState] = useState<ThemeVariant>('glass')
+  const [variant, setVariantState] = useState<ThemeVariant>('green')
   useEffect(() => {
     loadTheme()
       .then(setVariantState)

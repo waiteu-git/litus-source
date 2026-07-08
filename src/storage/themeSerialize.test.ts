@@ -2,16 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { deserializeTheme, serializeTheme } from './themeSerialize'
 
 describe('themeSerialize', () => {
-  it('solid を保存・復元', () => {
-    expect(deserializeTheme(serializeTheme('solid'))).toBe('solid')
+  it('green を保存・復元', () => {
+    expect(deserializeTheme(serializeTheme('green'))).toBe('green')
   })
-  it('glass を保存・復元', () => {
-    expect(deserializeTheme(serializeTheme('glass'))).toBe('glass')
+  it('white を保存・復元', () => {
+    expect(deserializeTheme(serializeTheme('white'))).toBe('white')
   })
-  it('null は既定 glass', () => {
-    expect(deserializeTheme(null)).toBe('glass')
+  it('旧glassはgreenへ移行', () => {
+    expect(deserializeTheme('glass')).toBe('green')
   })
-  it('不正値は既定 glass', () => {
-    expect(deserializeTheme('xyz')).toBe('glass')
+  it('旧solidはwhiteへ移行', () => {
+    expect(deserializeTheme('solid')).toBe('white')
+  })
+  it('null/不正は既定green', () => {
+    expect(deserializeTheme(null)).toBe('green')
+    expect(deserializeTheme('xyz')).toBe('green')
   })
 })

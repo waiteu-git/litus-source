@@ -1,10 +1,10 @@
-export type ThemeVariant = 'glass' | 'solid'
+export type ThemeVariant = 'green' | 'white'
 
 export function serializeTheme(v: ThemeVariant): string {
   return v
 }
 
-/** 不正値/null は既定の 'glass'。 */
+/** 'white'/旧'solid' は white、それ以外（'green'/旧'glass'/null/不正）は既定 green。 */
 export function deserializeTheme(raw: string | null): ThemeVariant {
-  return raw === 'solid' ? 'solid' : 'glass'
+  return raw === 'white' || raw === 'solid' ? 'white' : 'green'
 }
