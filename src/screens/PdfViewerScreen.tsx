@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import * as FileSystem from 'expo-file-system/legacy'
@@ -12,6 +12,8 @@ type Params = { PdfViewer: { url: string; title?: string } }
 
 // pdf.jsの読込〜描画がこの秒数を超えたら失敗扱い（無反応で固まらないように）。
 const RENDER_TIMEOUT_MS = 20000
+// 「端末アプリで開く」の取得がこの秒数を超えたら失敗扱いにして共有中フラグを解除（ボタンが固まらないように）。
+const SHARE_TIMEOUT_MS = 20000
 
 /**
  * LETUSファイル(PDF)のアプリ内ビューア。主経路はpdf.jsでのcanvas描画。
@@ -29,6 +31,7 @@ export default function PdfViewerScreen() {
   const [sharing, setSharing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const origin = useMemo(() => {
     try {
@@ -43,7 +46,23 @@ export default function PdfViewerScreen() {
     timerRef.current = setTimeout(() => setPhase((p) => (p === 'done' ? p : 'error')), RENDER_TIMEOUT_MS)
   }
 
+  function clearShareTimer() {
+    if (shareTimerRef.current) {
+      clearTimeout(shareTimerRef.current)
+      shareTimerRef.current = null
+    }
+  }
+
+  // アンマウント時に保留中のタイマーを片付ける。
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (shareTimerRef.current) clearTimeout(shareTimerRef.current)
+  }, [])
+
   function retry() {
+    // WebView作り直しで進行中の共有取得は失われるため、共有フラグとタイマーも必ずリセットする。
+    clearShareTimer()
+    setSharing(false)
     setPhase('loading')
     setPages(0)
     setNonce((n) => n + 1)
@@ -58,6 +77,12 @@ export default function PdfViewerScreen() {
     if (sharing) return
     setSharing(true)
     flash('ファイルを取得しています…')
+    clearShareTimer()
+    shareTimerRef.current = setTimeout(() => {
+      shareTimerRef.current = null
+      setSharing(false)
+      flash('ファイルを取得できませんでした')
+    }, SHARE_TIMEOUT_MS)
     webviewRef.current?.injectJavaScript(buildSharePdfJs())
   }
 
@@ -100,8 +125,10 @@ export default function PdfViewerScreen() {
       if (timerRef.current) clearTimeout(timerRef.current)
       setPhase('error')
     } else if (p.stage === 'share' && typeof p.dataBase64 === 'string') {
+      clearShareTimer()
       shareBase64(p.dataBase64)
     } else if (p.stage === 'shareError') {
+      clearShareTimer()
       setSharing(false)
       flash(p.reason === 'size' ? 'ファイルが大きすぎて共有できません（25MB超）' : 'ファイルを取得できませんでした')
     }

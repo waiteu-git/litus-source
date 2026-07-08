@@ -36,6 +36,8 @@ export default function BackgroundLetusSync() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s !== 'active') return
+      // didFullSyncは「完走済み」状態でのみtrue。進行中/待機中は触らない（同期の途中破棄を防ぐ）。
+      if (!syncSession.didFullSync) return
       const last = syncSession.lastFullSyncAt
       if (last != null && Date.now() - last > RESYNC_INTERVAL_MS) {
         syncSession.didFullSync = false
