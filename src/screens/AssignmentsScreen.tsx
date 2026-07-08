@@ -24,7 +24,8 @@ const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
   not_submitted: '未提出',
   submitted: '提出済み',
   completed: '受験済み',
-  unknown: '状態不明',
+  // 解析できなかった場合も、締切のある課題としては未提出扱いで表示（ユーザー要望）。
+  unknown: '未提出',
 }
 
 const URGENT: Set<BucketKey> = new Set(['within24h', 'overdue'])

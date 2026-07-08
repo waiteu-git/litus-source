@@ -464,14 +464,21 @@ export const DETECT_PAGE_JS = `(function(){
     var hasAttendanceForm = hasSubmitBtn && body.indexOf('認証コード') >= 0;
     var hasEnterSplash = btns.some(function(b){ var t=txt(b); return t.indexOf('PC')>=0 && /ENTER/i.test(t); });
     var hasClassMenu = body.indexOf('出欠管理') >= 0;
+    // ログアウトリンク=ログイン済みの普遍シグナル。ログイン後ポータルに「出欠管理」文字が
+    // 無い画面でも authed と判定できるようにする（ログイン済みなのにログイン表示になる不具合対策）。
+    var hasLogout = btns.some(function(b){
+      var t = ((b.textContent||b.value)||'');
+      var href = (b.getAttribute && (b.getAttribute('href')||'')) || '';
+      return t.indexOf('ログアウト') >= 0 || /logout|logoff|signout/i.test(t) || /logout|logoff|signout/i.test(href);
+    });
     var hasSystemError = /システムエラー|ViewExpired|この画面を閉じてください|別の画面で操作|複数の画面でご利用/.test(body);
     // 過去のリクエスト=SAMLリプレイ拒否 / CSRF=並走SSO等でフォームのトークンが無効化された状態。
     // どちらも「フローが壊れた」なので新しいWebViewでフォームを取り直す（gateのrecover対象）。
     var hasSsoStale = /過去のリクエスト|CSRF/i.test(body);
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'page', hasPasswordInput: hasPassword, hasAttendanceForm: hasAttendanceForm,
-      hasEnterSplash: hasEnterSplash, hasClassMenu: hasClassMenu, hasSystemError: hasSystemError,
-      hasSsoStale: hasSsoStale, url: location.href
+      hasEnterSplash: hasEnterSplash, hasClassMenu: hasClassMenu, hasLogout: hasLogout,
+      hasSystemError: hasSystemError, hasSsoStale: hasSsoStale, url: location.href
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
@@ -525,6 +532,62 @@ export const COLLECT_ASSIGNMENT_PAGE_JS = `(function(){
 export function isAssignmentPageUrl(url: string): boolean {
   return /\/mod\/(assign|quiz|turnitintool|turnitintooltwo|workshop|feedback|questionnaire)\/view\.php/i.test(url)
 }
+
+/** LETUSコースのトップページか（各アクティビティに追加ボタンを差す判定）。 */
+export function isCoursePageUrl(url: string): boolean {
+  return /\/course\/view\.php/i.test(url)
+}
+
+/**
+ * タップで即ダウンロードが始まってしまうファイル系URLか（PDF等）。押下を横取りして
+ * アプリ内ビューアへ回す/自動DLを抑止するのに使う。Moodleの pluginfile 直リンクと
+ * 代表的な文書拡張子を対象にする。
+ */
+export function isDownloadableFileUrl(url: string): boolean {
+  if (/\/pluginfile\.php\//i.test(url)) return true
+  return /\.(pdf|docx?|pptx?|xlsx?|zip|csv)(\?|#|$)/i.test(url)
+}
+
+/**
+ * コースページの各アクティビティ（/mod/* リンク）の隣に「＋追加」ボタンを差し込む（冪等）。
+ * 押すと postMessage(type:'addActivity') で種別・URL・名称・科目名を返す。RN側で追跡に加える。
+ * 拡張機能のように「このページから直接、追いたいものだけ追加」を実現する。
+ */
+export const INJECT_COURSE_ADD_BUTTONS_JS = `(function(){
+  try {
+    if (window.__litusCourseBtns) return true;
+    window.__litusCourseBtns = true;
+    var courseName = '';
+    var h1 = document.querySelector('.page-header-headings h1, #page-header h1, h1');
+    if (h1) courseName = (h1.textContent || '').replace(/\\s+/g,' ').trim();
+    function mk(a){
+      var href = a.getAttribute('href') || '';
+      if (!/\\/mod\\//.test(href)) return;
+      if (a.__litusBtn) return; a.__litusBtn = true;
+      var nameEl = a.querySelector('.instancename');
+      var name = ((nameEl || a).textContent || '').replace(/\\s+/g,' ').trim();
+      var accesshide = a.querySelector('.accesshide'); if (accesshide) name = name.replace((accesshide.textContent||'').trim(),'').trim();
+      var b = document.createElement('button');
+      b.textContent = '＋追加';
+      b.setAttribute('type','button');
+      b.style.cssText = 'margin-left:8px;padding:2px 10px;font-size:12px;line-height:1.6;border:1px solid #0aa579;color:#0aa579;background:#eafaf5;border-radius:12px;vertical-align:middle;cursor:pointer;';
+      b.addEventListener('click', function(ev){
+        ev.preventDefault(); ev.stopPropagation();
+        b.textContent = '追加済み'; b.style.color='#8a8a8a'; b.style.borderColor='#d0d0d0'; b.style.background='#f2f2f2';
+        var mod = (href.match(/\\/mod\\/([a-z]+)\\//) || [])[1] || '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type:'addActivity', url: a.href, title: name, mod: mod, courseName: courseName }));
+      }, true);
+      var host = a.closest ? (a.closest('.activityinstance') || a.parentNode) : a.parentNode;
+      (host || a.parentNode || a).appendChild(b);
+    }
+    var links = document.querySelectorAll('li.activity a.aalink, li.activity a[href*="/mod/"], .activityinstance a[href*="/mod/"]');
+    Array.prototype.forEach.call(links, mk);
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type:'courseButtons', count: links.length }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type:'error', message:String(e) }));
+  }
+  true;
+})();`
 
 /** コースページ本文HTMLを抽出して postMessage（抽出のみ）。 */
 export const COLLECT_COURSE_PAGE_JS = `(function(){

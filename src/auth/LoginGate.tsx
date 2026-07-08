@@ -195,6 +195,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
         hasPasswordInput: !!p.hasPasswordInput,
         hasClassMenu: !!p.hasClassMenu,
         hasEnterSplash: !!p.hasEnterSplash,
+        hasLogout: !!p.hasLogout,
         hasSsoStale: !!p.hasSsoStale,
         url: typeof p.url === 'string' ? p.url : undefined,
       })

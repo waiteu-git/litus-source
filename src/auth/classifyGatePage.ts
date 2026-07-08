@@ -12,6 +12,8 @@ export interface GatePageSignal {
   hasPasswordInput: boolean
   hasClassMenu: boolean
   hasEnterSplash: boolean
+  /** ログアウトリンクの有無。ログイン済みの普遍シグナル（出欠管理メニューが無いポータルでも成立） */
+  hasLogout?: boolean
   /** IdPの「過去のリクエスト」エラーページ（SAMLリプレイ拒否）。キャッシュ破棄して再試行が必要 */
   hasSsoStale?: boolean
   url?: string
@@ -32,6 +34,7 @@ export function classifyGatePage(s: GatePageSignal): GateVerdict {
   if (isSsoLoginUrl(s.url)) return 'needsLogin'
   // SSOフロー混線などでLETUS側に着地したら、CLASSのprobeへ誘導し直す
   if (/letus\.ed\.tus\.ac\.jp/i.test(s.url ?? '')) return 'stray'
-  if (s.hasClassMenu) return 'authed'
+  // 出欠管理メニュー、またはログアウトリンク（＝ログイン済みの普遍シグナル）で authed。
+  if (s.hasClassMenu || s.hasLogout) return 'authed'
   return 'pending'
 }

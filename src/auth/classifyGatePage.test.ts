@@ -29,4 +29,7 @@ describe('classifyGatePage', () => {
   it('LETUSに迷い込んだら stray（SSOリレー混線→CLASSへ誘導し直す）', () => {
     expect(classifyGatePage({ ...base, url: 'https://letus.ed.tus.ac.jp/my/' })).toBe('stray')
   })
+  it('ログアウトリンクがあれば authed（出欠管理メニューが無いポータルでもログイン済みと判定）', () => {
+    expect(classifyGatePage({ ...base, hasLogout: true })).toBe('authed')
+  })
 })
