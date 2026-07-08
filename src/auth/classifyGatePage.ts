@@ -16,10 +16,12 @@ export interface GatePageSignal {
   hasLogout?: boolean
   /** IdPの「過去のリクエスト」エラーページ（SAMLリプレイ拒否）。キャッシュ破棄して再試行が必要 */
   hasSsoStale?: boolean
+  /** CLASSの定時システムメンテナンス画面（毎日2:00〜4:00。この間はログインもできない） */
+  hasMaintenance?: boolean
   url?: string
 }
 
-export type GateVerdict = 'authed' | 'needsLogin' | 'stale' | 'stray' | 'pending'
+export type GateVerdict = 'authed' | 'needsLogin' | 'stale' | 'stray' | 'pending' | 'maintenance'
 
 const SSO_LOGIN_URL_RE = /login\.microsoftonline\.com|login\.live\.com|login\.microsoft\.com/i
 
@@ -36,5 +38,7 @@ export function classifyGatePage(s: GatePageSignal): GateVerdict {
   if (/letus\.ed\.tus\.ac\.jp/i.test(s.url ?? '')) return 'stray'
   // 出欠管理メニュー、またはログアウトリンク（＝ログイン済みの普遍シグナル）で authed。
   if (s.hasClassMenu || s.hasLogout) return 'authed'
+  // 定時メンテナンス画面はログインもできないため、pendingで詰まらせず専用扱いにする。
+  if (s.hasMaintenance) return 'maintenance'
   return 'pending'
 }

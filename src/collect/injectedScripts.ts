@@ -475,10 +475,12 @@ export const DETECT_PAGE_JS = `(function(){
     // 過去のリクエスト=SAMLリプレイ拒否 / CSRF=並走SSO等でフォームのトークンが無効化された状態。
     // どちらも「フローが壊れた」なので新しいWebViewでフォームを取り直す（gateのrecover対象）。
     var hasSsoStale = /過去のリクエスト|CSRF/i.test(body);
+    // CLASSの定時メンテナンス（毎日2:00〜4:00）。この間はログインもできないので専用表示にする。
+    var hasMaintenance = /システムメンテナンス|メンテナンス中|ただいまメンテナンス|ご利用いただけません/.test(body);
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'page', hasPasswordInput: hasPassword, hasAttendanceForm: hasAttendanceForm,
       hasEnterSplash: hasEnterSplash, hasClassMenu: hasClassMenu, hasLogout: hasLogout,
-      hasSystemError: hasSystemError, hasSsoStale: hasSsoStale, url: location.href
+      hasSystemError: hasSystemError, hasSsoStale: hasSsoStale, hasMaintenance: hasMaintenance, url: location.href
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
