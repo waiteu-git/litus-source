@@ -303,6 +303,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
             onProgress={setSyncLabel}
             onFinished={() => {
               syncSession.didFullSync = true
+              syncSession.lastFullSyncAt = Date.now()
               setState((s) => (s === 'sync' ? 'authed' : s))
             }}
           />
