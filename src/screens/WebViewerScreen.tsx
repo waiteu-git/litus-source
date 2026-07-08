@@ -1,14 +1,18 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useRoute, type RouteProp } from '@react-navigation/native'
 import {
   COLLECT_ASSIGNMENT_PAGE_JS,
+  INJECT_COURSE_ADD_BUTTONS_JS,
   isAssignmentPageUrl,
+  isCoursePageUrl,
+  isDownloadableFileUrl,
 } from '../collect/injectedScripts'
 import { parseAssignmentPage } from '../parsers/letus'
-import { upsertAssignments } from '../updates/assignmentUpsert'
+import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
 import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
+import { isSameTrackedActivity } from '../updates/letusActivityKey'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { COLORS } from '../theme'
@@ -18,8 +22,9 @@ type Params = { Web: { url: string; title?: string } }
 /**
  * アプリ内WebViewビューア。シラバス・LETUSコース・課題ページなどを外部ブラウザに出さず
  * アプリ内で表示する（Cookie共有なのでSSOログイン済みのまま開ける）。
- * 課題ページを開いているときは「この課題を追加」ボタンを出し、現ページを解析して手動で
- * 追跡対象に加えられる（カレンダー先読みで漏れた課題の補完）。
+ * - 課題ページ: 未追跡なら「この課題を追加」ボタン（既に追跡中なら出さない）。
+ * - コースページ: 各アクティビティ（ファイル/フォーラム/課題等）の隣に「＋追加」ボタンを注入。
+ * - ファイル(PDF等)リンク: タップ即ダウンロードを抑止（アプリ内表示はv9で対応）。
  */
 export default function WebViewerScreen() {
   const route = useRoute<RouteProp<Params, 'Web'>>()
@@ -29,56 +34,91 @@ export default function WebViewerScreen() {
   const [currentUrl, setCurrentUrl] = useState(url)
   const [toast, setToast] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [trackedUrls, setTrackedUrls] = useState<string[]>([])
 
-  const canAdd = isAssignmentPageUrl(currentUrl)
+  useEffect(() => {
+    loadAssignments()
+      .then((m) => setTrackedUrls(Object.keys(m)))
+      .catch(() => undefined)
+  }, [])
+
+  // 課題ページかつ未追跡のときだけ「この課題を追加」を出す（既知課題では出さない）。
+  const canAdd = isAssignmentPageUrl(currentUrl) && !isSameTrackedActivity(currentUrl, trackedUrls)
+
+  function flash(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
 
   function requestAdd() {
     setAdding(true)
     webviewRef.current?.injectJavaScript(COLLECT_ASSIGNMENT_PAGE_JS)
   }
 
+  async function addOne(a: CollectedAssignment, okMsg: string) {
+    try {
+      const existing = await loadAssignments()
+      const merged = upsertAssignments(existing, [a], new Date())
+      await saveAssignments(merged)
+      setTrackedUrls(Object.keys(merged))
+      await refreshAllNotifications()
+      bump()
+      flash(okMsg)
+    } catch {
+      flash('追加に失敗しました')
+    }
+  }
+
   async function onMessage(data: string) {
-    let p: { type?: string; html?: string; url?: string; courseName?: string }
+    let p: { type?: string; html?: string; url?: string; courseName?: string; title?: string; mod?: string }
     try {
       p = JSON.parse(data)
     } catch {
       setAdding(false)
       return
     }
-    if (p.type !== 'assignmentpage' || typeof p.html !== 'string') {
+    if (p.type === 'assignmentpage' && typeof p.html === 'string') {
+      const pageUrl = typeof p.url === 'string' ? p.url : currentUrl
+      const parsed = parseAssignmentPage(p.html, pageUrl)
+      await addOne(
+        {
+          url: pageUrl,
+          courseCode: null,
+          courseName: p.courseName ?? title ?? '',
+          title: title ?? p.courseName ?? '課題',
+          deadline: parsed.deadline,
+          deadlineText: '',
+          submissionStatus: parsed.submissionStatus,
+          lifecycleStatus: parsed.lifecycleStatus,
+        },
+        '課題を追加しました',
+      )
       setAdding(false)
       return
     }
-    const pageUrl = typeof p.url === 'string' ? p.url : currentUrl
-    const parsed = parseAssignmentPage(p.html, pageUrl)
-    try {
-      const existing = await loadAssignments()
-      await saveAssignments(
-        upsertAssignments(
-          existing,
-          [
-            {
-              url: pageUrl,
-              courseCode: null,
-              courseName: p.courseName ?? title ?? '',
-              title: title ?? p.courseName ?? '課題',
-              deadline: parsed.deadline,
-              deadlineText: '',
-              submissionStatus: parsed.submissionStatus,
-              lifecycleStatus: parsed.lifecycleStatus,
-            },
-          ],
-          new Date(),
-        ),
+    if (p.type === 'addActivity' && typeof p.url === 'string') {
+      // コースページからの直接追加（締切等はページ未訪問なので不明。次回収集で補完される）。
+      await addOne(
+        {
+          url: p.url,
+          courseCode: null,
+          courseName: p.courseName ?? title ?? '',
+          title: p.title || '（無題）',
+          deadline: null,
+          deadlineText: '',
+          submissionStatus: 'unknown',
+          lifecycleStatus: 'active',
+        },
+        `「${p.title || '項目'}」を追加しました`,
       )
-      await refreshAllNotifications()
-      bump()
-      setToast('課題を追加しました')
-    } catch {
-      setToast('追加に失敗しました')
-    } finally {
-      setAdding(false)
-      setTimeout(() => setToast(null), 2500)
+      return
+    }
+    setAdding(false)
+  }
+
+  function onLoadEnd() {
+    if (isCoursePageUrl(currentUrl)) {
+      webviewRef.current?.injectJavaScript(INJECT_COURSE_ADD_BUTTONS_JS)
     }
   }
 
@@ -91,7 +131,17 @@ export default function WebViewerScreen() {
         thirdPartyCookiesEnabled
         setSupportMultipleWindows={false}
         onNavigationStateChange={(s) => setCurrentUrl(s.url)}
+        onLoadEnd={onLoadEnd}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
+        onShouldStartLoadWithRequest={(req) => {
+          // ファイル(PDF等)は押した瞬間にダウンロードが始まるので、遷移自体を止める。
+          // アプリ内表示は次バージョン（pdf.js）で対応予定。
+          if (isDownloadableFileUrl(req.url)) {
+            flash('ファイルのアプリ内表示は次回対応します（自動ダウンロードは抑止しました）')
+            return false
+          }
+          return true
+        }}
         style={styles.web}
       />
       {canAdd ? (

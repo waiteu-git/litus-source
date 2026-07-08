@@ -1,5 +1,6 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TimetableStack from './TimetableStack'
 import AssignmentsStack from './AssignmentsStack'
 import AttendanceScreen from '../screens/AttendanceScreen'
@@ -16,6 +17,9 @@ const icon =
   ({ color, size }: { color: string; size: number }) => <Ionicons name={name} size={size} color={color} />
 
 export default function RootTabs() {
+  const insets = useSafeAreaInsets()
+  // ジェスチャーバー/ホームインジケータ分だけ底上げしないと、浮遊タブバーが下部で見切れる。
+  const bottomInset = Math.max(insets.bottom, 8)
   return (
     <Tab.Navigator
       screenOptions={{
@@ -26,7 +30,7 @@ export default function RootTabs() {
         // 確保したまま余白＋角丸＋影で「浮遊」させる。
         tabBarStyle: {
           marginHorizontal: 12,
-          marginBottom: 10,
+          marginBottom: bottomInset,
           height: 62,
           borderRadius: 20,
           backgroundColor: COLORS.white,

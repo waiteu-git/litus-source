@@ -22,7 +22,6 @@ import { normalizeAttendanceCode } from '../attendance/normalizeCode'
 import {
   attendanceReducer,
   initialEngineState,
-  overlayVisible,
   type EnginePhase,
   type SubmitResult,
 } from '../attendance/engine'
@@ -63,6 +62,10 @@ export default function AttendanceScreen() {
   const [expanded, setExpanded] = useState(true)
   const [webviewKey, setWebviewKey] = useState(0)
   const [now, setNow] = useState(() => new Date())
+  // 取得失敗（navFailed）でも生CLASSは自動表示しない。ユーザーが明示的に押した時だけ表示する。
+  const [revealClass, setRevealClass] = useState(false)
+  // 取得失敗の回数。数回失敗したら「CLASSの画面を表示」ボタンを出す（手動エスカレーション）。
+  const [failCount, setFailCount] = useState(0)
 
   // booting を抜けたらナビタイマーを止める（アンマウント時も）。
   useEffect(() => {
@@ -76,6 +79,11 @@ export default function AttendanceScreen() {
   }, [state.phase])
 
   phaseRef.current = state.phase
+
+  // 取得失敗に入るたびに回数を数える（数回でCLASS表示ボタンを解禁）。
+  useEffect(() => {
+    if (state.phase === 'navFailed') setFailCount((n) => n + 1)
+  }, [state.phase])
 
   // 時間割収集がCLASSを使い終わったら、WebViewを作り直して出席を再開する（使用中は譲って
   // アンマウントされている）。reception は保持してキャッシュ表示。
@@ -252,11 +260,11 @@ export default function AttendanceScreen() {
     setCode('')
     portalTriesRef.current = 0
     errorRetryRef.current = 0
+    setRevealClass(false)
     dispatch({ kind: 'retry' })
     setWebviewKey((k) => k + 1)
   }
 
-  const isOverlay = overlayVisible(state.phase)
   const c = COLORS
 
   // booting中でも前回の受付状況をキャッシュ表示し、裏の再遷移を待たせない（（更新中…）を添える）。
@@ -266,9 +274,11 @@ export default function AttendanceScreen() {
       ? `受付中: ${state.reception.courseName ?? ''}${updating ? '（更新中…）' : ''}`
       : state.phase === 'ready'
         ? '受付中の授業はありません'
-        : updating
-          ? '受付状況を更新しています…'
-          : '受付状況を確認しています…'
+        : state.phase === 'navFailed'
+          ? '受付状況を取得できませんでした'
+          : updating
+            ? '受付状況を更新しています…'
+            : '受付状況を確認しています…'
 
   const resultBanner = state.result
     ? {
@@ -326,6 +336,27 @@ export default function AttendanceScreen() {
           ) : null}
         </View>
 
+        {state.phase === 'navFailed' && !revealClass ? (
+          <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
+            <Text style={[styles.status, { color: valueColor, fontSize: 14, fontWeight: '500' }]}>
+              受付状況を取得できませんでした。「更新」で開き直します。
+            </Text>
+            <View style={styles.failRow}>
+              <Pressable style={[styles.failBtn, { backgroundColor: c.cta }]} onPress={retry}>
+                <Text style={styles.failBtnText}>更新</Text>
+              </Pressable>
+              {failCount >= 2 ? (
+                <Pressable
+                  style={[styles.failBtn, styles.failBtnGhost]}
+                  onPress={() => setRevealClass(true)}
+                >
+                  <Text style={[styles.failBtnText, { color: c.emeraldDark }]}>CLASSの画面を表示</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
           <Text style={[styles.inputLabel, { color: labelColor }]}>認証コード（半角数字）</Text>
           <Pressable style={styles.segRow} onPress={() => inputRef.current?.focus()}>
@@ -357,11 +388,12 @@ export default function AttendanceScreen() {
         ) : null}
       </ScreenBg>
 
-      {/* WebViewに直接absoluteを当てても効かず画面を占有するため、位置指定した親Viewで包む。
-          非表示時は画面外1x1、オーバーレイ時のみ全画面に出す。 */}
+      {/* 自動遷移・受付検出は常にこの非表示WebView（画面外1x1）で進める。ユーザーには基本
+          CLASSの生画面を見せない。取得できない時だけ、ユーザーが明示的に「CLASSの画面を表示」を
+          押した場合に限り全画面表示する（revealClass）。 */}
       <View
-        style={isOverlay ? styles.webviewOverlayBox : styles.webviewHiddenBox}
-        pointerEvents={isOverlay ? 'auto' : 'none'}
+        style={revealClass ? styles.webviewOverlayBox : styles.webviewHiddenBox}
+        pointerEvents={revealClass ? 'auto' : 'none'}
       >
         {!collectActive ? (
           <WebView
@@ -381,13 +413,17 @@ export default function AttendanceScreen() {
         ) : null}
       </View>
 
-      {isOverlay ? (
+      {revealClass ? (
         <View style={styles.overlayBar}>
-          <Text style={styles.overlayText}>
-            {state.phase === 'needsLogin' ? '初回のみログインしてください' : '画面を進めてください（自動で戻ります）'}
-          </Text>
-          <Pressable style={styles.overlayBtn} onPress={retry}>
-            <Text style={styles.overlayBtnText}>やり直す</Text>
+          <Text style={styles.overlayText}>CLASSの画面です。出席登録を済ませたら「閉じる」を押してください。</Text>
+          <Pressable
+            style={styles.overlayBtn}
+            onPress={() => {
+              setRevealClass(false)
+              inject(DETECT_PAGE_JS)
+            }}
+          >
+            <Text style={styles.overlayBtnText}>閉じる</Text>
           </Pressable>
         </View>
       ) : null}
@@ -425,6 +461,10 @@ const styles = StyleSheet.create({
   ctaText: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
   result: { marginTop: 12, borderRadius: 14, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
+  failRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  failBtn: { flex: 1, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  failBtnGhost: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: '#b9ddcd' },
+  failBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
   webviewHiddenBox: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
   webviewOverlayBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 56, backgroundColor: '#ffffff' },
   webviewFill: { flex: 1 },
