@@ -491,6 +491,29 @@ export const DETECT_PAGE_JS = `(function(){
 /** SSOセッションを黙って温める先読み対象（CLASS=出席/時間割、LETUS=課題）。 */
 export const CLASS_TOP_URL = 'https://class.admin.tus.ac.jp/'
 
+/**
+ * CLASS掲示一覧を抽出。ログイン後ポータル(Xut12401)は左に機能メニュー、本文に掲示一覧(dl.keiji)を
+ * 同居して表示する。各 dl.keiji は自己完結（カテゴリ/件名/日付/重要・新着アイコン/未読=fontBold）なので、
+ * その outerHTML を連結して送る。掲示ページに居るか(onKeijiPage)も一緒に返し、誤クリアを防ぐ。
+ */
+export const COLLECT_BULLETIN_JS = `(function(){
+  try {
+    var dls = document.querySelectorAll('dl.keiji');
+    var html = '';
+    for (var i=0;i<dls.length;i++){ html += dls[i].outerHTML; }
+    var body = document.body ? (document.body.innerText || '') : '';
+    // 掲示タブUI（グループ/未読/新着…）か、カテゴリ見出しが有れば掲示ページとみなす。
+    var onKeijiPage = dls.length > 0 || !!document.querySelector('.keijiCategory')
+      || (/グループ/.test(body) && /未読/.test(body) && /新着/.test(body));
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'bulletin', html: '<div>' + html + '</div>', count: dls.length, onKeijiPage: onKeijiPage
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
 /** LETUSマイコース。全履修コースの名前(コード入り)＋course/view.php URL が並ぶ。 */
 export const MYCOURSES_URL = 'https://letus.ed.tus.ac.jp/my/courses.php'
 

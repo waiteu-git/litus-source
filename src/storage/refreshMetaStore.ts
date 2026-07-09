@@ -5,9 +5,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
  * 走らせたくない。1日1回程度に制限する判定に使う。
  */
 const TIMETABLE_KEY = 'refresh.timetable.at.v1'
+const BULLETIN_KEY = 'refresh.bulletin.at.v1'
 
 // この間隔以内に更新済みならスキップする（起動のたびにCLASSを触らない）。
 export const TIMETABLE_REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000 // 20時間
+// 掲示は時間割より更新頻度が高いので短め。インフォタブを開いたときに古ければ裏更新する。
+export const BULLETIN_REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000 // 3時間
 
 export async function loadTimetableRefreshedAt(): Promise<number> {
   const raw = await AsyncStorage.getItem(TIMETABLE_KEY)
@@ -22,4 +25,19 @@ export async function saveTimetableRefreshedAt(at: number = Date.now()): Promise
 /** 前回更新から間隔を過ぎていれば true（=更新すべき）。 */
 export function isTimetableStale(lastAt: number, now: number = Date.now()): boolean {
   return now - lastAt >= TIMETABLE_REFRESH_INTERVAL_MS
+}
+
+export async function loadBulletinRefreshedAt(): Promise<number> {
+  const raw = await AsyncStorage.getItem(BULLETIN_KEY)
+  const n = raw ? Number(raw) : 0
+  return Number.isFinite(n) ? n : 0
+}
+
+export async function saveBulletinRefreshedAt(at: number = Date.now()): Promise<void> {
+  await AsyncStorage.setItem(BULLETIN_KEY, String(at))
+}
+
+/** 掲示の前回更新から間隔を過ぎていれば true。 */
+export function isBulletinStale(lastAt: number, now: number = Date.now()): boolean {
+  return now - lastAt >= BULLETIN_REFRESH_INTERVAL_MS
 }
