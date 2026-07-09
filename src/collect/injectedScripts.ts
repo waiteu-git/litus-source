@@ -491,6 +491,12 @@ export const DETECT_PAGE_JS = `(function(){
 /** SSOセッションを黙って温める先読み対象（CLASS=出席/時間割、LETUS=課題）。 */
 export const CLASS_TOP_URL = 'https://class.admin.tus.ac.jp/'
 
+/** CLASS掲示一覧ページ(Xut12401)。ログイン後にメニュー/出席等へ着地した場合の明示遷移先。 */
+export const BULLETIN_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut124/Xut12401.xhtml'
+
+/** 現在のCLASS WebViewを掲示一覧ページへ遷移させる（着地が掲示でなかったときのフォールバック）。 */
+export const GO_BULLETIN_JS = `(function(){ try { window.location.href='${BULLETIN_URL}'; } catch(e){} true; })();`
+
 /**
  * CLASS掲示一覧を抽出。ログイン後ポータル(Xut12401)は左に機能メニュー、本文に掲示一覧(dl.keiji)を
  * 同居して表示する。各 dl.keiji は自己完結（カテゴリ/件名/日付/重要・新着アイコン/未読=fontBold）なので、
