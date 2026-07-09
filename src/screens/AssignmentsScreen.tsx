@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
@@ -10,6 +11,7 @@ import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { Chip, ScreenBg, ScreenHeader, Segmented, SectionLabel, useUi } from '../ui/screen'
 import { useDisplaySettings } from '../displaySettings'
+import { COLORS } from '../theme'
 
 const SECTION_LABEL: Record<BucketKey, string> = {
   within24h: '24時間以内',
@@ -93,6 +95,14 @@ function StatusChip({ status }: { status: AssignmentSubmissionStatus }) {
 
 type Filter = 'not_submitted' | 'submitted' | 'all'
 
+/** null(締切未設定)は末尾、以外は締切の早い順（＝これから迫っている順）。 */
+function byDeadlineAsc(a: Assignment, b: Assignment): number {
+  if (a.deadline === null && b.deadline === null) return a.title.localeCompare(b.title, 'ja')
+  if (a.deadline === null) return 1
+  if (b.deadline === null) return -1
+  return new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+}
+
 export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const ui = useUi()
@@ -100,6 +110,9 @@ export default function AssignmentsScreen() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [now, setNow] = useState(() => new Date())
   const [filter, setFilter] = useState<Filter>('not_submitted')
+  // 期限切れ・非表示はデフォルト折りたたみ（主役はこれから迫る締切）。
+  const [showOverdue, setShowOverdue] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
 
   const reload = useCallback(async () => {
     const map = await loadAssignments()
@@ -129,23 +142,26 @@ export default function AssignmentsScreen() {
     return () => clearInterval(id)
   }, [])
 
-  async function hide(a: Assignment) {
+  async function setIgnored(a: Assignment, ignored: boolean) {
     const map = await loadAssignments()
     if (map[a.url]) {
-      map[a.url] = { ...map[a.url], ignored: true }
+      map[a.url] = { ...map[a.url], ignored }
       await saveAssignments(map)
       await reload()
     }
   }
+  const hide = (a: Assignment) => setIgnored(a, true)
+  const unhide = (a: Assignment) => setIgnored(a, false)
 
   function openDetail(a: Assignment) {
     navigation.navigate('LetusAssignmentDetail', { url: a.url })
   }
 
-  const buckets = bucketAssignments(assignments, now)
+  const live = assignments.filter((a) => !a.ignored)
+  const hidden = useMemo(() => assignments.filter((a) => a.ignored), [assignments])
+  const buckets = bucketAssignments(live, now)
   const total = BUCKET_ORDER.reduce((n, k) => n + buckets[k].length, 0)
 
-  const live = assignments.filter((a) => !a.ignored)
   const stats = useMemo(() => {
     const dueToday = live.filter((a) => !isSubmitted(a) && a.deadline && isSameLocalDate(new Date(a.deadline), now)).length
     const notSubmitted = live.filter((a) => !isSubmitted(a)).length
@@ -153,19 +169,75 @@ export default function AssignmentsScreen() {
     return { dueToday, notSubmitted, submitted }
   }, [live, now])
 
-  const flatList = useMemo(() => {
-    const filtered = live.filter((a) => {
-      if (filter === 'not_submitted') return !isSubmitted(a)
-      if (filter === 'submitted') return isSubmitted(a)
-      return true
-    })
-    return [...filtered].sort((a, b) => {
-      if (a.deadline === null && b.deadline === null) return a.title.localeCompare(b.title, 'ja')
-      if (a.deadline === null) return 1
-      if (b.deadline === null) return -1
-      return new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
-    })
-  }, [live, filter])
+  // 締切順表示: 未提出を「これから迫る(upcoming)」と「期限切れ(overdue)」に分け、overdueは別枠へ格納。
+  const { flatMain, flatOverdue } = useMemo(() => {
+    const notSub = live.filter((a) => !isSubmitted(a))
+    const submitted = [...live.filter(isSubmitted)].sort(byDeadlineAsc)
+    const isOverdue = (a: Assignment) => a.deadline !== null && new Date(a.deadline).getTime() < now.getTime()
+    const upcoming = [...notSub.filter((a) => !isOverdue(a))].sort(byDeadlineAsc)
+    const overdue = [...notSub.filter(isOverdue)].sort(
+      (a, b) => new Date(b.deadline as string).getTime() - new Date(a.deadline as string).getTime(),
+    )
+    if (filter === 'submitted') return { flatMain: submitted, flatOverdue: [] as Assignment[] }
+    if (filter === 'all') return { flatMain: [...upcoming, ...submitted], flatOverdue: overdue }
+    return { flatMain: upcoming, flatOverdue: overdue } // not_submitted（既定）
+  }, [live, filter, now])
+
+  const HideBtn = ({ a }: { a: Assignment }) => (
+    <Pressable onPress={() => hide(a)} hitSlop={8} style={styles.hideBtn}>
+      <Ionicons name="eye-off-outline" size={18} color={ui.labelColor} />
+    </Pressable>
+  )
+
+  const FlatRow = ({ a }: { a: Assignment }) => {
+    const tone = urgencyTone(a, now)
+    const rel = relDue(a.deadline, now)
+    return (
+      <Pressable onPress={() => openDetail(a)} onLongPress={() => hide(a)} style={[ui.card, styles.flatRow]}>
+        <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
+            {a.courseName || '科目不明'}
+          </Text>
+          <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={1}>
+            {a.title}
+          </Text>
+        </View>
+        <View style={styles.flatRight}>
+          <Text style={[styles.flatRel, { color: TONE_COLOR[tone] }]}>{rel || (isSubmitted(a) ? '提出済み' : '')}</Text>
+          <Text style={[styles.flatDue, { color: ui.labelColor }]}>{formatDeadline(a.deadline)}</Text>
+        </View>
+        <HideBtn a={a} />
+      </Pressable>
+    )
+  }
+
+  const HiddenSection = () =>
+    hidden.length === 0 ? null : (
+      <View style={{ marginTop: 14 }}>
+        <Pressable onPress={() => setShowHidden((v) => !v)} style={styles.collapseHead}>
+          <Ionicons name={showHidden ? 'chevron-down' : 'chevron-forward'} size={16} color={ui.labelColor} />
+          <Text style={[styles.collapseText, { color: ui.labelColor }]}>非表示 {hidden.length}件</Text>
+        </Pressable>
+        {showHidden
+          ? hidden.map((a) => (
+              <View key={a.url} style={[ui.card, styles.flatRow]}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
+                    {a.courseName || '科目不明'}
+                  </Text>
+                  <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={1}>
+                    {a.title}
+                  </Text>
+                </View>
+                <Pressable onPress={() => unhide(a)} style={styles.restoreBtn}>
+                  <Text style={styles.restoreText}>戻す</Text>
+                </Pressable>
+              </View>
+            ))
+          : null}
+      </View>
+    )
 
   return (
     <ScreenBg>
@@ -174,11 +246,9 @@ export default function AssignmentsScreen() {
         icon="checkbox-outline"
         right={<Chip label="更新" icon="refresh" onPress={() => navigation.navigate('CollectAssignments')} />}
       />
-      {total === 0 ? (
+      {total === 0 && hidden.length === 0 ? (
         <View style={[ui.card, { marginTop: 16 }]}>
-          <Text style={{ color: ui.valueColor }}>
-            表示できる課題がありません。「更新」から取得してください。
-          </Text>
+          <Text style={{ color: ui.valueColor }}>表示できる課題がありません。「更新」から取得してください。</Text>
         </View>
       ) : assignmentsView === 'flat' ? (
         <ScrollView contentContainerStyle={styles.list}>
@@ -206,37 +276,24 @@ export default function AssignmentsScreen() {
             onChange={setFilter}
           />
           <View style={{ marginTop: 12, gap: 8 }}>
-            {flatList.length === 0 ? (
+            {flatMain.length === 0 ? (
               <Text style={{ color: ui.labelColor, marginLeft: 2 }}>該当する課題はありません</Text>
             ) : (
-              flatList.map((a) => {
-                const tone = urgencyTone(a, now)
-                const rel = relDue(a.deadline, now)
-                return (
-                  <Pressable
-                    key={a.url}
-                    onPress={() => openDetail(a)}
-                    onLongPress={() => hide(a)}
-                    style={[ui.card, styles.flatRow]}
-                  >
-                    <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
-                        {a.courseName || '科目不明'}
-                      </Text>
-                      <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={1}>
-                        {a.title}
-                      </Text>
-                    </View>
-                    <View style={styles.flatRight}>
-                      <Text style={[styles.flatRel, { color: TONE_COLOR[tone] }]}>{rel || (isSubmitted(a) ? '提出済み' : '')}</Text>
-                      <Text style={[styles.flatDue, { color: ui.labelColor }]}>{formatDeadline(a.deadline)}</Text>
-                    </View>
-                  </Pressable>
-                )
-              })
+              flatMain.map((a) => <FlatRow key={a.url} a={a} />)
             )}
           </View>
+
+          {flatOverdue.length > 0 ? (
+            <View style={{ marginTop: 14 }}>
+              <Pressable onPress={() => setShowOverdue((v) => !v)} style={styles.collapseHead}>
+                <Ionicons name={showOverdue ? 'chevron-down' : 'chevron-forward'} size={16} color="#e0533a" />
+                <Text style={[styles.collapseText, { color: '#e0533a' }]}>期限切れ {flatOverdue.length}件</Text>
+              </Pressable>
+              {showOverdue ? <View style={{ gap: 8 }}>{flatOverdue.map((a) => <FlatRow key={a.url} a={a} />)}</View> : null}
+            </View>
+          ) : null}
+
+          <HiddenSection />
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
@@ -253,9 +310,12 @@ export default function AssignmentsScreen() {
                     onLongPress={() => hide(a)}
                     style={[ui.card, URGENT.has(k) && styles.urgent, styles.card, done && { opacity: 0.72 }]}
                   >
-                    <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
-                      {a.courseName || '科目不明'}
-                    </Text>
+                    <View style={styles.rowTop}>
+                      <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
+                        {a.courseName || '科目不明'}
+                      </Text>
+                      <HideBtn a={a} />
+                    </View>
                     <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={2}>
                       {a.title}
                     </Text>
@@ -271,6 +331,7 @@ export default function AssignmentsScreen() {
               })}
             </View>
           ))}
+          <HiddenSection />
         </ScrollView>
       )}
     </ScreenBg>
@@ -278,9 +339,10 @@ export default function AssignmentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  list: { paddingTop: 4, paddingBottom: 12 },
+  list: { paddingTop: 4, paddingBottom: 24 },
   card: { marginBottom: 9 },
   urgent: { borderLeftWidth: 4, borderLeftColor: '#ff7a5c' },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   course: { fontSize: 11 },
   title: { fontSize: 14, fontWeight: '500', marginTop: 2 },
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
@@ -300,4 +362,9 @@ const styles = StyleSheet.create({
   flatRight: { alignItems: 'flex-end' },
   flatRel: { fontSize: 13, fontWeight: '700' },
   flatDue: { fontSize: 11, marginTop: 2 },
+  hideBtn: { padding: 4, marginLeft: 2 },
+  collapseHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, marginLeft: 2 },
+  collapseText: { fontSize: 13, fontWeight: '600' },
+  restoreBtn: { backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#b9ddcd', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  restoreText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
 })

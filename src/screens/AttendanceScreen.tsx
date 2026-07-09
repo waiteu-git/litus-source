@@ -50,7 +50,7 @@ export default function AttendanceScreen() {
   // CLASSは同一セッションの複数画面を禁止する。出席のWebViewは**一度開いたら持続**させ
   // （タブ切替で破棄しない＝再訪ゼロ秒・「別の画面」エラーも出ない）、時間割収集など他の
   // CLASS利用者がフォーカスされている間だけ譲る（classViewArbiter）。
-  const { collectActive } = useClassView()
+  const { collectActive, setAttendanceFocused } = useClassView()
   const collectActiveRef = useRef(false)
   collectActiveRef.current = collectActive
   const prevCollectRef = useRef(false)
@@ -60,7 +60,6 @@ export default function AttendanceScreen() {
   const firstFocusRef = useRef(true)
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
   const [code, setCode] = useState('')
-  const [expanded, setExpanded] = useState(true)
   const [webviewKey, setWebviewKey] = useState(0)
   const [now, setNow] = useState(() => new Date())
   // 取得失敗（navFailed）でも生CLASSは自動表示しない。ユーザーが明示的に押した時だけ表示する。
@@ -140,10 +139,12 @@ export default function AttendanceScreen() {
     return () => clearInterval(id)
   }, [state.reception])
 
-  // 受付状況に連動して展開/集約を自動化（受付中＝展開／受付なし＝集約）。以後は手動トグルで上書き可。
+  // 出席タブの前面/背面をアービタへ通知する。前面のあいだCLASSは出席が絶対優先で保持し、
+  // 収集中に開かれたら収集を即中断させる。
   useEffect(() => {
-    if (state.reception) setExpanded(state.reception.accepting)
-  }, [state.reception])
+    setAttendanceFocused(isFocused)
+    return () => setAttendanceFocused(false)
+  }, [isFocused, setAttendanceFocused])
 
   function inject(js: string) {
     webviewRef.current?.injectJavaScript(js)
@@ -311,15 +312,6 @@ export default function AttendanceScreen() {
           </Text>
         </View>
 
-        <View style={styles.toggleRow}>
-          <Pressable onPress={() => setExpanded(true)} style={[styles.toggle, expanded && styles.toggleOn]}>
-            <Text style={[styles.toggleText, expanded && styles.toggleTextOn]}>展開</Text>
-          </Pressable>
-          <Pressable onPress={() => setExpanded(false)} style={[styles.toggle, !expanded && styles.toggleOn]}>
-            <Text style={[styles.toggleText, !expanded && styles.toggleTextOn]}>集約</Text>
-          </Pressable>
-        </View>
-
         {/* ライブ・ヒーロー型（Turn1で確定した1d案）。受付中は大きな円形カウントダウンを主役に、
             それ以外は控えめなステータス表示にとどめる。 */}
         <View style={[styles.card, cardStyle, styles.hero]}>
@@ -333,20 +325,16 @@ export default function AttendanceScreen() {
                 {state.reception?.courseName ?? '（科目名不明）'}
                 {updating ? '（更新中…）' : ''}
               </Text>
-              {expanded ? (
-                <>
-                  <View style={styles.ringWrap}>
-                    <CountdownRing
-                      centerText={countdownText(state.reception?.confirmWindow ?? null, now) ?? state.reception?.remaining ?? '—'}
-                      subText="残り時間"
-                      size={172}
-                    />
-                  </View>
-                  <Text style={[styles.heroWindow, { color: labelColor }]}>
-                    出席確認時間 {state.reception?.confirmWindow ?? '—'}
-                  </Text>
-                </>
-              ) : null}
+              <View style={styles.ringWrap}>
+                <CountdownRing
+                  centerText={countdownText(state.reception?.confirmWindow ?? null, now) ?? state.reception?.remaining ?? '—'}
+                  subText="残り時間"
+                  size={172}
+                />
+              </View>
+              <Text style={[styles.heroWindow, { color: labelColor }]}>
+                出席確認時間 {state.reception?.confirmWindow ?? '—'}
+              </Text>
             </>
           ) : (
             <>
@@ -471,11 +459,6 @@ const styles = StyleSheet.create({
   pill: { fontSize: 12, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
   pillGlass: { backgroundColor: 'rgba(255,255,255,0.42)', color: '#04322a' },
   pillSolid: { backgroundColor: '#d6efe4', color: '#0a6650' },
-  toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  toggle: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  toggleOn: { backgroundColor: 'rgba(255,255,255,0.6)' },
-  toggleText: { fontSize: 13, color: '#eafff7' },
-  toggleTextOn: { color: '#04322a', fontWeight: '600' },
   card: { borderRadius: 18, padding: 16 },
   hero: { alignItems: 'center', paddingVertical: 20 },
   liveBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },

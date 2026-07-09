@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import RootTabs from './src/navigation/RootTabs'
 import BackgroundLetusSync from './src/collect/BackgroundLetusSync'
+import BackgroundBulletinSync from './src/collect/BackgroundBulletinSync'
 import { ClassViewProvider } from './src/collect/classViewArbiter'
 import { AuthProvider } from './src/auth/AuthProvider'
 import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion'
@@ -46,6 +47,7 @@ export default function App() {
                 <ClassViewProvider>
                   <RootTabs />
                   <BackgroundLetusSync />
+                  <BackgroundBulletinSync />
                 </ClassViewProvider>
               </AuthProvider>
             </LoginGate>

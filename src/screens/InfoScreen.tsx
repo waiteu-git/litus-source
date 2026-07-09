@@ -44,9 +44,9 @@ export default function InfoScreen() {
       loadFavorites().then(setFavorites).catch(() => undefined)
       // 未読ダイジェストが埋まっていればスライド表示、空なら単一CTAにフォールバックする。
       loadBulletinDigest().then(setBulletin).catch(() => undefined)
-      // インフォタブを開いたとき、掲示が古ければCLASSを見せずに裏で取り込む。
-      startBulletinSync(false)
-    }, [startBulletinSync]),
+      // インフォタブを開いても自動更新はしない（出席以外でCLASSを不用意に開かない）。
+      // 掲示は起動時に収集済み。最新化は右上の更新ボタン（明示操作）で行う。
+    }, []),
   )
 
   async function onToggle(id: string) {

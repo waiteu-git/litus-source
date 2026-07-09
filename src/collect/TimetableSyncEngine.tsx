@@ -32,7 +32,7 @@ const MAX_TRIES = 3
  */
 export default function TimetableSyncEngine({ onFinished }: { onFinished: () => void }) {
   const webviewRef = useRef<WebView>(null)
-  const { setCollectActive } = useClassView()
+  const { setCollectActive, attendanceFocused } = useClassView()
   const triesRef = useRef(0)
   const doneRef = useRef(false)
   const [nonce, setNonce] = useState(0)
@@ -45,6 +45,11 @@ export default function TimetableSyncEngine({ onFinished }: { onFinished: () => 
   }
 
   useEffect(() => {
+    // 出席が前面ならCLASSに触らず即終了（出席が絶対優先）。
+    if (attendanceFocused) {
+      finish()
+      return
+    }
     setCollectActive(true) // CLASS使用権を取り出席に譲らせる
     const t = setTimeout(finish, OVERALL_TIMEOUT_MS)
     return () => {
@@ -53,6 +58,12 @@ export default function TimetableSyncEngine({ onFinished }: { onFinished: () => 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 収集中に出席タブが開かれたら即中断してCLASSを明け渡す。
+  useEffect(() => {
+    if (attendanceFocused) finish()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendanceFocused])
 
   function onLoadEnd() {
     webviewRef.current?.injectJavaScript(CLASS_ON_LOAD_JS)

@@ -14,8 +14,8 @@ describe('themeSerialize', () => {
   it('旧solidはwhiteへ移行', () => {
     expect(deserializeTheme('solid')).toBe('white')
   })
-  it('null/不正は既定green', () => {
-    expect(deserializeTheme(null)).toBe('green')
-    expect(deserializeTheme('xyz')).toBe('green')
+  it('null/不正は既定white（標準テーマは白）', () => {
+    expect(deserializeTheme(null)).toBe('white')
+    expect(deserializeTheme('xyz')).toBe('white')
   })
 })
