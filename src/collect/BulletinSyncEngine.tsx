@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { DESKTOP_UA, COLLECT_BULLETIN_JS, DETECT_AUTH_JS, ENTER_CLASS_PC_JS } from './injectedScripts'
+import { DESKTOP_UA, COLLECT_BULLETIN_JS, DETECT_AUTH_JS, ENTER_CLASS_PC_JS, GO_BULLETIN_JS } from './injectedScripts'
 import { parseBulletinList, toBulletinDigest } from '../parsers/bulletin'
 import { saveBulletinDigest } from '../storage/bulletinDigestStore'
 import { saveBulletinRefreshedAt } from '../storage/refreshMetaStore'
@@ -28,6 +28,8 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
   const { setCollectActive } = useClassView()
   const triesRef = useRef(0)
   const doneRef = useRef(false)
+  // 掲示ページ以外（CLASSメニュー/出席等）に着地したとき、掲示URLへ明示遷移するのは1回だけ。
+  const navigatedRef = useRef(false)
   const [nonce, setNonce] = useState(0)
 
   function finish() {
@@ -76,7 +78,14 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
       finish()
       return
     }
-    // 掲示ページ未到達（スプラッシュ/ログイン途中）→ 少し待って再収集。上限で諦める。
+    // 掲示ページに着地していない（CLASSメニュー/出席画面/ログイン途中/スプラッシュ等）。
+    // まだ掲示URLへ遷移していなければ、明示的に掲示一覧へ移動してから収集し直す。
+    if (!navigatedRef.current) {
+      navigatedRef.current = true
+      webviewRef.current?.injectJavaScript(GO_BULLETIN_JS) // → 新規ロード→onLoadEndで再収集
+      return
+    }
+    // 遷移後も掲示が取れないときだけ、少し待って再収集。上限で諦める。
     if (triesRef.current < MAX_TRIES) {
       triesRef.current += 1
       collectSoon()
