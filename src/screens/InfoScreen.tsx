@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useRef, useState } from 'react'
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi } from '../ui/screen'
@@ -8,6 +8,8 @@ import { loadFavorites, saveFavorites } from '../storage/favoritesStore'
 import { toggleFavorite } from '../storage/favoritesSerialize'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
+import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
+import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS } from '../theme'
 
 export default function InfoScreen() {
@@ -15,13 +17,36 @@ export default function InfoScreen() {
   const ui = useUi()
   const [favorites, setFavorites] = useState<string[]>([])
   const [bulletin, setBulletin] = useState<BulletinItem[]>([])
+  // CLASS掲示の裏取得中フラグ。true の間だけ headless エンジンをマウントする。
+  const [bulletinSyncing, setBulletinSyncing] = useState(false)
+  const bulletinSyncingRef = useRef(false)
+
+  // 掲示の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
+  const startBulletinSync = useCallback((force: boolean) => {
+    if (bulletinSyncingRef.current) return
+    const begin = () => {
+      bulletinSyncingRef.current = true
+      setBulletinSyncing(true)
+    }
+    if (force) {
+      begin()
+      return
+    }
+    loadBulletinRefreshedAt()
+      .then((at) => {
+        if (!bulletinSyncingRef.current && isBulletinStale(at)) begin()
+      })
+      .catch(() => undefined)
+  }, [])
 
   useFocusEffect(
     useCallback(() => {
       loadFavorites().then(setFavorites).catch(() => undefined)
       // 未読ダイジェストが埋まっていればスライド表示、空なら単一CTAにフォールバックする。
       loadBulletinDigest().then(setBulletin).catch(() => undefined)
-    }, []),
+      // インフォタブを開いたとき、掲示が古ければCLASSを見せずに裏で取り込む。
+      startBulletinSync(false)
+    }, [startBulletinSync]),
   )
 
   async function onToggle(id: string) {
@@ -73,7 +98,16 @@ export default function InfoScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* モジュール1: CLASS掲示。今後この位置に他モジュール（学食詳細・学年暦など）を同じ
             SectionLabel + card の形で積み増していける（Turn2/3で確定した拡張性重視の構成）。 */}
-        <SectionLabel>CLASS掲示</SectionLabel>
+        <View style={styles.sectionRow}>
+          <SectionLabel>CLASS掲示</SectionLabel>
+          <Pressable onPress={() => startBulletinSync(true)} hitSlop={10} disabled={bulletinSyncing} style={styles.refreshBtn}>
+            {bulletinSyncing ? (
+              <ActivityIndicator size="small" color={ui.green ? '#eafff7' : COLORS.emerald} />
+            ) : (
+              <Ionicons name="refresh" size={16} color={ui.green ? '#eafff7' : COLORS.emerald} />
+            )}
+          </Pressable>
+        </View>
         {bulletin.length > 0 ? (
           <View style={[ui.card, styles.bulletinCard]}>
             <View style={styles.bulletinHead}>
@@ -130,12 +164,24 @@ export default function InfoScreen() {
           </View>
         ))}
       </ScrollView>
+
+      {bulletinSyncing ? (
+        <BulletinSyncEngine
+          onFinished={() => {
+            bulletinSyncingRef.current = false
+            setBulletinSyncing(false)
+            loadBulletinDigest().then(setBulletin).catch(() => undefined)
+          }}
+        />
+      ) : null}
     </ScreenBg>
   )
 }
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 100 },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  refreshBtn: { padding: 6, marginTop: 8 },
   bulletinCard: { paddingBottom: 12 },
   bulletinHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   bulletinHeadText: { fontSize: 15, fontWeight: '600', flex: 1 },
