@@ -26,14 +26,14 @@ export const COLORS = {
 
 type ThemeCtx = { variant: ThemeVariant; setVariant: (v: ThemeVariant) => void }
 
-const ThemeContext = createContext<ThemeCtx>({ variant: 'green', setVariant: () => {} })
+const ThemeContext = createContext<ThemeCtx>({ variant: 'white', setVariant: () => {} })
 
 /**
  * テーマ選択（green/white）をアプリ全体で共有・永続化する。全画面が同じContextを読むため、
- * 設定での切替が出席画面など他画面にも即反映される。初回は AsyncStorage から復元。
+ * 設定での切替が出席画面など他画面にも即反映される。初回は AsyncStorage から復元。標準は白。
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [variant, setVariantState] = useState<ThemeVariant>('green')
+  const [variant, setVariantState] = useState<ThemeVariant>('white')
   useEffect(() => {
     loadTheme()
       .then(setVariantState)

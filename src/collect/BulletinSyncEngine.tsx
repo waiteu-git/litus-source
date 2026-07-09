@@ -25,7 +25,7 @@ const MAX_TRIES = 4
  */
 export default function BulletinSyncEngine({ onFinished }: { onFinished: () => void }) {
   const webviewRef = useRef<WebView>(null)
-  const { setCollectActive } = useClassView()
+  const { setCollectActive, attendanceFocused } = useClassView()
   const triesRef = useRef(0)
   const doneRef = useRef(false)
   // 掲示ページ以外（CLASSメニュー/出席等）に着地したとき、掲示URLへ明示遷移するのは1回だけ。
@@ -40,6 +40,11 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
   }
 
   useEffect(() => {
+    // 出席が前面ならCLASSに触らず即終了（出席が絶対優先）。
+    if (attendanceFocused) {
+      finish()
+      return
+    }
     setCollectActive(true) // CLASS使用権を取り出席に譲らせる
     const t = setTimeout(finish, OVERALL_TIMEOUT_MS)
     return () => {
@@ -48,6 +53,12 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 収集中に出席タブが開かれたら即中断してCLASSを明け渡す。
+  useEffect(() => {
+    if (attendanceFocused) finish()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendanceFocused])
 
   function collectSoon() {
     setTimeout(() => webviewRef.current?.injectJavaScript(COLLECT_BULLETIN_JS), COLLECT_DELAY_MS)

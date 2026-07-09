@@ -4,7 +4,7 @@ export function serializeTheme(v: ThemeVariant): string {
   return v
 }
 
-/** 'white'/旧'solid' は white、それ以外（'green'/旧'glass'/null/不正）は既定 green。 */
+/** 'green'/旧'glass' のみ green、それ以外（'white'/旧'solid'/null/不正）は既定 white。 */
 export function deserializeTheme(raw: string | null): ThemeVariant {
-  return raw === 'white' || raw === 'solid' ? 'white' : 'green'
+  return raw === 'green' || raw === 'glass' ? 'green' : 'white'
 }

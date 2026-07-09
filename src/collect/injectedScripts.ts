@@ -606,15 +606,22 @@ export const INJECT_COURSE_ADD_BUTTONS_JS = `(function(){
       var b = document.createElement('button');
       b.textContent = '＋追加';
       b.setAttribute('type','button');
-      b.style.cssText = 'margin-left:8px;padding:2px 10px;font-size:12px;line-height:1.6;border:1px solid #0aa579;color:#0aa579;background:#eafaf5;border-radius:12px;vertical-align:middle;cursor:pointer;';
-      b.addEventListener('click', function(ev){
+      // 行の右端にfloatで寄せ、リンク本体のタップ領域と物理的に分離する（誤タップでリンクが開くのを防ぐ）。
+      // タップを確実にボタンで受けるため z-index を上げ、伝播も止める。
+      b.style.cssText = 'float:right;margin:2px 0 6px 10px;padding:7px 14px;font-size:13px;line-height:1.4;border:1px solid #0aa579;color:#0aa579;background:#eafaf5;border-radius:14px;cursor:pointer;position:relative;z-index:20;';
+      function onAdd(ev){
         ev.preventDefault(); ev.stopPropagation();
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
         b.textContent = '追加済み'; b.style.color='#8a8a8a'; b.style.borderColor='#d0d0d0'; b.style.background='#f2f2f2';
         var mod = (href.match(/\\/mod\\/([a-z]+)\\//) || [])[1] || '';
         window.ReactNativeWebView.postMessage(JSON.stringify({ type:'addActivity', url: a.href, title: name, mod: mod, courseName: courseName }));
-      }, true);
-      var host = a.closest ? (a.closest('.activityinstance') || a.parentNode) : a.parentNode;
-      (host || a.parentNode || a).appendChild(b);
+      }
+      // touchstart/clickの両方を捕捉相で受け、アンカーへ届く前に握りつぶす。
+      b.addEventListener('click', onAdd, true);
+      b.addEventListener('touchend', onAdd, true);
+      // 行(li.activity)の先頭に入れると float:right で右端に回り、左のリンクと重ならない。
+      var host = (a.closest && (a.closest('li.activity') || a.closest('.activityinstance'))) || a.parentNode;
+      if (host) host.insertBefore(b, host.firstChild); else a.parentNode.appendChild(b);
     }
     var links = document.querySelectorAll('li.activity a.aalink, li.activity a[href*="/mod/"], .activityinstance a[href*="/mod/"]');
     Array.prototype.forEach.call(links, mk);

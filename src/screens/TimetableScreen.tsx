@@ -68,12 +68,11 @@ export default function TimetableScreen() {
         }
         if (active) setUpdatedCodes(set)
       })()
-      // フォーカス時に古ければ自動で裏取得（ボタンレス）。
-      startSync(false)
+      // フォーカスでの自動裏取得はしない（出席以外でCLASSを不用意に開かない）。更新は引き下げで明示的に。
       return () => {
         active = false
       }
-    }, [startSync]),
+    }, []),
   )
 
   const col = collections && collections.length > 0 ? collections[Math.min(selCol, collections.length - 1)] : null
