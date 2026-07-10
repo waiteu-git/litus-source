@@ -6,6 +6,7 @@ import {
   shortDate,
 } from './bulletin'
 import { BULLETIN_LIST_FIXTURE } from './bulletin.fixtures'
+import { BULLETIN_TABS_FIXTURE } from './__fixtures__/loadTabs'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -33,6 +34,23 @@ describe('parseBulletinList', () => {
   })
   it('別カテゴリも取れる', () => {
     expect(rows[3].category).toBe('授業に関する')
+  })
+})
+
+describe('parseBulletinList: flagged 判定', () => {
+  const rows = parseBulletinList(BULLETIN_TABS_FIXTURE)
+  it('2行を抽出', () => expect(rows).toHaveLength(2))
+  it('フラグボタン「フラグをはずす」でflagged=true', () => {
+    expect(rows[0].flagged).toBe(false) // 「フラグをつける」
+    expect(rows[1].flagged).toBe(true) // 「フラグをはずす」
+  })
+  it('未読はfontBold', () => {
+    expect(rows[0].unread).toBe(true)
+    expect(rows[1].unread).toBe(false)
+  })
+  it('ボタンの無い旧フィクスチャはflagged=false', () => {
+    const old = parseBulletinList(BULLETIN_LIST_FIXTURE)
+    expect(old.every((r) => r.flagged === false)).toBe(true)
   })
 })
 
