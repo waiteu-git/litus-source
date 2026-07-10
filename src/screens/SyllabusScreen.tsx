@@ -4,7 +4,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { parseSyllabus, type ParsedSyllabus } from '../parsers/syllabus'
 import type { TimetableStackParamList } from '../navigation/types'
-import { ScreenBg, useUi } from '../ui/screen'
+import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 
 type Status = 'loading' | 'ok' | 'error'
@@ -17,6 +17,7 @@ export default function SyllabusScreen() {
   const route = useRoute<RouteProp<TimetableStackParamList, 'Syllabus'>>()
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const ui = useUi()
+  const clearance = useTabBarClearance()
   const { url } = route.params
   const [status, setStatus] = useState<Status>('loading')
   const [data, setData] = useState<ParsedSyllabus | null>(null)
@@ -73,7 +74,7 @@ export default function SyllabusScreen() {
 
   return (
     <ScreenBg>
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
         <Text style={[styles.title, { color: ui.valueColor }]}>{data.title}</Text>
         {data.rows.map((row, i) =>
           row.value ? (

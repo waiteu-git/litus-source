@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { Chip, ScreenBg, ScreenHeader, useUi } from '../ui/screen'
+import { Chip, ScreenBg, ScreenHeader, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
@@ -19,6 +19,7 @@ type Row = { code: string; name: string; url: string; newCount: number }
 export default function LetusCoursesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const ui = useUi()
+  const clearance = useTabBarClearance()
   const [rows, setRows] = useState<Row[]>([])
   const [query, setQuery] = useState('')
 
@@ -73,7 +74,7 @@ export default function LetusCoursesScreen() {
           <Text style={{ color: ui.valueColor }}>まだコースがありません。右上の「更新」から収集してください。</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
           <View style={ui.card}>
             {filtered.map((r, i) => (
               <Pressable

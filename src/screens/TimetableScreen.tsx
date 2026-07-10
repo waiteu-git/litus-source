@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -9,7 +9,8 @@ import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMetaStore'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
-import { Chip, ScreenBg, ScreenHeader, Segmented, useUi } from '../ui/screen'
+import { currentPeriodNumber } from '../attendance/classPeriod'
+import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import { useDisplaySettings } from '../displaySettings'
 
@@ -23,12 +24,19 @@ type ClassEntry = TimetableCollection['slots'][number]['classes'][number]
 export default function TimetableScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const ui = useUi()
+  const clearance = useTabBarClearance()
   const { timetableView } = useDisplaySettings()
   const [collections, setCollections] = useState<TimetableCollection[] | null>(null)
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
   const [selCol, setSelCol] = useState(0)
-  const todayKey = TODAY_KEYS[new Date().getDay()]
-  const [selDay, setSelDay] = useState<DayKey>(todayKey)
+  // 現在時刻（当該コマ強調用）。分単位で十分なので30秒ごとに更新。
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000)
+    return () => clearInterval(id)
+  }, [])
+  const todayKey = TODAY_KEYS[now.getDay()]
+  const [selDay, setSelDay] = useState<DayKey>(TODAY_KEYS[new Date().getDay()])
   // 時間割の裏取得中フラグ。true の間だけ headless エンジンをマウントして収集する。
   const [syncing, setSyncing] = useState(false)
   // 多重起動防止（非同期スロットル判定中の再入も弾く）。setSyncing更新関数の中で副作用を起こさない。
@@ -76,6 +84,8 @@ export default function TimetableScreen() {
   )
 
   const col = collections && collections.length > 0 ? collections[Math.min(selCol, collections.length - 1)] : null
+  // 今この瞬間が属する時限（当該コマ強調用）。どの時限でもなければ null。
+  const curPeriod = currentPeriodNumber(col?.periodTimes ?? null, now)
   const hasSat = !!col?.slots.some((s) => s.day === 'sat')
   const days = DAY_ORDER.filter((d) => d !== 'sat' || hasSat)
   const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
@@ -112,6 +122,7 @@ export default function TimetableScreen() {
   const cellBg = ui.green ? 'rgba(255,255,255,0.16)' : '#f3f7f5'
   const cellFilledBg = ui.green ? 'rgba(255,255,255,0.5)' : '#e8f4ee'
   const cellTodayBg = ui.green ? 'rgba(255,255,255,0.62)' : '#d6efe4'
+  const cellNowBg = ui.green ? 'rgba(255,255,255,0.88)' : '#c3ead7'
   const cellTextColor = ui.green ? '#04322a' : ui.valueColor
 
   return (
@@ -140,7 +151,7 @@ export default function TimetableScreen() {
         <Segmented options={days.map((d) => ({ key: d, label: DAY_LABEL[d] }))} value={selDay} onChange={setSelDay} />
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.list} refreshControl={refresh}>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} refreshControl={refresh}>
         {!col ? (
           <View style={[ui.card, { marginTop: 16 }]}>
             <Text style={{ color: ui.valueColor }}>
@@ -171,6 +182,7 @@ export default function TimetableScreen() {
                   const slot = slotAt(d, p)
                   const cl = slot?.classes[0]
                   const today = d === todayKey
+                  const isNow = today && !!cl && p === curPeriod
                   return (
                     <Pressable
                       key={d}
@@ -178,8 +190,8 @@ export default function TimetableScreen() {
                       onPress={() => cl && openSubject(cl, d, p)}
                       style={[
                         styles.gridCell,
-                        { backgroundColor: cl ? (today ? cellTodayBg : cellFilledBg) : cellBg },
-                        today && cl ? styles.gridCellToday : null,
+                        { backgroundColor: isNow ? cellNowBg : cl ? (today ? cellTodayBg : cellFilledBg) : cellBg },
+                        isNow ? styles.gridCellNow : today && cl ? styles.gridCellToday : null,
                       ]}
                     >
                       {cl ? (
@@ -188,6 +200,11 @@ export default function TimetableScreen() {
                             {cl.name}
                           </Text>
                           {updatedCodes.has(cl.courseCode) ? <View style={styles.gridDot} /> : null}
+                          {isNow ? (
+                            <View style={styles.nowBadge}>
+                              <Text style={styles.nowBadgeText}>今</Text>
+                            </View>
+                          ) : null}
                         </>
                       ) : null}
                     </Pressable>
@@ -200,17 +217,20 @@ export default function TimetableScreen() {
         ) : daySlots.length === 0 ? (
           <Text style={{ color: ui.labelColor, marginLeft: 2, marginTop: 10 }}>この曜日の授業はありません</Text>
         ) : (
-          daySlots.map((s) => (
+          daySlots.map((s) => {
+            const rowNow = selDay === todayKey && s.period === curPeriod
+            return (
             <View key={`${s.day}-${s.period}`} style={styles.trow}>
               <View style={styles.per}>
-                <Text style={[styles.pnum, { color: ui.green ? COLORS.white : COLORS.emeraldDark }]}>{s.period}</Text>
-                <Text style={[styles.ptime, { color: ui.labelColor }]}>{startTime(s.period)}</Text>
+                <Text style={[styles.pnum, { color: rowNow ? COLORS.cta : ui.green ? COLORS.white : COLORS.emeraldDark }]}>{s.period}</Text>
+                <Text style={[styles.ptime, { color: rowNow ? COLORS.cta : ui.labelColor }]}>{startTime(s.period)}</Text>
               </View>
               <View style={styles.clsCol}>
                 {s.classes.map((cl) => (
-                  <Pressable key={cl.courseCode || cl.name} style={ui.card} onPress={() => openSubject(cl, s.day as DayKey, s.period)}>
+                  <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard]} onPress={() => openSubject(cl, s.day as DayKey, s.period)}>
                     <Text style={[styles.clsname, { color: ui.valueColor }]} numberOfLines={2}>
                       {cl.name}
+                      {rowNow ? '　（今）' : ''}
                       {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
                     </Text>
                     <Text style={[styles.clssub, { color: ui.labelColor }]} numberOfLines={1}>
@@ -222,7 +242,8 @@ export default function TimetableScreen() {
                 ))}
               </View>
             </View>
-          ))
+            )
+          })
         )}
       </ScrollView>
 
@@ -254,6 +275,10 @@ const styles = StyleSheet.create({
   gridDayHead: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 8 },
   gridCell: { flex: 1, minHeight: 74, borderRadius: 11, padding: 6, justifyContent: 'center' },
   gridCellToday: { borderWidth: 1.5, borderColor: COLORS.emerald },
+  gridCellNow: { borderWidth: 2.5, borderColor: COLORS.cta },
+  nowBadge: { position: 'absolute', top: 5, left: 5, backgroundColor: COLORS.cta, borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1 },
+  nowBadgeText: { color: '#ffffff', fontSize: 9, fontWeight: '700' },
+  nowCard: { borderWidth: 2, borderColor: COLORS.cta },
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },
   gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e8a400' },
   gridHint: { fontSize: 11, textAlign: 'center', marginTop: 6 },

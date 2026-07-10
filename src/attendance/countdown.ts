@@ -17,3 +17,50 @@ export function countdownText(confirmWindow: string | null, now: Date): string |
   const ss = sec % 60
   return h > 0 ? `あと${h}時間${mm}分` : `あと${mm}分${ss}秒`
 }
+
+function parseWindow(confirmWindow: string | null, now: Date): { start: Date; end: Date } | null {
+  if (!confirmWindow) return null
+  const m = confirmWindow.match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/)
+  if (!m) return null
+  const start = new Date(now)
+  start.setHours(Number(m[1]), Number(m[2]), 0, 0)
+  const end = new Date(now)
+  end.setHours(Number(m[3]), Number(m[4]), 0, 0)
+  if (end.getTime() <= start.getTime()) return null
+  return { start, end }
+}
+
+/**
+ * 受付可能時間の残り割合（0..1）。now が終了時刻に近づくほど 0 に向かう。リングの弧を残り時間で
+ * 動かすために使う（純粋）。開始前は 1、終了後は 0、解析不能/nullは null。
+ */
+export function countdownFraction(confirmWindow: string | null, now: Date): number | null {
+  const w = parseWindow(confirmWindow, now)
+  if (!w) return null
+  const total = w.end.getTime() - w.start.getTime()
+  const remaining = w.end.getTime() - now.getTime()
+  const frac = remaining / total
+  if (frac < 0) return 0
+  if (frac > 1) return 1
+  return frac
+}
+
+/**
+ * リング中央用の時計表示。1時間以上は `H:MM:SS`、未満は `MM:SS`。終了/超過は「受付終了」。
+ * 「あと〜」の文よりも桁が安定し1行に収まる（デザインのカウントダウン表示に合わせる）。
+ */
+export function countdownClock(confirmWindow: string | null, now: Date): string | null {
+  if (!confirmWindow) return null
+  const m = confirmWindow.match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/)
+  if (!m) return null
+  const end = new Date(now)
+  end.setHours(Number(m[3]), Number(m[4]), 0, 0)
+  let sec = Math.floor((end.getTime() - now.getTime()) / 1000)
+  if (sec <= 0) return '受付終了'
+  const h = Math.floor(sec / 3600)
+  sec -= h * 3600
+  const mm = Math.floor(sec / 60)
+  const ss = sec % 60
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  return h > 0 ? `${h}:${p2(mm)}:${p2(ss)}` : `${p2(mm)}:${p2(ss)}`
+}

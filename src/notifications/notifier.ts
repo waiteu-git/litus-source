@@ -76,6 +76,35 @@ export async function configureNotifications(): Promise<void> {
   }
 }
 
+type NotifResponseData = { tag?: string; courseCode?: string; kind?: string }
+
+function tagOf(resp: { notification: { request: { content: { data?: unknown } } } } | null | undefined): string | null {
+  const data = resp?.notification.request.content.data as NotifResponseData | undefined
+  return typeof data?.tag === 'string' ? data.tag : null
+}
+
+/**
+ * アプリを起動した通知タップ（cold start）の tag を返す。無ければ null。
+ * Expo Go では通知モジュールを読み込めないため null。
+ */
+export async function getInitialNotificationTag(): Promise<string | null> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return null
+  return tagOf(await Notifications.getLastNotificationResponseAsync())
+}
+
+/**
+ * 通知タップ（warm）を購読する。コールバックにはタップされた通知の tag を渡す。
+ * Expo Go では no-op（null を返す）。
+ */
+export async function addNotificationResponseListener(
+  cb: (tag: string | null) => void,
+): Promise<{ remove: () => void } | null> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return null
+  return Notifications.addNotificationResponseReceivedListener((resp) => cb(tagOf(resp)))
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
   const Notifications = await loadNotifications()
   if (!Notifications) return false

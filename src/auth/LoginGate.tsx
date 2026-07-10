@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -33,8 +33,11 @@ const SETUP_TIMEOUT_MS = 25000
 const SETUP_COLLECT_DELAY_MS = 900
 // 初回フル同期（コース→スナップショット→課題）の上限。超えたら入場し裏で再試行に任せる。
 const SYNC_TIMEOUT_MS = 180000
-// 起動アニメの最小表示時間（約3.2秒の合体アニメを最後まで再生してから入場/スライドへ）。
-const BOOT_ANIM_MS = 3300
+// 起動ローディングのイントロ(CLASS+LETUS→LITUS 合体)の長さ。これが終わるまで入場/スライドへ移さない。
+// bootLogoHtml の dc.html 由来の S=4.0s（ループ開始＝イントロ完了）と一致させる。
+const BOOT_INTRO_MS = 4000
+// ループ(不定形バー)の1周期。dc.html の P=1.4s と一致。認証完了がループ中なら次の周期境界で入場する。
+const BOOT_LOOP_MS = 1400
 // CLASS定時メンテナンス中、明けを検知して自動復帰するための再probe間隔。
 const MAINTENANCE_REPROBE_MS = 60000
 
@@ -80,13 +83,44 @@ export function LoginGate({ children }: { children: ReactNode }) {
   // 起動アニメの背景バリアントはテーマ由来（green=翠グラデ／white=白）。
   const { variant } = useThemeVariant()
   const bootWhite = variant === 'white'
-  // 起動アニメを最後まで再生してから入場/スライドへ移すためのゲート。
+  // イントロ完走ゲート（これが立つまでスライド/接続状況テキストは出さない）。
   const [bootAnimDone, setBootAnimDone] = useState(false)
+  // 入場可否ゲート: イントロ完走＋認証完了＋（ループ中に認証完了したなら次の周期境界）で true。
+  const [bootReady, setBootReady] = useState(false)
+  // イントロが完了した時刻（＝ループ開始時刻）。周期境界の計算に使う。
+  const introDoneAtRef = useRef<number | null>(null)
+  // authed に最初に到達した時刻。イントロ前に済んだか/ループ中に済んだかの判定に使う。
+  const authedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const t = setTimeout(() => setBootAnimDone(true), BOOT_ANIM_MS)
+    const t = setTimeout(() => {
+      introDoneAtRef.current = Date.now()
+      setBootAnimDone(true)
+    }, BOOT_INTRO_MS)
     return () => clearTimeout(t)
   }, [])
+
+  // authed 到達時刻を記録（初回のみ）。
+  useEffect(() => {
+    if (state === 'authed' && authedAtRef.current == null) authedAtRef.current = Date.now()
+  }, [state])
+
+  // 入場タイミング（ユーザー要望）:
+  //  ・認証がイントロ完了までに済んでいた → そのまま入場（ロードフェーズは見せない）
+  //  ・認証がループ中に済んだ           → 走っている1周期が終わる次の境界まで待ってから入場
+  useEffect(() => {
+    if (bootReady) return
+    if (!(state === 'authed' && bootAnimDone)) return
+    const introAt = introDoneAtRef.current ?? Date.now()
+    const authedAt = authedAtRef.current ?? Date.now()
+    let delay = 0
+    if (authedAt > introAt) {
+      const elapsed = Date.now() - introAt
+      delay = BOOT_LOOP_MS - (elapsed % BOOT_LOOP_MS)
+    }
+    const t = setTimeout(() => setBootReady(true), delay)
+    return () => clearTimeout(t)
+  }, [state, bootAnimDone, bootReady])
 
   useEffect(() => {
     loadOnboardingDone()
@@ -274,8 +308,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
     // type:'nav' は診断用（段階ログ）。ゲートでは無視する。
   }
 
-  // 認証が早く終わっても起動アニメが完走するまでは入場させない（最後まで再生）。
-  if (state === 'authed' && bootAnimDone) {
+  // 認証が早く終わってもイントロ完走まで、ループ中に終わったなら周期の切れ目まで待ってから入場。
+  if (state === 'authed' && bootReady) {
     return <LoginContext.Provider value={{ requireLogin }}>{children}</LoginContext.Provider>
   }
 
@@ -341,7 +375,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
             }}
           />
         ) : null}
-        {!bootAnimDone || state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' ? (
+        {!bootAnimDone || state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' || (state === 'authed' && !bootReady) ? (
           <View style={styles.boot}>
             {/* 起動ロゴアニメ（純CSS・ローカルHTML）。起動直後は状態に関わらず最前面で完走させ、
                 以降も裏でログイン/取得が進む間は表示。タッチは奪わない。 */}
@@ -359,7 +393,6 @@ export function LoginGate({ children }: { children: ReactNode }) {
                 アニメ再生中（!bootAnimDone かつ通常フロー）は邪魔しないよう出さない。 */}
             {bootAnimDone ? (
               <View style={styles.bootStatusWrap} pointerEvents="none">
-                <ActivityIndicator color={bootWhite ? '#8a968f' : 'rgba(255,255,255,0.9)'} />
                 <Text
                   style={[styles.bootStatusText, { color: bootWhite ? '#8a968f' : 'rgba(255,255,255,0.92)' }]}
                 >

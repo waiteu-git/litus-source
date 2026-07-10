@@ -6,3 +6,7 @@ dist/
 # expo prebuild の生成物（ローカルAPKビルド用。CNG: app.jsonが正）
 /android/
 /ios/
+# ビルド成果物・バックアップ・デザイン素材（リポジトリに入れない）
+*.apk
+*.orig.png
+*(standalone).html

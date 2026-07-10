@@ -1,13 +1,10 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
+import { getFocusedRouteNameFromRoute, type RouteProp } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TimetableStack from './TimetableStack'
 import AssignmentsStack from './AssignmentsStack'
-import InfoStack from './InfoStack'
-import AttendanceScreen from '../screens/AttendanceScreen'
-// 開発用ラボ（出席登録ボタンの発火検証）。必要時は下の出席タブの component をこちらに差し替える。
-// import AttendanceLabScreen from '../screens/AttendanceLabScreen'
-import SettingsScreen from '../screens/SettingsScreen'
+import HomeStack from './HomeStack'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS } from '../theme'
 
 const Tab = createBottomTabNavigator()
@@ -21,39 +18,63 @@ export default function RootTabs() {
   const insets = useSafeAreaInsets()
   // ジェスチャーバー/ホームインジケータ分だけ底上げしないと、浮遊タブバーが下部で見切れる。
   const bottomInset = Math.max(insets.bottom, 8)
+
+  // タブバーは position:absolute で**浮遊するピルだけ**を最前面に置き、その後ろは各画面(ScreenBg)が
+  // 全高で描くので、タブの背後にアプリ画面がそのまま透ける（不要な下地=面は持たせない）。
+  const tabBarStyle = {
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    marginHorizontal: 12,
+    marginBottom: bottomInset,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
+    borderTopWidth: 0,
+    elevation: 8,
+    shadowColor: '#0a6650',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    paddingBottom: 8,
+    paddingTop: 8,
+  }
+  // 全画面のWeb/PDF/Linkビューア（下部にボタンを持つ）ではピルが被るのでタブバーを隠す。
+  const hideOn = new Set(['Web', 'PdfViewer', 'Link'])
+  const barFor = (route: RouteProp<Record<string, object | undefined>, string>) =>
+    hideOn.has(getFocusedRouteNameFromRoute(route) ?? '') ? ({ display: 'none' as const }) : tabBarStyle
+
   return (
     <Tab.Navigator
+      // 通常起動は常にホーム着地。出席通知タップ時のみ App 層が Attendance へ遷移させる。
+      initialRouteName="ホーム"
       screenOptions={{
         headerShown: false,
+        sceneStyle: { backgroundColor: 'transparent' },
         tabBarActiveTintColor: COLORS.white,
         tabBarInactiveTintColor: '#0b5c48',
-        // position:absolute にすると全画面でコンテンツに被って押せなくなるため、レイアウト領域を
-        // 確保したまま余白＋角丸＋影で「浮遊」させる。
-        tabBarStyle: {
-          marginHorizontal: 12,
-          marginBottom: bottomInset,
-          height: 62,
-          borderRadius: 20,
-          backgroundColor: COLORS.white,
-          borderTopWidth: 0,
-          elevation: 8,
-          shadowColor: '#0a6650',
-          shadowOpacity: 0.18,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
-          paddingBottom: 8,
-          paddingTop: 8,
-        },
+        tabBarStyle,
         tabBarActiveBackgroundColor: COLORS.emerald,
         // overflow:hidden が無いとアクティブ背景が角丸で切り抜かれず四角く見える。外枠(20)に合わせる。
         tabBarItemStyle: { borderRadius: 16, marginHorizontal: 6, overflow: 'hidden' },
       }}
     >
-      <Tab.Screen name="時間割" component={TimetableStack} options={{ tabBarIcon: icon('calendar-outline') }} />
-      <Tab.Screen name="課題" component={AssignmentsStack} options={{ tabBarIcon: icon('checkbox-outline') }} />
-      <Tab.Screen name="出席" component={AttendanceScreen} options={{ tabBarIcon: icon('flash-outline') }} />
-      <Tab.Screen name="インフォ" component={InfoStack} options={{ tabBarIcon: icon('newspaper-outline') }} />
-      <Tab.Screen name="設定" component={SettingsScreen} options={{ tabBarIcon: icon('settings-outline') }} />
+      <Tab.Screen
+        name="時間割"
+        component={TimetableStack}
+        options={({ route }) => ({ tabBarIcon: icon('calendar-outline'), tabBarStyle: barFor(route) })}
+      />
+      <Tab.Screen
+        name="ホーム"
+        component={HomeStack}
+        options={({ route }) => ({ tabBarIcon: icon('home-outline'), tabBarStyle: barFor(route) })}
+      />
+      <Tab.Screen
+        name="課題"
+        component={AssignmentsStack}
+        options={({ route }) => ({ tabBarIcon: icon('checkbox-outline'), tabBarStyle: barFor(route) })}
+      />
     </Tab.Navigator>
   )
 }

@@ -1,0 +1,402 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
+import { WebView } from 'react-native-webview'
+import { useLoginGate } from '../auth/LoginGate'
+import { useClassView } from '../collect/classViewArbiter'
+import {
+  CLASS_PC_LOGIN_URL,
+  DESKTOP_UA,
+  DETECT_ATTENDANCE_JS,
+  DETECT_PAGE_JS,
+  ENTER_CLASS_PC_JS,
+  OPEN_ATTENDANCE_JS,
+  buildSubmitAttendanceJs,
+} from '../collect/injectedScripts'
+import { parseAttendanceMessage, type AttendanceReception } from '../collect/attendanceMessage'
+import { classifyClassPage } from './classifyClassPage'
+import { isInClassPeriod } from './classPeriod'
+import { isAttendedNow, todayKey, type AttendedRecord } from './attendedState'
+import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
+import { normalizeAttendanceCode } from './normalizeCode'
+import { loadTimetable } from '../storage/timetableStore'
+import type { TimetableCollection } from '../collect/timetableMessage'
+import {
+  attendanceReducer,
+  initialEngineState,
+  type EnginePhase,
+  type SubmitResult,
+} from './engine'
+
+const CLASS_URL = CLASS_PC_LOGIN_URL
+const NAV_TIMEOUT_MS = 10000
+const ATTENDANCE_POLL_MS = 30000
+
+/**
+ * 出席エンジン（CLASS WebView＋受付判定）をアプリ根で常時保持する共有層。
+ *
+ * 設計: docs/superpowers/specs/2026-07-09-home-tab-attendance-banner-design.md
+ * - WebViewはタブ/画面遷移で破棄されない（ここが唯一の所有者）。出席画面(AttendanceScreen)は
+ *   このcontextを読むだけの薄いUIになる。
+ * - 起動ポリシー: 授業時間帯(isInClassPeriod) または 出席画面がフォーカス中 のあいだだけ
+ *   WebViewを起動する（電池・CLASSセッション負荷回避）。停止中も reception はキャッシュ保持。
+ * - 収集(時間割/掲示)がCLASSを使う間は WebView を譲る（classViewArbiter）。
+ */
+export type AttendanceEngineValue = {
+  phase: EnginePhase
+  reception: AttendanceReception | null
+  result: SubmitResult | null
+  attended: AttendedRecord | null
+  attendedNow: boolean
+  now: Date
+  code: string
+  setCode: (s: string) => void
+  submit: () => void
+  retry: () => void
+  /** WebViewが起動中か（バナー判定で reception を信頼してよいかの目安）。 */
+  running: boolean
+  failCount: number
+  revealClass: boolean
+  setRevealClass: (b: boolean) => void
+  timetable: TimetableCollection[]
+  /** 出席画面のフォーカス状態を通知する（起動ポリシー＋収集への優先権制御）。 */
+  setAttendanceFocused: (b: boolean) => void
+}
+
+const Ctx = createContext<AttendanceEngineValue | null>(null)
+
+export function useAttendanceEngine(): AttendanceEngineValue {
+  const v = useContext(Ctx)
+  if (!v) throw new Error('useAttendanceEngine must be used within AttendanceEngineProvider')
+  return v
+}
+
+export function AttendanceEngineProvider({ children }: { children: ReactNode }) {
+  const webviewRef = useRef<WebView>(null)
+  const portalTriesRef = useRef(0)
+  const errorRetryRef = useRef(0)
+  const phaseRef = useRef<EnginePhase>('booting')
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loginGate = useLoginGate()
+  const { collectActive, setAttendanceFocused: arbiterSetFocused } = useClassView()
+  const collectActiveRef = useRef(false)
+  collectActiveRef.current = collectActive
+  const onAttendanceRef = useRef(false)
+  const attendedRef = useRef(false)
+  const lastCodeRef = useRef('')
+
+  const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
+  const [code, setCode] = useState('')
+  const [webviewKey, setWebviewKey] = useState(0)
+  const [now, setNow] = useState(() => new Date())
+  const [revealClass, setRevealClass] = useState(false)
+  const [failCount, setFailCount] = useState(0)
+  const [attended, setAttended] = useState<AttendedRecord | null>(null)
+  const [timetable, setTimetable] = useState<TimetableCollection[]>([])
+  const [attendanceFocused, setAttendanceFocusedState] = useState(false)
+
+  phaseRef.current = state.phase
+
+  // 起動ポリシー: 授業時間帯 または 出席画面フォーカス中。停止中は WebView をアンマウント。
+  const running = attendanceFocused || isInClassPeriod(timetable, now)
+  const shouldRender = running && !collectActive
+  const prevRenderRef = useRef(false)
+  const shouldRenderRef = useRef(false)
+  shouldRenderRef.current = shouldRender
+
+  // shouldRender が false→true になったら WebView を作り直して最初から遷移（収集返却・授業入り・
+  // 出席フォーカス取得のいずれでも同じ再起動）。reception はキャッシュ保持。
+  useEffect(() => {
+    if (shouldRender && !prevRenderRef.current) {
+      portalTriesRef.current = 0
+      errorRetryRef.current = 0
+      dispatch({ kind: 'reboot' })
+      setWebviewKey((k) => k + 1)
+    }
+    prevRenderRef.current = shouldRender
+  }, [shouldRender])
+
+  // 時間割を読み込む（起動ポリシー判定用）。前面復帰時も貼り直す。
+  useEffect(() => {
+    loadTimetable().then((t) => setTimetable(t ?? [])).catch(() => undefined)
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') loadTimetable().then((t) => setTimetable(t ?? [])).catch(() => undefined)
+    })
+    return () => sub.remove()
+  }, [])
+
+  // booting を抜けたらナビタイマーを止める。
+  useEffect(() => {
+    if (state.phase !== 'booting' && navTimerRef.current) {
+      clearTimeout(navTimerRef.current)
+      navTimerRef.current = null
+    }
+    return () => {
+      if (navTimerRef.current) clearTimeout(navTimerRef.current)
+    }
+  }, [state.phase])
+
+  // 取得失敗に入るたびに回数を数える（数回でCLASS表示ボタンを解禁）。
+  useEffect(() => {
+    if (state.phase === 'navFailed') setFailCount((n) => n + 1)
+  }, [state.phase])
+
+  // フォアグラウンド復帰時に再判定/リフレッシュ。送信中はスキップ。
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s !== 'active' || phaseRef.current === 'submitting' || !shouldRenderRef.current) return
+      if (onAttendanceRef.current) refreshAttendance()
+      else webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
+    })
+    return () => sub.remove()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 出席ページ滞在中は定期的にサーバから受付状況を取り直す（開きっぱなしで授業が始まったら
+  // 自動で「受付中」に切り替わるように）。収集使用中・送信中・出席済みは触らない。
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (
+        onAttendanceRef.current &&
+        shouldRenderRef.current &&
+        !collectActiveRef.current &&
+        phaseRef.current !== 'submitting' &&
+        !attendedRef.current
+      ) {
+        refreshAttendance()
+      }
+    }, ATTENDANCE_POLL_MS)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 受付中かつ確認時間が取れていれば毎秒 now を更新（カウントダウン）。それ以外は粗いクロックで
+  // isInClassPeriod/バナー判定を回す。
+  useEffect(() => {
+    const fast = !!(state.reception?.accepting && state.reception.confirmWindow)
+    const id = setInterval(() => setNow(new Date()), fast ? 1000 : 30000)
+    return () => clearInterval(id)
+  }, [state.reception])
+
+  // 出席のフォーカスをアービタへ通知（前面のあいだCLASSは出席が絶対優先で保持）。
+  useEffect(() => {
+    arbiterSetFocused(attendanceFocused)
+  }, [attendanceFocused, arbiterSetFocused])
+
+  // 「出席済み」記録の読み込み（起動時）。
+  useEffect(() => {
+    loadAttendedRecord().then(setAttended).catch(() => undefined)
+  }, [])
+
+  function inject(js: string) {
+    webviewRef.current?.injectJavaScript(js)
+  }
+
+  function armNavTimeout() {
+    if (navTimerRef.current) clearTimeout(navTimerRef.current)
+    navTimerRef.current = setTimeout(() => dispatch({ kind: 'navTimeout' }), NAV_TIMEOUT_MS)
+  }
+
+  function autoRestart() {
+    if (errorRetryRef.current < 2) {
+      errorRetryRef.current += 1
+      portalTriesRef.current = 0
+      dispatch({ kind: 'reboot' })
+      setWebviewKey((k) => k + 1)
+    } else {
+      dispatch({ kind: 'errorPage' })
+    }
+  }
+
+  function refreshAttendance() {
+    inject(OPEN_ATTENDANCE_JS)
+    setTimeout(() => inject(DETECT_ATTENDANCE_JS), 1600)
+  }
+
+  function onLoadEnd() {
+    if (state.phase === 'booting') armNavTimeout()
+    inject(DETECT_PAGE_JS)
+  }
+
+  function onMessage(data: string) {
+    let parsed: Record<string, unknown> | null = null
+    try {
+      parsed = JSON.parse(data)
+    } catch {
+      return
+    }
+    if (!parsed) return
+    if (parsed.type === 'page') {
+      const kind = classifyClassPage({
+        hasPasswordInput: !!parsed.hasPasswordInput,
+        hasAttendanceForm: !!parsed.hasAttendanceForm,
+        hasEnterSplash: !!parsed.hasEnterSplash,
+        hasClassMenu: !!parsed.hasClassMenu,
+        hasSystemError: !!parsed.hasSystemError,
+        url: typeof parsed.url === 'string' ? parsed.url : undefined,
+      })
+      dispatch({ kind: 'page', page: kind })
+      onAttendanceRef.current = kind === 'attendance'
+      if (kind === 'login') {
+        loginGate.requireLogin()
+      } else if (kind === 'attendance') {
+        portalTriesRef.current = 0
+        errorRetryRef.current = 0
+        inject(DETECT_ATTENDANCE_JS)
+      } else if (kind === 'splash') {
+        inject(ENTER_CLASS_PC_JS)
+      } else if (kind === 'portal') {
+        if (portalTriesRef.current < 3) {
+          portalTriesRef.current += 1
+          inject(OPEN_ATTENDANCE_JS)
+          setTimeout(() => inject(DETECT_PAGE_JS), 1500)
+        } else {
+          autoRestart()
+        }
+      } else if (kind === 'error') {
+        autoRestart()
+      }
+      return
+    }
+    if (parsed.type === 'nav') {
+      console.log('[attendance nav]', data)
+      return
+    }
+    if (parsed.type === 'attendance') {
+      dispatch({ kind: 'reception', reception: parseAttendanceMessage(data) })
+      return
+    }
+    if (parsed.type === 'submit') {
+      const result: SubmitResult = {
+        result: typeof parsed.result === 'string' ? parsed.result : '送信しました',
+        ok: !!parsed.ok,
+        wrong: !!parsed.wrong,
+        err: !!parsed.err,
+      }
+      dispatch({ kind: 'submitResult', result })
+      if (result.ok) {
+        const d = new Date()
+        const rec: AttendedRecord = {
+          date: todayKey(d),
+          courseName: state.reception?.courseName ?? '',
+          confirmWindow: state.reception?.confirmWindow ?? null,
+          code: lastCodeRef.current,
+        }
+        setAttended(rec)
+        saveAttendedRecord(rec).catch(() => undefined)
+      }
+    }
+  }
+
+  function submit() {
+    const c = normalizeAttendanceCode(code)
+    if (!c) return
+    lastCodeRef.current = c
+    dispatch({ kind: 'submitStart' })
+    inject(buildSubmitAttendanceJs(c))
+  }
+
+  function retry() {
+    setCode('')
+    portalTriesRef.current = 0
+    errorRetryRef.current = 0
+    setRevealClass(false)
+    dispatch({ kind: 'retry' })
+    setWebviewKey((k) => k + 1)
+  }
+
+  const setAttendanceFocused = useCallback((b: boolean) => setAttendanceFocusedState(b), [])
+
+  const attendedNow = isAttendedNow(attended, now)
+  attendedRef.current = attendedNow
+
+  const value: AttendanceEngineValue = {
+    phase: state.phase,
+    reception: state.reception,
+    result: state.result,
+    attended,
+    attendedNow,
+    now,
+    code,
+    setCode,
+    submit,
+    retry,
+    running,
+    failCount,
+    revealClass,
+    setRevealClass,
+    timetable,
+    setAttendanceFocused,
+  }
+
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {/* 自動遷移・受付検出は常にこの非表示WebView（画面外1x1）で進める。取得できない時だけ、
+          ユーザーが明示的に「CLASSの画面を表示」を押した場合に限り全画面表示する（revealClass）。 */}
+      <View
+        style={revealClass ? styles.webviewOverlayBox : styles.webviewHiddenBox}
+        pointerEvents={revealClass ? 'auto' : 'none'}
+      >
+        {shouldRender ? (
+          <WebView
+            key={webviewKey}
+            ref={webviewRef}
+            source={{ uri: `${CLASS_URL}?litus=a${webviewKey}` }}
+            cacheEnabled={false}
+            userAgent={DESKTOP_UA}
+            sharedCookiesEnabled
+            thirdPartyCookiesEnabled
+            onLoadEnd={onLoadEnd}
+            onMessage={(e) => onMessage(e.nativeEvent.data)}
+            style={styles.webviewFill}
+          />
+        ) : null}
+      </View>
+
+      {revealClass ? (
+        <View style={styles.overlayBar}>
+          <Text style={styles.overlayText}>CLASSの画面です。出席登録を済ませたら「閉じる」を押してください。</Text>
+          <Pressable
+            style={styles.overlayBtn}
+            onPress={() => {
+              setRevealClass(false)
+              inject(DETECT_PAGE_JS)
+            }}
+          >
+            <Text style={styles.overlayBtnText}>閉じる</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </Ctx.Provider>
+  )
+}
+
+const styles = StyleSheet.create({
+  webviewHiddenBox: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
+  webviewOverlayBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 56, backgroundColor: '#ffffff' },
+  webviewFill: { flex: 1 },
+  overlayBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 56,
+    backgroundColor: '#0a6650',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+  },
+  overlayText: { color: '#ffffff', fontSize: 13, flex: 1 },
+  overlayBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  overlayBtnText: { color: '#ffffff', fontSize: 13 },
+})

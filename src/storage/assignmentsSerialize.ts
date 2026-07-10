@@ -18,6 +18,8 @@ export type Assignment = {
   firstSeenAt: string
   lastSeenAt: string
   lastCheckedAt: string
+  /** 手動追加した課題（LETUS由来でない）。自動収集はこのキーに触れず、編集・削除ができる。 */
+  manual?: boolean
 }
 
 export type AssignmentMap = Record<string, Assignment>
@@ -68,6 +70,7 @@ export function deserializeAssignments(raw: string | null): AssignmentMap {
       lastSeenAt: e.lastSeenAt,
       lastCheckedAt: e.lastCheckedAt,
     }
+    if (e.manual === true) out[k].manual = true
   }
   return out
 }

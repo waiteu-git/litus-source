@@ -1,13 +1,27 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import Svg, { Circle, G } from 'react-native-svg'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, useThemeVariant } from '../theme'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
-/** 全画面共通の背景（テーマに応じて翠グラデ or 薄地）。上部はセーフエリア分を確保しノッチ/ステータスバー被りを防ぐ。 */
+/** 浮遊タブバー（position:absolute）の高さ＋下マージン分。スクロール内容の末尾がピルに隠れない退避量。 */
+export const TAB_BAR_CLEARANCE = 74
+
+/** タブバーのピルを避けるための下部退避量（セーフエリア込み）。スクロールの contentContainerStyle に足す。 */
+export function useTabBarClearance() {
+  const insets = useSafeAreaInsets()
+  return Math.max(insets.bottom, 8) + TAB_BAR_CLEARANCE
+}
+
+/**
+ * 全画面共通の背景（テーマに応じて翠グラデ or 薄地）。上部はセーフエリア分を確保。
+ * **背景は全高で描き、下部余白は入れない**（浮遊タブバーの背後までアプリ画面が透ける）。
+ * コンテンツがピルに隠れないための退避は各スクロールの contentContainerStyle 側（useTabBarClearance）で行う。
+ */
 export function ScreenBg({ children }: { children: ReactNode }) {
   const { variant } = useThemeVariant()
   const insets = useSafeAreaInsets()
@@ -182,54 +196,60 @@ export function StepList({ steps }: { steps: Step[] }) {
  * 描くにはSVG依存が要るため、意図的に円周は装飾（固定リング）にとどめ、中央の大きな数値/文言で
  * 情報量を担保する。センターは countdownText() 等の結果をそのまま渡す想定。
  */
+/**
+ * 残り時間リング。progress(0..1) に応じて緑の弧が動く（軽いトラック＋丸端アーク・SVG）。
+ * progress 省略時は満弧（装飾）。中央のカウントダウンは1行に収める（adjustsFontSizeToFit）。
+ */
 export function CountdownRing({
   centerText,
   subText,
-  size = 188,
+  size = 176,
   accent,
+  progress,
 }: {
   centerText: string
   subText?: string
   size?: number
   accent?: string
+  progress?: number
 }) {
   const { variant } = useThemeVariant()
   const green = variant === 'green'
-  const ringColor = accent ?? COLORS.cta
-  const inner = size - 44
+  const stroke = 12
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  const p = progress == null ? 1 : Math.max(0, Math.min(1, progress))
+  const cx = size / 2
+  const arcColor = accent ?? (green ? '#ffffff' : COLORS.cta)
+  const trackColor = green ? 'rgba(255,255,255,0.22)' : '#e3ebe7'
+  const textColor = green ? '#ffffff' : COLORS.emeraldDark
+  const subColor = green ? '#eafff7' : '#8a968f'
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: 7,
-        borderColor: ringColor,
-        alignItems: 'center',
-        justifyContent: 'center',
-        alignSelf: 'center',
-        backgroundColor: green ? 'rgba(255,255,255,0.14)' : '#eef8f4',
-      }}
-    >
-      <View
-        style={{
-          width: inner,
-          height: inner,
-          borderRadius: inner / 2,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: green ? 'rgba(6,58,44,0.28)' : '#ffffff',
-          borderWidth: 1,
-          borderColor: green ? 'rgba(255,255,255,0.4)' : '#e3ece8',
-        }}
+    <View style={{ width: size, height: size, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+        <Circle cx={cx} cy={cx} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
+        <G rotation={-90} originX={cx} originY={cx}>
+          <Circle
+            cx={cx}
+            cy={cx}
+            r={r}
+            stroke={arcColor}
+            strokeWidth={stroke}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={circ}
+            strokeDashoffset={circ * (1 - p)}
+          />
+        </G>
+      </Svg>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        style={{ fontSize: 36, fontWeight: '700', color: textColor, paddingHorizontal: 14, textAlign: 'center' }}
       >
-        <Text style={{ fontSize: inner * 0.2, fontWeight: '700', color: green ? '#ffffff' : COLORS.emeraldDark }}>
-          {centerText}
-        </Text>
-        {subText ? (
-          <Text style={{ fontSize: 12, marginTop: 4, color: green ? '#eafff7' : COLORS.emeraldDark }}>{subText}</Text>
-        ) : null}
-      </View>
+        {centerText}
+      </Text>
+      {subText ? <Text style={{ fontSize: 13, marginTop: 4, color: subColor }}>{subText}</Text> : null}
     </View>
   )
 }
