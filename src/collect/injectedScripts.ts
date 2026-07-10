@@ -383,7 +383,11 @@ export const COLLECT_BULLETIN_TABS_JS = `(function(){
   true;
 })();`
 
-/** 日付＋件名で行を特定し、件名リンクの PrimeFaces.ab を発火して掲示内容モーダルを開く。 */
+/**
+ * 日付＋件名で行を特定し、(1)掲示内容モーダルが未オープンなら件名リンクで開く、(2)未読なら少し遅らせて
+ * 既読化する（CLASS側で確実に既読へ）。冪等なので複数回発火しても二重操作にならない（モーダル既開/既読は
+ * スキップ）。onLoadEnd毎の再注入やRN側タイマの取りこぼしに対して安全。
+ */
 export function openBulletinDetailJs(title: string, date: string): string {
   return `(function(){
     try{
@@ -394,9 +398,21 @@ export function openBulletinDetailJs(title: string, date: string): string {
         var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
         var dd=((dls[i].textContent||'').match(/\\d{4}\\/\\d{1,2}\\/\\d{1,2}/g)||[]).pop()||'';
         if(tt===t && dd===d){
-          var oc=a.getAttribute('onclick');
-          if(oc){ new Function('event',oc).call(a,new MouseEvent('click',{bubbles:true})); } else { a.click(); }
-          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'detail-click'}));
+          var panel=document.querySelector('[id="bsd00702:dialogPanel"]');
+          var opened=panel && /本文/.test(panel.innerHTML||'');
+          if(!opened){
+            var oc=a.getAttribute('onclick');
+            if(oc){ new Function('event',oc).call(a,new MouseEvent('click',{bubbles:true})); } else { a.click(); }
+          }
+          var row=dls[i].parentNode, btns=row?row.querySelectorAll('.btnRead'):[];
+          for(var j=0;j<btns.length;j++){
+            if(/既読にする/.test(btns[j].textContent||'')){
+              var rbox=btns[j].querySelector('input[type=checkbox]');
+              if(rbox){ setTimeout((function(box){return function(){ box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true})); };})(rbox), 600); }
+              break;
+            }
+          }
+          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'detail-open'}));
           return true;
         }
       }
@@ -417,51 +433,33 @@ export const COLLECT_BULLETIN_DETAIL_JS = `(function(){
   true;
 })();`
 
-/** 対象行のフラグボタン(checkbox)をトグルし change を発火（インライン onchange の PrimeFaces.ab が走る）。 */
-export function setBulletinFlagJs(title: string, date: string): string {
+/**
+ * 対象行のフラグを「desired（true=フラグ付き）」の状態へ合わせる（インテント絶対・冪等）。
+ * 現在のボタン文言（フラグをはずす=済 / フラグをつける=未）を読み、desired と異なる時だけ checkbox を切替えて
+ * change を発火する。ローカルとCLASSのフラグ状態がズレていても意図どおりに揃い、複数回発火でも二重反転しない。
+ */
+export function setBulletinFlagJs(title: string, date: string, desired: boolean): string {
   return `(function(){
     try{
-      var t=${JSON.stringify(title)}, d=${JSON.stringify(date)};
+      var t=${JSON.stringify(title)}, d=${JSON.stringify(date)}, want=${desired ? 'true' : 'false'};
       var dls=document.querySelectorAll('dl.keiji');
       for(var i=0;i<dls.length;i++){
         var a=dls[i].querySelector('a.ui-commandlink'); if(!a) continue;
         var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
         var dd=((dls[i].textContent||'').match(/\\d{4}\\/\\d{1,2}\\/\\d{1,2}/g)||[]).pop()||'';
         if(tt===t && dd===d){
-          var row=dls[i].parentNode, btns=row.querySelectorAll('.btnRead'), flagBtn=null;
+          var row=dls[i].parentNode, btns=row?row.querySelectorAll('.btnRead'):[], flagBtn=null;
           for(var j=0;j<btns.length;j++){ if(/フラグ/.test(btns[j].textContent||'')){ flagBtn=btns[j]; break; } }
           if(!flagBtn){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'flag-nobtn'})); return true; }
+          var cur=/フラグをはずす/.test(flagBtn.textContent||''); // true=現在フラグ済み
+          if(cur===want){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'flag-nochange'})); return true; }
           var box=flagBtn.querySelector('input[type=checkbox]');
           box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true}));
-          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'flag-toggled'}));
+          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'flag-set'}));
           return true;
         }
       }
       window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'flag-notfound'}));
-    }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:String(e)})); }
-    true;
-  })();`
-}
-
-/** 対象行が未読(「既読にする」ボタン)なら既読化する。モーダル発火で既読にならない場合のフォールバック。 */
-export function markBulletinReadJs(title: string, date: string): string {
-  return `(function(){
-    try{
-      var t=${JSON.stringify(title)}, d=${JSON.stringify(date)};
-      var dls=document.querySelectorAll('dl.keiji');
-      for(var i=0;i<dls.length;i++){
-        var a=dls[i].querySelector('a.ui-commandlink'); if(!a) continue;
-        var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
-        var dd=((dls[i].textContent||'').match(/\\d{4}\\/\\d{1,2}\\/\\d{1,2}/g)||[]).pop()||'';
-        if(tt===t && dd===d){
-          var row=dls[i].parentNode, btns=row.querySelectorAll('.btnRead'), rb=null;
-          for(var j=0;j<btns.length;j++){ if(/既読にする/.test(btns[j].textContent||'')){ rb=btns[j]; break; } }
-          if(rb){ var box=rb.querySelector('input[type=checkbox]'); box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true})); }
-          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'read-done'}));
-          return true;
-        }
-      }
-      window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'read-notfound'}));
     }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:String(e)})); }
     true;
   })();`

@@ -19,6 +19,7 @@ export default function BulletinDetailScreen() {
   const clearance = useTabBarClearance()
   const [item, setItem] = useState<BulletinItem | null>(null)
   const [fetching, setFetching] = useState(false)
+  const [fetchFailed, setFetchFailed] = useState(false)
   const [flagBusy, setFlagBusy] = useState(false)
   const startedRef = useRef(false)
 
@@ -31,7 +32,7 @@ export default function BulletinDetailScreen() {
     reload()
   }, [reload])
 
-  // 初回、本文キャッシュが無ければ裏で取得（＝既読化）。
+  // 初回、本文キャッシュが無ければ裏で取得（＝既読化）。1度だけ自動起動する。
   useEffect(() => {
     if (!item || startedRef.current) return
     if (!item.body) {
@@ -40,15 +41,25 @@ export default function BulletinDetailScreen() {
     }
   }, [item])
 
-  const onFetched = useCallback(() => {
+  // 取得完了。本文が入っていなければ失敗扱いにして無限スピナーを避ける。
+  const onFetched = useCallback(async () => {
     setFetching(false)
-    reload()
-  }, [reload])
+    const items = await loadBulletinDigest()
+    const it = items.find((i) => i.id === route.params.id) ?? null
+    setItem(it)
+    if (it && !it.body) setFetchFailed(true)
+  }, [route.params.id])
+
+  const retryFetch = useCallback(() => {
+    setFetchFailed(false)
+    setFetching(true)
+  }, [])
 
   const toggleFlag = useCallback(() => {
-    if (!item || flagBusy) return
+    // 本文取得中はCLASSセッションを専有しているため、フラグ操作を受け付けない（1セッション1アクション）。
+    if (!item || flagBusy || fetching) return
     setFlagBusy(true)
-  }, [item, flagBusy])
+  }, [item, flagBusy, fetching])
 
   const onFlagged = useCallback(() => {
     setFlagBusy(false)
@@ -66,6 +77,8 @@ export default function BulletinDetailScreen() {
   }
 
   const b = item.body
+  // v1移行データは date が空。id(`YYYY/MM/DD::件名`)から日付を復元してDOM行と突き合わせる。
+  const targetDate = item.date || item.id.split('::')[0]
   return (
     <ScreenBg>
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
@@ -77,8 +90,8 @@ export default function BulletinDetailScreen() {
 
           <Pressable
             onPress={toggleFlag}
-            disabled={flagBusy}
-            style={[styles.flagBtn, { borderColor: item.flagged ? '#e0a100' : '#9bb3ab' }]}
+            disabled={flagBusy || fetching}
+            style={[styles.flagBtn, { borderColor: item.flagged ? '#e0a100' : '#9bb3ab', opacity: fetching ? 0.5 : 1 }]}
           >
             <Ionicons name={item.flagged ? 'flag' : 'flag-outline'} size={16} color={item.flagged ? '#e0a100' : '#9bb3ab'} />
             <Text style={[styles.flagText, { color: item.flagged ? '#e0a100' : ui.labelColor }]}>
@@ -86,12 +99,7 @@ export default function BulletinDetailScreen() {
             </Text>
           </Pressable>
 
-          {fetching || !b ? (
-            <View style={styles.loading}>
-              <ActivityIndicator color={COLORS.emerald} />
-              <Text style={{ color: ui.labelColor, marginTop: 8, fontSize: 12 }}>本文を取得しています…</Text>
-            </View>
-          ) : (
+          {b ? (
             <>
               {b.from ? <Text style={[styles.meta, { color: ui.labelColor }]}>差出人: {b.from}</Text> : null}
               {b.period ? <Text style={[styles.meta, { color: ui.labelColor }]}>掲示期間: {b.period}</Text> : null}
@@ -102,15 +110,36 @@ export default function BulletinDetailScreen() {
                 </Text>
               ) : null}
             </>
+          ) : fetchFailed ? (
+            <View style={styles.loading}>
+              <Text style={{ color: ui.labelColor, fontSize: 13, textAlign: 'center' }}>
+                本文を取得できませんでした。
+              </Text>
+              <Pressable onPress={retryFetch} style={styles.retryBtn}>
+                <Ionicons name="refresh" size={15} color={COLORS.emerald} />
+                <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>再試行</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.loading}>
+              <ActivityIndicator color={COLORS.emerald} />
+              <Text style={{ color: ui.labelColor, marginTop: 8, fontSize: 12 }}>本文を取得しています…</Text>
+            </View>
           )}
         </View>
       </ScrollView>
 
       {fetching ? (
-        <BulletinActionEngine action="openDetail" title={item.title} date={item.date} onFinished={onFetched} />
+        <BulletinActionEngine action="openDetail" title={item.title} date={targetDate} onFinished={onFetched} />
       ) : null}
       {flagBusy ? (
-        <BulletinActionEngine action="setFlag" title={item.title} date={item.date} onFinished={onFlagged} />
+        <BulletinActionEngine
+          action="setFlag"
+          title={item.title}
+          date={targetDate}
+          desiredFlag={!item.flagged}
+          onFinished={onFlagged}
+        />
       ) : null}
     </ScreenBg>
   )
@@ -136,6 +165,7 @@ const styles = StyleSheet.create({
   },
   flagText: { fontSize: 13, fontWeight: '600' },
   loading: { alignItems: 'center', paddingVertical: 30 },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
   meta: { fontSize: 12, marginTop: 10 },
   text: { fontSize: 14, lineHeight: 22, marginTop: 12 },
 })

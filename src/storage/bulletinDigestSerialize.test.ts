@@ -41,9 +41,19 @@ describe('merge / 更新', () => {
     expect(it0.unread).toBe(false) // 新しい状態
     expect(it0.body?.text).toBe('本文') // 旧bodyキャッシュ保持
   })
-  it('incomingに無いフラグ付きは残す', () => {
-    const merged = mergeBulletinItems(items, [items[0]]) // items[1](flagged)は含めない
-    expect(merged.some((i) => i.id === items[1].id)).toBe(true)
+  it('incomingを権威とし、含まれない項目は落とす（CLASS側と一致）', () => {
+    const merged = mergeBulletinItems(items, [items[0]]) // items[1]は含めない
+    expect(merged.some((i) => i.id === items[1].id)).toBe(false)
+    expect(merged).toHaveLength(1)
+  })
+  it('incoming内の同一id（未読かつフラグ付き）はOR統合して1件に畳む', () => {
+    const base = items[0]
+    const asUnread = { ...base, unread: true, flagged: false }
+    const asFlagged = { ...base, unread: false, flagged: true }
+    const merged = mergeBulletinItems([], [asUnread, asFlagged])
+    expect(merged).toHaveLength(1)
+    expect(merged[0].unread).toBe(true)
+    expect(merged[0].flagged).toBe(true)
   })
   it('markItemRead は unread=false', () => {
     expect(markItemRead(items, items[0].id).find((i) => i.id === items[0].id)!.unread).toBe(false)

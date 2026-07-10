@@ -62,22 +62,29 @@ export function deserializeBulletinDigest(raw: string | null): BulletinItem[] {
 }
 
 /**
- * incoming(最新の状態) を prev にマージする。id一致は状態を上書きしつつ body キャッシュは保持。
- * incoming に含まれない prev の項目は、フラグ付きのものだけ残す（既読フラグ付きの保持）。
+ * incoming(未読タブ＋フラグつきタブの収集結果＝最新の状態) を権威として prev にマージする。
+ * - incoming 内の同一id（未読タブとフラグつきタブに両出する未読かつフラグ付き掲示）は unread/flagged を
+ *   OR統合して1件に畳む（重複保存・keyの衝突を防ぐ）。
+ * - body キャッシュは prev（または incoming）から引き継ぐ。
+ * - incoming に含まれない prev の項目は落とす（既読かつ非フラグ、または収集ウィンドウ外＝CLASS側と一致）。
  */
 export function mergeBulletinItems(prev: BulletinItem[], incoming: BulletinItem[]): BulletinItem[] {
-  const byId = new Map(prev.map((i) => [i.id, i]))
-  const seen = new Set<string>()
-  const out: BulletinItem[] = []
+  const prevById = new Map(prev.map((i) => [i.id, i]))
+  const acc = new Map<string, BulletinItem>()
   for (const inc of incoming) {
-    const old = byId.get(inc.id)
-    out.push({ ...inc, body: inc.body ?? old?.body ?? null })
-    seen.add(inc.id)
+    const cur = acc.get(inc.id)
+    if (cur) {
+      acc.set(inc.id, {
+        ...cur,
+        unread: cur.unread || inc.unread,
+        flagged: cur.flagged || inc.flagged,
+        body: cur.body ?? inc.body ?? null,
+      })
+    } else {
+      acc.set(inc.id, { ...inc, body: inc.body ?? prevById.get(inc.id)?.body ?? null })
+    }
   }
-  for (const old of prev) {
-    if (!seen.has(old.id) && old.flagged) out.push(old)
-  }
-  return out
+  return [...acc.values()]
 }
 
 function update(items: BulletinItem[], id: string, patch: (i: BulletinItem) => BulletinItem): BulletinItem[] {
