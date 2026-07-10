@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import AssignmentCollector from '../collect/AssignmentCollector'
 import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
@@ -63,6 +64,15 @@ export default function AssignmentsScreen() {
   // 期限切れ・非表示はデフォルト折りたたみ（主役はこれから迫る締切）。
   const [showOverdue, setShowOverdue] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
+  // 課題更新（LETUS再スキャン）を「別画面へ遷移」ではなく、この一覧を保ったまま裏で走らせる。
+  // 収集は headless の AssignmentCollector に委譲し、進捗はインジケータで示す。完了時に version が
+  // 上がって一覧が差分反映される（既存の scanned 一覧に変更を加えていく形）。
+  const [collecting, setCollecting] = useState(false)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const startUpdate = useCallback(() => {
+    setProgress(null)
+    setCollecting(true)
+  }, [])
 
   const reload = useCallback(async () => {
     const map = await loadAssignments()
@@ -206,10 +216,32 @@ export default function AssignmentsScreen() {
         right={
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Chip label="追加" icon="add" onPress={() => navigation.navigate('ManualAssignment')} />
-            <Chip label="更新" icon="refresh" onPress={() => navigation.navigate('CollectAssignments')} />
+            <Chip label="更新" icon="refresh" onPress={collecting ? undefined : startUpdate} />
           </View>
         }
       />
+
+      {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。 */}
+      {collecting ? (
+        <View style={[ui.card, styles.updatingBar]}>
+          <ActivityIndicator size="small" color={COLORS.emerald} />
+          <Text style={[styles.updatingText, { color: ui.valueColor }]} numberOfLines={1}>
+            課題を更新中…{progress ? ` ${progress.done}/${progress.total} 件` : ''}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* headless 収集本体（画面外1px）。完了で version が上がり一覧が差分反映される。 */}
+      {collecting ? (
+        <AssignmentCollector
+          onProgress={(done, total) => setProgress({ done, total })}
+          onFinished={() => {
+            setCollecting(false)
+            setProgress(null)
+          }}
+        />
+      ) : null}
+
       {total === 0 && hidden.length === 0 ? (
         <View style={[ui.card, { marginTop: 16 }]}>
           <Text style={{ color: ui.valueColor }}>
@@ -319,6 +351,8 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11 },
   chipTextNg: { color: '#a33417' },
   chipTextOk: { color: '#0a5c48' },
+  updatingBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, paddingVertical: 12 },
+  updatingText: { fontSize: 13, fontWeight: '600', flex: 1 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   statCol: { flex: 1, alignItems: 'flex-start' },
   statNum: { fontSize: 24, fontWeight: '700' },
