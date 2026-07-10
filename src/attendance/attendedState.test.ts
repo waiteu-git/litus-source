@@ -34,4 +34,23 @@ describe('isAttendedNow', () => {
   it('confirmWindowが無ければ当日中はtrue', () => {
     expect(isAttendedNow(rec({ confirmWindow: null }), at(23, 0))).toBe(true)
   })
+
+  describe('classEndMin（授業終了までの延長）', () => {
+    const r = () => rec({ confirmWindow: '08:50〜09:20' }) // 受付は9:20で終了
+    it('受付終了後でも授業終了(分)までは出席済み', () => {
+      // 授業は10:20(=620分)まで。受付終了(9:20)を過ぎた10:00でもtrue。
+      expect(isAttendedNow(r(), at(10, 0), 620)).toBe(true)
+    })
+    it('授業終了を過ぎたらfalse', () => {
+      expect(isAttendedNow(r(), at(10, 21), 620)).toBe(false)
+    })
+    it('classEndMinが無ければ従来どおり受付終了で切れる', () => {
+      expect(isAttendedNow(r(), at(10, 0))).toBe(false)
+    })
+    it('受付終了が授業終了より遅ければ遅い方(受付)まで', () => {
+      // 受付14:30まで・授業は13:00(=780)で終了 → 遅い方の14:30まで。
+      expect(isAttendedNow(rec({ confirmWindow: '12:50〜14:30' }), at(14, 0), 780)).toBe(true)
+      expect(isAttendedNow(rec({ confirmWindow: '12:50〜14:30' }), at(14, 31), 780)).toBe(false)
+    })
+  })
 })

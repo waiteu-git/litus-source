@@ -23,7 +23,7 @@ import {
 } from '../collect/injectedScripts'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { classifyClassPage } from './classifyClassPage'
-import { isInClassPeriod } from './classPeriod'
+import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
 import { isAttendedNow, todayKey, type AttendedRecord } from './attendedState'
 import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
 import { normalizeAttendanceCode } from './normalizeCode'
@@ -363,7 +363,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const setAttendanceFocused = useCallback((b: boolean) => setAttendanceFocusedState(b), [])
 
   // CLASSが出席済みを示していれば最優先。無ければローカル記録（授業間の継続表示・オフライン補助）。
-  const attendedNow = state.reception?.status === 'attended' || isAttendedNow(attended, now)
+  // 受付が授業より早く閉じても、出席済み表示は当該授業の時限終了まで延長する（次の授業が始まれば切れる）。
+  const classEndMin = attendedClassEndMin(timetable, now, attended?.confirmWindow ?? null)
+  const attendedNow = state.reception?.status === 'attended' || isAttendedNow(attended, now, classEndMin)
   attendedRef.current = attendedNow
 
   const value: AttendanceEngineValue = {

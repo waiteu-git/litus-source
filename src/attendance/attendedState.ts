@@ -19,15 +19,25 @@ export function todayKey(now: Date): string {
 }
 
 /**
- * 記録が「今この授業の間」で有効か。今日の記録で、受付可能時間の終了時刻までなら true。
- * confirmWindow が無ければ当日中は true（時刻情報が無いケースの安全側）。
+ * 記録が「今この授業の間」で有効か。今日の記録で、次の遅い方の時刻まで true:
+ *   - 受付可能時間（confirmWindow）の終了
+ *   - `classEndMin`（出席した授業の時限終了・分）… 受付が早く閉じても授業終了まで出席済みを維持
+ * confirmWindow も classEndMin も無ければ当日中は true（時刻情報が無いケースの安全側）。
+ * classEndMin は時間割由来（呼び出し側で attendedClassEndMin を用いて算出）。
  */
-export function isAttendedNow(rec: AttendedRecord | null, now: Date): boolean {
+export function isAttendedNow(
+  rec: AttendedRecord | null,
+  now: Date,
+  classEndMin: number | null = null,
+): boolean {
   if (!rec) return false
   if (rec.date !== todayKey(now)) return false
+  const nowMin = now.getHours() * 60 + now.getMinutes()
   const m = rec.confirmWindow?.match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/)
-  if (!m) return true
-  const end = new Date(now)
-  end.setHours(Number(m[3]), Number(m[4]), 0, 0)
-  return now.getTime() <= end.getTime()
+  const cwEndMin = m ? Number(m[3]) * 60 + Number(m[4]) : null
+  const ends: number[] = []
+  if (cwEndMin != null) ends.push(cwEndMin)
+  if (classEndMin != null) ends.push(classEndMin)
+  if (ends.length === 0) return true
+  return nowMin <= Math.max(...ends)
 }
