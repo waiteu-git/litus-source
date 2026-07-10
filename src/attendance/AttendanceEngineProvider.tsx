@@ -35,13 +35,16 @@ import {
   type EnginePhase,
   type SubmitResult,
 } from './engine'
+import {
+  CONFLICT_MIN_GAP_MS,
+  conflictDelayMs,
+  isConflictExhausted,
+} from './conflictBackoff'
 
 const CLASS_URL = CLASS_PC_LOGIN_URL
 // 出席状況の取得（メニュー遷移→受付判定）は約7秒・2トライで打ち切る（ユーザー指定）。
 const NAV_TIMEOUT_MS = 7000
 const ATTENDANCE_POLL_MS = 30000
-// PC競合（他画面でCLASS使用中）のとき、諦めず静かに再試行する間隔。
-const CONFLICT_RETRY_MS = 7000
 
 /**
  * 出席エンジン（CLASS WebView＋受付判定）をアプリ根で常時保持する共有層。
@@ -68,6 +71,8 @@ export type AttendanceEngineValue = {
   running: boolean
   /** PC等の他画面でCLASSを開いていて確認できない状態（複数画面競合）。UIは専用表示にする。 */
   conflict: boolean
+  /** 競合が解けず自動再試行を打ち切った状態。UIは手動での再確認を促す。 */
+  conflictExhausted: boolean
   failCount: number
   revealClass: boolean
   setRevealClass: (b: boolean) => void
@@ -109,6 +114,14 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const [timetable, setTimetable] = useState<TimetableCollection[]>([])
   const [attendanceFocused, setAttendanceFocusedState] = useState(false)
   const [conflict, setConflict] = useState(false)
+  // 上限到達で自動再試行を打ち切った状態。UIの案内文を切り替えるため state で持つ。
+  const [conflictExhausted, setConflictExhausted] = useState(false)
+  // 再試行スケジューラの内部状態（タイマークロージャから最新値を読むため ref）。
+  const conflictRef = useRef(false)
+  const conflictAttemptRef = useRef(0)
+  const conflictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastConflictAttemptAtRef = useRef(0)
+  conflictRef.current = conflict
   // ポーリング条件を最新の受付状態で判定するための ref（interval クロージャの stale 回避）。
   const receptionStatusRef = useRef<AttendanceStatus | undefined>(undefined)
   receptionStatusRef.current = state.reception?.status
@@ -122,16 +135,30 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const shouldRenderRef = useRef(false)
   shouldRenderRef.current = shouldRender
 
+  // WebViewを作り直して最初から遷移し直す。競合の再試行スケジューラもここで初期化する。
+  // lastConflictAttemptAtRef を必ず更新することで、直後に走る復帰トリガーが
+  // CONFLICT_MIN_GAP_MS に阻まれて二重リブートしない。
+  function rebootWebview() {
+    portalTriesRef.current = 0
+    errorRetryRef.current = 0
+    lastConflictAttemptAtRef.current = Date.now()
+    dispatch({ kind: 'reboot' })
+    setWebviewKey((k) => k + 1)
+  }
+
   // shouldRender が false→true になったら WebView を作り直して最初から遷移（収集返却・授業入り・
   // 出席フォーカス取得のいずれでも同じ再起動）。reception はキャッシュ保持。
+  // conflict は「今のページがそう分類された」という判定結果なので、作り直す以上いったん偽に戻す。
+  // 戻さないと再分類で再び conflict になっても依存が変化せず、スケジューラが張り直されない。
   useEffect(() => {
     if (shouldRender && !prevRenderRef.current) {
-      portalTriesRef.current = 0
-      errorRetryRef.current = 0
-      dispatch({ kind: 'reboot' })
-      setWebviewKey((k) => k + 1)
+      conflictAttemptRef.current = 0
+      setConflictExhausted(false)
+      setConflict(false)
+      rebootWebview()
     }
     prevRenderRef.current = shouldRender
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldRender])
 
   // 時間割を読み込む（起動ポリシー判定用）。前面復帰時も貼り直す。
@@ -207,17 +234,54 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     loadAttendedRecord().then(setAttended).catch(() => undefined)
   }, [])
 
-  // PC競合中は諦めず、一定間隔でWebViewを作り直して再試行（PCを閉じたら正常ページに着地→自動復帰）。
+  function clearConflictTimer() {
+    if (conflictTimerRef.current) {
+      clearTimeout(conflictTimerRef.current)
+      conflictTimerRef.current = null
+    }
+  }
+
+  // 次の再試行を予約する。上限に達していたら予約せず打ち切り、UIへ知らせる。
+  function scheduleConflictRetry() {
+    clearConflictTimer()
+    if (isConflictExhausted(conflictAttemptRef.current)) {
+      setConflictExhausted(true)
+      return
+    }
+    const delay = conflictDelayMs(conflictAttemptRef.current, Math.random())
+    conflictTimerRef.current = setTimeout(() => {
+      conflictTimerRef.current = null
+      // 競合が解けた／WebViewが止まったなら何もしない。後者は shouldRender の
+      // 再起動 effect が conflict を偽に戻すので、そこから綺麗にやり直される。
+      if (!conflictRef.current || !shouldRenderRef.current) return
+      conflictAttemptRef.current += 1
+      rebootWebview()
+      scheduleConflictRetry()
+    }, delay)
+  }
+
+  // 上限到達後の復帰トリガー（前面復帰・画面フォーカス・再確認ボタン）から呼ぶ。
+  // 「ユーザーが今このアプリを見ている」という意思表示があったときだけバックオフを畳み直す。
+  function resumeConflictRetry() {
+    if (!conflictRef.current || !shouldRenderRef.current) return
+    if (Date.now() - lastConflictAttemptAtRef.current < CONFLICT_MIN_GAP_MS) return
+    conflictAttemptRef.current = 1
+    setConflictExhausted(false)
+    rebootWebview()
+    scheduleConflictRetry()
+  }
+
+  // PC競合中は指数バックオフで静かに再試行する（PCを閉じたら正常ページに着地→自動復帰）。
   useEffect(() => {
-    if (!conflict) return
-    const id = setInterval(() => {
-      if (!shouldRenderRef.current) return
-      portalTriesRef.current = 0
-      errorRetryRef.current = 0
-      dispatch({ kind: 'reboot' })
-      setWebviewKey((k) => k + 1)
-    }, CONFLICT_RETRY_MS)
-    return () => clearInterval(id)
+    if (!conflict) {
+      clearConflictTimer()
+      conflictAttemptRef.current = 0
+      setConflictExhausted(false)
+      return
+    }
+    scheduleConflictRetry()
+    return clearConflictTimer
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conflict])
 
   function inject(js: string) {
@@ -275,7 +339,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         loginGate.requireLogin()
       } else if (kind === 'conflict') {
         // PC等の他画面と競合。自動やり直しでは解けないので専用表示にし、navタイマーは止めて
-        // navFailed へ落とさない。復帰は CONFLICT_RETRY_MS の再試行に任せる（PCを閉じたら回復）。
+        // navFailed へ落とさない。復帰は指数バックオフの再試行スケジューラに任せる（PCを閉じたら回復）。
         if (navTimerRef.current) {
           clearTimeout(navTimerRef.current)
           navTimerRef.current = null
@@ -366,11 +430,12 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   function retry() {
     setCode('')
-    portalTriesRef.current = 0
-    errorRetryRef.current = 0
     setRevealClass(false)
+    clearConflictTimer()
+    conflictAttemptRef.current = 0
+    setConflictExhausted(false)
     dispatch({ kind: 'retry' })
-    setWebviewKey((k) => k + 1)
+    rebootWebview()
   }
 
   const setAttendanceFocused = useCallback((b: boolean) => setAttendanceFocusedState(b), [])
@@ -395,6 +460,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     retry,
     running,
     conflict,
+    conflictExhausted,
     failCount,
     revealClass,
     setRevealClass,
