@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { COLLECT_BULLETIN_TABS_JS, GO_BULLETIN_JS, OPEN_BULLETIN_JS } from './injectedScripts'
 import { parseBulletinList, toBulletinItems } from '../parsers/bulletin'
 import { loadBulletinDigest, saveBulletinDigest, saveBulletinDiag } from '../storage/bulletinDigestStore'
@@ -6,17 +7,47 @@ import { saveBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
 
 /**
- * CLASS掲示の headless 収集エンジン。未読(index5)＋フラグつき(index9)の2タブを収集し、
- * 既存の body キャッシュを保ってマージ保存する（フラグ付き既読も保持）。着地に頼らず常設メニューから遷移。
- * 行を1件以上取れた時だけ保存し、0件時は既存を消さない。
+ * CLASS掲示の headless 収集エンジン。ページ内の全掲示行を収集し、既存の body キャッシュを保って
+ * マージ保存する（フラグ付き既読も保持）。着地に頼らず常設メニューから遷移。行を1件以上取れた時だけ保存。
+ * 診断: 収集結果が無くても、最後に見たページ種別/nav段階/keiji件数を saveBulletinDiag に残し、
+ * ホームで「なぜ取得できないか」を切り分けられるようにする。
  */
 export default function BulletinSyncEngine({ onFinished }: { onFinished: () => void }) {
+  // 最後に観測したシグナル（診断用）。ページ未到達でも finish 時に書き出す。
+  const diag = useRef<{ page: string; stage: string; keiji: number; align: number; rows: number; got: boolean }>({
+    page: '',
+    stage: '',
+    keiji: 0,
+    align: 0,
+    rows: 0,
+    got: false,
+  })
+
+  const flushDiag = () => {
+    const d = diag.current
+    // 例: "page=bulletin? stage=bulletin-click keiji=0 align=0 rows=0 got=false"
+    saveBulletinDiag(
+      `page=${d.page || '?'} stage=${d.stage || '?'} keiji=${d.keiji} align=${d.align} rows=${d.rows} got=${d.got}`,
+    ).catch(() => undefined)
+  }
+
   return (
     <ClassHeadlessCollector
       openJs={OPEN_BULLETIN_JS}
       collectJs={COLLECT_BULLETIN_TABS_JS}
       resultType="bulletin"
       fallbackJs={GO_BULLETIN_JS}
+      onSignal={(p) => {
+        if (p.type === 'page' && typeof p.url === 'string') {
+          diag.current.page = (p.url.split('/').pop() as string) || p.url
+        }
+        if (p.type === 'nav' && typeof p.stage === 'string') diag.current.stage = p.stage as string
+        if (p.type === 'bulletin') {
+          if (typeof p.count === 'number') diag.current.keiji = p.count
+          if (typeof p.align === 'number') diag.current.align = p.align
+          if (typeof p.page === 'string' && p.page) diag.current.page = p.page as string
+        }
+      }}
       onData={async (raw) => {
         let p: { count?: number; html?: string; align?: number; page?: string } | null = null
         try {
@@ -24,24 +55,25 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
         } catch {
           return false
         }
-        // 診断: 着地ページ・dl.keiji件数・.alignRight件数を毎回記録（取得不能の切り分け用）。
         const rows0 = parseBulletinList(p?.html ?? '')
-        await saveBulletinDiag(`${p?.page ?? '?'} keiji=${p?.count ?? 0} align=${p?.align ?? 0} rows=${rows0.length}`)
+        diag.current.rows = rows0.length
         if (!p || typeof p.count !== 'number' || p.count <= 0) return false
-        // 行を1件も抽出できなければ保存しない（＝既存ダイジェストを空で上書きしない）。次回再試行。
-        const rows = rows0
-        if (rows.length === 0) return false
+        if (rows0.length === 0) return false
         try {
-          const incoming = toBulletinItems(rows)
+          const incoming = toBulletinItems(rows0)
           const prev = await loadBulletinDigest()
           await saveBulletinDigest(mergeBulletinItems(prev, incoming))
           await saveBulletinRefreshedAt()
+          diag.current.got = true
         } catch {
           // 保存失敗でも到達済みなので完了扱い（次回再試行）。
         }
         return true
       }}
-      onFinished={onFinished}
+      onFinished={() => {
+        flushDiag()
+        onFinished()
+      }}
     />
   )
 }

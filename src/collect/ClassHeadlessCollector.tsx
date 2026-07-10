@@ -41,6 +41,7 @@ export default function ClassHeadlessCollector({
   onFinished,
   fallbackJs,
   actionJs,
+  onSignal,
 }: {
   openJs: string
   collectJs: string
@@ -51,6 +52,8 @@ export default function ClassHeadlessCollector({
   fallbackJs?: string
   /** 目的ページ到達後・抽出前に1回だけ発火するアクション（詳細を開く/フラグ切替等）。省略可。 */
   actionJs?: string
+  /** 全メッセージ（page/nav/auth/error/結果）を素通しで受け取る診断フック。省略可。挙動には影響しない。 */
+  onSignal?: (p: Record<string, unknown>) => void
 }) {
   const webviewRef = useRef<WebView>(null)
   const { setCollectActive, attendanceFocused } = useClassView()
@@ -118,6 +121,7 @@ export default function ClassHeadlessCollector({
     } catch {
       return
     }
+    if (p) onSignal?.(p as Record<string, unknown>)
     if (!p || p.type === 'nav' || p.type === 'auth') return
     // 着地判定: PC競合/メンテ中は即離脱してロック解放、エラー/失効は作り直し。それ以外は続行。
     if (p.type === 'page') {
