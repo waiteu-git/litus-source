@@ -11,6 +11,7 @@ import { makeClassEventId, type ClassEvent, type ClassEventType, type MakeupStat
 import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { loadClassEvents, upsertClassEvent, removeClassEvent } from '../storage/classEventsStore'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+import { refreshAllNotifications } from '../notifications/notificationRefresh'
 
 type Nav = NativeStackNavigationProp<TimetableStackParamList>
 type Rt = RouteProp<TimetableStackParamList, 'ClassEventForm'>
@@ -103,6 +104,7 @@ export default function ClassEventFormScreen() {
     }
     await upsertClassEvent(ev)
     bump()
+    refreshAllNotifications().catch(() => undefined)
     nav.goBack()
   }
 
@@ -110,7 +112,16 @@ export default function ClassEventFormScreen() {
     if (!editId) return
     Alert.alert('削除しますか？', 'この予定を削除します。', [
       { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: async () => { await removeClassEvent(editId); bump(); nav.goBack() } },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: async () => {
+          await removeClassEvent(editId)
+          bump()
+          refreshAllNotifications().catch(() => undefined)
+          nav.goBack()
+        },
+      },
     ])
   }
 
