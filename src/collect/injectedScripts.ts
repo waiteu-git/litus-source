@@ -47,6 +47,11 @@ export const OPEN_TIMETABLE_JS = `(function(){
     }
   }
   try {
+    // 着地ガード: 既に時間割ページ(table.classTable)に居るならメニューを叩かない（onLoadEnd毎の
+    // 再クリック→再POSTループを防ぐ。収集(COLLECT)は別途走るのでここでは遷移だけ抑止）。
+    if (document.querySelector('table.classTable')) {
+      post({ type: 'nav', ok: true, stage: 'timetable-already' });
+    } else {
     var target = findAnchor('学生時間割表');
     if (target) {
       var m = fire(target);
@@ -64,6 +69,7 @@ export const OPEN_TIMETABLE_JS = `(function(){
       } else {
         post({ type: 'nav', ok: false, stage: 'menu' });
       }
+    }
     }
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
@@ -518,8 +524,9 @@ export const DETECT_PAGE_JS = `(function(){
 /** SSOセッションを黙って温める先読み対象（CLASS=出席/時間割、LETUS=課題）。 */
 export const CLASS_TOP_URL = 'https://class.admin.tus.ac.jp/'
 
-/** CLASS掲示一覧ページ(Xut12401)。ログイン後にメニュー/出席等へ着地した場合の明示遷移先。 */
-export const BULLETIN_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut124/Xut12401.xhtml'
+/** CLASS掲示一覧ページ(Bsa00101)。実測2026-07-10: メニュー「掲示板」(menuid=0)の着地先。
+ *  旧値 Xut12401 は誤り（別機能）。メニュー発火が失敗した時の直リンク最終フォールバックに使う。 */
+export const BULLETIN_URL = 'https://class.admin.tus.ac.jp/uprx/up/bs/bsa001/Bsa00101.xhtml'
 
 /** 現在のCLASS WebViewを掲示一覧ページへ遷移させる（menuForm発火が使えないときの最終フォールバック）。 */
 export const GO_BULLETIN_JS = `(function(){ try { window.location.href='${BULLETIN_URL}'; } catch(e){} true; })();`
@@ -554,9 +561,15 @@ export const OPEN_BULLETIN_JS = `(function(){
     }
   }
   try {
-    var target = menuAnchor('掲示板');
-    if (target) { var m = fire(target); post({ type: 'nav', ok: m !== 'err', stage: 'bulletin-click', method: m }); }
-    else { post({ type: 'nav', ok: false, stage: 'menu-bulletin' }); }
+    // 着地ガード: 既に掲示ページ(dl.keiji)に居るならメニューを叩かない（onLoadEnd毎の再クリック→
+    // 再POSTループを防ぐ。これが実機で掲示が取れない主因と推定）。収集は別途走る。
+    if (document.querySelector('dl.keiji')) {
+      post({ type: 'nav', ok: true, stage: 'bulletin-already' });
+    } else {
+      var target = menuAnchor('掲示板');
+      if (target) { var m = fire(target); post({ type: 'nav', ok: m !== 'err', stage: 'bulletin-click', method: m }); }
+      else { post({ type: 'nav', ok: false, stage: 'menu-bulletin' }); }
+    }
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }

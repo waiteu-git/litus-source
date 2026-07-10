@@ -1,4 +1,4 @@
-import { COLLECT_BULLETIN_JS, OPEN_BULLETIN_JS } from './injectedScripts'
+import { COLLECT_BULLETIN_JS, GO_BULLETIN_JS, OPEN_BULLETIN_JS } from './injectedScripts'
 import { parseBulletinList, toBulletinDigest } from '../parsers/bulletin'
 import { saveBulletinDigest } from '../storage/bulletinDigestStore'
 import { saveBulletinRefreshedAt } from '../storage/refreshMetaStore'
@@ -16,6 +16,7 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
       openJs={OPEN_BULLETIN_JS}
       collectJs={COLLECT_BULLETIN_JS}
       resultType="bulletin"
+      fallbackJs={GO_BULLETIN_JS}
       onData={async (raw) => {
         let p: { count?: number; html?: string } | null = null
         try {
