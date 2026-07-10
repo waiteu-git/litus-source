@@ -145,23 +145,26 @@ export const OPEN_ATTENDANCE_JS = `(function(){
 export const DETECT_ATTENDANCE_JS = `(function(){
   try {
     var body = document.body ? (document.body.innerText || document.body.textContent || '') : '';
+    // 科目名（実DOM 2026-07-10: .sizeBig は「時刻」と「科目名」の2つに使われるため、時刻でない方を採る）。
     var courseName = '';
-    var m = body.match(/\\d{1,2}:\\d{2}\\s*[～~]\\s*\\d{1,2}:\\d{2}\\s+([^\\n]{2,40})/);
-    if (m) courseName = m[1].trim();
-    // 実DOM由来の目印（判定はRN側 parseAttendanceMessage に集約）:
+    var sbTime = /^\\d{1,2}:\\d{2}\\s*[～~〜]\\s*\\d{1,2}:\\d{2}$/;
+    var sbs = Array.prototype.slice.call(document.querySelectorAll('.sizeBig'));
+    for (var si=0; si<sbs.length; si++) {
+      var st = (sbs[si].textContent||'').replace(/\\s+/g,' ').trim();
+      if (st && !sbTime.test(st)) { courseName = st; break; }
+    }
+    if (!courseName) { var m = body.match(/\\d{1,2}:\\d{2}\\s*[～~]\\s*\\d{1,2}:\\d{2}\\s+([^\\n]{2,40})/); if (m) courseName = m[1].trim(); }
+    // 受付時間（実DOM: label.signSize=「出席確認時間：10:20～12:00」）。判定はRN側 parseAttendanceMessage。
+    var ssEl = document.querySelector('.signSize');
+    var signSize = ssEl ? (ssEl.textContent||'') : '';
     // .attendSuc=出席が記録された確定マーカー（どのデバイスで出しても付く）
     var attendSuc = !!document.querySelector('.attendSuc');
-    // 未提出（受付中）: 認証コード入力欄／「出席登録する」ボタンの存在
+    // 未提出（受付中）: 認証コード欄（実DOM: input.verification が4箱）／「出席登録する」ボタンの存在
+    var verif = document.querySelectorAll('input.verification');
     var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
     var hasSubmitBtn = btns.some(function(b){ return (((b.textContent||b.value)||'').replace(/\\s+/g,'')).indexOf('出席登録する')>=0; });
-    var codeInputs = Array.prototype.slice.call(document.querySelectorAll('input')).filter(function(el){
-      var t=(el.getAttribute('type')||'text').toLowerCase();
-      if(['hidden','submit','button','checkbox','radio','file','image','reset'].indexOf(t)>=0) return false;
-      if(el.disabled||el.readOnly) return false;
-      return el.maxLength===1||el.maxLength===2;
-    });
-    var hasCodeInput = hasSubmitBtn || body.indexOf('認証コード')>=0 || codeInputs.length>0;
-    // 受付終了マーカー / 残り秒
+    var hasCodeInput = verif.length>0 || hasSubmitBtn || body.indexOf('認証コード')>=0;
+    // 受付終了マーカー / 残り秒（実DOM: label.signFlging=「出席確認中」or「…終了」, label.timeSum=残り秒）
     var flg = document.querySelector('.signFlging');
     var signEnded = !!(flg && /終了/.test(flg.textContent||''));
     var tsEl = document.querySelector('.timeSum');
@@ -172,6 +175,7 @@ export const DETECT_ATTENDANCE_JS = `(function(){
       type: 'attendance',
       text: body,
       courseName: courseName,
+      signSize: signSize,
       attendSuc: attendSuc,
       hasCodeInput: hasCodeInput,
       signEnded: signEnded,
@@ -233,17 +237,27 @@ export function buildSubmitAttendanceJs(code: string): string {
       if (el.disabled || el.readOnly || !el.offsetParent) return false;
       return true;
     });
-    var labelEl = Array.prototype.slice.call(document.querySelectorAll('*')).find(function(e){
-      return e.children.length === 0 && (e.textContent || '').indexOf('認証コード') >= 0;
+    // 実DOM 2026-07-10: 認証コード欄は input.verification（verification1〜4・maxlength=1）。
+    // これを最優先で使う（従来のラベル位置＋maxLengthヒューリスティックより確実）。無ければ従来法。
+    var verif = Array.prototype.slice.call(document.querySelectorAll('input.verification')).filter(function(el){
+      return !el.disabled && !el.readOnly;
     });
-    var codeInputs = inputs;
-    if (labelEl) {
-      var after = inputs.filter(function(el){ return (labelEl.compareDocumentPosition(el) & 4) !== 0; });
-      if (after.length > 0) codeInputs = after;
-    }
-    if (codeInputs.length > 1) {
-      var small = codeInputs.filter(function(el){ return el.maxLength === 1 || el.maxLength === 2; });
-      if (small.length > 0) codeInputs = small;
+    var codeInputs;
+    if (verif.length > 0) {
+      codeInputs = verif;
+    } else {
+      var labelEl = Array.prototype.slice.call(document.querySelectorAll('*')).find(function(e){
+        return e.children.length === 0 && (e.textContent || '').indexOf('認証コード') >= 0;
+      });
+      codeInputs = inputs;
+      if (labelEl) {
+        var after = inputs.filter(function(el){ return (labelEl.compareDocumentPosition(el) & 4) !== 0; });
+        if (after.length > 0) codeInputs = after;
+      }
+      if (codeInputs.length > 1) {
+        var small = codeInputs.filter(function(el){ return el.maxLength === 1 || el.maxLength === 2; });
+        if (small.length > 0) codeInputs = small;
+      }
     }
     function nativeSet(el, v){
       try {

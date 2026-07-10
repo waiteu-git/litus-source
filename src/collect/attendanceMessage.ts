@@ -27,6 +27,8 @@ type Payload = {
   type?: unknown
   text?: unknown
   courseName?: unknown
+  /** label.signSize の生テキスト（「出席確認時間：10:20～12:00」）。受付時間の確実な取得元。 */
+  signSize?: unknown
   attendSuc?: unknown
   hasCodeInput?: unknown
   signEnded?: unknown
@@ -77,12 +79,15 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
   const p = payload as Payload
   if (p.type !== 'attendance') return fail(PARSE_ERROR)
   const text = typeof p.text === 'string' ? p.text : ''
+  const signSize = typeof p.signSize === 'string' ? p.signSize : ''
+  // 受付時間は label.signSize（確実）を優先し、無ければ本文テキストから拾う。
+  const windowOf = () => extractWindow(signSize) ?? extractWindow(text)
 
   // 1) 出席済み: attendSuc は本文が薄くても確定。空本文チェックより先に見る。
   if (p.attendSuc === true) {
     const r = base('attended')
     r.courseName = courseNameOf(p)
-    r.confirmWindow = extractWindow(text)
+    r.confirmWindow = windowOf()
     return r
   }
 
@@ -91,7 +96,7 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
   // 2) 受付なし
   if (text.includes(NONE_MARKER)) return base('none')
 
-  const cw = extractWindow(text)
+  const cw = windowOf()
 
   // 3) 受付中（未提出）: コード入力欄／出席登録するボタンあり
   if (p.hasCodeInput === true) {

@@ -21,6 +21,15 @@ describe('parseAttendanceMessage', () => {
     expect(r.remaining).toBe('あと6分50秒')
   })
 
+  it('受付時間は signSize（label実測）を優先し本文が無くても取れる', () => {
+    // 実DOMの signSize は全角コロン＋全角チルダ「出席確認時間：10:20～12:00」。
+    const r = parseAttendanceMessage(
+      msg({ text: '線形代数学１\nあと81分26秒', courseName: '線形代数学１', hasCodeInput: true, signSize: '出席確認時間：10:20～12:00', timeSum: 4908 }),
+    )
+    expect(r.status).toBe('accepting')
+    expect(r.confirmWindow).toBe('10:20〜12:00')
+  })
+
   it('出席済み: attendSuc → attended（本文が薄くても確定・cross-device）', () => {
     const text = '08:50〜10:20 化学1\n出席確認時間：08:50〜09:20\n出席確認終了\n出席'
     const r = parseAttendanceMessage(msg({ text, courseName: '化学1', attendSuc: true, signEnded: true, timeSum: -1 }))
