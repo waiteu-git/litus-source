@@ -27,7 +27,7 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>()
   const ui = useUi()
   const clearance = useTabBarClearance()
-  const { reception, timetable, now, running } = useAttendanceEngine()
+  const { reception, timetable, now, running, attendedNow } = useAttendanceEngine()
 
   // 「今やること」用の現在時刻。engine停止中も分単位で更新して次の授業/締切を追随させる。
   const [tick, setTick] = useState(() => new Date())
@@ -77,7 +77,9 @@ export default function HomeScreen() {
   }, [])
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
-  const banner = computeHomeBanner(timetable, running ? reception : null, now)
+  // 出席済みのときは「出席登録受付中/出席を確認」バナーは出さない（案内が不要・紛らわしい）。
+  const rawBanner = computeHomeBanner(timetable, running ? reception : null, now)
+  const banner = attendedNow ? { ...rawBanner, active: false } : rawBanner
 
   const focus = pickFocusClass(timetable, tick)
   const urgent = pickUrgentAssignment(assignments, tick)
@@ -112,16 +114,17 @@ export default function HomeScreen() {
     if (expanded) {
       setBannerMounted(true)
       Animated.parallel([
-        Animated.timing(pillAnim, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-        Animated.timing(bannerAnim, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(pillAnim, { toValue: 0, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(bannerAnim, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       ]).start()
     } else {
-      Animated.timing(bannerAnim, { toValue: 0, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(
+      // 1) バナーがゆっくり上へ引っ込む → 2) 短い線が右端を伝って降りる → 3) 最後に水滴が弾けて円になる。
+      Animated.timing(bannerAnim, { toValue: 0, duration: 360, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(
         ({ finished }) => {
           if (finished) setBannerMounted(false)
         },
       )
-      Animated.timing(pillAnim, { toValue: 1, duration: 640, delay: 170, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }).start()
+      Animated.timing(pillAnim, { toValue: 1, duration: 1150, delay: 220, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }).start()
     }
   }, [expanded, banner.active, bannerAnim, pillAnim])
 
@@ -288,29 +291,50 @@ export default function HomeScreen() {
         </ScrollView>
       </ScreenBg>
 
-      {/* 収縮したお知らせ: バナーが引っ込んだ後、右端を伝って右下へ降り、端からボタンとして現れる。 */}
+      {/* 収縮アニメ: バナーが引っ込んだ後、短い線が右端を伝って降り、最後に水滴が弾けて円ボタンになる。 */}
       {banner.active ? (
-        <Animated.View
-          pointerEvents={expanded ? 'none' : 'auto'}
-          style={[
-            styles.miniPill,
-            {
-              backgroundColor: accent,
-              bottom: clearance - 8,
-              opacity: pillAnim.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 1, 1] }),
-              transform: [
-                // 右端を伝って上→下へ降りる。
-                { translateY: pillAnim.interpolate({ inputRange: [0, 0.72, 1], outputRange: [-pillTravel, 0, 0] }) },
-                // 移動中は端に隠れて一部だけ覗き、最後に端からスライドインして現れる。
-                { translateX: pillAnim.interpolate({ inputRange: [0, 0.78, 1], outputRange: [40, 40, 0] }) },
-              ],
-            },
-          ]}
-        >
-          <Pressable onPress={openAttendance} accessibilityLabel={banner.text} style={styles.miniPillHit}>
-            <Ionicons name="flash" size={16} color="#ffffff" />
-          </Pressable>
-        </Animated.View>
+        <>
+          {/* 右端を伝う短い線。 */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.edgeLine,
+              {
+                backgroundColor: accent,
+                bottom: clearance - 8 + 12,
+                opacity: pillAnim.interpolate({ inputRange: [0, 0.08, 0.6, 0.72], outputRange: [0, 1, 1, 0] }),
+                transform: [
+                  {
+                    translateY: pillAnim.interpolate({
+                      inputRange: [0.08, 0.68],
+                      outputRange: [-pillTravel, 0],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+          {/* 水滴が弾けてできる円ボタン（少しオーバーシュートしてから収まる）。 */}
+          <Animated.View
+            pointerEvents={expanded ? 'none' : 'auto'}
+            style={[
+              styles.miniPill,
+              {
+                backgroundColor: accent,
+                bottom: clearance - 8,
+                opacity: pillAnim.interpolate({ inputRange: [0.64, 0.74], outputRange: [0, 1], extrapolate: 'clamp' }),
+                transform: [
+                  { scale: pillAnim.interpolate({ inputRange: [0.64, 0.86, 1], outputRange: [0.2, 1.18, 1], extrapolate: 'clamp' }) },
+                ],
+              },
+            ]}
+          >
+            <Pressable onPress={openAttendance} accessibilityLabel={banner.text} style={styles.miniPillHit}>
+              <Ionicons name="flash" size={16} color="#ffffff" />
+            </Pressable>
+          </Animated.View>
+        </>
       ) : null}
 
       {bulletinSyncing ? (
@@ -419,6 +443,7 @@ const styles = StyleSheet.create({
   entryBody: { flex: 1 },
   entryTitle: { fontSize: 15, fontWeight: '600' },
   entrySub: { fontSize: 12, marginTop: 2 },
+  edgeLine: { position: 'absolute', right: 4, width: 4, height: 26, borderRadius: 2 },
   miniPillHit: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   miniPill: {
     position: 'absolute',
