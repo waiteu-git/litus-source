@@ -1,4 +1,4 @@
-import { parse } from 'node-html-parser'
+import { parse, type HTMLElement } from 'node-html-parser'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 
 /** CLASS掲示一覧の1行（dl.keiji）から抽出した生データ。 */
@@ -7,6 +7,7 @@ export type BulletinRow = {
   title: string
   date: string // 'YYYY/MM/DD'（掲示開始日）
   unread: boolean // タイトルリンクが太字(fontBold)＝未読
+  flagged: boolean // 行のフラグボタン文言が「フラグをはずす」＝フラグ済み
   important: boolean // 重要アイコン(exclamation)が表示（hiddenStyleでない）
   isNew: boolean // 新着アイコン(lightbulb)が表示（hiddenStyleでない）
 }
@@ -24,9 +25,22 @@ function iconVisible(dl: ReturnType<typeof parse>, faClass: string): boolean {
 }
 
 /**
- * COLLECT_BULLETIN_JS が送る「dl.keiji を連結したHTML」から掲示一覧を抽出する（純粋・RN非依存）。
- * 各 dl.keiji は category / title(a.ui-commandlink) / 末尾の日付テキスト / 重要・新着アイコン /
- * 未読フラグ(タイトルの fontBold) を自己完結して持つ。
+ * 掲示行のフラグ状態。行(dl.keiji)の親要素(div.alignRight)内のボタン文言で判定する。
+ * PrimeFacesの ui-state-active / checked は状態が反転して紛らわしいため、文言で見る。
+ * ボタンが無い旧フィクスチャ（dl のみ連結）では false になる。
+ */
+function rowFlagged(dl: HTMLElement): boolean {
+  const parent = dl.parentNode
+  if (!parent) return false
+  const texts = parent.querySelectorAll('.ui-button-text')
+  return texts.some((t) => (t.text ?? '').replace(/\s+/g, '') === 'フラグをはずす')
+}
+
+/**
+ * COLLECT_BULLETIN_TABS_JS が送る「div.alignRight（dl.keiji＋状態ボタン）を連結したHTML」から
+ * 掲示一覧を抽出する（純粋・RN非依存）。各行は category / title(a.ui-commandlink) / 末尾の日付テキスト /
+ * 重要・新着アイコン / 未読(タイトルの fontBold) / フラグ(ボタン文言) を自己完結して持つ。
+ * ボタンの無い旧「dl.keiji 連結」HTMLでも動作する（flagged は false）。
  */
 export function parseBulletinList(html: string): BulletinRow[] {
   const root = parse(html)
@@ -44,6 +58,7 @@ export function parseBulletinList(html: string): BulletinRow[] {
       title,
       date,
       unread: hasClass(a, 'fontBold'),
+      flagged: rowFlagged(dl),
       important: iconVisible(dl, 'fa-exclamation-circle'),
       isNew: iconVisible(dl, 'fa-lightbulb-o'),
     })
