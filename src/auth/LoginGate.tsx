@@ -22,6 +22,9 @@ import { classifyGatePage, type GateVerdict } from './classifyGatePage'
 import { syncSession } from '../collect/syncSession'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
 import OnboardingSlides from '../screens/OnboardingSlides'
+import TermsConsentScreen from '../screens/TermsConsentScreen'
+import { TERMS_VERSION } from '../legal/termsVersion'
+import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
 import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from '../screens/bootLogoHtml'
 import { COLORS, useThemeVariant } from '../theme'
 
@@ -41,7 +44,7 @@ const BOOT_LOOP_MS = 1400
 // CLASS定時メンテナンス中、明けを検知して自動復帰するための再probe間隔。
 const MAINTENANCE_REPROBE_MS = 60000
 
-type GateState = 'loading' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'sync' | 'authed' | 'maintenance'
+type GateState = 'loading' | 'needsConsent' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'sync' | 'authed' | 'maintenance'
 
 const LoginContext = createContext<{ requireLogin: () => void }>({ requireLogin: () => {} })
 
@@ -123,12 +126,21 @@ export function LoginGate({ children }: { children: ReactNode }) {
   }, [state, bootAnimDone, bootReady])
 
   useEffect(() => {
-    loadOnboardingDone()
-      .then((done) => {
+    ;(async () => {
+      try {
+        // 規約同意を最優先で判定（未同意/旧版なら規約 → オンボ → ログインの順）。
+        const accepted = await loadAcceptedTermsVersion()
+        if (accepted < TERMS_VERSION) {
+          setState('needsConsent')
+          return
+        }
+        const done = await loadOnboardingDone()
         if (!done) wasFirstRunRef.current = true
         setState(done ? 'checking' : 'firstRun')
-      })
-      .catch(() => setState('checking'))
+      } catch {
+        setState('checking')
+      }
+    })()
   }, [])
 
   useEffect(() => {
@@ -401,6 +413,21 @@ export function LoginGate({ children }: { children: ReactNode }) {
                 </Text>
               </View>
             ) : null}
+          </View>
+        ) : null}
+        {state === 'needsConsent' && bootAnimDone ? (
+          <View style={StyleSheet.absoluteFill}>
+            <TermsConsentScreen
+              onAccept={async () => {
+                try {
+                  const done = await loadOnboardingDone()
+                  if (!done) wasFirstRunRef.current = true
+                  setState(done ? 'checking' : 'firstRun')
+                } catch {
+                  setState('checking')
+                }
+              }}
+            />
           </View>
         ) : null}
         {state === 'firstRun' && bootAnimDone ? (
