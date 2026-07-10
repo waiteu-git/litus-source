@@ -1,4 +1,5 @@
 import { parse, type HTMLElement } from 'node-html-parser'
+import { firstCourseCode, isCourseCode } from './courseCode'
 
 export type TimetableClass = {
   courseCode: string
@@ -24,8 +25,7 @@ export function parseClassCell(cellHtml: string): TimetableClass | null {
   const name = nameEl.text.trim()
   if (!name) return null
 
-  const codeMatch = cell.text.match(/\d{7}/)
-  const courseCode = codeMatch ? codeMatch[0] : ''
+  const courseCode = firstCourseCode(cell.text) ?? ''
 
   const roomEl = cell.querySelector('span')
   const room = roomEl ? roomEl.text.trim() : ''
@@ -61,7 +61,7 @@ function extractTeachers(cell: HTMLElement, name: string, courseCode: string): s
     if (!t) continue
     if (t === name) continue
     if (t === courseCode) continue
-    if (/^\d{7}$/.test(t)) continue
+    if (isCourseCode(t)) continue
     if (/単位/.test(t)) continue
     if (t.includes('ui-button')) continue
     return t.split('／').map((x) => x.trim()).filter((x) => x.length > 0)

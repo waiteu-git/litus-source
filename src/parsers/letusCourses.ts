@@ -3,12 +3,14 @@
  * LETUSコース名にはCLASS7桁コードが埋め込まれている（統合コースは複数、特別コースは無し）。
  */
 import { extractLinksFromHtml } from './letusLinks'
+import { extractCourseCodes } from './courseCode'
 
 export type LetusCourse = { name: string; url: string; codes: string[] }
 export type CourseCodeMap = Record<string, LetusCourse>
 
 export function extractCourseCodesFromName(name: string): string[] {
-  return name.match(/\d{7}/g) ?? []
+  // 科目IDは英字を含むことがある（9975A06 等）。数字7桁固定だと当該コースが消える。
+  return extractCourseCodes(name)
 }
 
 export function parseMyCourses(html: string, origin: string): LetusCourse[] {
