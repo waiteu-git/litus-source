@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
@@ -83,7 +83,11 @@ export default function HomeScreen() {
   const urgent = pickUrgentAssignment(assignments, tick)
 
   const [expanded, setExpanded] = useState(true)
-  const fade = useRef(new Animated.Value(0)).current
+  // バナーがマウント中か（引っ込むアニメの間は残し、終わってから外す）。
+  const [bannerMounted, setBannerMounted] = useState(true)
+  // bannerAnim: 0=上へ引っ込んだ / 1=展開表示。pillAnim: 0=右上に隠れ / 1=右下ボタンとして着地。
+  const bannerAnim = useRef(new Animated.Value(0)).current
+  const pillAnim = useRef(new Animated.Value(0)).current
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 「新しい受付状態」への切り替わりを検知する署名（種別＋科目名）。変化時だけ再展開する。
   const sigRef = useRef<string>('')
@@ -102,9 +106,24 @@ export default function HomeScreen() {
     }
   }, [banner.active, banner.kind, banner.courseName])
 
+  // 展開⇄収縮アニメ: 収縮時はバナーを上へ引っ込め→ピルが右端を伝って右下へ移動し端から現れる。
   useEffect(() => {
-    Animated.timing(fade, { toValue: 1, duration: 240, useNativeDriver: true }).start()
-  }, [expanded, banner.active, fade])
+    if (!banner.active) return
+    if (expanded) {
+      setBannerMounted(true)
+      Animated.parallel([
+        Animated.timing(pillAnim, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(bannerAnim, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]).start()
+    } else {
+      Animated.timing(bannerAnim, { toValue: 0, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(
+        ({ finished }) => {
+          if (finished) setBannerMounted(false)
+        },
+      )
+      Animated.timing(pillAnim, { toValue: 1, duration: 640, delay: 170, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }).start()
+    }
+  }, [expanded, banner.active, bannerAnim, pillAnim])
 
   function openAttendance() {
     navigation.navigate('Attendance')
@@ -116,14 +135,21 @@ export default function HomeScreen() {
   const accent = banner.kind === 'accepting' ? COLORS.cta : COLORS.emerald
   const tone = urgent ? urgencyTone(urgent, tick) : 'green'
   const toneColor = TONE_COLOR[tone]
+  // ピルが右上から右下へ「右端を伝って」降りてくる移動距離。
+  const pillTravel = Math.min(Dimensions.get('window').height * 0.55, 460)
 
   return (
     <View style={styles.wrap}>
       <ScreenBg>
         <ScreenHeader title="ホーム" icon="home-outline" />
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: clearance }]}>
-          {banner.active && expanded ? (
-            <Animated.View style={{ opacity: fade }}>
+          {banner.active && bannerMounted ? (
+            <Animated.View
+              style={{
+                opacity: bannerAnim,
+                transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-28, 0] }) }],
+              }}
+            >
               <Pressable
                 style={[styles.banner, { backgroundColor: accent }]}
                 onPress={openAttendance}
@@ -262,15 +288,29 @@ export default function HomeScreen() {
         </ScrollView>
       </ScreenBg>
 
-      {/* 収縮したお知らせ（右下の小ピル）。展開が畳まれても条件が続く限り残り、タップで出席へ。 */}
-      {banner.active && !expanded ? (
-        <Pressable
-          style={[styles.miniPill, { backgroundColor: accent, bottom: clearance - 8 }]}
-          onPress={openAttendance}
-          accessibilityLabel={banner.text}
+      {/* 収縮したお知らせ: バナーが引っ込んだ後、右端を伝って右下へ降り、端からボタンとして現れる。 */}
+      {banner.active ? (
+        <Animated.View
+          pointerEvents={expanded ? 'none' : 'auto'}
+          style={[
+            styles.miniPill,
+            {
+              backgroundColor: accent,
+              bottom: clearance - 8,
+              opacity: pillAnim.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 1, 1] }),
+              transform: [
+                // 右端を伝って上→下へ降りる。
+                { translateY: pillAnim.interpolate({ inputRange: [0, 0.72, 1], outputRange: [-pillTravel, 0, 0] }) },
+                // 移動中は端に隠れて一部だけ覗き、最後に端からスライドインして現れる。
+                { translateX: pillAnim.interpolate({ inputRange: [0, 0.78, 1], outputRange: [40, 40, 0] }) },
+              ],
+            },
+          ]}
         >
-          <Ionicons name="flash" size={16} color="#ffffff" />
-        </Pressable>
+          <Pressable onPress={openAttendance} accessibilityLabel={banner.text} style={styles.miniPillHit}>
+            <Ionicons name="flash" size={16} color="#ffffff" />
+          </Pressable>
+        </Animated.View>
       ) : null}
 
       {bulletinSyncing ? (
@@ -379,6 +419,7 @@ const styles = StyleSheet.create({
   entryBody: { flex: 1 },
   entryTitle: { fontSize: 15, fontWeight: '600' },
   entrySub: { fontSize: 12, marginTop: 2 },
+  miniPillHit: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   miniPill: {
     position: 'absolute',
     right: 16,
