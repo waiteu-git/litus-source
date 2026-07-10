@@ -340,6 +340,17 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         setAttended(rec)
         saveAttendedRecord(rec).catch(() => undefined)
       }
+      // 送信後は応答テキスト解析に頼らず、CLASSの確定マーカー(.attendSuc)で「出席済み」を確認する。
+      // 出席ページを取り直し、出席済みなら attended に遷移（＝リング→出席済み表示）。まだなら受付フォームに戻る。
+      // 送信成功時のテキスト検出が「送信しました」止まりでも、これで確実に出席済みへ切り替わる。
+      setTimeout(() => {
+        if (shouldRenderRef.current && !collectActiveRef.current) refreshAttendance()
+      }, 2500)
+      setTimeout(() => {
+        if (shouldRenderRef.current && !collectActiveRef.current && receptionStatusRef.current !== 'attended') {
+          refreshAttendance()
+        }
+      }, 6000)
     }
   }
 
