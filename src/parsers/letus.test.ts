@@ -42,6 +42,25 @@ describe('extractSubmissionStatus（実DOMフィクスチャ）', () => {
   })
 })
 
+// 実DOM回帰: mod/quiz（2026-07-10実測）。受験済み=受験サマリ「ステータス 終了／完了日時」、
+// 未受験=受験サマリ無し＋「小テストを受験する」開始ボタン（旧実装は未受験を unknown にしていた）。
+describe('extractSubmissionStatus 小テスト（実DOMフィクスチャ）', () => {
+  const finished = readFileSync(
+    fileURLToPath(new URL('./__fixtures__/quiz-finished-real.html', import.meta.url)),
+    'utf-8',
+  )
+  const notAttempted = readFileSync(
+    fileURLToPath(new URL('./__fixtures__/quiz-not-attempted-real.html', import.meta.url)),
+    'utf-8',
+  )
+  it('受験サマリ「ステータス 終了」→ completed', () => {
+    expect(parseAssignmentPage(finished, QUIZ_URL).submissionStatus).toBe('completed')
+  })
+  it('「小テストを受験する」開始ボタン（未受験）→ not_submitted', () => {
+    expect(parseAssignmentPage(notAttempted, QUIZ_URL).submissionStatus).toBe('not_submitted')
+  })
+})
+
 describe('htmlToPlainText', () => {
   it('scriptを除去しエンティティを復号する', () => {
     const t = htmlToPlainText(HTML_NOISE)
