@@ -24,7 +24,7 @@ import {
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
-import { isAttendedNow, todayKey, type AttendedRecord } from './attendedState'
+import { isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
 import { normalizeAttendanceCode } from './normalizeCode'
 import { loadTimetable } from '../storage/timetableStore'
@@ -96,6 +96,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   collectActiveRef.current = collectActive
   const onAttendanceRef = useRef(false)
   const attendedRef = useRef(false)
+  const attendedRecordRef = useRef<AttendedRecord | null>(null)
   const lastCodeRef = useRef('')
 
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
@@ -310,12 +311,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       // オフライン補助）。CLASSの状態が正。
       if (rec.status === 'attended') {
         const d = new Date()
-        const arec: AttendedRecord = {
+        // 再アクセス/別デバイス出席では lastCodeRef が空。既存の同日記録のコードを引き継いで消さない。
+        const arec = mergeAttendedRecord(attendedRecordRef.current, {
           date: todayKey(d),
           courseName: rec.courseName ?? '',
           confirmWindow: rec.confirmWindow ?? null,
           code: lastCodeRef.current,
-        }
+        })
         setAttended(arec)
         saveAttendedRecord(arec).catch(() => undefined)
       }
@@ -331,12 +333,12 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       dispatch({ kind: 'submitResult', result })
       if (result.ok) {
         const d = new Date()
-        const rec: AttendedRecord = {
+        const rec = mergeAttendedRecord(attendedRecordRef.current, {
           date: todayKey(d),
           courseName: state.reception?.courseName ?? '',
           confirmWindow: state.reception?.confirmWindow ?? null,
           code: lastCodeRef.current,
-        }
+        })
         setAttended(rec)
         saveAttendedRecord(rec).catch(() => undefined)
       }
@@ -378,6 +380,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const classEndMin = attendedClassEndMin(timetable, now, attended?.confirmWindow ?? null)
   const attendedNow = state.reception?.status === 'attended' || isAttendedNow(attended, now, classEndMin)
   attendedRef.current = attendedNow
+  attendedRecordRef.current = attended
 
   const value: AttendanceEngineValue = {
     phase: state.phase,

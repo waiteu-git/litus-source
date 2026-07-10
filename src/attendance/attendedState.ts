@@ -25,6 +25,20 @@ export function todayKey(now: Date): string {
  * confirmWindow も classEndMin も無ければ当日中は true（時刻情報が無いケースの安全側）。
  * classEndMin は時間割由来（呼び出し側で attendedClassEndMin を用いて算出）。
  */
+/**
+ * 出席済み記録を更新する際、入力コードを失わないようにマージする。
+ * CLASSの .attendSuc を検出して記録し直すとき、そのセッションで送信していない（再アクセス/別デバイスで
+ * 出席済み）と incoming.code は空になる。同日の既存記録にコードがあればそれを引き継ぐ（コードが消えない）。
+ */
+export function mergeAttendedRecord(
+  prev: AttendedRecord | null,
+  next: AttendedRecord,
+): AttendedRecord {
+  if (next.code) return next
+  if (prev && prev.date === next.date && prev.code) return { ...next, code: prev.code }
+  return next
+}
+
 export function isAttendedNow(
   rec: AttendedRecord | null,
   now: Date,
