@@ -81,7 +81,7 @@ export function shortDate(date: string): string {
  * 一覧行 → インフォタブ「CLASS掲示」の未読ダイジェスト。未読のみを新しい順（渡された順を維持）で。
  * id は JSF の要素IDが毎回変わるため、日付＋件名から安定生成する。
  */
-export function toBulletinDigest(rows: BulletinRow[]): BulletinItem[] {
+export function toBulletinDigest(rows: BulletinRow[]): Pick<BulletinItem, 'id' | 'category' | 'title' | 'meta'>[] {
   return rows
     .filter((r) => r.unread)
     .map((r) => ({
@@ -90,4 +90,22 @@ export function toBulletinDigest(rows: BulletinRow[]): BulletinItem[] {
       title: r.title,
       meta: [shortDate(r.date), r.important ? '重要' : ''].filter(Boolean).join(' ・ '),
     }))
+}
+
+/**
+ * 一覧行 → 保存用 BulletinItem[]（全件・未読/フラグ状態込み・body は null）。
+ * 画面側で unread / flagged によりセクション振り分けする。
+ */
+export function toBulletinItems(rows: BulletinRow[]): BulletinItem[] {
+  return rows.map((r) => ({
+    id: `${r.date}::${r.title}`,
+    category: simplifyCategory(r.category),
+    title: r.title,
+    date: r.date,
+    meta: [shortDate(r.date), r.important ? '重要' : ''].filter(Boolean).join(' ・ '),
+    unread: r.unread,
+    flagged: r.flagged,
+    important: r.important,
+    body: null,
+  }))
 }
