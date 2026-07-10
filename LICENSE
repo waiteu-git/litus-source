@@ -33,12 +33,37 @@ source-available license.
 本ソフトウェアは現状有姿で提供され、著作権者はいかなる保証も行わず、
 本ソフトウェアの使用に起因する損害について一切の責任を負いません。
 
+■ 利用制限（Acceptable Use）
+本ソフトウェアのコードまたは技術を用いて、次の行為を行うことを禁止する。
+1. CLASS / LETUS / 東京理科大学のシステムへの過度な負荷。
+2. 出席コードの自動連投・総当たり、スクレイピングの乱用等、システムの正常な
+   運用を妨げる行為。
+3. 代理出席・なりすまし等の不正な出席登録。
+4. 大学の規程・利用規約・法令に違反する利用。
+
+■ 利用者の責任
+本ソフトウェアの利用に関する一切の責任は利用者が負い、大学の規程・法令の遵守は
+利用者の責任とする。
+
+■ 免責の強化
+上記の「現状有姿」・無保証に加え、第三者による複製・改変・悪用、および間接・付随・
+特別・派生的損害を含む一切の損害について、著作権者は責任を負わない。
+
+■ 違反時の自動終了
+利用者が本ライセンスの禁止事項または上記の利用制限に違反した時点で、本ライセンスに
+基づく許諾は自動的に終了する。
+
+■ 準拠法・裁判管轄
+本ライセンスは日本法に準拠し、これに関する紛争については東京地方裁判所を第一審の
+専属的合意管轄裁判所とする。
+
 ■ 個別許諾
 本ライセンスの複製・改変・再配布の禁止条項にかかわらず、GitHub ユーザー
 haya9924 氏が開発するアプリ「cabetus」（github.com/haya9924/cabetus）に
-限り、複製・改変・再配布を許諾する。本許諾は上記の個人・アプリに対する
-個別の例外であり、本ライセンスの他の条項を変更するものではない。
-（許諾日: 2026-07-08）
+限り、複製・改変・再配布を許諾する。**本許諾は LETUS 関連のコードに限る。CLASS
+および出席関連のコードは本許諾の対象に含まない。** 本許諾は上記の個人・アプリに
+対する個別の例外であり、本ライセンスの他の条項を変更するものではない。
+（許諾日: 2026-07-08 ／ LETUS 限定への改定: 2026-07-10）
 
 【English】
 
@@ -64,14 +89,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. IN NO EVENT
 SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
 
+ACCEPTABLE USE:
+Using this software's code or techniques for any of the following is prohibited:
+1. Placing excessive load on CLASS / LETUS / Tokyo University of Science systems.
+2. Automated repeated submission or brute-forcing of attendance codes, or abusive
+   scraping that interferes with the normal operation of these systems.
+3. Fraudulent attendance registration such as proxy attendance or impersonation.
+4. Any use that violates university regulations, terms of use, or applicable law.
+
+USER RESPONSIBILITY:
+The user bears all responsibility for the use of this software; compliance with
+university regulations and applicable law is the user's responsibility.
+
+ENHANCED DISCLAIMER:
+In addition to the "AS IS" disclaimer above, the copyright holder shall not be
+liable for any copying, modification, or misuse by third parties, nor for any
+indirect, incidental, special, or consequential damages.
+
+AUTOMATIC TERMINATION:
+This license terminates automatically upon any violation of the prohibitions or
+the acceptable-use restrictions set forth herein.
+
+GOVERNING LAW / JURISDICTION:
+This license is governed by the laws of Japan. The Tokyo District Court shall have
+exclusive jurisdiction as the court of first instance for any dispute arising from it.
+
 INDIVIDUAL GRANT:
 Notwithstanding the restrictions on reproduction, modification, and
 redistribution set forth above, reproduction, modification, and
 redistribution are permitted solely for the application "cabetus"
 (github.com/haya9924/cabetus) developed by the GitHub user haya9924.
-This grant is an individual exception applying only to the person and
-application named above, and does not modify any other terms of this
-license. (Granted: 2026-07-08)
+This grant is LIMITED TO LETUS-RELATED CODE; CLASS- and attendance-related
+code is NOT included in this grant. This grant is an individual exception
+applying only to the person and application named above, and does not modify
+any other terms of this license. (Granted: 2026-07-08 / limited to LETUS: 2026-07-10)
 
 In case of any discrepancy between the Japanese and English texts, the
 Japanese text shall prevail.
