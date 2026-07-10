@@ -150,6 +150,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // 出席フォーカス取得のいずれでも同じ再起動）。reception はキャッシュ保持。
   // conflict は「今のページがそう分類された」という判定結果なので、作り直す以上いったん偽に戻す。
   // 戻さないと再分類で再び conflict になっても依存が変化せず、スケジューラが張り直されない。
+  // 注意: 以下の useEffect は [attendanceFocused] effect より先に配置する必要がある。
+  // rebootWebview() で lastConflictAttemptAtRef を更新し、直後に走る resumeConflictRetry() が
+  // CONFLICT_MIN_GAP_MS で阻止され、同じ commit 内の二重リブートが防がれる。
   useEffect(() => {
     if (shouldRender && !prevRenderRef.current) {
       conflictAttemptRef.current = 0
@@ -236,6 +239,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   // 出席画面を開いた瞬間も復帰トリガー。授業時間帯は shouldRender が真のままなので
   // 再起動 effect が走らず、これがないと打ち切り後に手動操作でしか復帰できない。
+  // 注意: shouldRender effect と同じ commit 内で両者が発火する場合、実行順序に依存。
+  // その時点で conflictRef.current は stale 状態なため、二重リブート防止は
+  // conflictRef ガードではなく CONFLICT_MIN_GAP_MS の gap check が担当する。
   useEffect(() => {
     if (attendanceFocused) resumeConflictRetry()
     // eslint-disable-next-line react-hooks/exhaustive-deps
