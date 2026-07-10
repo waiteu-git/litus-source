@@ -272,11 +272,14 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   }
 
   // PC競合中は指数バックオフで静かに再試行する（PCを閉じたら正常ページに着地→自動復帰）。
+  // 注意: !conflict の分岐でタイマーを止めるだけにとどめ、conflictAttemptRef/conflictExhausted は
+  // ここでリセットしない。競合再試行のリブートはCLASSのURLへ入り直すためSSO(Shibboleth)を
+  // 再び歩き、その途中で一時的にログインページを通過する。ログインページは onMessage で
+  // conflict を偽に戻すため、ここでカウンタを毎回0に戻すと「偽→競合ページ着地で真」が
+  // 繰り返され、試行回数が0↔1を往復して打ち切りに到達できなくなる。
   useEffect(() => {
     if (!conflict) {
       clearConflictTimer()
-      conflictAttemptRef.current = 0
-      setConflictExhausted(false)
       return
     }
     scheduleConflictRetry()
@@ -346,12 +349,16 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         }
         setConflict(true)
       } else if (kind === 'attendance') {
+        conflictAttemptRef.current = 0
+        setConflictExhausted(false)
         portalTriesRef.current = 0
         errorRetryRef.current = 0
         inject(DETECT_ATTENDANCE_JS)
       } else if (kind === 'splash') {
         inject(ENTER_CLASS_PC_JS)
       } else if (kind === 'portal') {
+        conflictAttemptRef.current = 0
+        setConflictExhausted(false)
         if (portalTriesRef.current < 2) {
           portalTriesRef.current += 1
           inject(OPEN_ATTENDANCE_JS)
