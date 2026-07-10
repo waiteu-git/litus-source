@@ -132,17 +132,25 @@ export function extractSubmissionStatus(
   const isQuiz = url.toLowerCase().includes('/mod/quiz/')
 
   if (isQuiz) {
-    if (text.includes('ステータス 終了') || text.includes('status finished')) {
-      return 'completed'
-    }
-    if (text.includes('受験済み') || text.includes('attempt finished')) {
-      return 'completed'
-    }
+    // 受験済み（実DOM 2026-07-10 mod/quiz 受験サマリ）: ステータス=終了 / 完了日時あり / 受験済み。
+    // ステータスとの間の空白ゆれに強い正規表現で判定する。
     if (
-      text.includes('利用できません') ||
-      text.includes('not available') ||
+      /ステータス\s*終了/.test(text) ||
+      text.includes('完了日時') ||
+      text.includes('受験済み') ||
+      text.includes('status finished') ||
+      text.includes('attempt finished')
+    ) {
+      return 'completed'
+    }
+    // 未受験（実DOM: 受験サマリが無く「(小テストを)受験する」開始ボタンがある）。
+    if (
+      text.includes('受験する') ||
+      text.includes('attempt quiz') ||
       text.includes('未受験') ||
-      text.includes('not attempted')
+      text.includes('not attempted') ||
+      text.includes('利用できません') ||
+      text.includes('not available')
     ) {
       return 'not_submitted'
     }
