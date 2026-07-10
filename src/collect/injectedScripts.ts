@@ -365,10 +365,14 @@ export const COLLECT_BULLETIN_JS = `(function(){
  */
 export const COLLECT_BULLETIN_TABS_JS = `(function(){
   try {
-    var blocks = document.querySelectorAll('.alignRight'), out='';
+    var dls = document.querySelectorAll('dl.keiji');
+    var out='';
+    // Bsd00701(タブ付き)は各行が div.alignRight でボタンを持つ→親要素ごと拾ってフラグ/既読状態も得る。
+    var blocks = document.querySelectorAll('.alignRight');
     for(var i=0;i<blocks.length;i++){ if(blocks[i].querySelector('dl.keiji')) out += blocks[i].outerHTML; }
-    var cnt = document.querySelectorAll('dl.keiji').length;
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'bulletin', html: '<div>'+out+'</div>', count: cnt }));
+    // フォールバック: 素の dl.keiji ページ(旧Bsa00101等・.alignRightラッパ無し)は dl を直接連結。
+    if(!out){ for(var k=0;k<dls.length;k++){ out += dls[k].outerHTML; } }
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'bulletin', html: '<div>'+out+'</div>', count: dls.length }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }
