@@ -9,6 +9,11 @@ import { pickFocusClass, type FocusClass } from '../home/focusClass'
 import { formatDeadline, pickUrgentAssignment, relDue, TONE_COLOR, urgencyTone } from '../assignments/deadline'
 import { loadAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
+import { loadClassEvents } from '../storage/classEventsStore'
+import { todayEvents, todayKey } from '../timetableEvents/eventSelectors'
+import { makeupOccurrences, type ClassEvent } from '../timetableEvents/classEvent'
+import { eventTypeLabel } from '../timetableEvents/eventLabels'
+import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
@@ -17,6 +22,11 @@ import { COLORS } from '../theme'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
+
+// 今日の予定タグの色（タイプ別）。
+const EVENT_TONE: Record<string, string> = {
+  cancel: '#e0533a', makeup: COLORS.cta, roomChange: '#e8a400', quiz: '#3a7be0', midterm: '#7a5cff', final: '#7a5cff', other: '#8a968f',
+}
 
 /**
  * ホーム画面。起点として「今やること」（次の授業＋直近の未提出課題）を最上部に集約し、続いて CLASS掲示、
@@ -38,6 +48,8 @@ export default function HomeScreen() {
 
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [bulletin, setBulletin] = useState<BulletinItem[]>([])
+  const [classEvents, setClassEvents] = useState<ClassEvent[]>([])
+  const { version: classEventsVersion } = useClassEventsVersion()
 
   // CLASS掲示の裏取得中フラグ。true の間だけ headless エンジンをマウントする。
   const [bulletinSyncing, setBulletinSyncing] = useState(false)
@@ -52,11 +64,18 @@ export default function HomeScreen() {
       loadBulletinDigest()
         .then((b) => active && setBulletin(b))
         .catch(() => undefined)
+      loadClassEvents()
+        .then((e) => active && setClassEvents(e))
+        .catch(() => undefined)
       return () => {
         active = false
       }
     }, []),
   )
+
+  useEffect(() => {
+    loadClassEvents().then(setClassEvents).catch(() => undefined)
+  }, [classEventsVersion])
 
   // 掲示の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
   const startBulletinSync = useCallback((force: boolean) => {
@@ -83,6 +102,23 @@ export default function HomeScreen() {
 
   const focus = pickFocusClass(timetable, tick)
   const urgent = pickUrgentAssignment(assignments, tick)
+
+  // 今日の予定（当日のイベント＋当日の補講オカレンス）。
+  const todaysItems: { tag: string; tone: string; course: string; sub: string }[] = []
+  for (const e of todayEvents(classEvents, tick)) {
+    const extra = e.type === 'roomChange' && e.room ? ` → ${e.room}` : ''
+    todaysItems.push({
+      tag: eventTypeLabel(e.type),
+      tone: EVENT_TONE[e.type] ?? '#8a968f',
+      course: e.courseName,
+      sub: `${e.periods.join('・')}限${extra}${e.note ? ` ・ ${e.note}` : ''}`,
+    })
+  }
+  const tkey = todayKey(tick)
+  for (const m of makeupOccurrences(classEvents)) {
+    if (m.date !== tkey) continue
+    todaysItems.push({ tag: '補講', tone: COLORS.cta, course: m.courseName, sub: `${m.periods.join('・')}限${m.room ? ` ・ ${m.room}` : ''}` })
+  }
 
   const [expanded, setExpanded] = useState(true)
   // バナーがマウント中か（引っ込むアニメの間は残し、終わってから外す）。
@@ -202,6 +238,26 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 ) : null}
+              </View>
+            </>
+          ) : null}
+
+          {/* 今日の予定: 休講/補講/教室変更/小テスト/中間/期末など当日分。無ければ節ごと非表示。 */}
+          {todaysItems.length > 0 ? (
+            <>
+              <SectionLabel>今日の予定</SectionLabel>
+              <View style={[ui.card, { gap: 8 }]}>
+                {todaysItems.map((it, i) => (
+                  <View key={`te-${i}`} style={styles.todayEvRow}>
+                    <View style={[styles.todayEvTag, { backgroundColor: it.tone }]}>
+                      <Text style={styles.todayEvTagText}>{it.tag}</Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[styles.todayEvTitle, { color: ui.valueColor }]} numberOfLines={1}>{it.course}</Text>
+                      <Text style={[styles.todayEvSub, { color: ui.labelColor }]} numberOfLines={1}>{it.sub}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
             </>
           ) : null}
@@ -443,6 +499,11 @@ const styles = StyleSheet.create({
   entryBody: { flex: 1 },
   entryTitle: { fontSize: 15, fontWeight: '600' },
   entrySub: { fontSize: 12, marginTop: 2 },
+  todayEvRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  todayEvTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, minWidth: 52, alignItems: 'center' },
+  todayEvTagText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
+  todayEvTitle: { fontSize: 14, fontWeight: '600' },
+  todayEvSub: { fontSize: 12, marginTop: 1 },
   edgeLine: { position: 'absolute', right: 4, width: 4, height: 26, borderRadius: 2 },
   miniPillHit: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   miniPill: {
