@@ -12,6 +12,10 @@ import { loadCourseMap } from '../storage/courseMapStore'
 import { buildSyllabusUrl } from '../links/syllabus'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { CourseSnapshot } from '../storage/courseSnapshotSerialize'
+import { loadClassEvents } from '../storage/classEventsStore'
+import type { ClassEvent } from '../timetableEvents/classEvent'
+import { cellBadgeText } from '../timetableEvents/eventLabels'
+import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -50,11 +54,13 @@ function LinkAction({ icon, title, sub, onPress }: { icon: IconName; title: stri
 export default function SubjectDetailScreen() {
   const route = useRoute<RouteProp<TimetableStackParamList, 'SubjectDetail'>>()
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
-  const { courseCode, name, day, period, room, teachers, isRemote } = route.params
+  const { courseCode, name, day, dayKey, period, room, teachers, isRemote } = route.params
   const { variant } = useThemeVariant()
   const ui = useUi()
+  const { version } = useClassEventsVersion()
   const [letusUrl, setLetusUrl] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<CourseSnapshot | null>(null)
+  const [events, setEvents] = useState<ClassEvent[]>([])
 
   const syllabusUrl = buildSyllabusUrl(courseCode, new Date())
 
@@ -69,6 +75,12 @@ export default function SubjectDetailScreen() {
       }
     })()
   }, [courseCode])
+
+  useEffect(() => {
+    loadClassEvents()
+      .then((all) => setEvents(all.filter((e) => e.courseName === name).sort((a, b) => (a.date < b.date ? -1 : 1))))
+      .catch(() => undefined)
+  }, [name, version])
 
   const hasDiff = !!snapshot && snapshot.added.length + snapshot.removed.length > 0
 
@@ -89,6 +101,44 @@ export default function SubjectDetailScreen() {
             </View>
           ) : null}
         </View>
+
+        <View style={styles.eventsHead}>
+          <SectionLabel>各回の予定</SectionLabel>
+          <Pressable
+            style={[styles.addBtn, { backgroundColor: ui.green ? 'rgba(255,255,255,0.28)' : '#e8f4ee' }]}
+            onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })}
+          >
+            <Ionicons name="add" size={16} color={ui.green ? '#ffffff' : COLORS.emerald} />
+            <Text style={[styles.addBtnText, { color: ui.green ? '#ffffff' : COLORS.emerald }]}>予定を追加</Text>
+          </Pressable>
+        </View>
+        {events.length === 0 ? (
+          <View style={[ui.card, { marginBottom: 10 }]}>
+            <Text style={{ color: ui.labelColor, fontSize: 13 }}>
+              休講・補講・教室変更・小テスト・中間・期末などを登録できます。
+            </Text>
+          </View>
+        ) : (
+          events.map((e) => (
+            <Pressable
+              key={e.id}
+              style={[ui.card, styles.eventRow]}
+              onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey, editId: e.id })}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.eventText, { color: ui.valueColor }]}>{cellBadgeText(e)}</Text>
+                <Text style={[styles.eventSub, { color: ui.labelColor }]}>{e.periods.join('・')}限{e.note ? ` ・ ${e.note}` : ''}</Text>
+              </View>
+              {e.type === 'cancel' && e.makeupStatus === 'undecided' ? (
+                <View style={styles.makeupPill}>
+                  <Text style={styles.makeupPillText}>補講を入力</Text>
+                </View>
+              ) : (
+                <Ionicons name="chevron-forward" size={18} color={ui.green ? 'rgba(255,255,255,0.7)' : '#9bb3ab'} />
+              )}
+            </Pressable>
+          ))
+        )}
 
         <SectionLabel>リンク</SectionLabel>
         {letusUrl ? (
@@ -155,4 +205,12 @@ const styles = StyleSheet.create({
   diffPlus: { fontSize: 15, fontWeight: '700', color: COLORS.success, lineHeight: 20 },
   diffMinus: { fontSize: 15, fontWeight: '700', color: COLORS.danger, lineHeight: 20 },
   diffText: { fontSize: 14, flex: 1 },
+  eventsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
+  addBtnText: { fontSize: 13, fontWeight: '600' },
+  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  eventText: { fontSize: 14, fontWeight: '600' },
+  eventSub: { fontSize: 12, marginTop: 2 },
+  makeupPill: { backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  makeupPillText: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
 })

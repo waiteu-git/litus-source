@@ -5,6 +5,7 @@ import CollectCoursesScreen from '../screens/CollectCoursesScreen'
 import UpdateCheckScreen from '../screens/UpdateCheckScreen'
 import LetusCoursesScreen from '../screens/LetusCoursesScreen'
 import SubjectDetailScreen from '../screens/SubjectDetailScreen'
+import ClassEventFormScreen from '../screens/ClassEventFormScreen'
 import WebViewerScreen from '../screens/WebViewerScreen'
 import PdfViewerScreen from '../screens/PdfViewerScreen'
 import SyllabusScreen from '../screens/SyllabusScreen'
@@ -29,6 +30,11 @@ export default function TimetableStack() {
       {/* LETUS自前UI（Turn4で確定した4b）。ScreenHeaderを自前描画するためheaderShown:false。 */}
       <Stack.Screen name="LetusCourses" component={LetusCoursesScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SubjectDetail" component={SubjectDetailScreen} options={{ title: '科目' }} />
+      <Stack.Screen
+        name="ClassEventForm"
+        component={ClassEventFormScreen}
+        options={({ route }) => ({ title: route.params.editId ? '予定を編集' : '予定を追加' })}
+      />
       <Stack.Screen name="Syllabus" component={SyllabusScreen} options={{ title: 'シラバス' }} />
       <Stack.Screen
         name="Web"

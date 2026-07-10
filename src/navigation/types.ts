@@ -1,3 +1,5 @@
+import type { DayOfWeek } from '../parsers/timetable'
+
 export type TimetableStackParamList = {
   TimetableHome: undefined
   Collect: undefined
@@ -9,11 +11,14 @@ export type TimetableStackParamList = {
     name: string
     // 時間割タップ時のみ渡る付加情報（時限画面から遷移した場合）。他経路からの遷移では undefined。
     day?: string
+    dayKey?: DayOfWeek
     period?: number
     room?: string
     teachers?: string[]
     isRemote?: boolean
   }
+  // 各回イベント（休講/補講等）の追加/編集。editId ありで既存を編集。
+  ClassEventForm: { courseName: string; courseCode: string | null; dayKey?: DayOfWeek; editId?: string }
   Syllabus: { url: string; name: string }
   Web: { url: string; title?: string }
   PdfViewer: { url: string; title?: string }
