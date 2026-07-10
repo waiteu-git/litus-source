@@ -40,6 +40,7 @@ export default function ClassHeadlessCollector({
   onData,
   onFinished,
   fallbackJs,
+  actionJs,
 }: {
   openJs: string
   collectJs: string
@@ -48,6 +49,8 @@ export default function ClassHeadlessCollector({
   onFinished: () => void
   /** メニュー発火で目的ページに到達できない時の最終手段（直リンク遷移JS等）。省略可。 */
   fallbackJs?: string
+  /** 目的ページ到達後・抽出前に1回だけ発火するアクション（詳細を開く/フラグ切替等）。省略可。 */
+  actionJs?: string
 }) {
   const webviewRef = useRef<WebView>(null)
   const { setCollectActive, attendanceFocused } = useClassView()
@@ -99,7 +102,13 @@ export default function ClassHeadlessCollector({
     // 入口スプラッシュならPC ENTERで先へ＋着地判定。ログイン後はメニューを叩いて目的一覧へ。
     webviewRef.current?.injectJavaScript(CLASS_ON_LOAD_JS)
     setTimeout(() => webviewRef.current?.injectJavaScript(openJs), OPEN_DELAY_MS)
-    setTimeout(() => webviewRef.current?.injectJavaScript(collectJs), COLLECT_DELAY_MS)
+    if (actionJs) {
+      // 目的ページ到達 → アクション発火 → その結果を抽出、の順に間隔を空けて流す。
+      setTimeout(() => webviewRef.current?.injectJavaScript(actionJs), OPEN_DELAY_MS + 1400)
+      setTimeout(() => webviewRef.current?.injectJavaScript(collectJs), OPEN_DELAY_MS + 2800)
+    } else {
+      setTimeout(() => webviewRef.current?.injectJavaScript(collectJs), COLLECT_DELAY_MS)
+    }
   }
 
   async function onMessage(data: string) {
