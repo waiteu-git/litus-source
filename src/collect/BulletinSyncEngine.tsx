@@ -1,5 +1,5 @@
 import { COLLECT_BULLETIN_JS, GO_BULLETIN_JS, OPEN_BULLETIN_JS } from './injectedScripts'
-import { parseBulletinList, toBulletinDigest } from '../parsers/bulletin'
+import { parseBulletinList, toBulletinItems } from '../parsers/bulletin'
 import { saveBulletinDigest } from '../storage/bulletinDigestStore'
 import { saveBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
@@ -27,7 +27,7 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
         // dl.keiji を1件以上取れた＝掲示板ページに到達。抽出して保存。
         if (!p || typeof p.count !== 'number' || p.count <= 0 || typeof p.html !== 'string') return false
         try {
-          const digest = toBulletinDigest(parseBulletinList(p.html))
+          const digest = toBulletinItems(parseBulletinList(p.html))
           await saveBulletinDigest(digest)
           await saveBulletinRefreshedAt()
         } catch {
