@@ -7,13 +7,23 @@ import RootTabs from './src/navigation/RootTabs'
 import BackgroundLetusSync from './src/collect/BackgroundLetusSync'
 import BackgroundBulletinSync from './src/collect/BackgroundBulletinSync'
 import { ClassViewProvider } from './src/collect/classViewArbiter'
+import { AttendanceEngineProvider } from './src/attendance/AttendanceEngineProvider'
 import { AuthProvider } from './src/auth/AuthProvider'
 import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion'
 import { LoginGate } from './src/auth/LoginGate'
 import { ThemeProvider } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
-import { configureNotifications, requestNotificationPermission } from './src/notifications/notifier'
+import {
+  addNotificationResponseListener,
+  configureNotifications,
+  getInitialNotificationTag,
+  requestNotificationPermission,
+} from './src/notifications/notifier'
 import { refreshAllNotifications } from './src/notifications/notificationRefresh'
+import { navigationRef, flushPendingNavigation, requestOpenAttendance } from './src/navigation/navigationRef'
+
+// 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
+const ATTENDANCE_TAG = 'attendance-alarm'
 
 export default function App() {
   useEffect(() => {
@@ -33,6 +43,22 @@ export default function App() {
     return () => sub.remove()
   }, [])
 
+  // 出席通知タップで出席画面を即開く。cold start（起動時タップ）＋ warm（起動中タップ）の両対応。
+  useEffect(() => {
+    let sub: { remove: () => void } | null = null
+    ;(async () => {
+      try {
+        if ((await getInitialNotificationTag()) === ATTENDANCE_TAG) requestOpenAttendance()
+        sub = await addNotificationResponseListener((tag) => {
+          if (tag === ATTENDANCE_TAG) requestOpenAttendance()
+        })
+      } catch (e) {
+        console.warn('通知応答の購読に失敗しました', e)
+      }
+    })()
+    return () => sub?.remove()
+  }, [])
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
@@ -41,13 +67,15 @@ export default function App() {
             着地して詰む実機バグがあった。ログイン完了後にのみ裏SSOを開始する。 */}
         <DisplaySettingsProvider>
         <AssignmentsVersionProvider>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef} onReady={flushPendingNavigation}>
             <LoginGate>
               <AuthProvider>
                 <ClassViewProvider>
-                  <RootTabs />
-                  <BackgroundLetusSync />
-                  <BackgroundBulletinSync />
+                  <AttendanceEngineProvider>
+                    <RootTabs />
+                    <BackgroundLetusSync />
+                    <BackgroundBulletinSync />
+                  </AttendanceEngineProvider>
                 </ClassViewProvider>
               </AuthProvider>
             </LoginGate>

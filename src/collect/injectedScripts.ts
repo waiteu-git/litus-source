@@ -494,8 +494,47 @@ export const CLASS_TOP_URL = 'https://class.admin.tus.ac.jp/'
 /** CLASS掲示一覧ページ(Xut12401)。ログイン後にメニュー/出席等へ着地した場合の明示遷移先。 */
 export const BULLETIN_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut124/Xut12401.xhtml'
 
-/** 現在のCLASS WebViewを掲示一覧ページへ遷移させる（着地が掲示でなかったときのフォールバック）。 */
+/** 現在のCLASS WebViewを掲示一覧ページへ遷移させる（menuForm発火が使えないときの最終フォールバック）。 */
 export const GO_BULLETIN_JS = `(function(){ try { window.location.href='${BULLETIN_URL}'; } catch(e){} true; })();`
+
+/**
+ * メインメニューの「掲示板」へ遷移する（実DOM 2026-07-09: ログイン後の着地は時間帯で変わる＝授業中は
+ * モバイル出席登録、平常はホーム/アンケート等。掲示は着地に頼らず**常設メニューから遷移**するのが正解）。
+ * メニューの `<a>` の本当の遷移は onclick("confirmIfModified(this)") ではなく **data-pfconfirmcommand**
+ * （syncTransition＋menuForm submit・menuid='0'）に入っており、confirmIfModified は「変更あり」時に確認
+ * ダイアログでheadlessを止める危険がある。よって data-pfconfirmcommand を **直接実行**して確実に送信する
+ * （無ければ onclick → click の順にフォールバック）。menuForm.submit() はフルPOST＝新規ロードなので、
+ * 遷移後の onLoadEnd で COLLECT_BULLETIN_JS を流せば dl.keiji を拾える。
+ */
+export const OPEN_BULLETIN_JS = `(function(){
+  function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
+  function menuAnchor(text){
+    var as = Array.prototype.slice.call(document.querySelectorAll('a.ui-menuitem-link'));
+    return as.find(function(a){
+      var s = a.querySelector('.ui-menuitem-text');
+      return s && ((s.textContent || '').replace(/\\s+/g, '')) === text;
+    }) || null;
+  }
+  function fire(el){
+    var dpc = el.getAttribute('data-pfconfirmcommand');
+    try {
+      if (dpc) { new Function(dpc).call(el); return 'pfconfirm'; }
+      var oc = el.getAttribute('onclick');
+      if (oc) { new Function('event', oc).call(el, new MouseEvent('click', { bubbles: true })); return 'onclick'; }
+      el.click(); return 'click';
+    } catch (e) {
+      try { el.click(); return 'click-fb'; } catch (e2) { return 'err'; }
+    }
+  }
+  try {
+    var target = menuAnchor('掲示板');
+    if (target) { var m = fire(target); post({ type: 'nav', ok: m !== 'err', stage: 'bulletin-click', method: m }); }
+    else { post({ type: 'nav', ok: false, stage: 'menu-bulletin' }); }
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
 
 /**
  * CLASS掲示一覧を抽出。ログイン後ポータル(Xut12401)は左に機能メニュー、本文に掲示一覧(dl.keiji)を

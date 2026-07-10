@@ -4,7 +4,7 @@ import { clearTimetable, loadTimetable } from '../storage/timetableStore'
 import { loadAttendanceSettings, saveAttendanceSettings } from '../storage/attendanceSettingsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
-import { ScreenBg, ScreenHeader, Segmented, useUi } from '../ui/screen'
+import { ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemeVariant } from '../theme'
 import { useDisplaySettings } from '../displaySettings'
@@ -13,6 +13,7 @@ type Course = { courseCode: string; name: string }
 
 export default function SettingsScreen() {
   const ui = useUi()
+  const clearance = useTabBarClearance()
   const { variant, setVariant } = useThemeVariant()
   const { timetableView, assignmentsView, setTimetableView, setAssignmentsView } = useDisplaySettings()
   const [courses, setCourses] = useState<Course[]>([])
@@ -53,7 +54,7 @@ export default function SettingsScreen() {
   return (
     <ScreenBg>
       <ScreenHeader title="設定" icon="settings-outline" />
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
         <Accordion title="テーマ" icon="color-palette-outline" defaultOpen>
           <Segmented
             options={[

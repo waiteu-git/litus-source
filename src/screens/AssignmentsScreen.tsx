@@ -8,9 +8,11 @@ import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
 import { bucketAssignments, BUCKET_ORDER, type BucketKey } from '../assignments/buckets'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
+import { isManualUrl } from '../assignments/manualAssignment'
 import type { AssignmentsStackParamList } from '../navigation/types'
-import { Chip, ScreenBg, ScreenHeader, Segmented, SectionLabel, useUi } from '../ui/screen'
+import { Chip, ScreenBg, ScreenHeader, Segmented, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { useDisplaySettings } from '../displaySettings'
+import { byDeadlineAsc, formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone } from '../assignments/deadline'
 import { COLORS } from '../theme'
 
 const SECTION_LABEL: Record<BucketKey, string> = {
@@ -33,53 +35,8 @@ const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
 
 const URGENT: Set<BucketKey> = new Set(['within24h', 'overdue'])
 
-function isSubmitted(a: Assignment): boolean {
-  return a.submissionStatus === 'submitted' || a.submissionStatus === 'completed'
-}
-
 function isSameLocalDate(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-}
-
-function formatDeadline(iso: string | null): string {
-  if (!iso) return '締切未設定'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '締切未設定'
-  const mm = d.getMonth() + 1
-  const dd = d.getDate()
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mi = String(d.getMinutes()).padStart(2, '0')
-  return `${mm}/${dd} ${hh}:${mi}`
-}
-
-function relDue(iso: string | null, now: Date): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const sec = Math.floor((d.getTime() - now.getTime()) / 1000)
-  if (sec <= 0) return '締切超過'
-  const day = Math.floor(sec / 86400)
-  if (day >= 1) return `あと${day}日`
-  const h = Math.floor(sec / 3600)
-  if (h >= 1) return `あと${h}時間`
-  return `あと${Math.max(1, Math.floor(sec / 60))}分`
-}
-
-/** 締切順表示（案2b）の緊急度トーン。提出済みはグレー、以降は締切までの時間で判定。 */
-function urgencyTone(a: Assignment, now: Date): 'red' | 'amber' | 'green' | 'gray' {
-  if (isSubmitted(a)) return 'gray'
-  if (!a.deadline) return 'green'
-  const ms = new Date(a.deadline).getTime() - now.getTime()
-  if (ms <= 24 * 3600 * 1000) return 'red'
-  if (ms <= 7 * 24 * 3600 * 1000) return 'amber'
-  return 'green'
-}
-
-const TONE_COLOR: Record<'red' | 'amber' | 'green' | 'gray', string> = {
-  red: '#e0533a',
-  amber: '#e8a400',
-  green: '#0f9e75',
-  gray: '#b8ccc3',
 }
 
 function StatusChip({ status }: { status: AssignmentSubmissionStatus }) {
@@ -95,17 +52,10 @@ function StatusChip({ status }: { status: AssignmentSubmissionStatus }) {
 
 type Filter = 'not_submitted' | 'submitted' | 'all'
 
-/** null(締切未設定)は末尾、以外は締切の早い順（＝これから迫っている順）。 */
-function byDeadlineAsc(a: Assignment, b: Assignment): number {
-  if (a.deadline === null && b.deadline === null) return a.title.localeCompare(b.title, 'ja')
-  if (a.deadline === null) return 1
-  if (b.deadline === null) return -1
-  return new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
-}
-
 export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const ui = useUi()
+  const clearance = useTabBarClearance()
   const { assignmentsView } = useDisplaySettings()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [now, setNow] = useState(() => new Date())
@@ -154,7 +104,9 @@ export default function AssignmentsScreen() {
   const unhide = (a: Assignment) => setIgnored(a, false)
 
   function openDetail(a: Assignment) {
-    navigation.navigate('LetusAssignmentDetail', { url: a.url })
+    // 手動課題はLETUS詳細を持たないので編集画面へ。LETUS由来は従来どおり詳細へ。
+    if (isManualUrl(a.url)) navigation.navigate('ManualAssignment', { url: a.url })
+    else navigation.navigate('LetusAssignmentDetail', { url: a.url })
   }
 
   const live = assignments.filter((a) => !a.ignored)
@@ -196,9 +148,16 @@ export default function AssignmentsScreen() {
       <Pressable onPress={() => openDetail(a)} onLongPress={() => hide(a)} style={[ui.card, styles.flatRow]}>
         <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
-            {a.courseName || '科目不明'}
-          </Text>
+          <View style={styles.courseRow}>
+            <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
+              {a.courseName || '科目不明'}
+            </Text>
+            {isManualUrl(a.url) ? (
+              <View style={styles.manualBadge}>
+                <Text style={styles.manualBadgeText}>手動</Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={1}>
             {a.title}
           </Text>
@@ -244,14 +203,21 @@ export default function AssignmentsScreen() {
       <ScreenHeader
         title="課題"
         icon="checkbox-outline"
-        right={<Chip label="更新" icon="refresh" onPress={() => navigation.navigate('CollectAssignments')} />}
+        right={
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Chip label="追加" icon="add" onPress={() => navigation.navigate('ManualAssignment')} />
+            <Chip label="更新" icon="refresh" onPress={() => navigation.navigate('CollectAssignments')} />
+          </View>
+        }
       />
       {total === 0 && hidden.length === 0 ? (
         <View style={[ui.card, { marginTop: 16 }]}>
-          <Text style={{ color: ui.valueColor }}>表示できる課題がありません。「更新」から取得してください。</Text>
+          <Text style={{ color: ui.valueColor }}>
+            表示できる課題がありません。「更新」でLETUSから取得、「追加」で手動でも登録できます。
+          </Text>
         </View>
       ) : assignmentsView === 'flat' ? (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
           <View style={[ui.card, styles.statsRow]}>
             <View style={styles.statCol}>
               <Text style={[styles.statNum, { color: '#e0533a' }]}>{stats.dueToday}</Text>
@@ -296,7 +262,7 @@ export default function AssignmentsScreen() {
           <HiddenSection />
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
           {BUCKET_ORDER.filter((k) => buckets[k].length > 0).map((k) => (
             <View key={k}>
               <SectionLabel>{SECTION_LABEL[k]}</SectionLabel>
@@ -358,6 +324,9 @@ const styles = StyleSheet.create({
   statNum: { fontSize: 24, fontWeight: '700' },
   statLabel: { fontSize: 11, marginTop: 2 },
   flatRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  courseRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  manualBadge: { backgroundColor: '#e5f3ec', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
+  manualBadgeText: { fontSize: 10, color: COLORS.emeraldDark, fontWeight: '700' },
   dot: { width: 9, height: 9, borderRadius: 5 },
   flatRight: { alignItems: 'flex-end' },
   flatRel: { fontSize: 13, fontWeight: '700' },

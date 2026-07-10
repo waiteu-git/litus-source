@@ -23,12 +23,19 @@ export type AssignmentsStackParamList = {
   AssignmentsHome: undefined
   CollectAssignments: undefined
   LetusAssignmentDetail: { url: string }
+  // url なし=新規手動追加 / url あり=その手動課題を編集。
+  ManualAssignment: { url?: string } | undefined
   Web: { url: string; title?: string }
   PdfViewer: { url: string; title?: string }
 }
 
-export type InfoStackParamList = {
-  InfoHome: undefined
+// ホームタブのスタック。出席・インフォ・設定をホーム内へ集約する。
+export type HomeStackParamList = {
+  HomeHome: undefined
+  Attendance: undefined
+  Info: undefined
+  Bulletin: undefined
   Link: { url: string; title?: string; isClass?: boolean }
   PdfViewer: { url: string; title?: string }
+  Settings: undefined
 }
