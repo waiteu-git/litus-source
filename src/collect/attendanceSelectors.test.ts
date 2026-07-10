@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url'
 
 /**
  * 実DOM回帰: モバイル出席登録ページ（受付中・未提出 2026-07-10実測）の抜粋に対し、
- * DETECT_ATTENDANCE_JS / buildSubmitAttendanceJs が依存する**セレクタ**が解決することを担保する。
- * これが壊れると出席の検出/送信が黙って失敗するため、実サイトのDOM変更を検知する最重要の番人。
+ * sensor（DETECT_ATTENDANCE_JS）が依存する**セレクタ**が解決することを担保する。
+ * これが壊れると出席の検出が黙って失敗するため、実サイトのDOM変更を検知する番人。
+ * （送信 actuator は attendanceSubmit.private の非公開実装側。公開版はスタブ。）
  */
 const html = readFileSync(
   fileURLToPath(new URL('./__fixtures__/attendance-accepting-real.html', import.meta.url)),

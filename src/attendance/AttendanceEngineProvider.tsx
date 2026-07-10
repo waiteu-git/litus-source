@@ -19,8 +19,8 @@ import {
   DETECT_PAGE_JS,
   ENTER_CLASS_PC_JS,
   OPEN_ATTENDANCE_JS,
-  buildSubmitAttendanceJs,
 } from '../collect/injectedScripts'
+import { buildSubmitAttendanceJs } from '../collect/attendanceSubmit.private'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
