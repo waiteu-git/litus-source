@@ -349,6 +349,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         }
         setConflict(true)
       } else if (kind === 'attendance') {
+        // 出席ページ着地だけが競合解消の確実なシグナル。通過点である portal ではリセットしない。
         conflictAttemptRef.current = 0
         setConflictExhausted(false)
         portalTriesRef.current = 0
@@ -357,8 +358,6 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       } else if (kind === 'splash') {
         inject(ENTER_CLASS_PC_JS)
       } else if (kind === 'portal') {
-        conflictAttemptRef.current = 0
-        setConflictExhausted(false)
         if (portalTriesRef.current < 2) {
           portalTriesRef.current += 1
           inject(OPEN_ATTENDANCE_JS)
