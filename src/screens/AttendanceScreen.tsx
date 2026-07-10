@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg, CountdownRing, useTabBarClearance } from '../ui/screen'
@@ -59,13 +59,10 @@ export default function AttendanceScreen() {
             ? '受付状況を更新しています…'
             : '受付状況を確認しています…'
 
-  const resultBanner = result
-    ? {
-        text: result.result,
-        bg: result.ok ? c.successBg : c.dangerBg,
-        fg: result.ok ? c.success : c.danger,
-      }
-    : null
+  // 送信結果の3状態: 成功(ok)/失敗(wrong|err)/検出未確定(送信はした)。未確定は赤ではなく
+  // 「確認中」（送信後に .attendSuc を取り直して出席済みへ切り替わる）として中立表示にする。
+  const submitFailed = !!result && (result.wrong || result.err)
+  const verifying = !!result && !result.ok && !result.wrong && !result.err
 
   const digits = [0, 1, 2, 3].map((i) => code[i] ?? '')
 
@@ -218,20 +215,22 @@ export default function AttendanceScreen() {
               <Text style={styles.ctaText}>{phase === 'submitting' ? '送信中…' : '出席する'}</Text>
             </Pressable>
 
-            {resultBanner ? (
-              result?.ok ? (
-                <View style={[styles.card, cardStyle, styles.doneCard]}>
-                  <View style={styles.doneCheck}>
-                    <Ionicons name="checkmark" size={38} color="#ffffff" />
-                  </View>
-                  <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
-                  <Text style={[styles.doneSub, { color: labelColor }]}>{resultBanner.text}</Text>
+            {result?.ok ? (
+              <View style={[styles.card, cardStyle, styles.doneCard]}>
+                <View style={styles.doneCheck}>
+                  <Ionicons name="checkmark" size={38} color="#ffffff" />
                 </View>
-              ) : (
-                <View style={[styles.result, { backgroundColor: resultBanner.bg }]}>
-                  <Text style={[styles.resultText, { color: resultBanner.fg }]}>{resultBanner.text}</Text>
-                </View>
-              )
+                <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
+              </View>
+            ) : submitFailed ? (
+              <View style={[styles.result, { backgroundColor: c.dangerBg }]}>
+                <Text style={[styles.resultText, { color: c.danger }]}>{result?.result}</Text>
+              </View>
+            ) : verifying ? (
+              <View style={[styles.card, cardStyle, styles.verifyRow]}>
+                <ActivityIndicator size="small" color={c.emerald} />
+                <Text style={[styles.verifyText, { color: valueColor }]}>送信しました。出席を確認しています…</Text>
+              </View>
             ) : null}
           </>
         )}
@@ -273,6 +272,8 @@ const styles = StyleSheet.create({
   ctaText: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
   result: { marginTop: 12, borderRadius: 14, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
+  verifyRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  verifyText: { fontSize: 14, fontWeight: '600', flex: 1 },
   doneHero: { alignItems: 'center', paddingVertical: 24 },
   doneCodeLabel: { fontSize: 12, marginTop: 16 },
   doneCode: { fontSize: 40, fontWeight: '700', letterSpacing: 8, marginTop: 4 },
