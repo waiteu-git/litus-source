@@ -108,6 +108,7 @@ export default function TimetableScreen() {
       courseCode: cl.courseCode,
       name: cl.name,
       day: DAY_LABEL[day],
+      dayKey: day,
       period,
       room: cl.room,
       teachers: cl.teachers,
