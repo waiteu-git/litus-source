@@ -42,10 +42,16 @@ describe('mergeAttendedRecord', () => {
     const next = rec({ code: '2222' })
     expect(mergeAttendedRecord(prev, next).code).toBe('2222')
   })
-  it('新コードが空でも同日の既存コードを引き継ぐ（再アクセスでコードが消えない）', () => {
+  it('同一授業（同日・科目名/受付時間一致）なら空コードでも既存を引き継ぐ（再アクセスで消えない）', () => {
     const prev = rec({ code: '1234' })
     const next = rec({ code: '' })
     expect(mergeAttendedRecord(prev, next).code).toBe('1234')
+  })
+  it('別の授業（科目名・受付時間が違う）ならコードを引き継がない（前授業のコード誤表示を防ぐ）', () => {
+    // 前のコマにアプリで出席(1234)→今のコマは別授業をPC出席(コード無)。
+    const prev = rec({ courseName: '線形代数学', confirmWindow: '08:50〜09:20', code: '1234' })
+    const next = rec({ courseName: '基礎電気数学', confirmWindow: '10:20〜12:00', code: '' })
+    expect(mergeAttendedRecord(prev, next).code).toBe('')
   })
   it('日付が違えば引き継がない（別日の記録）', () => {
     const prev = rec({ date: '2026-07-06', code: '1234' })
