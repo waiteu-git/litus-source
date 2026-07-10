@@ -13,6 +13,13 @@ import { currentPeriodNumber } from '../attendance/classPeriod'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import { useDisplaySettings } from '../displaySettings'
+import { loadClassEvents } from '../storage/classEventsStore'
+import type { ClassEvent } from '../timetableEvents/classEvent'
+import { pickCellEvent, upcomingMakeups } from '../timetableEvents/eventSelectors'
+import { cellBadgeText, shortDate } from '../timetableEvents/eventLabels'
+import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+
+const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 type DayKey = (typeof DAY_ORDER)[number]
@@ -28,6 +35,8 @@ export default function TimetableScreen() {
   const { timetableView } = useDisplaySettings()
   const [collections, setCollections] = useState<TimetableCollection[] | null>(null)
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
+  const [events, setEvents] = useState<ClassEvent[]>([])
+  const { version: eventsVersion } = useClassEventsVersion()
   const [selCol, setSelCol] = useState(0)
   // 現在時刻（当該コマ強調用）。分単位で十分なので30秒ごとに更新。
   const [now, setNow] = useState(() => new Date())
@@ -60,12 +69,17 @@ export default function TimetableScreen() {
       .catch(() => undefined)
   }, [])
 
+  useEffect(() => {
+    loadClassEvents().then(setEvents).catch(() => undefined)
+  }, [eventsVersion])
+
   useFocusEffect(
     useCallback(() => {
       let active = true
       loadTimetable().then((c) => {
         if (active) setCollections(c)
       })
+      loadClassEvents().then((e) => { if (active) setEvents(e) }).catch(() => undefined)
       ;(async () => {
         const map = await loadCourseMap()
         const snaps = await loadCourseSnapshots()
@@ -89,6 +103,8 @@ export default function TimetableScreen() {
   const hasSat = !!col?.slots.some((s) => s.day === 'sat')
   const days = DAY_ORDER.filter((d) => d !== 'sat' || hasSat)
   const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
+  // 選択曜日に落ちる補講オカレンス（休講内包＋単独）。時間割の通常コマとは別に一回限りで表示。
+  const dayMakeups = upcomingMakeups(events, now).filter((m) => WEEKDAY_KEY[new Date(m.date).getDay()] === selDay)
   const startTime = (period: number) => col?.periodTimes?.periods.find((p) => p.period === period)?.start ?? ''
 
   // グリッド表示用: 授業がある最大時限まで（最低6限は確保）。
@@ -184,6 +200,8 @@ export default function TimetableScreen() {
                   const cl = slot?.classes[0]
                   const today = d === todayKey
                   const isNow = today && !!cl && p === curPeriod
+                  const gev = cl ? pickCellEvent(events, cl.name, p, now) : null
+                  const gCanceled = gev?.type === 'cancel'
                   return (
                     <Pressable
                       key={d}
@@ -193,14 +211,16 @@ export default function TimetableScreen() {
                         styles.gridCell,
                         { backgroundColor: isNow ? cellNowBg : cl ? (today ? cellTodayBg : cellFilledBg) : cellBg },
                         isNow ? styles.gridCellNow : today && cl ? styles.gridCellToday : null,
+                        gCanceled ? styles.canceledCard : null,
                       ]}
                     >
                       {cl ? (
                         <>
-                          <Text numberOfLines={3} style={[styles.gridCellText, { color: cellTextColor }]}>
+                          <Text numberOfLines={3} style={[styles.gridCellText, { color: cellTextColor }, gCanceled && styles.canceledName]}>
                             {cl.name}
                           </Text>
                           {updatedCodes.has(cl.courseCode) ? <View style={styles.gridDot} /> : null}
+                          {gev ? <View style={[styles.gridEvDot, gCanceled ? styles.gridEvDotCancel : styles.gridEvDotInfo]} /> : null}
                           {isNow ? (
                             <View style={styles.nowBadge}>
                               <Text style={styles.nowBadgeText}>今</Text>
@@ -227,25 +247,59 @@ export default function TimetableScreen() {
                 <Text style={[styles.ptime, { color: rowNow ? COLORS.cta : ui.labelColor }]}>{startTime(s.period)}</Text>
               </View>
               <View style={styles.clsCol}>
-                {s.classes.map((cl) => (
-                  <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard]} onPress={() => openSubject(cl, s.day as DayKey, s.period)}>
-                    <Text style={[styles.clsname, { color: ui.valueColor }]} numberOfLines={2}>
+                {s.classes.map((cl) => {
+                  const ev = pickCellEvent(events, cl.name, s.period, now)
+                  const canceled = ev?.type === 'cancel'
+                  return (
+                  <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard, canceled && styles.canceledCard]} onPress={() => openSubject(cl, s.day as DayKey, s.period)}>
+                    <Text style={[styles.clsname, { color: ui.valueColor }, canceled && styles.canceledName]} numberOfLines={2}>
                       {cl.name}
                       {rowNow ? '　（今）' : ''}
                       {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
                     </Text>
+                    {ev ? (
+                      <View style={[styles.evBadge, canceled ? styles.evBadgeCancel : styles.evBadgeInfo]}>
+                        <Text style={[styles.evBadgeText, canceled ? styles.evBadgeTextCancel : styles.evBadgeTextInfo]} numberOfLines={1}>
+                          {cellBadgeText(ev)}
+                        </Text>
+                      </View>
+                    ) : null}
                     <Text style={[styles.clssub, { color: ui.labelColor }]} numberOfLines={1}>
                       {cl.room}
                       {cl.isRemote ? ' ・ 遠隔' : ''}
                       {cl.teachers[0] ? ` ・ ${cl.teachers[0]}` : ''}
                     </Text>
                   </Pressable>
-                ))}
+                  )
+                })}
               </View>
             </View>
             )
           })
         )}
+
+        {timetableView === 'list' && col && dayMakeups.length > 0 ? (
+          <View style={{ marginTop: 6 }}>
+            {dayMakeups.map((m, i) => (
+              <View key={`mk-${i}`} style={styles.trow}>
+                <View style={styles.per}>
+                  <Text style={[styles.pnum, { color: COLORS.cta }]}>補</Text>
+                  <Text style={[styles.ptime, { color: ui.labelColor }]}>{shortDate(m.date)}</Text>
+                </View>
+                <View style={styles.clsCol}>
+                  <View style={[ui.card, styles.makeupCard]}>
+                    <Text style={[styles.clsname, { color: ui.valueColor }]} numberOfLines={2}>
+                      {m.courseName}　補講
+                    </Text>
+                    <Text style={[styles.clssub, { color: ui.labelColor }]} numberOfLines={1}>
+                      {m.periods.join('・')}限{m.room ? ` ・ ${m.room}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
 
       {syncing ? (
@@ -270,6 +324,15 @@ const styles = StyleSheet.create({
   clsCol: { flex: 1, gap: 8 },
   clsname: { fontSize: 14, fontWeight: '500' },
   clssub: { fontSize: 12, marginTop: 3 },
+  canceledCard: { opacity: 0.6 },
+  canceledName: { textDecorationLine: 'line-through' },
+  evBadge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 },
+  evBadgeCancel: { backgroundColor: '#ffe1d8' },
+  evBadgeInfo: { backgroundColor: '#e3f0ff' },
+  evBadgeText: { fontSize: 11, fontWeight: '700' },
+  evBadgeTextCancel: { color: '#b23b1c' },
+  evBadgeTextInfo: { color: '#1c5fb2' },
+  makeupCard: { borderLeftWidth: 3, borderLeftColor: COLORS.cta },
   gridCard: { padding: 8 },
   gridRow: { flexDirection: 'row', gap: 5, marginBottom: 5 },
   gridPerCol: { width: 22, alignItems: 'center', justifyContent: 'center' },
@@ -282,5 +345,8 @@ const styles = StyleSheet.create({
   nowCard: { borderWidth: 2, borderColor: COLORS.cta },
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },
   gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e8a400' },
+  gridEvDot: { position: 'absolute', bottom: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
+  gridEvDotCancel: { backgroundColor: '#e0533a' },
+  gridEvDotInfo: { backgroundColor: '#3a7be0' },
   gridHint: { fontSize: 11, textAlign: 'center', marginTop: 6 },
 })
