@@ -68,8 +68,10 @@ const styles = StyleSheet.create({
   inner: { flex: 1, paddingHorizontal: 20 },
   title: { color: COLORS.white, fontSize: 24, fontWeight: '700', marginBottom: 6 },
   sub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginBottom: 14 },
-  scroll: { flex: 1, backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 14, padding: 16 },
-  scrollBody: { paddingBottom: 10 },
+  // padding は ScrollView 本体ではなく contentContainerStyle 側へ。本体に付けると最後の行が枠下に
+  // 隠れて見切れる（RNのScrollViewのpadding挙動）。下部は同意ボタン手前まで十分な余白を確保する。
+  scroll: { flex: 1, backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 14 },
+  scrollBody: { padding: 16, paddingBottom: 28 },
   body: { color: '#12332a', fontSize: 13.5, lineHeight: 22 },
   cta: { marginTop: 16, backgroundColor: COLORS.white, borderRadius: 999, paddingVertical: 15, alignItems: 'center' },
   ctaText: { color: COLORS.emeraldDark, fontSize: 16, fontWeight: '700' },
