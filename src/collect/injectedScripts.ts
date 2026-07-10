@@ -282,9 +282,9 @@ export const DETECT_PAGE_JS = `(function(){
 /** SSOセッションを黙って温める先読み対象（CLASS=出席/時間割、LETUS=課題）。 */
 export const CLASS_TOP_URL = 'https://class.admin.tus.ac.jp/'
 
-/** CLASS掲示一覧ページ(Bsa00101)。実測2026-07-10: メニュー「掲示板」(menuid=0)の着地先。
- *  旧値 Xut12401 は誤り（別機能）。メニュー発火が失敗した時の直リンク最終フォールバックに使う。 */
-export const BULLETIN_URL = 'https://class.admin.tus.ac.jp/uprx/up/bs/bsa001/Bsa00101.xhtml'
+/** CLASS掲示一覧ページ(Bsd00701)。実測2026-07-11: メニュー「掲示板」(menuid=0)の着地先。機能ID [Bsd007]。
+ *  旧値 Bsa00101/Xut12401 は誤り。メニュー発火が失敗した時の直リンク最終フォールバックに使う。 */
+export const BULLETIN_URL = 'https://class.admin.tus.ac.jp/uprx/up/bs/bsd007/Bsd00701.xhtml'
 
 /** 現在のCLASS WebViewを掲示一覧ページへ遷移させる（menuForm発火が使えないときの最終フォールバック）。 */
 export const GO_BULLETIN_JS = `(function(){ try { window.location.href='${BULLETIN_URL}'; } catch(e){} true; })();`
@@ -356,6 +356,116 @@ export const COLLECT_BULLETIN_JS = `(function(){
   }
   true;
 })();`
+
+/**
+ * 未読(index5)・フラグつき(index9)タブの行(div.alignRight>dl.keiji)を各々連結して送る。
+ * 行にはフラグ/既読ボタンが含まれるので parseBulletinList が状態(未読/フラグ)を読める。
+ * 各タブは既定約15件表示（「すべて表示する」で全件）。v1は既定表示分のみ収集する。
+ */
+export const COLLECT_BULLETIN_TABS_JS = `(function(){
+  try {
+    function rows(scrId){
+      var scr = document.querySelector('[id="'+scrId+'"]');
+      if(!scr) return '';
+      var blocks = scr.querySelectorAll('.alignRight'), out='';
+      for(var i=0;i<blocks.length;i++){ if(blocks[i].querySelector('dl.keiji')) out += blocks[i].outerHTML; }
+      return out;
+    }
+    var unread = rows('funcForm:tabArea:5:allScr');
+    var flagged = rows('funcForm:tabArea:9:allScr');
+    var cnt = document.querySelectorAll('dl.keiji').length;
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'bulletin', unreadHtml: '<div>'+unread+'</div>', flaggedHtml: '<div>'+flagged+'</div>', count: cnt
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
+/** 日付＋件名で行を特定し、件名リンクの PrimeFaces.ab を発火して掲示内容モーダルを開く。 */
+export function openBulletinDetailJs(title: string, date: string): string {
+  return `(function(){
+    try{
+      var t=${JSON.stringify(title)}, d=${JSON.stringify(date)};
+      var dls=document.querySelectorAll('dl.keiji');
+      for(var i=0;i<dls.length;i++){
+        var a=dls[i].querySelector('a.ui-commandlink'); if(!a) continue;
+        var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
+        var dd=((dls[i].textContent||'').match(/\\d{4}\\/\\d{1,2}\\/\\d{1,2}/g)||[]).pop()||'';
+        if(tt===t && dd===d){
+          var oc=a.getAttribute('onclick');
+          if(oc){ new Function('event',oc).call(a,new MouseEvent('click',{bubbles:true})); } else { a.click(); }
+          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'detail-click'}));
+          return true;
+        }
+      }
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'detail-notfound'}));
+    }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:String(e)})); }
+    true;
+  })();`
+}
+
+/** 掲示内容モーダルの中身(#bsd00702:dialogPanel)を抽出。テーブル描画済みのときだけ ready=true。 */
+export const COLLECT_BULLETIN_DETAIL_JS = `(function(){
+  try{
+    var p=document.querySelector('[id="bsd00702:dialogPanel"]');
+    var html=p?p.innerHTML:'';
+    var ready=/singleTable|ui-panelgrid/.test(html) && /本文/.test(html);
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type:'bulletinDetail', html: ready?html:'', ready: ready }));
+  }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({ type:'error', message:String(e) })); }
+  true;
+})();`
+
+/** 対象行のフラグボタン(checkbox)をトグルし change を発火（インライン onchange の PrimeFaces.ab が走る）。 */
+export function setBulletinFlagJs(title: string, date: string): string {
+  return `(function(){
+    try{
+      var t=${JSON.stringify(title)}, d=${JSON.stringify(date)};
+      var dls=document.querySelectorAll('dl.keiji');
+      for(var i=0;i<dls.length;i++){
+        var a=dls[i].querySelector('a.ui-commandlink'); if(!a) continue;
+        var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
+        var dd=((dls[i].textContent||'').match(/\\d{4}\\/\\d{1,2}\\/\\d{1,2}/g)||[]).pop()||'';
+        if(tt===t && dd===d){
+          var row=dls[i].parentNode, btns=row.querySelectorAll('.btnRead'), flagBtn=null;
+          for(var j=0;j<btns.length;j++){ if(/フラグ/.test(btns[j].textContent||'')){ flagBtn=btns[j]; break; } }
+          if(!flagBtn){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'flag-nobtn'})); return true; }
+          var box=flagBtn.querySelector('input[type=checkbox]');
+          box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true}));
+          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'flag-toggled'}));
+          return true;
+        }
+      }
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'flag-notfound'}));
+    }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:String(e)})); }
+    true;
+  })();`
+}
+
+/** 対象行が未読(「既読にする」ボタン)なら既読化する。モーダル発火で既読にならない場合のフォールバック。 */
+export function markBulletinReadJs(title: string, date: string): string {
+  return `(function(){
+    try{
+      var t=${JSON.stringify(title)}, d=${JSON.stringify(date)};
+      var dls=document.querySelectorAll('dl.keiji');
+      for(var i=0;i<dls.length;i++){
+        var a=dls[i].querySelector('a.ui-commandlink'); if(!a) continue;
+        var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
+        var dd=((dls[i].textContent||'').match(/\\d{4}\\/\\d{1,2}\\/\\d{1,2}/g)||[]).pop()||'';
+        if(tt===t && dd===d){
+          var row=dls[i].parentNode, btns=row.querySelectorAll('.btnRead'), rb=null;
+          for(var j=0;j<btns.length;j++){ if(/既読にする/.test(btns[j].textContent||'')){ rb=btns[j]; break; } }
+          if(rb){ var box=rb.querySelector('input[type=checkbox]'); box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true})); }
+          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'read-done'}));
+          return true;
+        }
+      }
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'read-notfound'}));
+    }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:String(e)})); }
+    true;
+  })();`
+}
 
 /** LETUSマイコース。全履修コースの名前(コード入り)＋course/view.php URL が並ぶ。 */
 export const MYCOURSES_URL = 'https://letus.ed.tus.ac.jp/my/courses.php'
