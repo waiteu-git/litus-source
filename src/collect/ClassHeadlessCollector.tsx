@@ -12,6 +12,8 @@ const OVERALL_TIMEOUT_MS = 25000
 // ページ読込後にメニュー発火→抽出を試みるまでの待ち。
 const OPEN_DELAY_MS = 1200
 const COLLECT_DELAY_MS = 2600
+// 0件時に「再ナビせず」もう一度抽出するまでの待ち（描画待ち）。
+const COLLECT_RETRY_MS = 1600
 // 目的ページ未到達（0件）時の再試行上限。
 const MAX_TRIES = 3
 // エラー/失効での作り直し上限（無限リロード防止）。
@@ -37,17 +39,21 @@ export default function ClassHeadlessCollector({
   resultType,
   onData,
   onFinished,
+  fallbackJs,
 }: {
   openJs: string
   collectJs: string
   resultType: string
   onData: (raw: string) => Promise<boolean> | boolean
   onFinished: () => void
+  /** メニュー発火で目的ページに到達できない時の最終手段（直リンク遷移JS等）。省略可。 */
+  fallbackJs?: string
 }) {
   const webviewRef = useRef<WebView>(null)
   const { setCollectActive, attendanceFocused } = useClassView()
   const triesRef = useRef(0)
   const rebootsRef = useRef(0)
+  const fallbackUsedRef = useRef(false)
   const doneRef = useRef(false)
   const [nonce, setNonce] = useState(0)
 
@@ -78,11 +84,6 @@ export default function ClassHeadlessCollector({
     if (attendanceFocused) finish()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attendanceFocused])
-
-  function openThenCollect() {
-    webviewRef.current?.injectJavaScript(openJs)
-    setTimeout(() => webviewRef.current?.injectJavaScript(collectJs), COLLECT_DELAY_MS)
-  }
 
   function reboot() {
     if (rebootsRef.current >= MAX_REBOOTS) {
@@ -126,10 +127,15 @@ export default function ClassHeadlessCollector({
       finish()
       return
     }
-    // 未到達（メニュー未反映/ログイン途中）→ メニュー再発火＋収集。上限で諦める（保存はしない）。
+    // 未到達/未描画 → 再ナビ（メニュー再クリック）はせず**再抽出のみ**（二重POSTでViewStateを壊さない。
+    // ページ遷移は各読込の onLoadEnd 側 OPEN が担う）。既定回数を尽くしたら直リンクへ最終フォールバック。
     if (triesRef.current < MAX_TRIES) {
       triesRef.current += 1
-      openThenCollect()
+      setTimeout(() => webviewRef.current?.injectJavaScript(collectJs), COLLECT_RETRY_MS)
+    } else if (fallbackJs && !fallbackUsedRef.current) {
+      fallbackUsedRef.current = true
+      triesRef.current = 0
+      webviewRef.current?.injectJavaScript(fallbackJs)
     } else {
       finish()
     }

@@ -6,6 +6,8 @@ import {
   shortDate,
 } from './bulletin'
 import { BULLETIN_LIST_FIXTURE } from './bulletin.fixtures'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 describe('parseBulletinList', () => {
   const rows = parseBulletinList(BULLETIN_LIST_FIXTURE)
@@ -42,6 +44,37 @@ describe('simplifyCategory / shortDate', () => {
   it('日付を M/D に', () => {
     expect(shortDate('2026/07/04')).toBe('7/4')
     expect(shortDate('不明')).toBe('不明')
+  })
+})
+
+// 実DOM回帰: CLASS掲示ページ(Bsa00101.xhtml 2026-07-10実測)の実際の dl.keiji 抜粋。
+// セレクタ/構造が実サイト変更で壊れていないことを担保する（合成フィクスチャでは気づけない差分対策）。
+describe('parseBulletinList（実DOMフィクスチャ）', () => {
+  const html = readFileSync(fileURLToPath(new URL('./__fixtures__/bulletin-real.html', import.meta.url)), 'utf-8')
+  const rows = parseBulletinList(html)
+
+  it('実ページの dl.keiji を全行抽出（抜粋6行）', () => {
+    expect(rows).toHaveLength(6)
+  })
+  it('未読(fontBold)を正しく判定', () => {
+    expect(rows.filter((r) => r.unread)).toHaveLength(3)
+  })
+  it('新着アイコン(hiddenStyleなし)で isNew', () => {
+    const konyo = rows.find((r) => r.title.includes('こうよう会'))
+    expect(konyo?.isNew).toBe(true)
+    expect(konyo?.unread).toBe(true)
+  })
+  it('重要アイコン(hiddenStyleなし)で important', () => {
+    const jugyo = rows.filter((r) => r.title.includes('授業実施方法'))
+    expect(jugyo.length).toBeGreaterThan(0)
+    expect(jugyo.every((r) => r.important)).toBe(true)
+  })
+  it('カテゴリ・日付を実DOMから取得', () => {
+    expect(rows[0].category).toBe('お知らせ(個人に対する)')
+    expect(rows[0].date).toBe('2026/07/03')
+  })
+  it('ダイジェストは未読3件', () => {
+    expect(toBulletinDigest(rows)).toHaveLength(3)
   })
 })
 
