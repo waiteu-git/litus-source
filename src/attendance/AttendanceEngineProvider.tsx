@@ -291,10 +291,12 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   // PC競合中は指数バックオフで静かに再試行する（PCを閉じたら正常ページに着地→自動復帰）。
   // 注意: !conflict の分岐でタイマーを止めるだけにとどめ、conflictAttemptRef/conflictExhausted は
-  // ここでリセットしない。競合再試行のリブートはCLASSのURLへ入り直すためSSO(Shibboleth)を
-  // 再び歩き、その途中で一時的にログインページを通過する。ログインページは onMessage で
-  // conflict を偽に戻すため、ここでカウンタを毎回0に戻すと「偽→競合ページ着地で真」が
-  // 繰り返され、試行回数が0↔1を往復して打ち切りに到達できなくなる。
+  // ここでリセットしない。競合再試行のリブートはCLASSのURLへ入り直すためSSOチェーンを再び歩き、
+  // その途中でportal等の非conflictページを一時的に経由する（セッションが生きていればloginには
+  // 分類されない。分類されればloginGate.requireLogin()でエンジンごとアンマウントされてしまうため）。
+  // その通過点はonMessageの `if (kind !== 'conflict') setConflict(false)` でconflictを偽に戻す。
+  // ここでカウンタを毎回0に戻すと「偽→競合ページ着地で真」が繰り返され、試行回数が0↔1を往復して
+  // 打ち切りに到達できなくなる。
   useEffect(() => {
     if (!conflict) {
       clearConflictTimer()
@@ -367,7 +369,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         }
         setConflict(true)
       } else if (kind === 'attendance') {
-        // 出席ページ着地だけが競合解消の確実なシグナル。通過点である portal ではリセットしない。
+        // 出席ページ着地だけが競合解消の確実なシグナル。login/splash/portal はいずれも
+        // SSOチェーンの通過点になり得るため、そこでリセットしてはならない。
         conflictAttemptRef.current = 0
         setConflictExhausted(false)
         portalTriesRef.current = 0
