@@ -27,15 +27,20 @@ export function todayKey(now: Date): string {
  */
 /**
  * 出席済み記録を更新する際、入力コードを失わないようにマージする。
- * CLASSの .attendSuc を検出して記録し直すとき、そのセッションで送信していない（再アクセス/別デバイスで
- * 出席済み）と incoming.code は空になる。同日の既存記録にコードがあればそれを引き継ぐ（コードが消えない）。
+ * CLASSの .attendSuc を検出して記録し直すとき、そのセッションで送信していない（同一授業への再アクセス/
+ * 別デバイスで出席）と incoming.code は空になる。**同一授業**（同日かつ科目名または受付時間が一致）の
+ * 既存コードだけ引き継ぐ。別の授業（例: 前のコマにアプリで出席→今のコマはPC出席）へは引き継がない
+ * ＝前授業のコードを誤表示しない。
  */
 export function mergeAttendedRecord(
   prev: AttendedRecord | null,
   next: AttendedRecord,
 ): AttendedRecord {
   if (next.code) return next
-  if (prev && prev.date === next.date && prev.code) return { ...next, code: prev.code }
+  if (!prev || prev.date !== next.date || !prev.code) return next
+  const sameCourse = !!prev.courseName && prev.courseName === next.courseName
+  const sameWindow = !!prev.confirmWindow && prev.confirmWindow === next.confirmWindow
+  if (sameCourse || sameWindow) return { ...next, code: prev.code }
   return next
 }
 
