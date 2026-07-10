@@ -20,6 +20,8 @@ type Props = {
   action: 'openDetail' | 'setFlag'
   title: string
   date: string
+  /** setFlag のとき、合わせたいフラグ状態（true=付ける）。省略時は true。 */
+  desiredFlag?: boolean
   onFinished: () => void
 }
 
@@ -29,7 +31,7 @@ type Props = {
  * - setFlag: 対象行のフラグを切替え、2タブを再収集して最新状態をマージ保存。
  * どちらも 1 セッション 1 アクション（ViewState保護）。
  */
-export default function BulletinActionEngine({ action, title, date, onFinished }: Props) {
+export default function BulletinActionEngine({ action, title, date, desiredFlag, onFinished }: Props) {
   const id = `${date}::${title}`
 
   if (action === 'openDetail') {
@@ -62,7 +64,7 @@ export default function BulletinActionEngine({ action, title, date, onFinished }
   return (
     <ClassHeadlessCollector
       openJs={OPEN_BULLETIN_JS}
-      actionJs={setBulletinFlagJs(title, date)}
+      actionJs={setBulletinFlagJs(title, date, desiredFlag ?? true)}
       collectJs={COLLECT_BULLETIN_TABS_JS}
       resultType="bulletin"
       fallbackJs={GO_BULLETIN_JS}

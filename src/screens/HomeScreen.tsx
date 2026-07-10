@@ -102,6 +102,8 @@ export default function HomeScreen() {
 
   const focus = pickFocusClass(timetable, tick)
   const urgent = pickUrgentAssignment(assignments, tick)
+  // ストアは全件（既読・フラグ付き含む）を持つため、ホームの「未読」スライドは未読のみに絞る。
+  const unreadBulletin = bulletin.filter((b) => b.unread)
 
   // 今日の予定（当日のイベント＋当日の補講オカレンス）。
   const todaysItems: { tag: string; tone: string; course: string; sub: string }[] = []
@@ -273,18 +275,18 @@ export default function HomeScreen() {
               )}
             </Pressable>
           </View>
-          {bulletin.length > 0 ? (
+          {unreadBulletin.length > 0 ? (
             <View style={[ui.card, styles.bulletinCard]}>
               <View style={styles.bulletinHead}>
                 <Ionicons name="megaphone-outline" size={18} color={ui.green ? '#ffffff' : COLORS.emerald} />
                 <Text style={[styles.bulletinHeadText, { color: ui.valueColor }]}>CLASS掲示</Text>
                 <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>未読 {bulletin.length}</Text>
+                  <Text style={styles.unreadBadgeText}>未読 {unreadBulletin.length}</Text>
                 </View>
               </View>
               <Carousel
                 intervalMs={3500}
-                items={bulletin.map((b) => (
+                items={unreadBulletin.map((b) => (
                   <Pressable key={b.id} onPress={openBulletin} style={styles.bulletinSlide}>
                     <View style={[styles.bulletinTag, { backgroundColor: ui.green ? 'rgba(255,255,255,0.5)' : '#d6efe4' }]}>
                       <Text style={[styles.bulletinTagText, { color: ui.green ? '#04322a' : COLORS.emeraldDark }]}>
