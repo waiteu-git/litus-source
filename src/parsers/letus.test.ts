@@ -59,6 +59,16 @@ describe('extractSubmissionStatus 小テスト（実DOMフィクスチャ）', (
   it('「小テストを受験する」開始ボタン（未受験）→ not_submitted', () => {
     expect(parseAssignmentPage(notAttempted, QUIZ_URL).submissionStatus).toBe('not_submitted')
   })
+
+  it('「現在、この小テストは利用できません」（まだ受験できない）→ before_start', () => {
+    const notAvailable = readFileSync(
+      fileURLToPath(new URL('./__fixtures__/quiz-not-available-real.html', import.meta.url)),
+      'utf-8',
+    )
+    const r = parseAssignmentPage(notAvailable, QUIZ_URL)
+    // 未受験扱いだが、アクション不能なので lifecycle は before_start（開始前バケットへ）。
+    expect(r.lifecycleStatus).toBe('before_start')
+  })
 })
 
 describe('htmlToPlainText', () => {

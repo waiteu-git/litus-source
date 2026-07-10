@@ -63,11 +63,16 @@ export function byDeadlineAsc(a: Assignment, b: Assignment): number {
 
 /**
  * ホームの「今やること」向けに、最も締切が近い“これから迫る”未提出課題を1件返す。
- * 除外: 非表示 / 提出済み / 締切未設定 / 締切超過（アクション不能なものは出さない）。
+ * 除外: 非表示 / 提出済み / 開始前(まだ受験できない) / 締切未設定 / 締切超過（アクション不能なものは出さない）。
  */
 export function pickUrgentAssignment(list: Assignment[], now: Date): Assignment | null {
   const candidates = list.filter(
-    (a) => !a.ignored && !isSubmitted(a) && a.deadline !== null && new Date(a.deadline).getTime() >= now.getTime(),
+    (a) =>
+      !a.ignored &&
+      !isSubmitted(a) &&
+      a.lifecycleStatus !== 'before_start' &&
+      a.deadline !== null &&
+      new Date(a.deadline).getTime() >= now.getTime(),
   )
   if (candidates.length === 0) return null
   return [...candidates].sort(byDeadlineAsc)[0]
