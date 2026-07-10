@@ -358,25 +358,17 @@ export const COLLECT_BULLETIN_JS = `(function(){
 })();`
 
 /**
- * 未読(index5)・フラグつき(index9)タブの行(div.alignRight>dl.keiji)を各々連結して送る。
- * 行にはフラグ/既読ボタンが含まれるので parseBulletinList が状態(未読/フラグ)を読める。
- * 各タブは既定約15件表示（「すべて表示する」で全件）。v1は既定表示分のみ収集する。
+ * ページ内の全掲示行(div.alignRight>dl.keiji)を連結して送る。行にはフラグ/既読ボタンが含まれるので
+ * parseBulletinList が状態(未読/フラグ)を読める。同一掲示が複数タブに出るが RN側 mergeBulletinItems が
+ * id で dedup＋状態OR統合する。特定タブ(未読/フラグつき)のallScr限定だと、PrimeFacesが非アクティブタブを
+ * 遅延描画する着地では空になり得るため、**タブ非依存で全行を拾う**（既定のグループタブにも状態ボタン付き行がある）。
  */
 export const COLLECT_BULLETIN_TABS_JS = `(function(){
   try {
-    function rows(scrId){
-      var scr = document.querySelector('[id="'+scrId+'"]');
-      if(!scr) return '';
-      var blocks = scr.querySelectorAll('.alignRight'), out='';
-      for(var i=0;i<blocks.length;i++){ if(blocks[i].querySelector('dl.keiji')) out += blocks[i].outerHTML; }
-      return out;
-    }
-    var unread = rows('funcForm:tabArea:5:allScr');
-    var flagged = rows('funcForm:tabArea:9:allScr');
+    var blocks = document.querySelectorAll('.alignRight'), out='';
+    for(var i=0;i<blocks.length;i++){ if(blocks[i].querySelector('dl.keiji')) out += blocks[i].outerHTML; }
     var cnt = document.querySelectorAll('dl.keiji').length;
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'bulletin', unreadHtml: '<div>'+unread+'</div>', flaggedHtml: '<div>'+flagged+'</div>', count: cnt
-    }));
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'bulletin', html: '<div>'+out+'</div>', count: cnt }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }

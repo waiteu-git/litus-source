@@ -69,17 +69,15 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
       resultType="bulletin"
       fallbackJs={GO_BULLETIN_JS}
       onData={async (raw) => {
-        let p: { count?: number; unreadHtml?: string; flaggedHtml?: string } | null = null
+        let p: { count?: number; html?: string } | null = null
         try {
           p = JSON.parse(raw)
         } catch {
           return false
         }
         if (!p || typeof p.count !== 'number' || p.count <= 0) return false
-        const rows = [
-          ...parseBulletinList(p.unreadHtml ?? ''),
-          ...parseBulletinList(p.flaggedHtml ?? ''),
-        ]
+        const rows = parseBulletinList(p.html ?? '')
+        if (rows.length === 0) return false
         const prev = await loadBulletinDigest()
         await saveBulletinDigest(mergeBulletinItems(prev, toBulletinItems(rows)))
         return true
