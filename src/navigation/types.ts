@@ -40,6 +40,7 @@ export type HomeStackParamList = {
   Attendance: undefined
   Info: undefined
   Bulletin: undefined
+  BulletinDetail: { id: string }
   Link: { url: string; title?: string; isClass?: boolean }
   PdfViewer: { url: string; title?: string }
   Settings: undefined
