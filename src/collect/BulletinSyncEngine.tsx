@@ -1,6 +1,6 @@
 import { COLLECT_BULLETIN_TABS_JS, GO_BULLETIN_JS, OPEN_BULLETIN_JS } from './injectedScripts'
 import { parseBulletinList, toBulletinItems } from '../parsers/bulletin'
-import { loadBulletinDigest, saveBulletinDigest } from '../storage/bulletinDigestStore'
+import { loadBulletinDigest, saveBulletinDigest, saveBulletinDiag } from '../storage/bulletinDigestStore'
 import { mergeBulletinItems } from '../storage/bulletinDigestSerialize'
 import { saveBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
@@ -18,15 +18,18 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
       resultType="bulletin"
       fallbackJs={GO_BULLETIN_JS}
       onData={async (raw) => {
-        let p: { count?: number; html?: string } | null = null
+        let p: { count?: number; html?: string; align?: number; page?: string } | null = null
         try {
           p = JSON.parse(raw)
         } catch {
           return false
         }
+        // 診断: 着地ページ・dl.keiji件数・.alignRight件数を毎回記録（取得不能の切り分け用）。
+        const rows0 = parseBulletinList(p?.html ?? '')
+        await saveBulletinDiag(`${p?.page ?? '?'} keiji=${p?.count ?? 0} align=${p?.align ?? 0} rows=${rows0.length}`)
         if (!p || typeof p.count !== 'number' || p.count <= 0) return false
         // 行を1件も抽出できなければ保存しない（＝既存ダイジェストを空で上書きしない）。次回再試行。
-        const rows = parseBulletinList(p.html ?? '')
+        const rows = rows0
         if (rows.length === 0) return false
         try {
           const incoming = toBulletinItems(rows)
