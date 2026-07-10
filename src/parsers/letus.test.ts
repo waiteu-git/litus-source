@@ -17,9 +17,30 @@ import {
   QUIZ_NOT_ATTEMPTED,
   HTML_NOISE,
 } from './letus.fixtures'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const ASSIGN_URL = 'https://letus.ed.tus.ac.jp/mod/assign/view.php?id=1'
 const QUIZ_URL = 'https://letus.ed.tus.ac.jp/mod/quiz/view.php?id=2'
+
+// 実DOM回帰: mod/assign 提出ステータス表（2026-07-10実測）。実際の文言は「まだ提出されていません」
+// （旧実装が unknown を返した真因）／「評定のために提出済み」。実サイトのDOM変更を検知する番人。
+describe('extractSubmissionStatus（実DOMフィクスチャ）', () => {
+  const notSubmitted = readFileSync(
+    fileURLToPath(new URL('./__fixtures__/assign-not-submitted-real.html', import.meta.url)),
+    'utf-8',
+  )
+  const submitted = readFileSync(
+    fileURLToPath(new URL('./__fixtures__/assign-submitted-real.html', import.meta.url)),
+    'utf-8',
+  )
+  it('「まだ提出されていません」→ not_submitted（旧実装は unknown だった）', () => {
+    expect(parseAssignmentPage(notSubmitted, ASSIGN_URL).submissionStatus).toBe('not_submitted')
+  })
+  it('「評定のために提出済み」→ submitted', () => {
+    expect(parseAssignmentPage(submitted, ASSIGN_URL).submissionStatus).toBe('submitted')
+  })
+})
 
 describe('htmlToPlainText', () => {
   it('scriptを除去しエンティティを復号する', () => {
