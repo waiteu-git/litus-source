@@ -110,17 +110,21 @@ export default function AttendanceScreen() {
             </Pressable>
           </View>
         ) : attendedNow ? (
-          <View style={[styles.card, cardStyle, styles.doneHero]}>
-            <View style={styles.doneCheck}>
-              <Ionicons name="checkmark" size={38} color="#ffffff" />
+          <View style={[styles.card, cardStyle, styles.hero]}>
+            <View style={styles.liveBadgeRow}>
+              <Ionicons name="checkmark-circle" size={16} color={c.success} />
+              <Text style={[styles.liveBadgeText, { color: c.success }]}>出席済み</Text>
             </View>
-            <Text style={[styles.doneTitle, { color: valueColor }]}>出席済み</Text>
-            {(attended?.courseName || reception?.courseName) ? (
-              <Text style={[styles.doneSub, { color: labelColor }]}>{attended?.courseName || reception?.courseName}</Text>
-            ) : null}
+            <Text style={[styles.heroCourse, { color: valueColor }]} numberOfLines={2}>
+              {attended?.courseName || reception?.courseName || '（科目名不明）'}
+            </Text>
+            <View style={styles.ringWrap}>
+              {/* 残り時間の代わりに、満円のリング中央へ「出席」を表示する。 */}
+              <CountdownRing centerText="出席" size={176} progress={1} />
+            </View>
             {attended?.code ? (
               <>
-                <Text style={[styles.doneCodeLabel, { color: labelColor }]}>入力した出席コード</Text>
+                <Text style={[styles.doneCodeLabel, styles.doneCodeCenter, { color: labelColor }]}>入力した出席コード</Text>
                 <Text style={[styles.doneCode, { color: valueColor }]}>{attended.code}</Text>
               </>
             ) : (
@@ -280,6 +284,7 @@ const styles = StyleSheet.create({
   doneHero: { alignItems: 'center', paddingVertical: 24 },
   doneCodeLabel: { fontSize: 12, marginTop: 16 },
   doneCode: { fontSize: 40, fontWeight: '700', letterSpacing: 8, marginTop: 4 },
+  doneCodeCenter: { textAlign: 'center' },
   doneOther: { fontSize: 13, marginTop: 12 },
   doneCard: { marginTop: 12, alignItems: 'center', paddingVertical: 22 },
   doneCheck: { width: 76, height: 76, borderRadius: 38, backgroundColor: COLORS.success, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },

@@ -291,8 +291,10 @@ function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<
   return (
     <View style={[styles.focusRow, last && { paddingBottom: 14 }]}>
       <View style={styles.focusLead}>
-        <Text style={[styles.focusPer, { color: ui.labelColor }]}>{focus.period}限</Text>
-        <Text style={[styles.focusTime, { color: ui.valueColor }]}>{focus.start}</Text>
+        <Text style={[styles.focusPer, { color: ui.labelColor }]} numberOfLines={1}>{focus.period}限</Text>
+        <Text style={[styles.focusTime, { color: ui.valueColor }]} numberOfLines={1} adjustsFontSizeToFit>
+          {focus.start}
+        </Text>
       </View>
       <View style={[styles.focusTimeDivider, { backgroundColor: ui.dividerColor }]} />
       <View style={styles.focusMain}>
@@ -340,7 +342,7 @@ const styles = StyleSheet.create({
 
   focusCard: { paddingVertical: 4, paddingHorizontal: 16 },
   focusRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
-  focusLead: { width: 44, alignItems: 'center', justifyContent: 'center' },
+  focusLead: { width: 58, alignItems: 'center', justifyContent: 'center' },
   focusPer: { fontSize: 11 },
   focusTime: { fontSize: 18, fontWeight: '700', lineHeight: 20, marginTop: 1 },
   focusTimeDivider: { width: 1, alignSelf: 'stretch' },
