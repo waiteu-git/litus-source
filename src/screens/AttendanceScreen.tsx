@@ -27,6 +27,7 @@ export default function AttendanceScreen() {
     attended,
     attendedNow,
     conflict,
+    conflictExhausted,
     now,
     code,
     setCode,
@@ -103,7 +104,9 @@ export default function AttendanceScreen() {
               PCなど他の画面でCLASSを開いていると確認できません
             </Text>
             <Text style={[styles.conflictSub, { color: labelColor }]}>
-              他のCLASSを閉じるとこの画面が自動で復帰します。すぐ試すには「再確認」。
+              {conflictExhausted
+                ? '他のCLASSを閉じてから「再確認」を押してください。'
+                : '他のCLASSを閉じるとこの画面が自動で復帰します。すぐ試すには「再確認」。'}
             </Text>
             <Pressable style={[styles.cta, styles.conflictBtn, { backgroundColor: c.cta }]} onPress={retry}>
               <Text style={styles.ctaText}>再確認</Text>
