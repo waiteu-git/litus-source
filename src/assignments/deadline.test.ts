@@ -29,6 +29,11 @@ describe('pickUrgentAssignment', () => {
     expect(pickUrgentAssignment([], NOW)).toBeNull()
   })
 
+  it('開始前(before_start・まだ受験できない)は除外する', () => {
+    const before = assignment({ deadline: iso(23, 1), lifecycleStatus: 'before_start' })
+    expect(pickUrgentAssignment([before], NOW)).toBeNull()
+  })
+
   it('未提出で締切が最も近い将来の課題を返す', () => {
     const a = assignment({ url: 'a', title: '近い', deadline: iso(15) })
     const b = assignment({ url: 'b', title: '遠い', deadline: iso(15, 3) })

@@ -183,7 +183,11 @@ export function extractSubmissionStatus(
 
 function isBeforeStart(plainText: string): boolean {
   const text = normalizeText(plainText)
-  return text.includes('開始予定') && text.includes('利用できません')
+  if (text.includes('開始予定') && text.includes('利用できません')) return true
+  // 小テストが「まだ受験できない」状態（受験サマリ・開始ボタンが無く「(現在、)この小テストは
+  // 利用できません」と表示。実DOM 2026-07-10）。未公開ではなく“受験不可”を before_start として扱う。
+  if (text.includes('小テストは利用できません')) return true
+  return false
 }
 
 function isDeadlinePassed(deadline: string | null): boolean {
