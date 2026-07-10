@@ -149,10 +149,25 @@ export function extractSubmissionStatus(
     return 'unknown'
   }
 
-  if (text.includes('提出済み') || text.includes('submitted')) {
+  // 実DOM 2026-07-10（mod/assign 提出ステータス行）:
+  //  提出済み = 「評定のために提出済み」（"提出済み" を含む） / Submitted for grading
+  //  未提出   = 「まだ提出されていません」（"未提出" は含まれない＝旧実装が unknown を返す真因）
+  if (
+    text.includes('提出済み') ||
+    text.includes('submitted for grading') ||
+    text.includes('submitted')
+  ) {
     return 'submitted'
   }
-  if (text.includes('未提出') || text.includes('not submitted')) {
+  if (
+    text.includes('未提出') ||
+    text.includes('まだ提出されていません') ||
+    text.includes('提出されていません') ||
+    text.includes('提出がありません') ||
+    text.includes('not submitted') ||
+    text.includes('no attempt') ||
+    text.includes('nothing has been submitted')
+  ) {
     return 'not_submitted'
   }
   return 'unknown'
