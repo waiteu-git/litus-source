@@ -15,6 +15,7 @@ import { makeupOccurrences, type ClassEvent } from '../timetableEvents/classEven
 import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
+import { BUILD_TAG } from '../buildTag'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
@@ -189,6 +190,8 @@ export default function HomeScreen() {
       <ScreenBg>
         <ScreenHeader title="ホーム" icon="home-outline" />
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: clearance }]}>
+          {/* 開発ビルドの識別タグ（APK名 litus-...-vNN と一致）。公開前に撤去する。 */}
+          <Text style={[styles.devTag, { color: ui.labelColor }]}>{BUILD_TAG}</Text>
           {banner.active && bannerMounted ? (
             <Animated.View
               style={{
@@ -411,6 +414,7 @@ export default function HomeScreen() {
             bulletinSyncingRef.current = false
             setBulletinSyncing(false)
             loadBulletinDigest().then(setBulletin).catch(() => undefined)
+            loadBulletinDiag().then(setBulletinDiag).catch(() => undefined)
           }}
         />
       ) : null}
@@ -453,6 +457,7 @@ function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
   scroll: { paddingBottom: 24 },
+  devTag: { alignSelf: 'flex-end', fontSize: 11, fontWeight: '700', opacity: 0.7, marginBottom: 2 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
