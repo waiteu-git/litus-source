@@ -123,7 +123,10 @@ export default function AttendanceScreen() {
                 <Text style={[styles.doneCodeLabel, { color: labelColor }]}>入力した出席コード</Text>
                 <Text style={[styles.doneCode, { color: valueColor }]}>{attended.code}</Text>
               </>
-            ) : null}
+            ) : (
+              // コード未保持＝このアプリで送信していない（PC等の他端末で出席）。混乱しないよう明示する。
+              <Text style={[styles.doneOther, { color: labelColor }]}>他の端末で出席登録済み</Text>
+            )}
           </View>
         ) : closed ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
@@ -277,6 +280,7 @@ const styles = StyleSheet.create({
   doneHero: { alignItems: 'center', paddingVertical: 24 },
   doneCodeLabel: { fontSize: 12, marginTop: 16 },
   doneCode: { fontSize: 40, fontWeight: '700', letterSpacing: 8, marginTop: 4 },
+  doneOther: { fontSize: 13, marginTop: 12 },
   doneCard: { marginTop: 12, alignItems: 'center', paddingVertical: 22 },
   doneCheck: { width: 76, height: 76, borderRadius: 38, backgroundColor: COLORS.success, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   doneTitle: { fontSize: 18, fontWeight: '700' },
