@@ -190,6 +190,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s !== 'active' || phaseRef.current === 'submitting' || !shouldRenderRef.current) return
+      // 競合中の前面復帰は「PCを閉じて戻ってきた」可能性が高い。バックオフを畳み直して即1回試す。
+      if (conflictRef.current) {
+        resumeConflictRetry()
+        return
+      }
       if (onAttendanceRef.current) refreshAttendance()
       else webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
     })
@@ -228,6 +233,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     arbiterSetFocused(attendanceFocused)
   }, [attendanceFocused, arbiterSetFocused])
+
+  // 出席画面を開いた瞬間も復帰トリガー。授業時間帯は shouldRender が真のままなので
+  // 再起動 effect が走らず、これがないと打ち切り後に手動操作でしか復帰できない。
+  useEffect(() => {
+    if (attendanceFocused) resumeConflictRetry()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendanceFocused])
 
   // 「出席済み」記録の読み込み（起動時）。
   useEffect(() => {
