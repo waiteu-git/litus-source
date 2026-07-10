@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAttendedNow, todayKey, type AttendedRecord } from './attendedState'
+import { isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 
 const rec = (over: Partial<AttendedRecord> = {}): AttendedRecord => ({
   date: '2026-07-07',
@@ -33,6 +33,27 @@ describe('isAttendedNow', () => {
   })
   it('confirmWindowが無ければ当日中はtrue', () => {
     expect(isAttendedNow(rec({ confirmWindow: null }), at(23, 0))).toBe(true)
+  })
+})
+
+describe('mergeAttendedRecord', () => {
+  it('新しいコードがあればそのまま採用', () => {
+    const prev = rec({ code: '1111' })
+    const next = rec({ code: '2222' })
+    expect(mergeAttendedRecord(prev, next).code).toBe('2222')
+  })
+  it('新コードが空でも同日の既存コードを引き継ぐ（再アクセスでコードが消えない）', () => {
+    const prev = rec({ code: '1234' })
+    const next = rec({ code: '' })
+    expect(mergeAttendedRecord(prev, next).code).toBe('1234')
+  })
+  it('日付が違えば引き継がない（別日の記録）', () => {
+    const prev = rec({ date: '2026-07-06', code: '1234' })
+    const next = rec({ date: '2026-07-07', code: '' })
+    expect(mergeAttendedRecord(prev, next).code).toBe('')
+  })
+  it('既存が無ければ next をそのまま', () => {
+    expect(mergeAttendedRecord(null, rec({ code: '' })).code).toBe('')
   })
 
   describe('classEndMin（授業終了までの延長）', () => {
