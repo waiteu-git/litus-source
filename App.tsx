@@ -10,6 +10,7 @@ import { ClassViewProvider } from './src/collect/classViewArbiter'
 import { AttendanceEngineProvider } from './src/attendance/AttendanceEngineProvider'
 import { AuthProvider } from './src/auth/AuthProvider'
 import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion'
+import { ClassEventsVersionProvider } from './src/timetableEvents/classEventsVersion'
 import { LoginGate } from './src/auth/LoginGate'
 import { ThemeProvider } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
@@ -67,6 +68,7 @@ export default function App() {
             着地して詰む実機バグがあった。ログイン完了後にのみ裏SSOを開始する。 */}
         <DisplaySettingsProvider>
         <AssignmentsVersionProvider>
+        <ClassEventsVersionProvider>
           <NavigationContainer ref={navigationRef} onReady={flushPendingNavigation}>
             <LoginGate>
               <AuthProvider>
@@ -81,6 +83,7 @@ export default function App() {
             </LoginGate>
           </NavigationContainer>
           <StatusBar style="auto" />
+        </ClassEventsVersionProvider>
         </AssignmentsVersionProvider>
         </DisplaySettingsProvider>
       </ThemeProvider>
