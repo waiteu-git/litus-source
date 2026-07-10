@@ -7,10 +7,12 @@ export interface ClassPageSignal {
   hasEnterSplash: boolean
   hasClassMenu: boolean
   hasSystemError: boolean
+  /** 「複数の画面でご利用／別の画面で操作されました」＝PC等の他画面と競合（CLASSは同一セッション複数画面禁止）。 */
+  hasMultiScreen?: boolean
   url?: string
 }
 
-export type ClassPageKind = 'attendance' | 'login' | 'splash' | 'portal' | 'error' | 'other'
+export type ClassPageKind = 'attendance' | 'login' | 'splash' | 'portal' | 'error' | 'conflict' | 'other'
 
 /** モバイル出席登録ページ（Xua00101.xhtml）のURLか。受付中の授業が無いとフォームが無く
  *  hasClassMenu だけ立って portal と誤判定されるため、URLで「出席ページに居る」ことを確定する。 */
@@ -21,6 +23,9 @@ export function isAttendanceUrl(url?: string): boolean {
 export function classifyClassPage(s: ClassPageSignal): ClassPageKind {
   // SSO（Microsoft）ログインの初画面はパスワード欄が無いため、URLでも login を検知する
   if (s.hasPasswordInput || isSsoLoginUrl(s.url)) return 'login'
+  // PC等の他画面と競合（複数の画面でご利用/別の画面で操作された）。自動やり直しでは解けないので
+  // 専用表示＋PCが閉じるまで静かに再試行するため、システムエラーとは別verdictにする。
+  if (s.hasMultiScreen) return 'conflict'
   // JSF ViewExpired等の「システムエラー」ページ。放置すると操作不能なので検知して自動復帰する
   if (s.hasSystemError) return 'error'
   // 受付フォームがある（＝受付中の授業あり）か、出席ページURLに居るなら attendance。

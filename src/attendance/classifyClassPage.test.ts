@@ -31,6 +31,12 @@ describe('classifyClassPage', () => {
   it('システムエラー文言があれば error（login以外に優先）', () => {
     expect(classifyClassPage({ ...base, hasSystemError: true, hasClassMenu: true })).toBe('error')
   })
+  it('多重画面(PC競合)は conflict（system errorより優先・専用ハンドリング）', () => {
+    expect(classifyClassPage({ ...base, hasMultiScreen: true, hasSystemError: true, hasClassMenu: true })).toBe('conflict')
+  })
+  it('多重画面でもパスワード欄(login)が最優先', () => {
+    expect(classifyClassPage({ ...base, hasPasswordInput: true, hasMultiScreen: true })).toBe('login')
+  })
   it('パスワード欄はエラーより優先（ログインページにエラー文言が乗っても login）', () => {
     expect(classifyClassPage({ ...base, hasPasswordInput: true, hasSystemError: true })).toBe('login')
   })

@@ -21,7 +21,7 @@ import {
   OPEN_ATTENDANCE_JS,
   buildSubmitAttendanceJs,
 } from '../collect/injectedScripts'
-import { parseAttendanceMessage, type AttendanceReception } from '../collect/attendanceMessage'
+import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod } from './classPeriod'
 import { isAttendedNow, todayKey, type AttendedRecord } from './attendedState'
@@ -37,8 +37,11 @@ import {
 } from './engine'
 
 const CLASS_URL = CLASS_PC_LOGIN_URL
-const NAV_TIMEOUT_MS = 10000
+// 出席状況の取得（メニュー遷移→受付判定）は約7秒・2トライで打ち切る（ユーザー指定）。
+const NAV_TIMEOUT_MS = 7000
 const ATTENDANCE_POLL_MS = 30000
+// PC競合（他画面でCLASS使用中）のとき、諦めず静かに再試行する間隔。
+const CONFLICT_RETRY_MS = 7000
 
 /**
  * 出席エンジン（CLASS WebView＋受付判定）をアプリ根で常時保持する共有層。
@@ -63,6 +66,8 @@ export type AttendanceEngineValue = {
   retry: () => void
   /** WebViewが起動中か（バナー判定で reception を信頼してよいかの目安）。 */
   running: boolean
+  /** PC等の他画面でCLASSを開いていて確認できない状態（複数画面競合）。UIは専用表示にする。 */
+  conflict: boolean
   failCount: number
   revealClass: boolean
   setRevealClass: (b: boolean) => void
@@ -102,6 +107,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const [attended, setAttended] = useState<AttendedRecord | null>(null)
   const [timetable, setTimetable] = useState<TimetableCollection[]>([])
   const [attendanceFocused, setAttendanceFocusedState] = useState(false)
+  const [conflict, setConflict] = useState(false)
+  // ポーリング条件を最新の受付状態で判定するための ref（interval クロージャの stale 回避）。
+  const receptionStatusRef = useRef<AttendanceStatus | undefined>(undefined)
+  receptionStatusRef.current = state.reception?.status
 
   phaseRef.current = state.phase
 
@@ -164,12 +173,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // 自動で「受付中」に切り替わるように）。収集使用中・送信中・出席済みは触らない。
   useEffect(() => {
     const id = setInterval(() => {
+      // 受付状況の取り直しは「受付中(未提出)」のときだけ（出席済み/受付終了/受付なし/送信中/収集中/競合は無駄打ち）。
       if (
+        receptionStatusRef.current === 'accepting' &&
         onAttendanceRef.current &&
         shouldRenderRef.current &&
         !collectActiveRef.current &&
-        phaseRef.current !== 'submitting' &&
-        !attendedRef.current
+        phaseRef.current !== 'submitting'
       ) {
         refreshAttendance()
       }
@@ -195,6 +205,19 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     loadAttendedRecord().then(setAttended).catch(() => undefined)
   }, [])
+
+  // PC競合中は諦めず、一定間隔でWebViewを作り直して再試行（PCを閉じたら正常ページに着地→自動復帰）。
+  useEffect(() => {
+    if (!conflict) return
+    const id = setInterval(() => {
+      if (!shouldRenderRef.current) return
+      portalTriesRef.current = 0
+      errorRetryRef.current = 0
+      dispatch({ kind: 'reboot' })
+      setWebviewKey((k) => k + 1)
+    }, CONFLICT_RETRY_MS)
+    return () => clearInterval(id)
+  }, [conflict])
 
   function inject(js: string) {
     webviewRef.current?.injectJavaScript(js)
@@ -241,12 +264,22 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         hasEnterSplash: !!parsed.hasEnterSplash,
         hasClassMenu: !!parsed.hasClassMenu,
         hasSystemError: !!parsed.hasSystemError,
+        hasMultiScreen: !!parsed.hasMultiScreen,
         url: typeof parsed.url === 'string' ? parsed.url : undefined,
       })
       dispatch({ kind: 'page', page: kind })
       onAttendanceRef.current = kind === 'attendance'
+      if (kind !== 'conflict') setConflict(false)
       if (kind === 'login') {
         loginGate.requireLogin()
+      } else if (kind === 'conflict') {
+        // PC等の他画面と競合。自動やり直しでは解けないので専用表示にし、navタイマーは止めて
+        // navFailed へ落とさない。復帰は CONFLICT_RETRY_MS の再試行に任せる（PCを閉じたら回復）。
+        if (navTimerRef.current) {
+          clearTimeout(navTimerRef.current)
+          navTimerRef.current = null
+        }
+        setConflict(true)
       } else if (kind === 'attendance') {
         portalTriesRef.current = 0
         errorRetryRef.current = 0
@@ -254,7 +287,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       } else if (kind === 'splash') {
         inject(ENTER_CLASS_PC_JS)
       } else if (kind === 'portal') {
-        if (portalTriesRef.current < 3) {
+        if (portalTriesRef.current < 2) {
           portalTriesRef.current += 1
           inject(OPEN_ATTENDANCE_JS)
           setTimeout(() => inject(DETECT_PAGE_JS), 1500)
@@ -271,7 +304,21 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       return
     }
     if (parsed.type === 'attendance') {
-      dispatch({ kind: 'reception', reception: parseAttendanceMessage(data) })
+      const rec = parseAttendanceMessage(data)
+      dispatch({ kind: 'reception', reception: rec })
+      // CLASSが「出席済み」を示したら、どのデバイスで出していても記録を更新（授業間の継続表示・
+      // オフライン補助）。CLASSの状態が正。
+      if (rec.status === 'attended') {
+        const d = new Date()
+        const arec: AttendedRecord = {
+          date: todayKey(d),
+          courseName: rec.courseName ?? '',
+          confirmWindow: rec.confirmWindow ?? null,
+          code: lastCodeRef.current,
+        }
+        setAttended(arec)
+        saveAttendedRecord(arec).catch(() => undefined)
+      }
       return
     }
     if (parsed.type === 'submit') {
@@ -315,7 +362,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   const setAttendanceFocused = useCallback((b: boolean) => setAttendanceFocusedState(b), [])
 
-  const attendedNow = isAttendedNow(attended, now)
+  // CLASSが出席済みを示していれば最優先。無ければローカル記録（授業間の継続表示・オフライン補助）。
+  const attendedNow = state.reception?.status === 'attended' || isAttendedNow(attended, now)
   attendedRef.current = attendedNow
 
   const value: AttendanceEngineValue = {
@@ -330,6 +378,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     submit,
     retry,
     running,
+    conflict,
     failCount,
     revealClass,
     setRevealClass,
