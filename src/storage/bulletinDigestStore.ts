@@ -15,6 +15,17 @@ export async function loadBulletinDigest(): Promise<BulletinItem[]> {
   return deserializeBulletinDigest(await AsyncStorage.getItem(KEY))
 }
 
+const DIAG_KEY = 'info.bulletinDiag.v1'
+
+/** 掲示収集の診断（着地ページ・dl.keiji件数・.alignRight件数）を保存する。取得不能の切り分け用。 */
+export async function saveBulletinDiag(text: string): Promise<void> {
+  await AsyncStorage.setItem(DIAG_KEY, text)
+}
+
+export async function loadBulletinDiag(): Promise<string> {
+  return (await AsyncStorage.getItem(DIAG_KEY)) ?? ''
+}
+
 /** 単一項目を読み書きで更新（body付与・既読化・フラグ更新の永続化に使う）。更新後の全件を返す。 */
 export async function updateBulletinItem(
   id: string,

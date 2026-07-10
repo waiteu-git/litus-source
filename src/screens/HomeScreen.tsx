@@ -14,7 +14,7 @@ import { todayEvents, todayKey } from '../timetableEvents/eventSelectors'
 import { makeupOccurrences, type ClassEvent } from '../timetableEvents/classEvent'
 import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
-import { loadBulletinDigest } from '../storage/bulletinDigestStore'
+import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
@@ -54,6 +54,8 @@ export default function HomeScreen() {
   // CLASS掲示の裏取得中フラグ。true の間だけ headless エンジンをマウントする。
   const [bulletinSyncing, setBulletinSyncing] = useState(false)
   const bulletinSyncingRef = useRef(false)
+  // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用に画面へ薄く表示する。
+  const [bulletinDiag, setBulletinDiag] = useState('')
 
   useFocusEffect(
     useCallback(() => {
@@ -63,6 +65,9 @@ export default function HomeScreen() {
         .catch(() => undefined)
       loadBulletinDigest()
         .then((b) => active && setBulletin(b))
+        .catch(() => undefined)
+      loadBulletinDiag()
+        .then((d) => active && setBulletinDiag(d))
         .catch(() => undefined)
       loadClassEvents()
         .then((e) => active && setClassEvents(e))
@@ -307,9 +312,14 @@ export default function HomeScreen() {
           ) : (
             <Pressable style={[ui.card, styles.bulletinCta]} onPress={() => startBulletinSync(true)}>
               <Ionicons name="megaphone-outline" size={20} color={COLORS.emerald} />
-              <Text style={[styles.bulletinCtaText, { color: ui.valueColor }]}>
-                {bulletinSyncing ? '掲示を取得しています…' : 'まだ取得できていません。タップで取得します。'}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.bulletinCtaText, { color: ui.valueColor }]}>
+                  {bulletinSyncing ? '掲示を取得しています…' : 'まだ取得できていません。タップで取得します。'}
+                </Text>
+                {bulletinDiag ? (
+                  <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 4 }}>診断: {bulletinDiag}</Text>
+                ) : null}
+              </View>
             </Pressable>
           )}
 
