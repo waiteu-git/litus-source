@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isInClassPeriod, currentPeriodNumber } from './classPeriod'
+import { isInClassPeriod, currentPeriodNumber, attendedClassEndMin } from './classPeriod'
 import type { TimetableCollection } from '../collect/timetableMessage'
 
 const periodTimes = {
@@ -79,5 +79,27 @@ describe('currentPeriodNumber', () => {
   })
   it('periodTimesが無ければ null', () => {
     expect(currentPeriodNumber(null, MON_0930)).toBeNull()
+  })
+})
+
+describe('attendedClassEndMin', () => {
+  // 1限 9:00-10:30（=630分）。受付は 9:00〜9:20。
+  it('受付開始時刻がその時限に入る登録授業の終了(分)を返す', () => {
+    expect(attendedClassEndMin([col('mon', 1)], MON_0930, '09:00〜09:20')).toBe(10 * 60 + 30)
+  })
+  it('confirmWindowが無ければ null', () => {
+    expect(attendedClassEndMin([col('mon', 1)], MON_0930, null)).toBeNull()
+  })
+  it('どの時限にも入らない受付なら null', () => {
+    expect(attendedClassEndMin([col('mon', 1)], MON_0930, '15:00〜15:10')).toBeNull()
+  })
+  it('別曜日の授業は対象外（今日と突き合わせ）', () => {
+    expect(attendedClassEndMin([col('tue', 1)], MON_0930, '09:00〜09:20')).toBeNull()
+  })
+  it('空きコマは対象外', () => {
+    expect(attendedClassEndMin([col('mon', 1, false)], MON_0930, '09:00〜09:20')).toBeNull()
+  })
+  it('開始のわずか前から始まる受付も同時限に紐づく（10分の前余裕）', () => {
+    expect(attendedClassEndMin([col('mon', 1)], MON_0857, '08:55〜09:10')).toBe(10 * 60 + 30)
   })
 })
