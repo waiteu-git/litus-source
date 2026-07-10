@@ -18,18 +18,17 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
       resultType="bulletin"
       fallbackJs={GO_BULLETIN_JS}
       onData={async (raw) => {
-        let p: { count?: number; unreadHtml?: string; flaggedHtml?: string } | null = null
+        let p: { count?: number; html?: string } | null = null
         try {
           p = JSON.parse(raw)
         } catch {
           return false
         }
         if (!p || typeof p.count !== 'number' || p.count <= 0) return false
+        // 行を1件も抽出できなければ保存しない（＝既存ダイジェストを空で上書きしない）。次回再試行。
+        const rows = parseBulletinList(p.html ?? '')
+        if (rows.length === 0) return false
         try {
-          const rows = [
-            ...parseBulletinList(p.unreadHtml ?? ''),
-            ...parseBulletinList(p.flaggedHtml ?? ''),
-          ]
           const incoming = toBulletinItems(rows)
           const prev = await loadBulletinDigest()
           await saveBulletinDigest(mergeBulletinItems(prev, incoming))
