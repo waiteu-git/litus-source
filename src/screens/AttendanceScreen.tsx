@@ -26,6 +26,7 @@ export default function AttendanceScreen() {
     result,
     attended,
     attendedNow,
+    conflict,
     now,
     code,
     setCode,
@@ -36,6 +37,7 @@ export default function AttendanceScreen() {
     setRevealClass,
     setAttendanceFocused,
   } = engine
+  const closed = reception?.status === 'closed'
 
   // フォーカスをエンジンへ通知（起動ポリシー＋収集への優先権制御）。
   useEffect(() => {
@@ -83,21 +85,61 @@ export default function AttendanceScreen() {
             <Text style={[styles.hTitle, { color: glass ? c.white : c.emeraldDark }]}>出席</Text>
           </View>
           <Text style={[styles.pill, glass ? styles.pillGlass : styles.pillSolid]}>
-            {attendedNow ? '出席済み' : phase === 'needsLogin' ? 'ログインが必要' : reception ? 'ログイン済み' : '確認中…'}
+            {conflict
+              ? 'PC等で確認中'
+              : attendedNow
+                ? '出席済み'
+                : phase === 'needsLogin'
+                  ? 'ログインが必要'
+                  : reception
+                    ? 'ログイン済み'
+                    : '確認中…'}
           </Text>
         </View>
 
-        {attendedNow ? (
+        {conflict ? (
+          <View style={[styles.card, cardStyle, styles.hero]}>
+            <View style={[styles.preIconWrap, glass && styles.preIconWrapGlass]}>
+              <Ionicons name="desktop-outline" size={30} color={glass ? c.white : c.emerald} />
+            </View>
+            <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
+              PCなど他の画面でCLASSを開いていると確認できません
+            </Text>
+            <Text style={[styles.conflictSub, { color: labelColor }]}>
+              他のCLASSを閉じるとこの画面が自動で復帰します。すぐ試すには「再確認」。
+            </Text>
+            <Pressable style={[styles.cta, styles.conflictBtn, { backgroundColor: c.cta }]} onPress={retry}>
+              <Text style={styles.ctaText}>再確認</Text>
+            </Pressable>
+          </View>
+        ) : attendedNow ? (
           <View style={[styles.card, cardStyle, styles.doneHero]}>
             <View style={styles.doneCheck}>
               <Ionicons name="checkmark" size={38} color="#ffffff" />
             </View>
             <Text style={[styles.doneTitle, { color: valueColor }]}>出席済み</Text>
-            {attended?.courseName ? (
-              <Text style={[styles.doneSub, { color: labelColor }]}>{attended.courseName}</Text>
+            {(attended?.courseName || reception?.courseName) ? (
+              <Text style={[styles.doneSub, { color: labelColor }]}>{attended?.courseName || reception?.courseName}</Text>
             ) : null}
-            <Text style={[styles.doneCodeLabel, { color: labelColor }]}>入力した出席コード</Text>
-            <Text style={[styles.doneCode, { color: valueColor }]}>{attended?.code}</Text>
+            {attended?.code ? (
+              <>
+                <Text style={[styles.doneCodeLabel, { color: labelColor }]}>入力した出席コード</Text>
+                <Text style={[styles.doneCode, { color: valueColor }]}>{attended.code}</Text>
+              </>
+            ) : null}
+          </View>
+        ) : closed ? (
+          <View style={[styles.card, cardStyle, styles.hero]}>
+            <View style={[styles.preIconWrap, glass && styles.preIconWrapGlass]}>
+              <Ionicons name="time-outline" size={30} color={glass ? c.white : c.emerald} />
+            </View>
+            <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>この授業の受付は終了しました</Text>
+            {reception?.courseName ? (
+              <Text style={[styles.conflictSub, { color: labelColor }]}>
+                {reception.courseName}
+                {reception.confirmWindow ? ` ・ ${reception.confirmWindow}` : ''}
+              </Text>
+            ) : null}
           </View>
         ) : (
           <>
@@ -219,6 +261,8 @@ const styles = StyleSheet.create({
   preIconWrapGlass: { backgroundColor: 'rgba(255,255,255,0.2)' },
   status: { fontSize: 16, fontWeight: '600' },
   statusCenter: { textAlign: 'center' },
+  conflictSub: { fontSize: 13, textAlign: 'center', marginTop: 8, paddingHorizontal: 8, lineHeight: 19 },
+  conflictBtn: { alignSelf: 'stretch' },
   inputLabel: { fontSize: 13, marginBottom: 10 },
   segRow: { flexDirection: 'row', gap: 9 },
   seg: { flex: 1, height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: '#b9ddcd', backgroundColor: '#f1f8f5', alignItems: 'center', justifyContent: 'center' },

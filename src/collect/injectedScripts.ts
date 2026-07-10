@@ -142,10 +142,34 @@ export const DETECT_ATTENDANCE_JS = `(function(){
     var courseName = '';
     var m = body.match(/\\d{1,2}:\\d{2}\\s*[～~]\\s*\\d{1,2}:\\d{2}\\s+([^\\n]{2,40})/);
     if (m) courseName = m[1].trim();
+    // 実DOM由来の目印（判定はRN側 parseAttendanceMessage に集約）:
+    // .attendSuc=出席が記録された確定マーカー（どのデバイスで出しても付く）
+    var attendSuc = !!document.querySelector('.attendSuc');
+    // 未提出（受付中）: 認証コード入力欄／「出席登録する」ボタンの存在
+    var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
+    var hasSubmitBtn = btns.some(function(b){ return (((b.textContent||b.value)||'').replace(/\\s+/g,'')).indexOf('出席登録する')>=0; });
+    var codeInputs = Array.prototype.slice.call(document.querySelectorAll('input')).filter(function(el){
+      var t=(el.getAttribute('type')||'text').toLowerCase();
+      if(['hidden','submit','button','checkbox','radio','file','image','reset'].indexOf(t)>=0) return false;
+      if(el.disabled||el.readOnly) return false;
+      return el.maxLength===1||el.maxLength===2;
+    });
+    var hasCodeInput = hasSubmitBtn || body.indexOf('認証コード')>=0 || codeInputs.length>0;
+    // 受付終了マーカー / 残り秒
+    var flg = document.querySelector('.signFlging');
+    var signEnded = !!(flg && /終了/.test(flg.textContent||''));
+    var tsEl = document.querySelector('.timeSum');
+    var timeSum = null;
+    if (tsEl) { var n = parseInt((tsEl.textContent||'').replace(/[^0-9-]/g,''),10); if(!isNaN(n)) timeSum = n; }
+    if (timeSum!==null && timeSum<=0) signEnded = true;
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'attendance',
       text: body,
-      courseName: courseName
+      courseName: courseName,
+      attendSuc: attendSuc,
+      hasCodeInput: hasCodeInput,
+      signEnded: signEnded,
+      timeSum: timeSum
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
@@ -471,7 +495,9 @@ export const DETECT_PAGE_JS = `(function(){
       var href = (b.getAttribute && (b.getAttribute('href')||'')) || '';
       return t.indexOf('ログアウト') >= 0 || /logout|logoff|signout/i.test(t) || /logout|logoff|signout/i.test(href);
     });
-    var hasSystemError = /システムエラー|ViewExpired|この画面を閉じてください|別の画面で操作|複数の画面でご利用/.test(body);
+    // PC等の他画面と競合（複数の画面でご利用/別の画面で操作された）は専用ハンドリングのため分離する。
+    var hasMultiScreen = /別の画面で操作|複数の画面でご利用/.test(body);
+    var hasSystemError = /システムエラー|ViewExpired|この画面を閉じてください/.test(body);
     // 過去のリクエスト=SAMLリプレイ拒否 / CSRF=並走SSO等でフォームのトークンが無効化された状態。
     // どちらも「フローが壊れた」なので新しいWebViewでフォームを取り直す（gateのrecover対象）。
     var hasSsoStale = /過去のリクエスト|CSRF/i.test(body);
@@ -480,7 +506,8 @@ export const DETECT_PAGE_JS = `(function(){
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'page', hasPasswordInput: hasPassword, hasAttendanceForm: hasAttendanceForm,
       hasEnterSplash: hasEnterSplash, hasClassMenu: hasClassMenu, hasLogout: hasLogout,
-      hasSystemError: hasSystemError, hasSsoStale: hasSsoStale, hasMaintenance: hasMaintenance, url: location.href
+      hasSystemError: hasSystemError, hasMultiScreen: hasMultiScreen, hasSsoStale: hasSsoStale,
+      hasMaintenance: hasMaintenance, url: location.href
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));

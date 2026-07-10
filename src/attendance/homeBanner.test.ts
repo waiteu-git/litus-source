@@ -27,9 +27,10 @@ function col(day: 'mon' | 'tue', period: number, name = '線形代数', hasClass
 }
 
 function accepting(courseName: string | null): AttendanceReception {
-  return { accepting: true, courseName, confirmWindow: '9:00〜9:15', remaining: 'あと5分', error: null }
+  return { status: 'accepting', accepting: true, courseName, confirmWindow: '9:00〜9:15', remaining: 'あと5分', error: null }
 }
 const notAccepting: AttendanceReception = {
+  status: 'none',
   accepting: false,
   courseName: null,
   confirmWindow: null,
