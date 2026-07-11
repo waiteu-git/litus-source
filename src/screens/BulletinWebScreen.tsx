@@ -6,18 +6,28 @@ import { useClassView } from '../collect/classViewArbiter'
 import {
   CLASS_TOP_URL,
   DESKTOP_UA,
+  DETECT_PAGE_JS,
   ENTER_CLASS_PC_JS,
   OPEN_BULLETIN_JS,
   openBulletinDetailJs,
 } from '../collect/injectedScripts'
+import { nextBulletinWebStep, type BulletinWebSignal } from '../collect/bulletinWebFlow'
 import { loadBulletinDigest, updateBulletinItem } from '../storage/bulletinDigestStore'
 import { COLORS } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
 
+// 一手を注入したあと、着地を見直すために現在ページを撃ち直す間隔（postback/AJAXの描画待ち）。
+const REPROBE_MS = 1400
+
 /**
  * 掲示を「アプリ内の可視WebView」でCLASS本物ページとして開く（方式B）。ヘッドレスの脆さを避け、
  * CLASSのJSを完全に走らせて確実に表示する。CLASSトップ→掲示板メニュー→対象掲示を自動で開く。
- * 自動で開かなくても掲示板が見えているのでユーザーが自分でタップできる。読む＝CLASS側で既読化。
+ *
+ * 遷移は状態駆動（nextBulletinWebStep）。onLoadEnd 毎に無条件で ENTER/メニュー/掲示オープンの
+ * タイマーを積むと、CLASSのSSO/postbackで多重 postback になり ViewState が競合して
+ * 「別の画面で操作されました」を誘発する（実機バグの根本原因）。そこで各 onLoadEnd では現在ページを
+ * 判定し、着地に応じた「次の一手」だけを冪等に一度注入する。
+ *
  * 表示中は classViewArbiter でCLASS使用権を取り、出席の持続WebViewに譲らせる（単一セッション保護）。
  */
 export default function BulletinWebScreen() {
@@ -26,6 +36,10 @@ export default function BulletinWebScreen() {
   const { setCollectActive } = useClassView()
   const [nonce, setNonce] = useState(0)
   const [target, setTarget] = useState<{ title: string; date: string } | null>(null)
+  // 対象掲示を開く操作（openDetail）を撃ったか。掲示ページに再着地しても二重に開かない（多重postback防止の要）。
+  const detailFiredRef = useRef(false)
+  const modalOpenRef = useRef(false)
+  const reprobeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     loadBulletinDigest()
@@ -43,17 +57,70 @@ export default function BulletinWebScreen() {
   useFocusEffect(
     useCallback(() => {
       setCollectActive(true) // CLASS使用権を取り出席に譲らせる
-      return () => setCollectActive(false)
+      return () => {
+        setCollectActive(false)
+        if (reprobeTimer.current) clearTimeout(reprobeTimer.current)
+      }
     }, [setCollectActive]),
   )
 
+  function inject(js: string) {
+    webviewRef.current?.injectJavaScript(js)
+  }
+
+  function scheduleReprobe() {
+    if (reprobeTimer.current) clearTimeout(reprobeTimer.current)
+    reprobeTimer.current = setTimeout(() => inject(DETECT_PAGE_JS), REPROBE_MS)
+  }
+
+  // ページ読込のたびに現在ページを判定する（無条件注入はしない）。判定結果は onMessage で受ける。
   function onLoadEnd() {
-    // 入口スプラッシュならPC ENTER。ログイン後は掲示板メニューへ、掲示板に着いたら対象掲示を開く。
-    webviewRef.current?.injectJavaScript(ENTER_CLASS_PC_JS)
-    setTimeout(() => webviewRef.current?.injectJavaScript(OPEN_BULLETIN_JS), 1200)
-    if (target) {
-      setTimeout(() => webviewRef.current?.injectJavaScript(openBulletinDetailJs(target.title, target.date)), 2800)
+    inject(DETECT_PAGE_JS)
+  }
+
+  function onMessage(data: string) {
+    let p: Record<string, unknown> | null = null
+    try {
+      p = JSON.parse(data)
+    } catch {
+      return
     }
+    if (!p) return
+    // 対象掲示のモーダルが開いた/既に開いていたら、以後は何も注入しない（ユーザーが読む）。
+    if (p.type === 'bulletindetail') {
+      if (p.stage === 'opened' || p.stage === 'already-open') modalOpenRef.current = true
+      return
+    }
+    if (p.type !== 'page') return
+    const url = typeof p.url === 'string' ? p.url : ''
+    const signal: BulletinWebSignal = {
+      hasEnterSplash: !!p.hasEnterSplash,
+      onBulletinPage: /bsd007/i.test(url),
+      modalOpen: modalOpenRef.current,
+      detailFired: detailFiredRef.current,
+      hasPasswordInput: !!p.hasPasswordInput,
+      hasMultiScreen: !!p.hasMultiScreen,
+    }
+    const step = nextBulletinWebStep(signal)
+    if (step === 'enter') {
+      inject(ENTER_CLASS_PC_JS)
+      scheduleReprobe()
+    } else if (step === 'openMenu') {
+      inject(OPEN_BULLETIN_JS)
+      scheduleReprobe()
+    } else if (step === 'openDetail') {
+      detailFiredRef.current = true // 先に立てて、再probeが来ても二重発火しない
+      if (target) inject(openBulletinDetailJs(target.title, target.date))
+      // openDetail は AJAX モーダルでページ遷移を伴わないため、結果は bulletindetail メッセージで受ける。
+    }
+    // 'idle' は何もしない（競合/ログイン/モーダル既開）。ユーザー操作での onLoadEnd 再来で再評価される。
+  }
+
+  function retry() {
+    detailFiredRef.current = false
+    modalOpenRef.current = false
+    if (reprobeTimer.current) clearTimeout(reprobeTimer.current)
+    setNonce((n) => n + 1)
   }
 
   return (
@@ -72,9 +139,10 @@ export default function BulletinWebScreen() {
         thirdPartyCookiesEnabled
         cacheEnabled={false}
         onLoadEnd={onLoadEnd}
+        onMessage={(e) => onMessage(e.nativeEvent.data)}
         style={styles.web}
       />
-      <Pressable style={styles.refresh} onPress={() => setNonce((n) => n + 1)}>
+      <Pressable style={styles.refresh} onPress={retry}>
         <Text style={styles.refreshText}>やり直す</Text>
       </Pressable>
     </View>
