@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "dev.waiteu.litus",
-      "versionCode": 64,
+      "versionCode": 65,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

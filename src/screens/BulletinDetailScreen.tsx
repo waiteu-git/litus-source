@@ -94,16 +94,26 @@ export default function BulletinDetailScreen() {
           </View>
           <Text style={[styles.title, { color: ui.valueColor }]}>{item.title}</Text>
 
-          <Pressable
-            onPress={toggleFlag}
-            disabled={flagBusy || fetching}
-            style={[styles.flagBtn, { borderColor: item.flagged ? '#e0a100' : '#9bb3ab', opacity: fetching ? 0.5 : 1 }]}
-          >
-            <Ionicons name={item.flagged ? 'flag' : 'flag-outline'} size={16} color={item.flagged ? '#e0a100' : '#9bb3ab'} />
-            <Text style={[styles.flagText, { color: item.flagged ? '#e0a100' : ui.labelColor }]}>
-              {flagBusy ? '同期中…' : item.flagged ? 'フラグを外す' : 'フラグを付ける'}
-            </Text>
-          </Pressable>
+          <View style={styles.actionsRow}>
+            <Pressable
+              onPress={toggleFlag}
+              disabled={flagBusy || fetching}
+              style={[styles.flagBtn, { borderColor: item.flagged ? '#e0a100' : '#9bb3ab', opacity: fetching ? 0.5 : 1 }]}
+            >
+              <Ionicons name={item.flagged ? 'flag' : 'flag-outline'} size={16} color={item.flagged ? '#e0a100' : '#9bb3ab'} />
+              <Text style={[styles.flagText, { color: item.flagged ? '#e0a100' : ui.labelColor }]}>
+                {flagBusy ? '同期中…' : item.flagged ? 'フラグを外す' : 'フラグを付ける'}
+              </Text>
+            </Pressable>
+            {/* 添付ファイルの確認・DLはCLASS本物ページ側で完結させる。全掲示に常設。 */}
+            <Pressable
+              onPress={() => navigation.navigate('BulletinWeb', { id: route.params.id })}
+              style={[styles.flagBtn, { borderColor: COLORS.emerald }]}
+            >
+              <Ionicons name="open-outline" size={16} color={COLORS.emerald} />
+              <Text style={[styles.flagText, { color: COLORS.emerald }]}>CLASSで開く</Text>
+            </Pressable>
+          </View>
 
           {b ? (
             <>
@@ -112,7 +122,7 @@ export default function BulletinDetailScreen() {
               <Text style={[styles.text, { color: ui.valueColor }]}>{b.text}</Text>
               {b.hasAttachment ? (
                 <Text style={[styles.meta, { color: ui.labelColor, marginTop: 10 }]}>
-                  ※ 添付ファイルはCLASSで確認してください。
+                  ※ 添付ファイルは上の「CLASSで開く」から確認・ダウンロードしてください。
                 </Text>
               ) : null}
             </>
@@ -131,11 +141,7 @@ export default function BulletinDetailScreen() {
                   <Ionicons name="refresh" size={15} color={COLORS.emerald} />
                   <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>再試行</Text>
                 </Pressable>
-                {/* 独自UIでの本文取得が不調な掲示は、CLASS本物ページ(方式B)で確実に開ける保険。 */}
-                <Pressable onPress={() => navigation.replace('BulletinWeb', { id: route.params.id })} style={styles.retryBtn}>
-                  <Ionicons name="open-outline" size={15} color={COLORS.emerald} />
-                  <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>CLASSページで開く</Text>
-                </Pressable>
+                {/* 本文取得が不調でも、上部の常設「CLASSで開く」で本物ページを開ける。 */}
               </View>
             </View>
           ) : (
@@ -170,6 +176,7 @@ const styles = StyleSheet.create({
   tag: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   tagText: { fontSize: 12, fontWeight: '600' },
   title: { fontSize: 18, fontWeight: '700', marginTop: 10, lineHeight: 25 },
+  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   flagBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -179,7 +186,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    marginTop: 12,
   },
   flagText: { fontSize: 13, fontWeight: '600' },
   loading: { alignItems: 'center', paddingVertical: 30 },
