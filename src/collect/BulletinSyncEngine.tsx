@@ -14,20 +14,12 @@ import ClassHeadlessCollector from './ClassHeadlessCollector'
  */
 export default function BulletinSyncEngine({ onFinished }: { onFinished: () => void }) {
   // 最後に観測したシグナル（診断用）。ページ未到達でも finish 時に書き出す。
-  const diag = useRef<{ page: string; stage: string; keiji: number; align: number; rows: number; got: boolean }>({
-    page: '',
-    stage: '',
-    keiji: 0,
-    align: 0,
-    rows: 0,
-    got: false,
-  })
+  const diag = useRef({ page: '', stage: '', keiji: 0, align: 0, rows: 0, got: false, tab: 0, pwd: 0, logout: 0, blen: 0 })
 
   const flushDiag = () => {
     const d = diag.current
-    // 例: "page=bulletin? stage=bulletin-click keiji=0 align=0 rows=0 got=false"
     saveBulletinDiag(
-      `page=${d.page || '?'} stage=${d.stage || '?'} keiji=${d.keiji} align=${d.align} rows=${d.rows} got=${d.got}`,
+      `page=${d.page || '?'} stage=${d.stage || '?'} keiji=${d.keiji} rows=${d.rows} tab=${d.tab} pwd=${d.pwd} logout=${d.logout} blen=${d.blen} got=${d.got}`,
     ).catch(() => undefined)
   }
 
@@ -46,6 +38,10 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
           if (typeof p.count === 'number') diag.current.keiji = p.count
           if (typeof p.align === 'number') diag.current.align = p.align
           if (typeof p.page === 'string' && p.page) diag.current.page = p.page as string
+          if (typeof p.tab === 'number') diag.current.tab = p.tab
+          if (typeof p.pwd === 'number') diag.current.pwd = p.pwd
+          if (typeof p.logout === 'number') diag.current.logout = p.logout
+          if (typeof p.blen === 'number') diag.current.blen = p.blen
         }
       }}
       onData={async (raw) => {
