@@ -1,0 +1,19 @@
+<!-- CLASS掲示一覧ページ Bsd00701.xhtml の実DOM（2026-07-11ユーザー提供・PCブラウザ outerHTML）。
+     恒久事実の要点:
+     - ページ冒頭に <style>*{visibility:hidden;}</style> → CLASSは全要素を隠してからJSで表示。
+       innerText はvisibility:hiddenを除外するので、未reveal時 document.body.innerText='' (blen=0)。
+     - 掲示板メニュー: a.ui-menuitem-link > span.ui-menuitem-text='掲示板'、
+       data-pfconfirmcommand に 'menuForm:mainMenu_menuid':'0' + submit('menuForm')。
+     - タブ funcForm:tabArea = 0グループ/1全表示/2授業/3時間割変更/4既読/5未読/6新着/7重要/8申込/9フラグつき(dynamic=false・全同時描画)。
+       tab0=アコーディオン(カテゴリ別・各~5件+すべて表示する)、tab1/5/9等= *:allScr にフラット list。
+     - 行: div.alignRight > dl#keiji.keiji（id="keiji"は全行同一=非ユニーク）
+         ・カテゴリ span.keijiCategory
+         ・件名 a.ui-commandlink（未読=class に fontBold）
+         ・日付 </a>直後テキスト yyyy/MM/dd
+         ・重要 i.fa-exclamation-circle（hiddenStyle無し=重要）
+         ・新着 i.fa-lightbulb-o（hiddenStyle無し=新着）
+       行右 span.inlineBlock 内 div.btnRead x2:
+         ・フラグ: span.ui-button-text='フラグをはずす'(=現在フラグ済) / 'フラグをつける'(=未フラグ)
+         ・既読 : span.ui-button-text='既読にする'(=現在未読) / '未読にする'(=現在既読)
+     - 詳細モーダル: #bsd00702:dialog / #bsd00702:dialogPanel（件名 a の PrimeFaces.ab で AJAX描画）。
+     全文HTMLはセッション会話に格納（サイズ大のため要点のみ本ファイルに保存）。 -->

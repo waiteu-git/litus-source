@@ -13,9 +13,12 @@ const OVERALL_TIMEOUT_MS = 25000
 const OPEN_DELAY_MS = 1200
 const COLLECT_DELAY_MS = 2600
 // 0件時に「再ナビせず」もう一度抽出するまでの待ち（描画待ち）。
-const COLLECT_RETRY_MS = 1600
-// 目的ページ未到達（0件）時の再試行上限。
-const MAX_TRIES = 3
+// CLASSは全画面POST遷移＋冒頭の visibility:hidden 解除があり、固定タイマだと目的ページ着地前に
+// 収集して0件になる。短い間隔で dl.keiji 等の出現をポーリングし、着地した瞬間に拾う（着地駆動）。
+const COLLECT_RETRY_MS = 1200
+// 目的ページ未到達（0件）時の再試行上限。着地まで待てるよう十分に取る（2600+10*1200≒14.6s＜25sタイムアウト）。
+// 再試行は collectJs（読み取り専用抽出）の再実行のみ＝二重POSTしないので回数を増やしても安全。
+const MAX_TRIES = 10
 // エラー/失効での作り直し上限（無限リロード防止）。
 const MAX_REBOOTS = 2
 
