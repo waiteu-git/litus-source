@@ -335,42 +335,55 @@ export const OPEN_BULLETIN_JS = `(function(){
     return (menu.length ? menu : hits)[0] || null;
   }
   function anyKeiji(){ var ds = docs(); for (var i=0;i<ds.length;i++){ if (ds[i].querySelector('dl.keiji')) return true; } return false; }
-  function fire(el){
+  // アンカーの所属ドキュメントの window で発火する（子フレーム内のメニューは、そのフレームの PrimeFaces
+  // スコープで data-pfconfirmcommand を実行しないと ReferenceError で空振り→トップが空遷移する）。
+  function fireIn(el){
+    var win = (el.ownerDocument && el.ownerDocument.defaultView) || window;
+    var F = win.Function || Function;
+    var ME = win.MouseEvent || MouseEvent;
     var dpc = el.getAttribute('data-pfconfirmcommand');
     try {
-      if (dpc) { new Function(dpc).call(el); return 'pfconfirm'; }
+      if (dpc) { F(dpc).call(el); return 'pfconfirm'; }
       var oc = el.getAttribute('onclick');
-      if (oc) { new Function('event', oc).call(el, new MouseEvent('click', { bubbles: true })); return 'onclick'; }
+      if (oc) { F('event', oc).call(el, new ME('click', { bubbles: true })); return 'onclick'; }
       el.click(); return 'click';
     } catch (e) {
       try { el.click(); return 'click-fb'; } catch (e2) { return 'err'; }
     }
   }
-  try {
-    // 着地ガード: 既に掲示ページ(dl.keiji)に居るならメニューを叩かない（onLoadEnd毎の再クリック→再POSTループ防止）。
-    if (anyKeiji()) {
-      post({ type: 'nav', ok: true, stage: 'bulletin-already' });
-    } else {
-      var target = findAnchor('掲示');
-      if (target) { var m = fire(target); post({ type: 'nav', ok: m !== 'err', stage: 'bulletin-click', method: m, id: target.id || '' }); }
-      else {
-        // 見つからない理由を stage に埋め込む(決定的診断): a=トップ<a>数, if=iframe/frame数, fm=form数, sc=script数,
-        // h=innerHTML長, t=title先頭。if>0→フレーム構造(子が別オリジンで参照不可の可能性), fm>0&a=0→自動submit中継,
-        // 全0→空/リダイレクト。これでXut12401の正体を一意に特定する。
-        var na = document.querySelectorAll('a').length;
-        var nif = document.querySelectorAll('iframe,frame').length;
-        var nfm = document.querySelectorAll('form').length;
-        var nsc = document.querySelectorAll('script').length;
-        var hb = document.body ? (document.body.innerHTML || '').length : 0;
-        var ttl = norm(document.title).slice(0, 16);
-        post({ type: 'nav', ok: false, stage: 'menu-bulletin[a=' + na + ',if=' + nif + ',fm=' + nfm + ',sc=' + nsc + ',h=' + hb + ',t=' + ttl + ']' });
-      }
-    }
-  } catch (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  function landscape(){
+    var na = document.querySelectorAll('a').length;
+    var nif = document.querySelectorAll('iframe,frame').length;
+    var nfm = document.querySelectorAll('form').length;
+    var nsc = document.querySelectorAll('script').length;
+    var hb = document.body ? (document.body.innerHTML || '').length : 0;
+    var ttl = norm(document.title).slice(0, 16);
+    return 'menu-bulletin[a='+na+',if='+nif+',fm='+nfm+',sc='+nsc+',h='+hb+',t='+ttl+']';
   }
-  true;
-})();`
+  // 条件待ち: 固定待ちだと Xut12401 の過渡状態(フレーム未生成/空)を引いて空振りする。掲示アンカーが
+  // 現れるまで最大約6秒ポーリングし、現れ次第そのフレーム文脈で一度だけ発火する。
+  var tries = 0, MAX = 20; // 20 * 300ms ≈ 6s
+  function tick(){
+    tries++;
+    try {
+      if (window.__litusBulletinFired) { post({ type: 'nav', ok: true, stage: 'bulletin-fired' }); return; }
+      if (anyKeiji()) { post({ type: 'nav', ok: true, stage: 'bulletin-already' }); return; }
+      var target = findAnchor('掲示');
+      if (target) {
+        window.__litusBulletinFired = true;
+        var inFrame = target.ownerDocument !== document ? 1 : 0;
+        var m = fireIn(target);
+        post({ type: 'nav', ok: m !== 'err', stage: 'bulletin-click', method: m, frame: inFrame });
+        return;
+      }
+      if (tries >= MAX) { post({ type: 'nav', ok: false, stage: landscape() }); return; }
+      setTimeout(tick, 300);
+    } catch (e) {
+      post({ type: 'error', message: String(e) });
+    }
+  }
+  tick();
+})(); true;`
 
 /**
  * CLASS掲示一覧を抽出。ログイン後ポータル(Xut12401)は左に機能メニュー、本文に掲示一覧(dl.keiji)を
@@ -402,15 +415,16 @@ export const COLLECT_BULLETIN_JS = `(function(){
  * 遅延描画する着地では空になり得るため、**タブ非依存で全行を拾う**（既定のグループタブにも状態ボタン付き行がある）。
  */
 export const COLLECT_BULLETIN_TABS_JS = `(function(){
-  try {
-    // Xut12401 は frameset/iframe ラッパー。掲示一覧は子フレーム内に読み込まれるため、トップだけ見ると空になる。
-    // トップ＋同一オリジンで参照可能な全フレームを横断して dl.keiji を集める。
-    function docs(){
-      var ds=[document];
-      try { var fr=Array.prototype.slice.call(document.querySelectorAll('iframe,frame'));
-        for(var i=0;i<fr.length;i++){ try{ var d=fr[i].contentDocument; if(d) ds.push(d); }catch(e){} } }catch(e){}
-      return ds;
-    }
+  function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
+  // Xut12401 は frameset/iframe ラッパー。掲示一覧は子フレーム内に読み込まれるため、トップだけ見ると空になる。
+  // トップ＋同一オリジンで参照可能な全フレームを横断して dl.keiji を集める。
+  function docs(){
+    var ds=[document];
+    try { var fr=Array.prototype.slice.call(document.querySelectorAll('iframe,frame'));
+      for(var i=0;i<fr.length;i++){ try{ var d=fr[i].contentDocument; if(d) ds.push(d); }catch(e){} } }catch(e){}
+    return ds;
+  }
+  function scan(){
     var ds = docs();
     var out='', align=0, dlTotal=0, blen=0, hlen=0, hasTab=false, hasPwd=false, hasLogout=false, keijiPage='';
     for(var di=0; di<ds.length; di++){
@@ -431,17 +445,27 @@ export const COLLECT_BULLETIN_TABS_JS = `(function(){
       var btns = Array.prototype.slice.call(d.querySelectorAll('a,button,input[type=submit]'));
       if(btns.some(function(x){ var t=((x.textContent||x.value)||''); return t.indexOf('ログアウト')>=0 || /logout/i.test(x.getAttribute&&(x.getAttribute('href')||'')); })) hasLogout=true;
     }
-    var page = keijiPage || ((location.pathname||'').split('/').pop() || '');
-    window.ReactNativeWebView.postMessage(JSON.stringify({
+    return {
       type: 'bulletin', html: '<div>'+out+'</div>', count: dlTotal, align: align,
-      page: page, fr: ds.length-1,
+      page: keijiPage || ((location.pathname||'').split('/').pop() || ''), fr: ds.length-1,
       tab: hasTab?1:0, pwd: hasPwd?1:0, logout: hasLogout?1:0, blen: blen, hlen: hlen
-    }));
-  } catch (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+    };
   }
-  true;
-})();`
+  // 条件待ち: メニュー発火→フレームへ掲示ロードは非同期。dl.keiji が現れるまで最大約6秒ポーリングし、
+  // 現れ次第 or タイムアウトで送る（固定待ちの空振りレースを解消）。
+  var tries = 0, MAX = 15; // 15 * 400ms ≈ 6s
+  function tick(){
+    tries++;
+    try {
+      var r = scan();
+      if (r.count > 0 || tries >= MAX) { post(r); return; }
+      setTimeout(tick, 400);
+    } catch (e) {
+      post({ type: 'error', message: String(e) });
+    }
+  }
+  tick();
+})(); true;`
 
 /**
  * 日付＋件名で行を特定し、(1)掲示内容モーダルが未オープンなら件名リンクで開く、(2)未読なら少し遅らせて
