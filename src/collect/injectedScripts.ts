@@ -519,16 +519,11 @@ export function openBulletinDetailJs(title: string, date: string): string {
         var panel=qsOne('[id="bsd00702:dialogPanel"]');
         var opened=panel && /本文/.test(panel.innerHTML||'');
         // 件名リンクをフレーム文脈で発火してモーダルを開く（トップ文脈だとPrimeFaces未解決で空振り）。
+        // モーダルを開くこと自体でCLASS側は既読になる（一覧行が「未読にする」表示へ変わる）。
+        // ここで別途「既読にする」チェックボックスを撃つと、モーダル開閉で更新された行バージョンに対し
+        // 古いバージョンの既読postbackを送る形になり「対象データは他のユーザによって編集されました」の
+        // 楽観ロック競合を誘発する。よって明示的な既読トグルは行わない（ローカル既読は呼び出し側が設定）。
         if(!opened){ fireEl(r.a); }
-        // 未読なら少し遅らせて既読化（CLASS側で確実に既読へ）。この行の既読ボタンだけを叩く（全既読化しない）。
-        var row=r.dl.parentNode, btns=row?row.querySelectorAll('.btnRead'):[];
-        for(var j=0;j<btns.length;j++){
-          if(/既読にする/.test(btns[j].textContent||'')){
-            var rbox=btns[j].querySelector('input[type=checkbox]');
-            if(rbox){ setTimeout((function(box){return function(){ try{ fireChange(box); }catch(e){} };})(rbox), 800); }
-            break;
-          }
-        }
         post({type:'nav',ok:true,stage:'detail-open'});
       }catch(e){ post({type:'error',message:String(e)}); }
     }
