@@ -4,6 +4,7 @@ import AttendanceScreen from '../screens/AttendanceScreen'
 import InfoScreen from '../screens/InfoScreen'
 import BulletinListScreen from '../screens/BulletinListScreen'
 import BulletinDetailScreen from '../screens/BulletinDetailScreen'
+import BulletinWebScreen from '../screens/BulletinWebScreen'
 import LinkViewerScreen from '../screens/LinkViewerScreen'
 import PdfViewerScreen from '../screens/PdfViewerScreen'
 import SettingsScreen from '../screens/SettingsScreen'
@@ -31,6 +32,7 @@ export default function HomeStack() {
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Bulletin" component={BulletinListScreen} options={{ title: 'CLASS掲示' }} />
       <Stack.Screen name="BulletinDetail" component={BulletinDetailScreen} options={{ title: '掲示' }} />
+      <Stack.Screen name="BulletinWeb" component={BulletinWebScreen} options={{ title: '掲示' }} />
       <Stack.Screen
         name="Link"
         component={LinkViewerScreen}

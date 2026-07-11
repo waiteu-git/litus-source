@@ -41,6 +41,7 @@ export type HomeStackParamList = {
   Info: undefined
   Bulletin: undefined
   BulletinDetail: { id: string }
+  BulletinWeb: { id: string }
   Link: { url: string; title?: string; isClass?: boolean }
   PdfViewer: { url: string; title?: string }
   Settings: undefined
