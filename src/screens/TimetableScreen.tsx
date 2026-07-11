@@ -11,6 +11,9 @@ import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMe
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
 import { NowPulse } from '../ui/NowPulse'
+import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
+import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
+import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import { useDisplaySettings } from '../displaySettings'
@@ -37,6 +40,7 @@ export default function TimetableScreen() {
   const [collections, setCollections] = useState<TimetableCollection[] | null>(null)
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
   const [events, setEvents] = useState<ClassEvent[]>([])
+  const [patterns, setPatterns] = useState<WeeklyPatternMap>({})
   const { version: eventsVersion } = useClassEventsVersion()
   const [selCol, setSelCol] = useState(0)
   // 現在時刻（当該コマ強調用）。分単位で十分なので30秒ごとに更新。
@@ -81,6 +85,7 @@ export default function TimetableScreen() {
         if (active) setCollections(c)
       })
       loadClassEvents().then((e) => { if (active) setEvents(e) }).catch(() => undefined)
+      loadWeeklyPatterns().then((m) => { if (active) setPatterns(m) }).catch(() => undefined)
       ;(async () => {
         const map = await loadCourseMap()
         const snaps = await loadCourseSnapshots()
@@ -203,6 +208,8 @@ export default function TimetableScreen() {
                   const isNow = today && !!cl && p === curPeriod
                   const gev = cl ? pickCellEvent(events, cl.name, p, now) : null
                   const gCanceled = gev?.type === 'cancel'
+                  // 隔週で今週は休みの授業は薄く（取消線）表示する。
+                  const gOff = !!cl && !isClassOnDate(patterns[cl.courseCode], now)
                   return (
                     <Pressable
                       key={d}
@@ -213,11 +220,12 @@ export default function TimetableScreen() {
                         { backgroundColor: isNow ? cellNowBg : cl ? (today ? cellTodayBg : cellFilledBg) : cellBg },
                         isNow ? styles.gridCellNow : today && cl ? styles.gridCellToday : null,
                         gCanceled ? styles.canceledCard : null,
+                        gOff ? styles.offCell : null,
                       ]}
                     >
                       {cl ? (
                         <>
-                          <Text numberOfLines={3} style={[styles.gridCellText, { color: cellTextColor }, gCanceled && styles.canceledName]}>
+                          <Text numberOfLines={3} style={[styles.gridCellText, { color: cellTextColor }, (gCanceled || gOff) && styles.canceledName]}>
                             {cl.name}
                           </Text>
                           {updatedCodes.has(cl.courseCode) ? <View style={styles.gridDot} /> : null}
@@ -251,10 +259,11 @@ export default function TimetableScreen() {
                 {s.classes.map((cl) => {
                   const ev = pickCellEvent(events, cl.name, s.period, now)
                   const canceled = ev?.type === 'cancel'
+                  const off = !isClassOnDate(patterns[cl.courseCode], now)
                   return (
-                  <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard, canceled && styles.canceledCard]} onPress={() => openSubject(cl, s.day as DayKey, s.period)}>
+                  <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard, canceled && styles.canceledCard, off && styles.offCell]} onPress={() => openSubject(cl, s.day as DayKey, s.period)}>
                     <View style={styles.clsHeadRow}>
-                      <Text style={[styles.clsname, { color: ui.valueColor, flex: 1 }, canceled && styles.canceledName]} numberOfLines={2}>
+                      <Text style={[styles.clsname, { color: ui.valueColor, flex: 1 }, (canceled || off) && styles.canceledName]} numberOfLines={2}>
                         {cl.name}
                         {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
                       </Text>
@@ -262,6 +271,10 @@ export default function TimetableScreen() {
                         <View style={styles.nowChip}>
                           <NowPulse size={6} color="#ffffff" />
                           <Text style={styles.nowChipText}>実施中</Text>
+                        </View>
+                      ) : off ? (
+                        <View style={styles.offChip}>
+                          <Text style={styles.offChipText}>今週休み・隔週</Text>
                         </View>
                       ) : null}
                     </View>
@@ -351,6 +364,9 @@ const styles = StyleSheet.create({
   nowDot: { position: 'absolute', top: 6, left: 6 },
   nowCard: { borderWidth: 2, borderColor: COLORS.cta },
   clsHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  offCell: { opacity: 0.45 },
+  offChip: { backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  offChipText: { fontSize: 10, fontWeight: '700', color: '#7a8a83' },
   nowChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   nowChipText: { color: '#ffffff', fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },

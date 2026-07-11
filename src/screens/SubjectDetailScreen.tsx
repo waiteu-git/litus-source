@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { SectionLabel, useUi } from '../ui/screen'
@@ -16,6 +16,13 @@ import { loadClassEvents } from '../storage/classEventsStore'
 import type { ClassEvent } from '../timetableEvents/classEvent'
 import { cellBadgeText } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+import { loadWeeklyPatterns, saveWeeklyPattern } from '../storage/weeklyPatternStore'
+import {
+  isClassOnDate,
+  setBiweeklyAnchor,
+  setWeekException,
+  type WeeklyPattern,
+} from '../timetableEvents/weeklyPattern'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -61,8 +68,21 @@ export default function SubjectDetailScreen() {
   const [letusUrl, setLetusUrl] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<CourseSnapshot | null>(null)
   const [events, setEvents] = useState<ClassEvent[]>([])
+  const [pattern, setPattern] = useState<WeeklyPattern>({ mode: 'every' })
 
   const syllabusUrl = buildSyllabusUrl(courseCode, new Date())
+
+  useEffect(() => {
+    loadWeeklyPatterns()
+      .then((m) => setPattern(m[courseCode] ?? { mode: 'every' }))
+      .catch(() => undefined)
+  }, [courseCode])
+
+  const updatePattern = (next: WeeklyPattern) => {
+    setPattern(next)
+    saveWeeklyPattern(courseCode, next).catch(() => undefined)
+  }
+  const thisWeekHolds = isClassOnDate(pattern, new Date())
 
   useEffect(() => {
     ;(async () => {
@@ -100,6 +120,51 @@ export default function SubjectDetailScreen() {
               {teachers && teachers[0] ? <InfoChip icon="person-outline" label={teachers[0]} /> : null}
             </View>
           ) : null}
+        </View>
+
+        <SectionLabel>実施パターン</SectionLabel>
+        <View style={[ui.card, { marginBottom: 10 }]}>
+          <View style={styles.segRow}>
+            <Pressable
+              style={[styles.seg, pattern.mode === 'every' && styles.segActive]}
+              onPress={() => updatePattern({ mode: 'every' })}
+            >
+              <Text style={[styles.segText, { color: pattern.mode === 'every' ? '#ffffff' : ui.labelColor }]}>毎週</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.seg, pattern.mode === 'biweekly' && styles.segActive]}
+              onPress={() => updatePattern(setBiweeklyAnchor(pattern, new Date()))}
+            >
+              <Text style={[styles.segText, { color: pattern.mode === 'biweekly' ? '#ffffff' : ui.labelColor }]}>隔週</Text>
+            </Pressable>
+          </View>
+          {pattern.mode === 'biweekly' ? (
+            <>
+              <View style={styles.patRow}>
+                <Text style={{ color: ui.valueColor, fontSize: 14, fontWeight: '600' }}>
+                  今週は{thisWeekHolds ? '実施' : '休み'}
+                </Text>
+                <Switch
+                  value={thisWeekHolds}
+                  onValueChange={(v) => updatePattern(setWeekException(pattern, new Date(), v))}
+                  trackColor={{ true: COLORS.emerald }}
+                />
+              </View>
+              <Pressable onPress={() => updatePattern(setBiweeklyAnchor(pattern, new Date()))} style={styles.reanchor}>
+                <Ionicons name="sync-outline" size={15} color={ui.green ? '#eafff7' : COLORS.emerald} />
+                <Text style={{ color: ui.green ? '#eafff7' : COLORS.emerald, fontSize: 13, fontWeight: '600' }}>
+                  基準を今週に合わせる（ズレを直す）
+                </Text>
+              </Pressable>
+              <Text style={[styles.patHint, { color: ui.labelColor }]}>
+                今週を実施週として1週おきに表示します。祝日等でずれた週は上のスイッチで個別調整できます。
+              </Text>
+            </>
+          ) : (
+            <Text style={[styles.patHint, { color: ui.labelColor }]}>
+              毎週実施。隔週にすると、今週を実施週として1週おきに表示します。
+            </Text>
+          )}
         </View>
 
         <View style={styles.eventsHead}>
@@ -213,4 +278,11 @@ const styles = StyleSheet.create({
   eventSub: { fontSize: 12, marginTop: 2 },
   makeupPill: { backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   makeupPillText: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
+  segRow: { flexDirection: 'row', gap: 8 },
+  seg: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.05)' },
+  segActive: { backgroundColor: COLORS.emerald },
+  segText: { fontSize: 14, fontWeight: '700' },
+  patRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
+  reanchor: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  patHint: { fontSize: 12, lineHeight: 18, marginTop: 10 },
 })

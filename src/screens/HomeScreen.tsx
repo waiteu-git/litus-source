@@ -18,6 +18,9 @@ import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestS
 import { BUILD_TAG } from '../buildTag'
 import { isManualUrl } from '../assignments/manualAssignment'
 import { NowPulse } from '../ui/NowPulse'
+import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
+import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
+import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
@@ -54,6 +57,7 @@ export default function HomeScreen() {
   const [classEvents, setClassEvents] = useState<ClassEvent[]>([])
   const { version: classEventsVersion } = useClassEventsVersion()
 
+  const [weeklyPatterns, setWeeklyPatterns] = useState<WeeklyPatternMap>({})
   // CLASS掲示の裏取得中フラグ。true の間だけ headless エンジンをマウントする。
   const [bulletinSyncing, setBulletinSyncing] = useState(false)
   const bulletinSyncingRef = useRef(false)
@@ -71,6 +75,9 @@ export default function HomeScreen() {
         .catch(() => undefined)
       loadBulletinDiag()
         .then((d) => active && setBulletinDiag(d))
+        .catch(() => undefined)
+      loadWeeklyPatterns()
+        .then((m) => active && setWeeklyPatterns(m))
         .catch(() => undefined)
       loadClassEvents()
         .then((e) => active && setClassEvents(e))
@@ -118,7 +125,7 @@ export default function HomeScreen() {
   const rawBanner = computeHomeBanner(timetable, running ? reception : null, now)
   const banner = attendedNow ? { ...rawBanner, active: false } : rawBanner
 
-  const focus = pickFocusClass(timetable, tick)
+  const focus = pickFocusClass(timetable, tick, (code) => isClassOnDate(weeklyPatterns[code], tick))
   const urgent = pickUrgentAssignment(assignments, tick)
   // ストアは全件（既読・フラグ付き含む）を持つため、ホームの「未読」スライドは未読のみに絞る。
   const unreadBulletin = bulletin.filter((b) => b.unread)

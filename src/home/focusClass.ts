@@ -32,7 +32,12 @@ export type FocusClass = {
 
 type Candidate = { start: number; focus: FocusClass }
 
-export function pickFocusClass(collections: TimetableCollection[], now: Date): FocusClass | null {
+export function pickFocusClass(
+  collections: TimetableCollection[],
+  now: Date,
+  /** その科目が今週実施されるか（隔週で休みの週は除外）。省略時は常に実施扱い。 */
+  isOn?: (courseCode: string) => boolean,
+): FocusClass | null {
   const weekday = now.getDay()
   const nowMin = now.getHours() * 60 + now.getMinutes()
 
@@ -50,6 +55,7 @@ export function pickFocusClass(collections: TimetableCollection[], now: Date): F
       const end = hhmmToMin(pt.end)
       if (start === null || end === null) continue
       const c = slot.classes[0]
+      if (isOn && !isOn(c.courseCode)) continue
       const base = {
         period: slot.period,
         start: pt.start,
