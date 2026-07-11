@@ -16,9 +16,8 @@ const COLLECT_DELAY_MS = 2600
 // CLASSは全画面POST遷移＋冒頭の visibility:hidden 解除があり、固定タイマだと目的ページ着地前に
 // 収集して0件になる。短い間隔で dl.keiji 等の出現をポーリングし、着地した瞬間に拾う（着地駆動）。
 const COLLECT_RETRY_MS = 1200
-// 目的ページ未到達（0件）時の再試行上限。着地まで待てるよう十分に取る（2600+10*1200≒14.6s＜25sタイムアウト）。
-// 再試行は collectJs（読み取り専用抽出）の再実行のみ＝二重POSTしないので回数を増やしても安全。
-const MAX_TRIES = 10
+// 目的ページ未到達（0件）時の再抽出上限。尽きたら直リンク(fallbackJs)へ切替える。
+const MAX_TRIES = 4
 // エラー/失効での作り直し上限（無限リロード防止）。
 const MAX_REBOOTS = 2
 
@@ -45,6 +44,7 @@ export default function ClassHeadlessCollector({
   fallbackJs,
   actionJs,
   onSignal,
+  navOnce,
 }: {
   openJs: string
   collectJs: string
@@ -57,12 +57,17 @@ export default function ClassHeadlessCollector({
   actionJs?: string
   /** 全メッセージ（page/nav/auth/error/結果）を素通しで受け取る診断フック。省略可。挙動には影響しない。 */
   onSignal?: (p: Record<string, unknown>) => void
+  /** 目的メニューを一度だけ発火する（掲示: CLASSの遷移ページ Xut12401 では onLoadEnd 毎に再クリックすると
+   *  遷移をやり直して永久に着地しない。着地は collectJs ポーリング＋直リンク fallback に任せる）。 */
+  navOnce?: boolean
 }) {
   const webviewRef = useRef<WebView>(null)
   const { setCollectActive, attendanceFocused } = useClassView()
   const triesRef = useRef(0)
   const rebootsRef = useRef(0)
   const fallbackUsedRef = useRef(false)
+  // navOnce時: 目的メニューを発火済みか。以後の onLoadEnd では再発火せず着地を待つ（再クリックで遷移をやり直さない）。
+  const menuFiredRef = useRef(false)
   const doneRef = useRef(false)
   const [nonce, setNonce] = useState(0)
 
@@ -101,13 +106,17 @@ export default function ClassHeadlessCollector({
     }
     rebootsRef.current += 1
     triesRef.current = 0
+    menuFiredRef.current = false // 作り直し後は改めてメニューから遷移し直す
     setNonce((n) => n + 1)
   }
 
   function onLoadEnd() {
     // 入口スプラッシュならPC ENTERで先へ＋着地判定。ログイン後はメニューを叩いて目的一覧へ。
     webviewRef.current?.injectJavaScript(CLASS_ON_LOAD_JS)
-    setTimeout(() => webviewRef.current?.injectJavaScript(openJs), OPEN_DELAY_MS)
+    // navOnce＆発火済みなら openJs（メニュー）を再注入しない（遷移ページでの再クリック→遷移やり直しループ防止）。
+    if (!(navOnce && menuFiredRef.current)) {
+      setTimeout(() => webviewRef.current?.injectJavaScript(openJs), OPEN_DELAY_MS)
+    }
     if (actionJs) {
       // 目的ページ到達 → アクション発火 → その結果を抽出、の順に間隔を空けて流す。
       setTimeout(() => webviewRef.current?.injectJavaScript(actionJs), OPEN_DELAY_MS + 1400)
@@ -125,7 +134,14 @@ export default function ClassHeadlessCollector({
       return
     }
     if (p) onSignal?.(p as Record<string, unknown>)
-    if (!p || p.type === 'nav' || p.type === 'auth') return
+    if (!p) return
+    if (p.type === 'nav') {
+      // メニュー発火成功(ok)を検知したら navOnce で以後の再発火を止める（遷移やり直しループ防止）。
+      const nav = p as { ok?: boolean; stage?: string }
+      if (navOnce && nav.ok === true && /click/.test(String(nav.stage || ''))) menuFiredRef.current = true
+      return
+    }
+    if (p.type === 'auth') return
     // 着地判定: PC競合/メンテ中は即離脱してロック解放、エラー/失効は作り直し。それ以外は続行。
     if (p.type === 'page') {
       const act = collectEarlyAction(p as CollectSignal)

@@ -41,6 +41,8 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
       collectJs={COLLECT_BULLETIN_TABS_JS}
       resultType="bulletin"
       fallbackJs={GO_BULLETIN_JS}
+      navOnce
+
       onSignal={(p) => {
         observePageSignal(obs.current, p)
         if (p.type === 'page' && typeof p.url === 'string') {
