@@ -1,14 +1,11 @@
 /**
- * 授業の週次実施パターン（毎週 / 隔週）。隔週は「基準週の偶奇(parity)」で自動判定し、
- * 祝日等でズレたら「その週だけの例外(exceptions)」で上書きする（週ごとのカスタマイズ）。
- * 端末非依存の純粋ロジック（now/date注入）で vitest テスト可能。
+ * 授業の週次実施パターン（カレンダー式）。「休みにした週」の集合(off)だけを持ち、
+ * カレンダー上で週ごとに実施/休みを選ぶ。隔週はプリセットで交互OFFを流し込み、ズレた週だけ手で直す。
+ * 端末非依存の純粋ロジック（date注入）で vitest テスト可能。
  */
 export type WeeklyPattern = {
-  mode: 'every' | 'biweekly'
-  /** 隔週で「実施する週」の parity（週インデックス%2）。既定 0。 */
-  anchorParity?: 0 | 1
-  /** 週(月曜日キー 'YYYY-MM-DD') → 実施(true)/休み(false)。パターンより優先。 */
-  exceptions?: Record<string, boolean>
+  /** 休みにした週（週=その週の月曜日キー 'YYYY-MM-DD'）の集合。キーが無い週＝実施。 */
+  off?: Record<string, true>
 }
 
 /** その日が属する週の月曜日（ローカル日付）。 */
@@ -20,7 +17,7 @@ export function mondayOf(d: Date): Date {
   return x
 }
 
-/** 週の月曜日キー 'YYYY-MM-DD'（例外マップのキー・表示用）。 */
+/** 週の月曜日キー 'YYYY-MM-DD'（off集合のキー・表示用）。 */
 export function weekMondayKey(d: Date): string {
   const m = mondayOf(d)
   const mm = String(m.getMonth() + 1).padStart(2, '0')
@@ -28,48 +25,59 @@ export function weekMondayKey(d: Date): string {
   return `${m.getFullYear()}-${mm}-${dd}`
 }
 
-// 固定基準（2024-01-01 は月曜）。ここからの週数の偶奇で A週/B週 を決める。
-const EPOCH = new Date(2024, 0, 1)
-
-/** その週の parity（週インデックス%2）。隔週の A週/B週 判定に使う。 */
-export function weekParity(d: Date): 0 | 1 {
-  const days = Math.round((mondayOf(d).getTime() - EPOCH.getTime()) / 86400000)
-  const weeks = Math.round(days / 7)
-  return (((weeks % 2) + 2) % 2) as 0 | 1
-}
-
 export function defaultPattern(): WeeklyPattern {
-  return { mode: 'every' }
+  return {}
 }
 
-/** その日にこの授業が実施されるか。例外があればパターンより優先。 */
+/** その日にこの授業が実施されるか（休み週に入っていなければ実施）。 */
 export function isClassOnDate(p: WeeklyPattern | undefined, d: Date): boolean {
-  if (!p) return true
-  const ex = p.exceptions?.[weekMondayKey(d)]
-  if (p.mode === 'every') return ex === undefined ? true : ex
-  const base = weekParity(d) === (p.anchorParity ?? 0)
-  return ex === undefined ? base : ex
+  return !p?.off?.[weekMondayKey(d)]
 }
 
-/** 「この週を実施週にする」＝隔週にして parity 基準を合わせ、その週の例外は消す（再アンカー）。 */
-export function setBiweeklyAnchor(p: WeeklyPattern, d: Date): WeeklyPattern {
-  const key = weekMondayKey(d)
-  const ex = { ...(p.exceptions ?? {}) }
-  delete ex[key]
-  return {
-    ...p,
-    mode: 'biweekly',
-    anchorParity: weekParity(d),
-    exceptions: Object.keys(ex).length ? ex : undefined,
+/** その週が「休み」か。 */
+export function isWeekOff(p: WeeklyPattern | undefined, weekDate: Date): boolean {
+  return !!p?.off?.[weekMondayKey(weekDate)]
+}
+
+/** その週の実施/休みをトグルする。 */
+export function toggleWeek(p: WeeklyPattern | undefined, weekDate: Date): WeeklyPattern {
+  const key = weekMondayKey(weekDate)
+  const off = { ...(p?.off ?? {}) }
+  if (off[key]) delete off[key]
+  else off[key] = true
+  return Object.keys(off).length ? { off } : {}
+}
+
+/** 週の月曜Date同士の週数差。 */
+function weekDiff(a: Date, b: Date): number {
+  return Math.round((mondayOf(a).getTime() - mondayOf(b).getTime()) / (7 * 86400000))
+}
+
+/**
+ * 隔週プリセット：anchor 週を「実施」とし、そこから交互に休みを weeks の範囲へ流し込む（既存offは置換）。
+ * anchor と偶数週差＝実施、奇数週差＝休み。あとはユーザーが個別トグルでズレを直す。
+ */
+export function applyBiweeklyPreset(anchorWeek: Date, weeks: Date[]): WeeklyPattern {
+  const off: Record<string, true> = {}
+  for (const w of weeks) {
+    if (((weekDiff(w, anchorWeek) % 2) + 2) % 2 === 1) off[weekMondayKey(w)] = true
   }
+  return Object.keys(off).length ? { off } : {}
 }
 
-/** その週の実施有無を明示上書きする。パターンの基本判定と一致するなら無駄な例外を残さない。 */
-export function setWeekException(p: WeeklyPattern, d: Date, holds: boolean): WeeklyPattern {
-  const key = weekMondayKey(d)
-  const base = p.mode === 'biweekly' ? weekParity(d) === (p.anchorParity ?? 0) : true
-  const ex = { ...(p.exceptions ?? {}) }
-  if (holds === base) delete ex[key]
-  else ex[key] = holds
-  return { ...p, exceptions: Object.keys(ex).length ? ex : undefined }
+/** 全週を実施に戻す（休み集合をクリア）。 */
+export function clearPattern(): WeeklyPattern {
+  return {}
+}
+
+/** カレンダー用の週リスト（各週の月曜Date）。今週の back 週前 〜 forward 週後。 */
+export function weekList(now: Date, back: number, forward: number): Date[] {
+  const base = mondayOf(now)
+  const out: Date[] = []
+  for (let i = -back; i <= forward; i++) {
+    const d = new Date(base)
+    d.setDate(base.getDate() + i * 7)
+    out.push(d)
+  }
+  return out
 }

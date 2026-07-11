@@ -7,6 +7,10 @@ export function serializeWeeklyPatterns(m: WeeklyPatternMap): string {
   return JSON.stringify(m)
 }
 
+/**
+ * v2(off集合)を読む。旧v1({mode,anchorParity,exceptions})が来たら exceptions の false(=休み)を off に移行する
+ * （mode/anchorParity は範囲情報が無く再現できないため破棄。開発版のみのため許容）。
+ */
 export function deserializeWeeklyPatterns(raw: string | null): WeeklyPatternMap {
   if (!raw) return {}
   let parsed: unknown
@@ -20,16 +24,19 @@ export function deserializeWeeklyPatterns(raw: string | null): WeeklyPatternMap 
   for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
     if (typeof v !== 'object' || v === null) continue
     const e = v as Record<string, unknown>
-    const p: WeeklyPattern = { mode: e.mode === 'biweekly' ? 'biweekly' : 'every' }
-    if (e.anchorParity === 0 || e.anchorParity === 1) p.anchorParity = e.anchorParity
-    if (e.exceptions && typeof e.exceptions === 'object') {
-      const ex: Record<string, boolean> = {}
-      for (const [wk, val] of Object.entries(e.exceptions as Record<string, unknown>)) {
-        if (typeof val === 'boolean') ex[wk] = val
+    const off: Record<string, true> = {}
+    if (e.off && typeof e.off === 'object') {
+      for (const [wk, val] of Object.entries(e.off as Record<string, unknown>)) {
+        if (val === true) off[wk] = true
       }
-      if (Object.keys(ex).length) p.exceptions = ex
     }
-    out[k] = p
+    // v1 移行: exceptions の false(=休み) を off に。
+    if (e.exceptions && typeof e.exceptions === 'object') {
+      for (const [wk, val] of Object.entries(e.exceptions as Record<string, unknown>)) {
+        if (val === false) off[wk] = true
+      }
+    }
+    out[k] = Object.keys(off).length ? { off } : {}
   }
   return out
 }
