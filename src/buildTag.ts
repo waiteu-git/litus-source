@@ -2,4 +2,4 @@
  * 開発ビルドの識別タグ。APKファイル名(litus-v1.0.0-vNN.apk)と一致させ、ビルドごとに手で上げる。
  * ホーム画面に常時表示して、どのビルドを実機で見ているか区別できるようにする（開発中のみの目印）。
  */
-export const BUILD_TAG = 'v44'
+export const BUILD_TAG = 'v45'

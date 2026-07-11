@@ -85,22 +85,32 @@ export default function HomeScreen() {
   }, [classEventsVersion])
 
   // 掲示の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
-  const startBulletinSync = useCallback((force: boolean) => {
-    if (bulletinSyncingRef.current) return
-    const begin = () => {
-      bulletinSyncingRef.current = true
-      setBulletinSyncing(true)
-    }
-    if (force) {
-      begin()
-      return
-    }
-    loadBulletinRefreshedAt()
-      .then((at) => {
-        if (!bulletinSyncingRef.current && isBulletinStale(at)) begin()
-      })
-      .catch(() => undefined)
-  }, [])
+  // 授業時間帯(running=出席WebViewが前面/稼働)はCLASSセッションを出席が専有しており、掲示収集を
+  // 走らせると同一セッションを奪い合って「別の画面で操作された」＝空ページになり、出席まで不安定化する。
+  // そのため授業中は掲示収集を控える（出席絶対優先。掲示は授業後に取得）。
+  const startBulletinSync = useCallback(
+    (force: boolean) => {
+      if (bulletinSyncingRef.current) return
+      if (running) {
+        setBulletinDiag('授業中のため取得を控えています（授業後に取得できます）')
+        return
+      }
+      const begin = () => {
+        bulletinSyncingRef.current = true
+        setBulletinSyncing(true)
+      }
+      if (force) {
+        begin()
+        return
+      }
+      loadBulletinRefreshedAt()
+        .then((at) => {
+          if (!bulletinSyncingRef.current && isBulletinStale(at)) begin()
+        })
+        .catch(() => undefined)
+    },
+    [running],
+  )
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
   // 出席済みのときは「出席登録受付中/出席を確認」バナーは出さない（案内が不要・紛らわしい）。
@@ -184,6 +194,20 @@ export default function HomeScreen() {
     const screen = isManualUrl(url) ? 'ManualAssignment' : 'LetusAssignmentDetail'
     navigation.navigate('課題', { screen, params: { url } })
   }
+  // 「今やること」の授業カードから、その科目の詳細（時間割タブ内）へ飛ぶ。
+  function openSubject(f: FocusClass) {
+    navigation.navigate('時間割', {
+      screen: 'SubjectDetail',
+      params: {
+        courseCode: f.courseCode,
+        name: f.name,
+        period: f.period,
+        room: f.room,
+        teachers: f.teachers,
+        isRemote: f.isRemote,
+      },
+    })
+  }
 
   const accent = banner.kind === 'accepting' ? COLORS.cta : COLORS.emerald
   const tone = urgent ? urgencyTone(urgent, tick) : 'green'
@@ -229,7 +253,11 @@ export default function HomeScreen() {
             <>
               <SectionLabel>今やること</SectionLabel>
               <View style={[ui.card, styles.focusCard]}>
-                {focus ? <FocusClassRow focus={focus} ui={ui} last={!urgent} /> : null}
+                {focus ? (
+                  <Pressable onPress={() => openSubject(focus)}>
+                    <FocusClassRow focus={focus} ui={ui} last={!urgent} />
+                  </Pressable>
+                ) : null}
                 {focus && urgent ? <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} /> : null}
                 {urgent ? (
                   <Pressable style={styles.focusRow} onPress={() => openAssignment(urgent.url)}>
@@ -323,7 +351,11 @@ export default function HomeScreen() {
               <Ionicons name="megaphone-outline" size={20} color={COLORS.emerald} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.bulletinCtaText, { color: ui.valueColor }]}>
-                  {bulletinSyncing ? '掲示を取得しています…' : 'まだ取得できていません。タップで取得します。'}
+                  {bulletinSyncing
+                    ? '掲示を取得しています…'
+                    : running
+                      ? '授業中は取得を控えています。授業後に取得できます。'
+                      : 'まだ取得できていません。タップで取得します。'}
                 </Text>
                 {bulletinDiag ? (
                   <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 4 }}>診断: {bulletinDiag}</Text>
