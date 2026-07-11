@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Animated, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
@@ -25,6 +25,7 @@ import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS } from '../theme'
+import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
@@ -150,9 +151,12 @@ export default function HomeScreen() {
   const [expanded, setExpanded] = useState(true)
   // バナーがマウント中か（引っ込むアニメの間は残し、終わってから外す）。
   const [bannerMounted, setBannerMounted] = useState(true)
-  // bannerAnim: 0=上へ引っ込んだ / 1=展開表示。pillAnim: 0=右上に隠れ / 1=右下ボタンとして着地。
+  // bannerAnim: 0=上へ引っ込んだ / 1=展開表示。edgeAnim: 0=右端上に隠れ / 1=右下へ到達（線が伝う）。
+  // pillOpacity/pillScale: 着地点でボタン化する円の不透明度とバネ（0.9→1.03→1）。
   const bannerAnim = useRef(new Animated.Value(0)).current
-  const pillAnim = useRef(new Animated.Value(0)).current
+  const edgeAnim = useRef(new Animated.Value(0)).current
+  const pillOpacity = useRef(new Animated.Value(0)).current
+  const pillScale = useRef(new Animated.Value(SPRING.from)).current
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 「新しい受付状態」への切り替わりを検知する署名（種別＋科目名）。変化時だけ再展開する。
   const sigRef = useRef<string>('')
@@ -171,25 +175,41 @@ export default function HomeScreen() {
     }
   }, [banner.active, banner.kind, banner.courseName])
 
-  // 展開⇄収縮アニメ: 収縮時はバナーを上へ引っ込め→ピルが右端を伝って右下へ移動し端から現れる。
+  // 展開⇄収縮アニメ（モーショントークン準拠・上品に）:
+  // 展開=バナーが slow enter で降りる／収縮=バナー格納→短い線が右端を base で伝い→着地点で円が hero spring 着地。
   useEffect(() => {
     if (!banner.active) return
     if (expanded) {
       setBannerMounted(true)
-      Animated.parallel([
-        Animated.timing(pillAnim, { toValue: 0, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-        Animated.timing(bannerAnim, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      ]).start()
+      edgeAnim.setValue(0)
+      Animated.timing(bannerAnim, { toValue: 1, duration: DUR.slow, easing: EASE.enter, useNativeDriver: true }).start()
+      Animated.timing(pillOpacity, { toValue: 0, duration: DUR.fast, easing: EASE.exit, useNativeDriver: true }).start()
+      pillScale.setValue(SPRING.from)
     } else {
-      // 1) バナーがゆっくり上へ引っ込む → 2) 短い線が右端を伝って降りる → 3) 最後に水滴が弾けて円になる。
-      Animated.timing(bannerAnim, { toValue: 0, duration: 360, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(
+      // 1) バナーが base で上へ格納。
+      Animated.timing(bannerAnim, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }).start(
         ({ finished }) => {
           if (finished) setBannerMounted(false)
         },
       )
-      Animated.timing(pillAnim, { toValue: 1, duration: 1150, delay: 220, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }).start()
+      // 2) 短い線が右端を伝って降りる（少し遅れて開始・move）。
+      edgeAnim.setValue(0)
+      Animated.timing(edgeAnim, { toValue: 1, duration: 420, delay: 120, easing: EASE.move, useNativeDriver: true }).start()
+      // 3) 線が着く直前に、着地点で円が hero spring（0.9→1.03→1）で立ち上がる＋fast フェードイン。
+      pillScale.setValue(SPRING.from)
+      pillOpacity.setValue(0)
+      Animated.sequence([
+        Animated.delay(120 + 420 - 60),
+        Animated.parallel([
+          Animated.timing(pillOpacity, { toValue: 1, duration: DUR.fast, easing: EASE.enter, useNativeDriver: true }),
+          Animated.sequence([
+            Animated.timing(pillScale, { toValue: SPRING.over, duration: SPRING.upMs, easing: EASE.enter, useNativeDriver: true }),
+            Animated.timing(pillScale, { toValue: SPRING.to, duration: SPRING.downMs, easing: EASE.enter, useNativeDriver: true }),
+          ]),
+        ]),
+      ]).start()
     }
-  }, [expanded, banner.active, bannerAnim, pillAnim])
+  }, [expanded, banner.active, bannerAnim, edgeAnim, pillOpacity, pillScale])
 
   function openAttendance() {
     navigation.navigate('Attendance')
@@ -234,7 +254,7 @@ export default function HomeScreen() {
             <Animated.View
               style={{
                 opacity: bannerAnim,
-                transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-28, 0] }) }],
+                transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-SHIFT.large, 0] }) }],
               }}
             >
               <Pressable
@@ -255,6 +275,9 @@ export default function HomeScreen() {
               </Pressable>
             </Animated.View>
           ) : null}
+
+          {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。 */}
+          <BulletinSyncStatus syncing={bulletinSyncing} />
 
           {/* 今やること: 次の授業＋直近の未提出課題。どちらも無ければセクションごと隠す。 */}
           {focus || urgent ? (
@@ -419,11 +442,11 @@ export default function HomeScreen() {
               {
                 backgroundColor: accent,
                 bottom: clearance - 8 + 12,
-                opacity: pillAnim.interpolate({ inputRange: [0, 0.08, 0.6, 0.72], outputRange: [0, 1, 1, 0] }),
+                opacity: edgeAnim.interpolate({ inputRange: [0, 0.12, 0.75, 1], outputRange: [0, 1, 1, 0] }),
                 transform: [
                   {
-                    translateY: pillAnim.interpolate({
-                      inputRange: [0.08, 0.68],
+                    translateY: edgeAnim.interpolate({
+                      inputRange: [0, 1],
                       outputRange: [-pillTravel, 0],
                       extrapolate: 'clamp',
                     }),
@@ -432,7 +455,7 @@ export default function HomeScreen() {
               },
             ]}
           />
-          {/* 水滴が弾けてできる円ボタン（少しオーバーシュートしてから収まる）。 */}
+          {/* 着地点で hero spring 着地する円ボタン（0.9→1.03→1・控えめ）。 */}
           <Animated.View
             pointerEvents={expanded ? 'none' : 'auto'}
             style={[
@@ -440,10 +463,8 @@ export default function HomeScreen() {
               {
                 backgroundColor: accent,
                 bottom: clearance - 8,
-                opacity: pillAnim.interpolate({ inputRange: [0.64, 0.74], outputRange: [0, 1], extrapolate: 'clamp' }),
-                transform: [
-                  { scale: pillAnim.interpolate({ inputRange: [0.64, 0.86, 1], outputRange: [0.2, 1.18, 1], extrapolate: 'clamp' }) },
-                ],
+                opacity: pillOpacity,
+                transform: [{ scale: pillScale }],
               },
             ]}
           >
@@ -505,6 +526,92 @@ function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<
   )
 }
 
+/**
+ * 掲示同期のヒーロー表示。`syncing` が true の間は「同期中…」バナーを上部へ出し、false へ落ちた瞬間に
+ * バナーを上へ格納→「✓ 最新」ピルを控えめな hero バネ(0.9→1.03→1)で立ち上げ→数秒保持してフェード。
+ * idle 時は何も描画しない（レイアウトを占有しない）。動きは transform/opacity のみ。
+ */
+function BulletinSyncStatus({ syncing }: { syncing: boolean }) {
+  const [phase, setPhase] = useState<'idle' | 'syncing' | 'done'>('idle')
+  const bannerAnim = useRef(new Animated.Value(0)).current // 0=上へ格納 / 1=表示
+  const pillOpacity = useRef(new Animated.Value(0)).current
+  const pillScale = useRef(new Animated.Value(SPRING.from)).current
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prev = useRef(false)
+
+  useEffect(() => {
+    if (syncing && !prev.current) {
+      // 開始: バナーが slow enter で降りてくる。
+      if (holdTimer.current) clearTimeout(holdTimer.current)
+      pillOpacity.setValue(0)
+      pillScale.setValue(SPRING.from)
+      setPhase('syncing')
+      bannerAnim.setValue(0)
+      Animated.timing(bannerAnim, { toValue: 1, duration: DUR.slow, easing: EASE.enter, useNativeDriver: true }).start()
+    } else if (!syncing && prev.current) {
+      // 完了: バナーが exit で上へ格納 → ピルが hero バネで登場 → 保持 → フェードして idle。
+      setPhase('done')
+      Animated.timing(bannerAnim, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }).start()
+      pillOpacity.setValue(0)
+      pillScale.setValue(SPRING.from)
+      Animated.sequence([
+        Animated.delay(DUR.fast),
+        Animated.parallel([
+          Animated.timing(pillOpacity, { toValue: 1, duration: DUR.fast, easing: EASE.enter, useNativeDriver: true }),
+          Animated.sequence([
+            Animated.timing(pillScale, { toValue: SPRING.over, duration: SPRING.upMs, easing: EASE.enter, useNativeDriver: true }),
+            Animated.timing(pillScale, { toValue: SPRING.to, duration: SPRING.downMs, easing: EASE.enter, useNativeDriver: true }),
+          ]),
+        ]),
+      ]).start()
+      holdTimer.current = setTimeout(() => {
+        Animated.timing(pillOpacity, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }).start(
+          ({ finished }) => {
+            if (finished) setPhase('idle')
+          },
+        )
+      }, 1900)
+    }
+    prev.current = syncing
+  }, [syncing, bannerAnim, pillOpacity, pillScale])
+
+  useEffect(() => () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current)
+  }, [])
+
+  if (phase === 'idle') return null
+
+  return (
+    <View style={styles.syncZone}>
+      {/* バナーは done 中も exit を見せるため残す（idle で View ごと外れる）。 */}
+      <Animated.View
+        style={{
+          opacity: bannerAnim,
+          transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-SHIFT.large, 0] }) }],
+        }}
+      >
+        <View style={[styles.banner, { backgroundColor: COLORS.cta }]}>
+          <View style={styles.bannerDot}>
+            <ActivityIndicator size="small" color="#ffffff" />
+          </View>
+          <View style={styles.bannerBody}>
+            <Text style={styles.bannerTitle}>同期中…</Text>
+            <Text style={styles.bannerSub}>課題と掲示を更新しています</Text>
+          </View>
+        </View>
+      </Animated.View>
+      {/* 完了ピル。バナーが格納された跡（右上）に控えめなバネで現れる。 */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.syncPill, { opacity: pillOpacity, transform: [{ scale: pillScale }] }]}
+      >
+        <Ionicons name="checkmark" size={14} color="#ffffff" />
+        <Text style={styles.syncPillText}>最新</Text>
+      </Animated.View>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
   scroll: { paddingBottom: 24 },
@@ -527,6 +634,26 @@ const styles = StyleSheet.create({
   bannerBody: { flex: 1 },
   bannerTitle: { color: '#ffffff', fontSize: 15, fontWeight: '700', lineHeight: 20 },
   bannerSub: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 2 },
+
+  syncZone: { position: 'relative' },
+  syncPill: {
+    position: 'absolute',
+    top: 6,
+    right: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.cta,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    shadowColor: '#0a6650',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  syncPillText: { color: '#ffffff', fontSize: 13, fontWeight: '700' },
 
   focusCard: { paddingVertical: 4, paddingHorizontal: 16 },
   focusRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
