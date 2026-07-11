@@ -46,6 +46,7 @@ export type BulletinCollectDiag = {
   logout?: number
   blen?: number
   hlen?: number
+  fr?: number
 }
 
 export function bulletinHealth(

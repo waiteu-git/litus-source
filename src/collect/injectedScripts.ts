@@ -403,25 +403,39 @@ export const COLLECT_BULLETIN_JS = `(function(){
  */
 export const COLLECT_BULLETIN_TABS_JS = `(function(){
   try {
-    var dls = document.querySelectorAll('dl.keiji');
-    var out='', align=0;
-    // Bsd00701(タブ付き)は各行が div.alignRight でボタンを持つ→親要素ごと拾ってフラグ/既読状態も得る。
-    var blocks = document.querySelectorAll('.alignRight');
-    for(var i=0;i<blocks.length;i++){ if(blocks[i].querySelector('dl.keiji')){ out += blocks[i].outerHTML; align++; } }
-    // フォールバック: 素の dl.keiji ページ(旧Bsa00101等・.alignRightラッパ無し)は dl を直接連結。
-    if(!out){ for(var k=0;k<dls.length;k++){ out += dls[k].outerHTML; } }
-    // 診断マーカー: タブ構造/ログイン欄/ログアウトリンク/本文長/検索タブ有無で、keiji=0の原因を切り分ける。
-    var body = document.body ? (document.body.innerText || '') : '';
-    // hlen=innerHTML長。blen=0でもhlen>0なら「中身は在るが visibility:hidden 未解除」、hlen≈0なら「本当に空/未描画」。
-    var hbody = document.body ? (document.body.innerHTML || '') : '';
-    var hasTab = !!document.querySelector('[id$="tabArea"], .ui-tabs');
-    var hasPwd = !!document.querySelector('input[type=password]');
-    var btns = Array.prototype.slice.call(document.querySelectorAll('a,button,input[type=submit]'));
-    var hasLogout = btns.some(function(b){ var t=((b.textContent||b.value)||''); return t.indexOf('ログアウト')>=0 || /logout/i.test(b.getAttribute&&(b.getAttribute('href')||'')); });
+    // Xut12401 は frameset/iframe ラッパー。掲示一覧は子フレーム内に読み込まれるため、トップだけ見ると空になる。
+    // トップ＋同一オリジンで参照可能な全フレームを横断して dl.keiji を集める。
+    function docs(){
+      var ds=[document];
+      try { var fr=Array.prototype.slice.call(document.querySelectorAll('iframe,frame'));
+        for(var i=0;i<fr.length;i++){ try{ var d=fr[i].contentDocument; if(d) ds.push(d); }catch(e){} } }catch(e){}
+      return ds;
+    }
+    var ds = docs();
+    var out='', align=0, dlTotal=0, blen=0, hlen=0, hasTab=false, hasPwd=false, hasLogout=false, keijiPage='';
+    for(var di=0; di<ds.length; di++){
+      var d = ds[di];
+      var dls = d.querySelectorAll('dl.keiji'); dlTotal += dls.length;
+      // Bsd00701(タブ付き)は各行が div.alignRight でボタンを持つ→親要素ごと拾ってフラグ/既読状態も得る。
+      var blocks = d.querySelectorAll('.alignRight');
+      var wrapHit = false;
+      for(var i=0;i<blocks.length;i++){ if(blocks[i].querySelector('dl.keiji')){ out += blocks[i].outerHTML; align++; wrapHit = true; } }
+      // フォールバック: 素の dl.keiji ページ(.alignRightラッパ無し)は dl を直接連結。
+      if(dls.length && !wrapHit){ for(var k=0;k<dls.length;k++){ out += dls[k].outerHTML; } }
+      // keiji を持つフレームの pathname を page として報告（health の bsd007 判定を通すため）。
+      if(dls.length && !keijiPage){ try{ keijiPage=((d.location&&d.location.pathname)||'').split('/').pop()||''; }catch(e){} }
+      var b = d.body ? (d.body.innerText||'') : ''; if(b.length>blen) blen=b.length;
+      var h = d.body ? (d.body.innerHTML||'') : ''; if(h.length>hlen) hlen=h.length;
+      if(d.querySelector('[id$="tabArea"], .ui-tabs')) hasTab=true;
+      if(d.querySelector('input[type=password]')) hasPwd=true;
+      var btns = Array.prototype.slice.call(d.querySelectorAll('a,button,input[type=submit]'));
+      if(btns.some(function(x){ var t=((x.textContent||x.value)||''); return t.indexOf('ログアウト')>=0 || /logout/i.test(x.getAttribute&&(x.getAttribute('href')||'')); })) hasLogout=true;
+    }
+    var page = keijiPage || ((location.pathname||'').split('/').pop() || '');
     window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'bulletin', html: '<div>'+out+'</div>', count: dls.length, align: align,
-      page: (location.pathname||'').split('/').pop() || '',
-      tab: hasTab?1:0, pwd: hasPwd?1:0, logout: hasLogout?1:0, blen: body.length, hlen: hbody.length
+      type: 'bulletin', html: '<div>'+out+'</div>', count: dlTotal, align: align,
+      page: page, fr: ds.length-1,
+      tab: hasTab?1:0, pwd: hasPwd?1:0, logout: hasLogout?1:0, blen: blen, hlen: hlen
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
