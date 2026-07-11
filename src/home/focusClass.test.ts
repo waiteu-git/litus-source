@@ -72,4 +72,14 @@ describe('pickFocusClass', () => {
     const cols = collection([{ day: 'mon', period: 3, classes: [cls('情報理論')] }])
     expect(pickFocusClass(cols, MON(19, 0))).toBeNull()
   })
+
+  it('隔週で今週休みの授業(isOn=false)はスキップし次の授業を返す', () => {
+    const cols = collection([
+      { day: 'mon', period: 2, classes: [cls('隔週ゼミ')] },
+      { day: 'mon', period: 4, classes: [cls('統計学')] },
+    ])
+    const isOn = (code: string) => code !== '隔週ゼミ'
+    const focus = pickFocusClass(cols, MON(8, 0), isOn)
+    expect(focus!.name).toBe('統計学')
+  })
 })
