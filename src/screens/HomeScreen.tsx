@@ -26,6 +26,7 @@ import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMeta
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
+import { maintenanceSystemAt } from '../health/maintenanceWindow'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
@@ -108,6 +109,8 @@ export default function HomeScreen() {
   const startBulletinSync = useCallback(
     (force: boolean) => {
       if (bulletinSyncingRef.current) return
+      // CLASS定時メンテナンス帯（2:00–4:00）は収集不能。上部のヘルスバナーがメンテ表示を出すので、ここは無駄打ちを止めるだけ。
+      if (maintenanceSystemAt(new Date()) === 'class') return
       if (running) {
         setBulletinDiag('授業中のため取得を控えています（授業後に取得できます）')
         return

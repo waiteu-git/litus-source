@@ -10,9 +10,11 @@ describe('healthBannerText', () => {
     expect(healthBannerText({ status: 'not_logged_in' }, 'class')).toBe('CLASSへのログインが必要です。')
     expect(healthBannerText({ status: 'not_logged_in' }, 'letus')).toBe('LETUSへのログインが必要です。')
   })
-  it('maintenance はCLASS定時メンテの案内', () => {
+  it('maintenance はソース別の定時メンテ案内', () => {
     expect(healthBannerText({ status: 'maintenance' }, 'class'))
       .toBe('CLASSはメンテナンス中です（毎日2:00–4:00）。')
+    expect(healthBannerText({ status: 'maintenance' }, 'letus'))
+      .toBe('LETUSはメンテナンス中です（毎日4:00–5:30）。')
   })
   it('ok / empty_valid / blocked / 未保存(null) はバナーなし', () => {
     expect(healthBannerText({ status: 'ok', count: 3 }, 'class')).toBeNull()

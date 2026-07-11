@@ -17,6 +17,7 @@ import { byDeadlineAsc, formatDeadline, isSubmitted, relDue, TONE_COLOR, urgency
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
+import { maintenanceSystemAt } from '../health/maintenanceWindow'
 import { COLORS } from '../theme'
 
 const SECTION_LABEL: Record<BucketKey, string> = {
@@ -75,6 +76,8 @@ export default function AssignmentsScreen() {
   // LETUS課題収集の最終ヘルス（層1の正直表示バナー用）。
   const [health, setHealth] = useState<StoredHealth | null>(null)
   const startUpdate = useCallback(() => {
+    // LETUS定時メンテナンス帯（4:00–5:30）は収集不能。ヘルスバナーがメンテ表示を出すので、無駄打ちを止める。
+    if (maintenanceSystemAt(new Date()) === 'letus') return
     setProgress(null)
     setCollecting(true)
   }, [])

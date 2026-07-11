@@ -11,6 +11,7 @@ import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMe
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
+import { maintenanceSystemAt } from '../health/maintenanceWindow'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
 import { NowPulse } from '../ui/NowPulse'
@@ -64,6 +65,8 @@ export default function TimetableScreen() {
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
   const startSync = useCallback((force: boolean) => {
     if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
+    // CLASS定時メンテナンス帯（2:00–4:00）は収集不能。ヘルスバナーがメンテ表示を出すので無駄打ちを止める。
+    if (maintenanceSystemAt(new Date()) === 'class') return
     const begin = () => {
       syncingRef.current = true
       setSyncing(true)
