@@ -26,6 +26,17 @@ export async function loadBulletinDiag(): Promise<string> {
   return (await AsyncStorage.getItem(DIAG_KEY)) ?? ''
 }
 
+const DETAIL_DIAG_KEY = 'info.bulletinDetailDiag.v1'
+
+/** 本文取得の診断（着地/行探索/モーダル状態）。詳細画面の失敗表示に使う。 */
+export async function saveBulletinDetailDiag(text: string): Promise<void> {
+  await AsyncStorage.setItem(DETAIL_DIAG_KEY, text)
+}
+
+export async function loadBulletinDetailDiag(): Promise<string> {
+  return (await AsyncStorage.getItem(DETAIL_DIAG_KEY)) ?? ''
+}
+
 /** 単一項目を読み書きで更新（body付与・既読化・フラグ更新の永続化に使う）。更新後の全件を返す。 */
 export async function updateBulletinItem(
   id: string,

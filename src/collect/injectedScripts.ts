@@ -396,34 +396,47 @@ export const COLLECT_BULLETIN_TABS_JS = `(function(){
  */
 export function openBulletinDetailJs(title: string, date: string): string {
   return `(function(){
-    try{
-      var t=${JSON.stringify(title)}, d=${JSON.stringify(date)};
+    var t=${JSON.stringify(title)}, d=${JSON.stringify(date)}, tries=0;
+    function post(o){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); }catch(e){} }
+    function findRow(){
       var dls=document.querySelectorAll('dl.keiji');
       for(var i=0;i<dls.length;i++){
         var a=dls[i].querySelector('a.ui-commandlink'); if(!a) continue;
         var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
         var dd=((dls[i].textContent||'').match(/\\d{4}\\/\\d{1,2}\\/\\d{1,2}/g)||[]).pop()||'';
-        if(tt===t && dd===d){
-          var panel=document.querySelector('[id="bsd00702:dialogPanel"]');
-          var opened=panel && /本文/.test(panel.innerHTML||'');
-          if(!opened){
-            var oc=a.getAttribute('onclick');
-            if(oc){ new Function('event',oc).call(a,new MouseEvent('click',{bubbles:true})); } else { a.click(); }
-          }
-          var row=dls[i].parentNode, btns=row?row.querySelectorAll('.btnRead'):[];
-          for(var j=0;j<btns.length;j++){
-            if(/既読にする/.test(btns[j].textContent||'')){
-              var rbox=btns[j].querySelector('input[type=checkbox]');
-              if(rbox){ setTimeout((function(box){return function(){ box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true})); };})(rbox), 600); }
-              break;
-            }
-          }
-          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'detail-open'}));
-          return true;
-        }
+        if(tt===t && dd===d) return { dl: dls[i], a: a };
       }
-      window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'detail-notfound'}));
-    }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:String(e)})); }
+      return null;
+    }
+    function step(){
+      try{
+        var r=findRow();
+        if(!r){
+          tries++;
+          // 行がまだ描画されていない（PrimeFacesの遅延描画）。少し待って再探索する。
+          if(tries<10){ setTimeout(step, 600); return; }
+          post({type:'nav',ok:false,stage:'detail-notfound',keiji:document.querySelectorAll('dl.keiji').length});
+          return;
+        }
+        var panel=document.querySelector('[id="bsd00702:dialogPanel"]');
+        var opened=panel && /本文/.test(panel.innerHTML||'');
+        if(!opened){
+          var oc=r.a.getAttribute('onclick');
+          if(oc){ new Function('event',oc).call(r.a,new MouseEvent('click',{bubbles:true})); } else { r.a.click(); }
+        }
+        // 未読なら少し遅らせて既読化（CLASS側で確実に既読へ）。
+        var row=r.dl.parentNode, btns=row?row.querySelectorAll('.btnRead'):[];
+        for(var j=0;j<btns.length;j++){
+          if(/既読にする/.test(btns[j].textContent||'')){
+            var rbox=btns[j].querySelector('input[type=checkbox]');
+            if(rbox){ setTimeout((function(box){return function(){ box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true})); };})(rbox), 800); }
+            break;
+          }
+        }
+        post({type:'nav',ok:true,stage:'detail-open'});
+      }catch(e){ post({type:'error',message:String(e)}); }
+    }
+    step();
     true;
   })();`
 }
@@ -434,7 +447,9 @@ export const COLLECT_BULLETIN_DETAIL_JS = `(function(){
     var p=document.querySelector('[id="bsd00702:dialogPanel"]');
     var html=p?p.innerHTML:'';
     var ready=/singleTable|ui-panelgrid/.test(html) && /本文/.test(html);
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type:'bulletinDetail', html: ready?html:'', ready: ready }));
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type:'bulletinDetail', html: ready?html:'', ready: ready, panel: p?1:0, plen: html.length
+    }));
   }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({ type:'error', message:String(e) })); }
   true;
 })();`
