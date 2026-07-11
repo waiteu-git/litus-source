@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg, CountdownRing, useTabBarClearance } from '../ui/screen'
@@ -221,7 +221,14 @@ export default function AttendanceScreen() {
               />
             </View>
 
-            <Pressable style={[styles.cta, { backgroundColor: c.cta }]} onPress={submit}>
+            <Pressable
+              style={[styles.cta, { backgroundColor: c.cta }]}
+              onPress={() => {
+                // 送信時にキーボードを閉じ、結果メッセージ（成功/失敗）がすぐ見えるようにする。
+                Keyboard.dismiss()
+                submit()
+              }}
+            >
               <Text style={styles.ctaText}>{phase === 'submitting' ? '送信中…' : '出席する'}</Text>
             </Pressable>
 

@@ -10,6 +10,7 @@ import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMetaStore'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
+import { NowPulse } from '../ui/NowPulse'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import { useDisplaySettings } from '../displaySettings'
@@ -222,8 +223,8 @@ export default function TimetableScreen() {
                           {updatedCodes.has(cl.courseCode) ? <View style={styles.gridDot} /> : null}
                           {gev ? <View style={[styles.gridEvDot, gCanceled ? styles.gridEvDotCancel : styles.gridEvDotInfo]} /> : null}
                           {isNow ? (
-                            <View style={styles.nowBadge}>
-                              <Text style={styles.nowBadgeText}>今</Text>
+                            <View style={styles.nowDot}>
+                              <NowPulse size={7} />
                             </View>
                           ) : null}
                         </>
@@ -252,11 +253,18 @@ export default function TimetableScreen() {
                   const canceled = ev?.type === 'cancel'
                   return (
                   <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard, canceled && styles.canceledCard]} onPress={() => openSubject(cl, s.day as DayKey, s.period)}>
-                    <Text style={[styles.clsname, { color: ui.valueColor }, canceled && styles.canceledName]} numberOfLines={2}>
-                      {cl.name}
-                      {rowNow ? '　（今）' : ''}
-                      {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
-                    </Text>
+                    <View style={styles.clsHeadRow}>
+                      <Text style={[styles.clsname, { color: ui.valueColor, flex: 1 }, canceled && styles.canceledName]} numberOfLines={2}>
+                        {cl.name}
+                        {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
+                      </Text>
+                      {rowNow ? (
+                        <View style={styles.nowChip}>
+                          <NowPulse size={6} color="#ffffff" />
+                          <Text style={styles.nowChipText}>実施中</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     {ev ? (
                       <View style={[styles.evBadge, canceled ? styles.evBadgeCancel : styles.evBadgeInfo]}>
                         <Text style={[styles.evBadgeText, canceled ? styles.evBadgeTextCancel : styles.evBadgeTextInfo]} numberOfLines={1}>
@@ -340,9 +348,11 @@ const styles = StyleSheet.create({
   gridCell: { flex: 1, minHeight: 74, borderRadius: 11, padding: 6, justifyContent: 'center' },
   gridCellToday: { borderWidth: 1.5, borderColor: COLORS.emerald },
   gridCellNow: { borderWidth: 2.5, borderColor: COLORS.cta },
-  nowBadge: { position: 'absolute', top: 5, left: 5, backgroundColor: COLORS.cta, borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1 },
-  nowBadgeText: { color: '#ffffff', fontSize: 9, fontWeight: '700' },
+  nowDot: { position: 'absolute', top: 6, left: 6 },
   nowCard: { borderWidth: 2, borderColor: COLORS.cta },
+  clsHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  nowChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  nowChipText: { color: '#ffffff', fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },
   gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e8a400' },
   gridEvDot: { position: 'absolute', bottom: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
