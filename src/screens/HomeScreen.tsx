@@ -16,6 +16,7 @@ import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
 import { BUILD_TAG } from '../buildTag'
+import { isManualUrl } from '../assignments/manualAssignment'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
@@ -178,6 +179,11 @@ export default function HomeScreen() {
   function openBulletin() {
     navigation.navigate('Bulletin')
   }
+  // 「今やること」の課題カードから、その課題の詳細（課題タブ内）へ直接飛ぶ。
+  function openAssignment(url: string) {
+    const screen = isManualUrl(url) ? 'ManualAssignment' : 'LetusAssignmentDetail'
+    navigation.navigate('課題', { screen, params: { url } })
+  }
 
   const accent = banner.kind === 'accepting' ? COLORS.cta : COLORS.emerald
   const tone = urgent ? urgencyTone(urgent, tick) : 'green'
@@ -226,7 +232,7 @@ export default function HomeScreen() {
                 {focus ? <FocusClassRow focus={focus} ui={ui} last={!urgent} /> : null}
                 {focus && urgent ? <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} /> : null}
                 {urgent ? (
-                  <View style={styles.focusRow}>
+                  <Pressable style={styles.focusRow} onPress={() => openAssignment(urgent.url)}>
                     <View style={styles.focusLead}>
                       <View style={[styles.focusDot, { backgroundColor: toneColor }]} />
                     </View>
@@ -246,7 +252,7 @@ export default function HomeScreen() {
                         {formatDeadline(urgent.deadline)}
                       </Text>
                     </View>
-                  </View>
+                  </Pressable>
                 ) : null}
               </View>
             </>
