@@ -14,6 +14,9 @@ import type { AssignmentsStackParamList } from '../navigation/types'
 import { Chip, ScreenBg, ScreenHeader, Segmented, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { useDisplaySettings } from '../displaySettings'
 import { byDeadlineAsc, formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone } from '../assignments/deadline'
+import { loadCollectionHealth } from '../storage/collectionHealthStore'
+import type { StoredHealth } from '../storage/collectionHealthSerialize'
+import HealthBanner from '../ui/HealthBanner'
 import { COLORS } from '../theme'
 
 const SECTION_LABEL: Record<BucketKey, string> = {
@@ -69,6 +72,8 @@ export default function AssignmentsScreen() {
   // 上がって一覧が差分反映される（既存の scanned 一覧に変更を加えていく形）。
   const [collecting, setCollecting] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  // LETUS課題収集の最終ヘルス（層1の正直表示バナー用）。
+  const [health, setHealth] = useState<StoredHealth | null>(null)
   const startUpdate = useCallback(() => {
     setProgress(null)
     setCollecting(true)
@@ -85,6 +90,9 @@ export default function AssignmentsScreen() {
       loadAssignments().then((map) => {
         if (active) setAssignments(Object.values(map))
       })
+      loadCollectionHealth()
+        .then((m) => active && setHealth(m.letusAssignments ?? null))
+        .catch(() => undefined)
       return () => {
         active = false
       }
@@ -221,6 +229,8 @@ export default function AssignmentsScreen() {
         }
       />
 
+      <HealthBanner health={health?.health} source="letus" />
+
       {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。 */}
       {collecting ? (
         <View style={[ui.card, styles.updatingBar]}>
@@ -238,6 +248,7 @@ export default function AssignmentsScreen() {
           onFinished={() => {
             setCollecting(false)
             setProgress(null)
+            loadCollectionHealth().then((m) => setHealth(m.letusAssignments ?? null)).catch(() => undefined)
           }}
         />
       ) : null}

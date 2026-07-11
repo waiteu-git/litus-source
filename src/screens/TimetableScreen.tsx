@@ -8,6 +8,9 @@ import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMetaStore'
+import { loadCollectionHealth } from '../storage/collectionHealthStore'
+import type { StoredHealth } from '../storage/collectionHealthSerialize'
+import HealthBanner from '../ui/HealthBanner'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
 import { NowPulse } from '../ui/NowPulse'
@@ -53,6 +56,8 @@ export default function TimetableScreen() {
   const [selDay, setSelDay] = useState<DayKey>(TODAY_KEYS[new Date().getDay()])
   // 時間割の裏取得中フラグ。true の間だけ headless エンジンをマウントして収集する。
   const [syncing, setSyncing] = useState(false)
+  // 時間割収集の最終ヘルス（層1の正直表示バナー用）。
+  const [health, setHealth] = useState<StoredHealth | null>(null)
   // 多重起動防止（非同期スロットル判定中の再入も弾く）。setSyncing更新関数の中で副作用を起こさない。
   const syncingRef = useRef(false)
 
@@ -86,6 +91,7 @@ export default function TimetableScreen() {
       })
       loadClassEvents().then((e) => { if (active) setEvents(e) }).catch(() => undefined)
       loadWeeklyPatterns().then((m) => { if (active) setPatterns(m) }).catch(() => undefined)
+      loadCollectionHealth().then((m) => { if (active) setHealth(m.timetable ?? null) }).catch(() => undefined)
       ;(async () => {
         const map = await loadCourseMap()
         const snaps = await loadCourseSnapshots()
@@ -175,6 +181,7 @@ export default function TimetableScreen() {
       ) : null}
 
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} refreshControl={refresh}>
+        <HealthBanner health={health?.health} source="class" />
         {!col ? (
           <View style={[ui.card, { marginTop: 16 }]}>
             <Text style={{ color: ui.valueColor }}>
@@ -329,6 +336,7 @@ export default function TimetableScreen() {
             syncingRef.current = false
             setSyncing(false)
             loadTimetable().then(setCollections).catch(() => undefined)
+            loadCollectionHealth().then((m) => setHealth(m.timetable ?? null)).catch(() => undefined)
           }}
         />
       ) : null}
