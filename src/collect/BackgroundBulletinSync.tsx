@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import BulletinSyncEngine from './BulletinSyncEngine'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
+import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 
 // 起動直後の描画やLETUS同期と競合しないよう、少し待ってから開始する。
 const START_DELAY_MS = 6000
@@ -16,11 +17,15 @@ const session = { done: false }
 export default function BackgroundBulletinSync() {
   const [active, setActive] = useState(false)
   const [finished, setFinished] = useState(false)
+  // 授業時間帯(running=出席WebViewが稼働)はCLASSセッションを出席が専有するため、掲示収集を控える
+  // （同一セッションの奪い合いで空ページ＝出席まで不安定化する）。running が下がれば再試行される。
+  const { running } = useAttendanceEngine()
 
   useEffect(() => {
     if (session.done || finished) return
     let cancelled = false
     const t = setTimeout(() => {
+      if (cancelled || running) return
       loadBulletinRefreshedAt()
         .then((at) => {
           if (cancelled) return
@@ -38,7 +43,7 @@ export default function BackgroundBulletinSync() {
       cancelled = true
       clearTimeout(t)
     }
-  }, [finished])
+  }, [finished, running])
 
   if (!active || finished || session.done) return null
   return (
