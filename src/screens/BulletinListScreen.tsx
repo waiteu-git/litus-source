@@ -70,7 +70,7 @@ export default function BulletinListScreen() {
           shown.map((b) => (
             <Pressable
               key={b.id}
-              onPress={() => navigation.navigate('BulletinWeb', { id: b.id })}
+              onPress={() => navigation.navigate('BulletinDetail', { id: b.id })}
               style={[ui.card, styles.item]}
             >
               <View style={styles.itemHead}>
