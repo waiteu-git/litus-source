@@ -12,10 +12,17 @@ export const COLLECT_TIMETABLE_JS = `(function(){
       .call(document.querySelectorAll('table.classTable'))
       .map(function(t){ return t.outerHTML; });
     var jigen = document.querySelector('dd.jigenArea');
+    // 診断マーカー（COLLECT_BULLETIN_TABS_JSと同型）: ヘルス判定(層2)が tables=0 の原因を切り分ける。
+    var body = document.body ? (document.body.innerText || '') : '';
+    var hasPwd = !!document.querySelector('input[type=password]');
+    var btns = Array.prototype.slice.call(document.querySelectorAll('a,button,input[type=submit]'));
+    var hasLogout = btns.some(function(b){ var t=((b.textContent||b.value)||''); return t.indexOf('ログアウト')>=0 || /logout/i.test(b.getAttribute&&(b.getAttribute('href')||'')); });
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'timetable',
       tables: tables,
-      jigen: jigen ? jigen.textContent : ''
+      jigen: jigen ? jigen.textContent : '',
+      page: (location.pathname||'').split('/').pop() || '',
+      pwd: hasPwd?1:0, logout: hasLogout?1:0, blen: body.length
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
