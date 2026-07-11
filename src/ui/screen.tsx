@@ -5,6 +5,7 @@ import Svg, { Circle, G } from 'react-native-svg'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, useThemeVariant } from '../theme'
+import { DUR, EASE } from './motion'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -254,19 +255,57 @@ export function CountdownRing({
   )
 }
 
+/** カルーセルのアクティブドット（幅 6⇄18px を micro でアニメ。色は cta/薄地で出し分け）。 */
+function CarouselDot({ active, green }: { active: boolean; green: boolean }) {
+  const w = useRef(new Animated.Value(active ? 18 : 6)).current
+  useEffect(() => {
+    Animated.timing(w, { toValue: active ? 18 : 6, duration: DUR.micro, easing: EASE.move, useNativeDriver: false }).start()
+  }, [active, w])
+  return (
+    <Animated.View
+      style={[
+        ui.dot,
+        { width: w, backgroundColor: active ? COLORS.cta : green ? 'rgba(255,255,255,0.45)' : '#cfe0d9' },
+      ]}
+    />
+  )
+}
+
 /**
- * 汎用の自動スライドカルーセル（一定間隔でクロスフェード）。インフォタブのCLASS掲示など、
+ * 汎用の自動スライドカルーセル（一定間隔でクロスディゾルブ）。インフォタブのCLASS掲示など、
  * 今後アイテム数が増減するモジュールをそのまま差し替えられるよう中身は ReactNode[] で受け取る。
+ * 切替は旧スライドの exit フェードと新スライドの enter フェード＋微ドリフト(6→0)を重ね、空白を作らない。
  */
 export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; intervalMs?: number }) {
   const [idx, setIdx] = useState(0)
-  const opacity = useRef(new Animated.Value(1)).current
+  // 出ていく旧スライドを重ねるためのオーバーレイ（クロスディゾルブ中だけ描画）。
+  const [outgoing, setOutgoing] = useState<{ node: ReactNode; key: number } | null>(null)
+  const inOpacity = useRef(new Animated.Value(1)).current
+  const inShift = useRef(new Animated.Value(0)).current
+  const outOpacity = useRef(new Animated.Value(0)).current
+  // setInterval クロージャの陳腐化を避けるため、最新の items と idx を ref で参照する。
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+  const idxRef = useRef(idx)
+  idxRef.current = idx
+
   useEffect(() => {
     if (items.length <= 1) return
     const id = setInterval(() => {
-      Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => {
-        setIdx((i) => (i + 1) % items.length)
-        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }).start()
+      const list = itemsRef.current
+      const cur = idxRef.current
+      const next = (cur + 1) % list.length
+      setOutgoing({ node: list[cur], key: cur })
+      outOpacity.setValue(1)
+      inOpacity.setValue(0)
+      inShift.setValue(6)
+      setIdx(next)
+      Animated.parallel([
+        Animated.timing(outOpacity, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }),
+        Animated.timing(inOpacity, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+        Animated.timing(inShift, { toValue: 0, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+      ]).start(({ finished }) => {
+        if (finished) setOutgoing(null)
       })
     }, intervalMs)
     return () => clearInterval(id)
@@ -279,18 +318,22 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
   const green = variant === 'green'
   return (
     <View>
-      <Animated.View style={{ opacity }}>{items[idx] ?? null}</Animated.View>
+      <View>
+        {/* 新スライドは通常フローで高さを決める（enter フェード＋6→0ドリフト）。 */}
+        <Animated.View style={{ opacity: inOpacity, transform: [{ translateY: inShift }] }}>
+          {items[idx] ?? null}
+        </Animated.View>
+        {/* 旧スライドは絶対配置で重ね、exit フェードで抜ける（空白を作らない）。 */}
+        {outgoing ? (
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: outOpacity }]}>
+            {outgoing.node}
+          </Animated.View>
+        ) : null}
+      </View>
       {items.length > 1 ? (
         <View style={ui.dotsRow}>
           {items.map((_, i) => (
-            <View
-              key={i}
-              style={[
-                ui.dot,
-                { backgroundColor: green ? 'rgba(255,255,255,0.45)' : '#cfe0d9' },
-                i === idx && { width: 18, backgroundColor: COLORS.cta },
-              ]}
-            />
+            <CarouselDot key={i} active={i === idx} green={green} />
           ))}
         </View>
       ) : null}
