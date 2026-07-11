@@ -276,6 +276,9 @@ export default function HomeScreen() {
             </Animated.View>
           ) : null}
 
+          {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。 */}
+          <BulletinSyncStatus syncing={bulletinSyncing} />
+
           {/* 今やること: 次の授業＋直近の未提出課題。どちらも無ければセクションごと隠す。 */}
           {focus || urgent ? (
             <>
@@ -523,6 +526,92 @@ function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<
   )
 }
 
+/**
+ * 掲示同期のヒーロー表示。`syncing` が true の間は「同期中…」バナーを上部へ出し、false へ落ちた瞬間に
+ * バナーを上へ格納→「✓ 最新」ピルを控えめな hero バネ(0.9→1.03→1)で立ち上げ→数秒保持してフェード。
+ * idle 時は何も描画しない（レイアウトを占有しない）。動きは transform/opacity のみ。
+ */
+function BulletinSyncStatus({ syncing }: { syncing: boolean }) {
+  const [phase, setPhase] = useState<'idle' | 'syncing' | 'done'>('idle')
+  const bannerAnim = useRef(new Animated.Value(0)).current // 0=上へ格納 / 1=表示
+  const pillOpacity = useRef(new Animated.Value(0)).current
+  const pillScale = useRef(new Animated.Value(SPRING.from)).current
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prev = useRef(false)
+
+  useEffect(() => {
+    if (syncing && !prev.current) {
+      // 開始: バナーが slow enter で降りてくる。
+      if (holdTimer.current) clearTimeout(holdTimer.current)
+      pillOpacity.setValue(0)
+      pillScale.setValue(SPRING.from)
+      setPhase('syncing')
+      bannerAnim.setValue(0)
+      Animated.timing(bannerAnim, { toValue: 1, duration: DUR.slow, easing: EASE.enter, useNativeDriver: true }).start()
+    } else if (!syncing && prev.current) {
+      // 完了: バナーが exit で上へ格納 → ピルが hero バネで登場 → 保持 → フェードして idle。
+      setPhase('done')
+      Animated.timing(bannerAnim, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }).start()
+      pillOpacity.setValue(0)
+      pillScale.setValue(SPRING.from)
+      Animated.sequence([
+        Animated.delay(DUR.fast),
+        Animated.parallel([
+          Animated.timing(pillOpacity, { toValue: 1, duration: DUR.fast, easing: EASE.enter, useNativeDriver: true }),
+          Animated.sequence([
+            Animated.timing(pillScale, { toValue: SPRING.over, duration: SPRING.upMs, easing: EASE.enter, useNativeDriver: true }),
+            Animated.timing(pillScale, { toValue: SPRING.to, duration: SPRING.downMs, easing: EASE.enter, useNativeDriver: true }),
+          ]),
+        ]),
+      ]).start()
+      holdTimer.current = setTimeout(() => {
+        Animated.timing(pillOpacity, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }).start(
+          ({ finished }) => {
+            if (finished) setPhase('idle')
+          },
+        )
+      }, 1900)
+    }
+    prev.current = syncing
+  }, [syncing, bannerAnim, pillOpacity, pillScale])
+
+  useEffect(() => () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current)
+  }, [])
+
+  if (phase === 'idle') return null
+
+  return (
+    <View style={styles.syncZone}>
+      {/* バナーは done 中も exit を見せるため残す（idle で View ごと外れる）。 */}
+      <Animated.View
+        style={{
+          opacity: bannerAnim,
+          transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-SHIFT.large, 0] }) }],
+        }}
+      >
+        <View style={[styles.banner, { backgroundColor: COLORS.cta }]}>
+          <View style={styles.bannerDot}>
+            <ActivityIndicator size="small" color="#ffffff" />
+          </View>
+          <View style={styles.bannerBody}>
+            <Text style={styles.bannerTitle}>同期中…</Text>
+            <Text style={styles.bannerSub}>課題と掲示を更新しています</Text>
+          </View>
+        </View>
+      </Animated.View>
+      {/* 完了ピル。バナーが格納された跡（右上）に控えめなバネで現れる。 */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.syncPill, { opacity: pillOpacity, transform: [{ scale: pillScale }] }]}
+      >
+        <Ionicons name="checkmark" size={14} color="#ffffff" />
+        <Text style={styles.syncPillText}>最新</Text>
+      </Animated.View>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
   scroll: { paddingBottom: 24 },
@@ -545,6 +634,26 @@ const styles = StyleSheet.create({
   bannerBody: { flex: 1 },
   bannerTitle: { color: '#ffffff', fontSize: 15, fontWeight: '700', lineHeight: 20 },
   bannerSub: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 2 },
+
+  syncZone: { position: 'relative' },
+  syncPill: {
+    position: 'absolute',
+    top: 6,
+    right: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.cta,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    shadowColor: '#0a6650',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  syncPillText: { color: '#ffffff', fontSize: 13, fontWeight: '700' },
 
   focusCard: { paddingVertical: 4, paddingHorizontal: 16 },
   focusRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
