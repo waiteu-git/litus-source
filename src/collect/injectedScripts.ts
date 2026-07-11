@@ -308,18 +308,33 @@ export const GO_BULLETIN_JS = `(function(){ try { window.location.href='${BULLET
 export const OPEN_BULLETIN_JS = `(function(){
   function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
   function norm(s){ return ((s||'')+'').replace(/\\s+/g, ''); }
-  // 時間割/出席で実証済みのアンカー探索に合わせる: 全<a>からテキスト部分一致→menuForm/mainMenu優先。
-  // ui-menuitem-text完全一致だけだと着地ページのメニュー構造差で空振りする（stage=menu-bulletinの主因）。
+  // 対象ドキュメント群 = トップ＋同一オリジンで参照できる iframe/frame の contentDocument。
+  // Xut12401 が frameset/iframe ラッパーで、メニューが子フレーム内にある場合に備えて中も探す。
+  function docs(){
+    var ds = [document];
+    try {
+      var fr = Array.prototype.slice.call(document.querySelectorAll('iframe,frame'));
+      for (var i=0;i<fr.length;i++){ try { var d = fr[i].contentDocument; if (d) ds.push(d); } catch(e){} }
+    } catch(e){}
+    return ds;
+  }
+  // 時間割/出席で実証済みのアンカー探索に合わせる: 全<a>からテキスト部分一致→menuForm/mainMenu優先。子フレームも横断。
   function findAnchor(text){
-    var as = Array.prototype.slice.call(document.querySelectorAll('a'));
-    var hits = as.filter(function(a){
-      var s = a.querySelector('.ui-menuitem-text');
-      var label = norm(s ? s.textContent : a.textContent);
-      return label.indexOf(text) >= 0;
-    });
+    var hits = [];
+    var ds = docs();
+    for (var i=0;i<ds.length;i++){
+      var as = Array.prototype.slice.call(ds[i].querySelectorAll('a'));
+      for (var j=0;j<as.length;j++){
+        var a = as[j];
+        var s = a.querySelector('.ui-menuitem-text');
+        var label = norm(s ? s.textContent : a.textContent);
+        if (label.indexOf(text) >= 0) hits.push(a);
+      }
+    }
     var menu = hits.filter(function(a){ var idn = (a.id || a.name || ''); return idn.indexOf('menuForm') >= 0 || idn.indexOf('mainMenu') >= 0; });
     return (menu.length ? menu : hits)[0] || null;
   }
+  function anyKeiji(){ var ds = docs(); for (var i=0;i<ds.length;i++){ if (ds[i].querySelector('dl.keiji')) return true; } return false; }
   function fire(el){
     var dpc = el.getAttribute('data-pfconfirmcommand');
     try {
@@ -333,20 +348,22 @@ export const OPEN_BULLETIN_JS = `(function(){
   }
   try {
     // 着地ガード: 既に掲示ページ(dl.keiji)に居るならメニューを叩かない（onLoadEnd毎の再クリック→再POSTループ防止）。
-    if (document.querySelector('dl.keiji')) {
+    if (anyKeiji()) {
       post({ type: 'nav', ok: true, stage: 'bulletin-already' });
     } else {
       var target = findAnchor('掲示');
       if (target) { var m = fire(target); post({ type: 'nav', ok: m !== 'err', stage: 'bulletin-click', method: m, id: target.id || '' }); }
       else {
-        // 見つからない理由を stage に埋め込む(決定的診断・新規フィールド不要): a=全<a>数, ml=ui-menuitem-link数,
-        // k='掲示'を含む<a>数, h=body.innerHTML長。h≈0なら本文空(遷移途中/空ページ)、a>0&k=0なら別メニュー構造。
+        // 見つからない理由を stage に埋め込む(決定的診断): a=トップ<a>数, if=iframe/frame数, fm=form数, sc=script数,
+        // h=innerHTML長, t=title先頭。if>0→フレーム構造(子が別オリジンで参照不可の可能性), fm>0&a=0→自動submit中継,
+        // 全0→空/リダイレクト。これでXut12401の正体を一意に特定する。
         var na = document.querySelectorAll('a').length;
-        var nml = document.querySelectorAll('a.ui-menuitem-link').length;
-        var allA = Array.prototype.slice.call(document.querySelectorAll('a'));
-        var nk = allA.filter(function(a){ return norm(a.textContent).indexOf('掲示') >= 0; }).length;
+        var nif = document.querySelectorAll('iframe,frame').length;
+        var nfm = document.querySelectorAll('form').length;
+        var nsc = document.querySelectorAll('script').length;
         var hb = document.body ? (document.body.innerHTML || '').length : 0;
-        post({ type: 'nav', ok: false, stage: 'menu-bulletin[a=' + na + ',ml=' + nml + ',k=' + nk + ',h=' + hb + ']' });
+        var ttl = norm(document.title).slice(0, 16);
+        post({ type: 'nav', ok: false, stage: 'menu-bulletin[a=' + na + ',if=' + nif + ',fm=' + nfm + ',sc=' + nsc + ',h=' + hb + ',t=' + ttl + ']' });
       }
     }
   } catch (e) {
