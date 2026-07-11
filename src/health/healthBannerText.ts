@@ -1,4 +1,5 @@
 import type { CollectionHealth } from './collectionHealth'
+import { maintenanceWindowLabel } from './maintenanceWindow'
 
 export type HealthSource = 'class' | 'letus'
 
@@ -17,7 +18,9 @@ export function healthBannerText(
     case 'not_logged_in':
       return source === 'letus' ? 'LETUSへのログインが必要です。' : 'CLASSへのログインが必要です。'
     case 'maintenance':
-      return 'CLASSはメンテナンス中です（毎日2:00–4:00）。'
+      return source === 'letus'
+        ? `LETUSはメンテナンス中です（毎日${maintenanceWindowLabel('letus')}）。`
+        : `CLASSはメンテナンス中です（毎日${maintenanceWindowLabel('class')}）。`
     default:
       return null // ok / empty_valid / blocked
   }

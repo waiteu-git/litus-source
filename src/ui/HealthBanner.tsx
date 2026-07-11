@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import type { CollectionHealth } from '../health/collectionHealth'
 import { healthBannerText, type HealthSource } from '../health/healthBannerText'
+import { isUnderMaintenance } from '../health/maintenanceWindow'
 import { useUi } from './screen'
 
 /**
@@ -16,7 +17,10 @@ export default function HealthBanner({
   source: HealthSource
 }) {
   const ui = useUi()
-  const text = healthBannerText(health, source)
+  // 定時メンテナンス帯（CLASS 2:00–4:00 / LETUS 4:00–5:30）は収集不能なので、
+  // スクレイプ結果に関わらずメンテナンス表示に倒す（帯外はスクレイプ由来のヘルスに従う）。
+  const health2 = isUnderMaintenance(source, new Date()) ? ({ status: 'maintenance' } as const) : health
+  const text = healthBannerText(health2, source)
   if (!text) return null
   return (
     <View style={[ui.card, styles.banner]}>
