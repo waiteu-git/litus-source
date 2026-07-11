@@ -11,6 +11,8 @@ import { upsertAssignments, type CollectedAssignment } from '../updates/assignme
 import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
+import { hasLetusLoginMarker, letusAssignmentsHealth, type LetusRunStats } from '../health/collectionSignals'
+import { saveCollectionHealth } from '../storage/collectionHealthStore'
 
 type Candidate = { url: string; title: string; courseName: string; courseCode: string | null }
 
@@ -35,6 +37,8 @@ export default function AssignmentCollector({
   const [loaded, setLoaded] = useState(false)
   const doneRef = useRef(false)
   const collectedRef = useRef<CollectedAssignment[]>([])
+  // ヘルス判定(層2)用の巡回集計。visited=onMessageが返ったページ数、parsedOk=締切or提出状態を解析できた数。
+  const statsRef = useRef<LetusRunStats>({ visited: 0, parsedOk: 0, loginSeen: false })
   const { bump } = useAssignmentsVersion()
 
   useEffect(() => {
@@ -95,6 +99,9 @@ export default function AssignmentCollector({
     }
     if (payload.type === 'coursepage' && typeof payload.html === 'string' && current) {
       const parsed = parseAssignmentPage(payload.html, current.url)
+      statsRef.current.visited += 1
+      if (hasLetusLoginMarker(payload.html)) statsRef.current.loginSeen = true
+      if (parsed.submissionStatus !== 'unknown' || parsed.deadline != null) statsRef.current.parsedOk += 1
       collectedRef.current.push({
         url: current.url,
         courseCode: current.courseCode,
@@ -119,6 +126,8 @@ export default function AssignmentCollector({
         await refreshAllNotifications()
         bump()
       }
+      // ヘルス(層2): 巡回集計から分類して保存（層1バナー用）。候補0巡回は empty_valid＝正常。
+      await saveCollectionHealth('letusAssignments', letusAssignmentsHealth(statsRef.current)).catch(() => undefined)
       onFinished({ checked: candidates.length, saved: collectedRef.current.length })
     })()
   }, [loaded, index, candidates.length, bump, onFinished])
