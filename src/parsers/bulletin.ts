@@ -6,7 +6,7 @@ export type BulletinRow = {
   category: string
   title: string
   date: string // 'YYYY/MM/DD'（掲示開始日）
-  unread: boolean // タイトルリンクが太字(fontBold)＝未読
+  unread: boolean // 状態ボタン文言（既読にする=未読）を正とする。ボタン無し旧HTMLのみ fontBold で判定
   flagged: boolean // 行のフラグボタン文言が「フラグをはずす」＝フラグ済み
   important: boolean // 重要アイコン(exclamation)が表示（hiddenStyleでない）
   isNew: boolean // 新着アイコン(lightbulb)が表示（hiddenStyleでない）
@@ -37,6 +37,21 @@ function rowFlagged(dl: HTMLElement): boolean {
 }
 
 /**
+ * 掲示行の未読状態。状態ボタン文言を正とする（未読にする=既読 / 既読にする=未読。CLASSの既読トグル
+ * そのもの）。件名の fontBold は重要・新着掲示だと既読後も残ることがあり、それだけで判定すると
+ * 「CLASS上は既読なのにアプリが未読と誤判定→毎回再取得」になる。ボタンが無い旧HTMLは fontBold に退避。
+ */
+function rowUnread(dl: HTMLElement, fallbackBold: boolean): boolean {
+  const parent = dl.parentNode
+  if (parent) {
+    const texts = parent.querySelectorAll('.ui-button-text').map((t) => (t.text ?? '').replace(/\s+/g, ''))
+    if (texts.includes('未読にする')) return false // 「未読にする」ボタン=現在は既読
+    if (texts.includes('既読にする')) return true // 「既読にする」ボタン=現在は未読
+  }
+  return fallbackBold
+}
+
+/**
  * COLLECT_BULLETIN_TABS_JS が送る「div.alignRight（dl.keiji＋状態ボタン）を連結したHTML」から
  * 掲示一覧を抽出する（純粋・RN非依存）。各行は category / title(a.ui-commandlink) / 末尾の日付テキスト /
  * 重要・新着アイコン / 未読(タイトルの fontBold) / フラグ(ボタン文言) を自己完結して持つ。
@@ -57,7 +72,7 @@ export function parseBulletinList(html: string): BulletinRow[] {
       category,
       title,
       date,
-      unread: hasClass(a, 'fontBold'),
+      unread: rowUnread(dl, hasClass(a, 'fontBold')),
       flagged: rowFlagged(dl),
       important: iconVisible(dl, 'fa-exclamation-circle'),
       isNew: iconVisible(dl, 'fa-lightbulb-o'),

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useRoute, type RouteProp } from '@react-navigation/native'
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
@@ -15,6 +16,7 @@ import BulletinActionEngine from '../collect/BulletinActionEngine'
  */
 export default function BulletinDetailScreen() {
   const route = useRoute<RouteProp<HomeStackParamList, 'BulletinDetail'>>()
+  const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>()
   const ui = useUi()
   const clearance = useTabBarClearance()
   const [item, setItem] = useState<BulletinItem | null>(null)
@@ -124,10 +126,17 @@ export default function BulletinDetailScreen() {
                   診断: {detailDiag}
                 </Text>
               ) : null}
-              <Pressable onPress={retryFetch} style={styles.retryBtn}>
-                <Ionicons name="refresh" size={15} color={COLORS.emerald} />
-                <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>再試行</Text>
-              </Pressable>
+              <View style={styles.failRow}>
+                <Pressable onPress={retryFetch} style={styles.retryBtn}>
+                  <Ionicons name="refresh" size={15} color={COLORS.emerald} />
+                  <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>再試行</Text>
+                </Pressable>
+                {/* 独自UIでの本文取得が不調な掲示は、CLASS本物ページ(方式B)で確実に開ける保険。 */}
+                <Pressable onPress={() => navigation.replace('BulletinWeb', { id: route.params.id })} style={styles.retryBtn}>
+                  <Ionicons name="open-outline" size={15} color={COLORS.emerald} />
+                  <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>CLASSページで開く</Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <View style={styles.loading}>
@@ -174,7 +183,8 @@ const styles = StyleSheet.create({
   },
   flagText: { fontSize: 13, fontWeight: '600' },
   loading: { alignItems: 'center', paddingVertical: 30 },
-  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
+  failRow: { flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: 12 },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   meta: { fontSize: 12, marginTop: 10 },
   text: { fontSize: 14, lineHeight: 22, marginTop: 12 },
 })

@@ -54,6 +54,34 @@ describe('parseBulletinList: flagged 判定', () => {
   })
 })
 
+// 回帰: 重要掲示は既読でも件名の fontBold が残ることがあり、fontBold だけで未読判定すると
+// 「CLASS上は既読なのにアプリが未読と誤判定→毎回再取得」される。状態ボタン文言（未読にする=既読 /
+// 既読にする=未読）はCLASSの既読トグルそのものなので、ボタンがある行はそれを正とする。
+describe('parseBulletinList: 既読トグル文言を未読判定の正とする（重要掲示のfontBold残り対策）', () => {
+  const readImportant = `
+    <div class="alignRight">
+      <dl class="keiji">
+        <span class="keijiCategory">お知らせ</span>
+        <i class="fa fa-exclamation-circle"></i>
+        <a class="ui-commandlink fontBold">重要な既読の掲示</a> 2026/07/06
+      </dl>
+      <span class="inlineBlock">
+        <button class="btnRead"><span class="ui-button-text">フラグをつける</span></button>
+        <button class="btnRead"><span class="ui-button-text">未読にする</span></button>
+      </span>
+    </div>`
+  it('ボタンが「未読にする」なら既読（fontBoldでも unread=false）', () => {
+    const rows = parseBulletinList(readImportant)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].important).toBe(true)
+    expect(rows[0].unread).toBe(false)
+  })
+  it('ボタンが「既読にする」なら未読', () => {
+    const unreadRow = readImportant.replace('未読にする', '既読にする')
+    expect(parseBulletinList(unreadRow)[0].unread).toBe(true)
+  })
+})
+
 describe('simplifyCategory / shortDate', () => {
   it('括弧補足を落とす', () => {
     expect(simplifyCategory('お知らせ(個人に対する)')).toBe('お知らせ')
