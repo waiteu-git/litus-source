@@ -17,6 +17,7 @@ import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
 import { BUILD_TAG } from '../buildTag'
 import { isManualUrl } from '../assignments/manualAssignment'
+import { NowPulse } from '../ui/NowPulse'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
@@ -476,11 +477,16 @@ function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<
           <Text style={[styles.focusTitle, { color: ui.valueColor }]} numberOfLines={1}>
             {focus.name}
           </Text>
-          <View style={[styles.nextBadge, { backgroundColor: ui.green ? 'rgba(255,255,255,0.6)' : '#e3f5ee' }]}>
-            <Text style={[styles.nextBadgeText, { color: ui.green ? '#053a2c' : COLORS.cta }]}>
-              {focus.isNow ? '今の授業' : '次の授業'}
-            </Text>
-          </View>
+          {focus.isNow ? (
+            <View style={styles.nowLiveBadge}>
+              <NowPulse size={6} color="#ffffff" />
+              <Text style={styles.nowLiveText}>今の授業</Text>
+            </View>
+          ) : (
+            <View style={[styles.nextBadge, { backgroundColor: ui.green ? 'rgba(255,255,255,0.6)' : '#e3f5ee' }]}>
+              <Text style={[styles.nextBadgeText, { color: ui.green ? '#053a2c' : COLORS.cta }]}>次の授業</Text>
+            </View>
+          )}
         </View>
         <Text style={[styles.focusSub, { color: ui.labelColor }]} numberOfLines={1}>
           {focus.room}
@@ -527,6 +533,8 @@ const styles = StyleSheet.create({
   focusTitle: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
   focusSub: { fontSize: 12, marginTop: 3 },
   nextBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
+  nowLiveBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
+  nowLiveText: { color: '#ffffff', fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
   nextBadgeText: { fontSize: 10, fontWeight: '700' },
   focusDot: { width: 10, height: 10, borderRadius: 5 },
   focusRight: { alignItems: 'flex-end' },
