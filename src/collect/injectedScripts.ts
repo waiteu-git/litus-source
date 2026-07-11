@@ -381,6 +381,8 @@ export const COLLECT_BULLETIN_TABS_JS = `(function(){
     if(!out){ for(var k=0;k<dls.length;k++){ out += dls[k].outerHTML; } }
     // 診断マーカー: タブ構造/ログイン欄/ログアウトリンク/本文長/検索タブ有無で、keiji=0の原因を切り分ける。
     var body = document.body ? (document.body.innerText || '') : '';
+    // hlen=innerHTML長。blen=0でもhlen>0なら「中身は在るが visibility:hidden 未解除」、hlen≈0なら「本当に空/未描画」。
+    var hbody = document.body ? (document.body.innerHTML || '') : '';
     var hasTab = !!document.querySelector('[id$="tabArea"], .ui-tabs');
     var hasPwd = !!document.querySelector('input[type=password]');
     var btns = Array.prototype.slice.call(document.querySelectorAll('a,button,input[type=submit]'));
@@ -388,7 +390,7 @@ export const COLLECT_BULLETIN_TABS_JS = `(function(){
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'bulletin', html: '<div>'+out+'</div>', count: dls.length, align: align,
       page: (location.pathname||'').split('/').pop() || '',
-      tab: hasTab?1:0, pwd: hasPwd?1:0, logout: hasLogout?1:0, blen: body.length
+      tab: hasTab?1:0, pwd: hasPwd?1:0, logout: hasLogout?1:0, blen: body.length, hlen: hbody.length
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
