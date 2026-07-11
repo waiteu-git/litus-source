@@ -307,12 +307,18 @@ export const GO_BULLETIN_JS = `(function(){ try { window.location.href='${BULLET
  */
 export const OPEN_BULLETIN_JS = `(function(){
   function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
-  function menuAnchor(text){
-    var as = Array.prototype.slice.call(document.querySelectorAll('a.ui-menuitem-link'));
-    return as.find(function(a){
+  function norm(s){ return ((s||'')+'').replace(/\\s+/g, ''); }
+  // 時間割/出席で実証済みのアンカー探索に合わせる: 全<a>からテキスト部分一致→menuForm/mainMenu優先。
+  // ui-menuitem-text完全一致だけだと着地ページのメニュー構造差で空振りする（stage=menu-bulletinの主因）。
+  function findAnchor(text){
+    var as = Array.prototype.slice.call(document.querySelectorAll('a'));
+    var hits = as.filter(function(a){
       var s = a.querySelector('.ui-menuitem-text');
-      return s && ((s.textContent || '').replace(/\\s+/g, '')) === text;
-    }) || null;
+      var label = norm(s ? s.textContent : a.textContent);
+      return label.indexOf(text) >= 0;
+    });
+    var menu = hits.filter(function(a){ var idn = (a.id || a.name || ''); return idn.indexOf('menuForm') >= 0 || idn.indexOf('mainMenu') >= 0; });
+    return (menu.length ? menu : hits)[0] || null;
   }
   function fire(el){
     var dpc = el.getAttribute('data-pfconfirmcommand');
@@ -326,14 +332,22 @@ export const OPEN_BULLETIN_JS = `(function(){
     }
   }
   try {
-    // 着地ガード: 既に掲示ページ(dl.keiji)に居るならメニューを叩かない（onLoadEnd毎の再クリック→
-    // 再POSTループを防ぐ。これが実機で掲示が取れない主因と推定）。収集は別途走る。
+    // 着地ガード: 既に掲示ページ(dl.keiji)に居るならメニューを叩かない（onLoadEnd毎の再クリック→再POSTループ防止）。
     if (document.querySelector('dl.keiji')) {
       post({ type: 'nav', ok: true, stage: 'bulletin-already' });
     } else {
-      var target = menuAnchor('掲示板');
-      if (target) { var m = fire(target); post({ type: 'nav', ok: m !== 'err', stage: 'bulletin-click', method: m }); }
-      else { post({ type: 'nav', ok: false, stage: 'menu-bulletin' }); }
+      var target = findAnchor('掲示');
+      if (target) { var m = fire(target); post({ type: 'nav', ok: m !== 'err', stage: 'bulletin-click', method: m, id: target.id || '' }); }
+      else {
+        // 見つからない理由を stage に埋め込む(決定的診断・新規フィールド不要): a=全<a>数, ml=ui-menuitem-link数,
+        // k='掲示'を含む<a>数, h=body.innerHTML長。h≈0なら本文空(遷移途中/空ページ)、a>0&k=0なら別メニュー構造。
+        var na = document.querySelectorAll('a').length;
+        var nml = document.querySelectorAll('a.ui-menuitem-link').length;
+        var allA = Array.prototype.slice.call(document.querySelectorAll('a'));
+        var nk = allA.filter(function(a){ return norm(a.textContent).indexOf('掲示') >= 0; }).length;
+        var hb = document.body ? (document.body.innerHTML || '').length : 0;
+        post({ type: 'nav', ok: false, stage: 'menu-bulletin[a=' + na + ',ml=' + nml + ',k=' + nk + ',h=' + hb + ']' });
+      }
     }
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));

@@ -193,8 +193,8 @@ export default function ClassHeadlessCollector({
 }
 
 const styles = StyleSheet.create({
-  // CLASSはデスクトップ向けJSF。1×1では表示解除/遷移スクリプトが走らず blen=0 で固まるため、
-  // 実寸(360×760)を画面外(top/left:-10000)に配置して実描画させる。opacity:0とpointerEventsで不可視・不可触。
-  box: { position: 'absolute', width: 360, height: 760, top: -10000, left: -10000, opacity: 0 },
-  web: { width: 360, height: 760 },
+  // 出席WebView(webviewHiddenBox)と同一の隠し方。1×1画面外でもCLASS収集は成立する（出席/時間割で実証済み）。
+  // ※blen=0で固まる主因はWebViewサイズではなくメニュー遷移側（掲示OPENのアンカー探索）だった。
+  box: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
+  web: { width: 1, height: 1 },
 })
