@@ -274,11 +274,15 @@ export const DETECT_PAGE_JS = `(function(){
     var hasSsoStale = /過去のリクエスト|CSRF/i.test(body);
     // CLASSの定時メンテナンス（毎日2:00〜4:00）。この間はログインもできないので専用表示にする。
     var hasMaintenance = /システムメンテナンス|メンテナンス中|ただいまメンテナンス|ご利用いただけません/.test(body);
+    // 掲示一覧に着地したか（frameset対応）。掲示は子フレーム内に載りトップURLはXut12401のままなので、
+    // URLでなく dl.keiji の有無で判定する。トップ＋同一オリジンフレームを横断して探す。
+    var hasBulletinList = !!document.querySelector('dl.keiji');
+    try { var _fr=document.querySelectorAll('iframe,frame'); for(var _i=0;_i<_fr.length && !hasBulletinList;_i++){ try{ var _d=_fr[_i].contentDocument; if(_d && _d.querySelector('dl.keiji')) hasBulletinList=true; }catch(e){} } }catch(e){}
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'page', hasPasswordInput: hasPassword, hasAttendanceForm: hasAttendanceForm,
       hasEnterSplash: hasEnterSplash, hasClassMenu: hasClassMenu, hasLogout: hasLogout,
       hasSystemError: hasSystemError, hasMultiScreen: hasMultiScreen, hasSsoStale: hasSsoStale,
-      hasMaintenance: hasMaintenance, url: location.href
+      hasMaintenance: hasMaintenance, hasBulletinList: hasBulletinList, url: location.href
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));

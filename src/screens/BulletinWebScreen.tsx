@@ -95,7 +95,8 @@ export default function BulletinWebScreen() {
     const url = typeof p.url === 'string' ? p.url : ''
     const signal: BulletinWebSignal = {
       hasEnterSplash: !!p.hasEnterSplash,
-      onBulletinPage: /bsd007/i.test(url),
+      // frameset対応: 掲示は子フレーム内でトップURLはXut12401のまま→URLでなく dl.keiji の有無で着地判定。
+      onBulletinPage: !!p.hasBulletinList || /bsd007/i.test(url),
       modalOpen: modalOpenRef.current,
       detailFired: detailFiredRef.current,
       hasPasswordInput: !!p.hasPasswordInput,
