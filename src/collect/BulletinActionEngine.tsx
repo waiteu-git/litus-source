@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import {
   OPEN_BULLETIN_JS,
   GO_BULLETIN_JS,
@@ -12,6 +13,7 @@ import {
   loadBulletinDigest,
   saveBulletinDigest,
   updateBulletinItem,
+  saveBulletinDetailDiag,
 } from '../storage/bulletinDigestStore'
 import { mergeBulletinItems } from '../storage/bulletinDigestSerialize'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
@@ -33,6 +35,7 @@ type Props = {
  */
 export default function BulletinActionEngine({ action, title, date, desiredFlag, onFinished }: Props) {
   const id = `${date}::${title}`
+  const diag = useRef({ page: '', stage: '', panel: 0, plen: 0, got: false })
 
   if (action === 'openDetail') {
     return (
@@ -42,6 +45,14 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
         collectJs={COLLECT_BULLETIN_DETAIL_JS}
         resultType="bulletinDetail"
         fallbackJs={GO_BULLETIN_JS}
+        onSignal={(p) => {
+          if (p.type === 'page' && typeof p.url === 'string') diag.current.page = (p.url.split('/').pop() as string) || ''
+          if (p.type === 'nav' && typeof p.stage === 'string') diag.current.stage = p.stage as string
+          if (p.type === 'bulletinDetail') {
+            if (typeof p.panel === 'number') diag.current.panel = p.panel
+            if (typeof p.plen === 'number') diag.current.plen = p.plen
+          }
+        }}
         onData={async (raw) => {
           let p: { html?: string; ready?: boolean } | null = null
           try {
@@ -53,9 +64,16 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
           const body = parseBulletinDetail(p.html)
           if (!body) return false
           await updateBulletinItem(id, (i) => ({ ...i, body, unread: false }))
+          diag.current.got = true
           return true
         }}
-        onFinished={onFinished}
+        onFinished={() => {
+          const d = diag.current
+          saveBulletinDetailDiag(
+            `page=${d.page || '?'} stage=${d.stage || '?'} panel=${d.panel} plen=${d.plen} got=${d.got}`,
+          ).catch(() => undefined)
+          onFinished()
+        }}
       />
     )
   }

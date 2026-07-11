@@ -5,7 +5,7 @@ import { useRoute, type RouteProp } from '@react-navigation/native'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
-import { loadBulletinDigest } from '../storage/bulletinDigestStore'
+import { loadBulletinDigest, loadBulletinDetailDiag } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
 
@@ -20,6 +20,7 @@ export default function BulletinDetailScreen() {
   const [item, setItem] = useState<BulletinItem | null>(null)
   const [fetching, setFetching] = useState(false)
   const [fetchFailed, setFetchFailed] = useState(false)
+  const [detailDiag, setDetailDiag] = useState('')
   const [flagBusy, setFlagBusy] = useState(false)
   const startedRef = useRef(false)
 
@@ -47,7 +48,10 @@ export default function BulletinDetailScreen() {
     const items = await loadBulletinDigest()
     const it = items.find((i) => i.id === route.params.id) ?? null
     setItem(it)
-    if (it && !it.body) setFetchFailed(true)
+    if (it && !it.body) {
+      setFetchFailed(true)
+      loadBulletinDetailDiag().then(setDetailDiag).catch(() => undefined)
+    }
   }, [route.params.id])
 
   const retryFetch = useCallback(() => {
@@ -115,6 +119,11 @@ export default function BulletinDetailScreen() {
               <Text style={{ color: ui.labelColor, fontSize: 13, textAlign: 'center' }}>
                 本文を取得できませんでした。
               </Text>
+              {detailDiag ? (
+                <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 6, textAlign: 'center' }}>
+                  診断: {detailDiag}
+                </Text>
+              ) : null}
               <Pressable onPress={retryFetch} style={styles.retryBtn}>
                 <Ionicons name="refresh" size={15} color={COLORS.emerald} />
                 <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>再試行</Text>
