@@ -468,16 +468,32 @@ export const COLLECT_BULLETIN_TABS_JS = `(function(){
 })(); true;`
 
 /**
+ * フレーム横断ヘルパ群（Xut12401 frameset 対応）。掲示の行/状態ボタン/詳細モーダルは子フレーム内にあるため、
+ * トップ＋同一オリジン全フレームを横断して探索・発火する。各注入スクリプト冒頭に展開して使う。
+ * - qsAll/qsOne: 全docへ querySelectorAll/querySelector を横断。
+ * - fireEl: 要素の所属フレームの window.Function で data-pfconfirmcommand/onclick を実行（PrimeFacesスコープ解決）。
+ * - fireChange: checkbox を所属フレームの Event で change 発火（既読/フラグ切替の onchange=PrimeFaces.ab を起こす）。
+ */
+const FRAME_PRELUDE = `
+  function docs(){ var ds=[document]; try{ var fr=Array.prototype.slice.call(document.querySelectorAll('iframe,frame')); for(var _i=0;_i<fr.length;_i++){ try{ var _d=fr[_i].contentDocument; if(_d) ds.push(_d); }catch(e){} } }catch(e){} return ds; }
+  function qsAll(sel){ var ds=docs(), out=[]; for(var _i=0;_i<ds.length;_i++){ try{ var ns=ds[_i].querySelectorAll(sel); for(var _j=0;_j<ns.length;_j++) out.push(ns[_j]); }catch(e){} } return out; }
+  function qsOne(sel){ var ds=docs(); for(var _i=0;_i<ds.length;_i++){ try{ var n=ds[_i].querySelector(sel); if(n) return n; }catch(e){} } return null; }
+  function fireEl(el){ var win=(el.ownerDocument&&el.ownerDocument.defaultView)||window; var F=win.Function||Function; var ME=win.MouseEvent||MouseEvent; var dpc=el.getAttribute&&el.getAttribute('data-pfconfirmcommand'); try{ if(dpc){ F(dpc).call(el); return 'pfconfirm'; } var oc=el.getAttribute&&el.getAttribute('onclick'); if(oc){ F('event',oc).call(el, new ME('click',{bubbles:true})); return 'onclick'; } el.click(); return 'click'; }catch(e){ try{ el.click(); return 'click-fb'; }catch(e2){ return 'err'; } } }
+  function fireChange(box){ var win=(box.ownerDocument&&box.ownerDocument.defaultView)||window; var EV=win.Event||Event; box.checked=!box.checked; box.dispatchEvent(new EV('change',{bubbles:true})); }
+`
+
+/**
  * 日付＋件名で行を特定し、(1)掲示内容モーダルが未オープンなら件名リンクで開く、(2)未読なら少し遅らせて
  * 既読化する（CLASS側で確実に既読へ）。冪等なので複数回発火しても二重操作にならない（モーダル既開/既読は
- * スキップ）。onLoadEnd毎の再注入やRN側タイマの取りこぼしに対して安全。
+ * スキップ）。onLoadEnd毎の再注入やRN側タイマの取りこぼしに対して安全。frameset対応でフレーム内も横断。
  */
 export function openBulletinDetailJs(title: string, date: string): string {
   return `(function(){
+    ${FRAME_PRELUDE}
     var t=${JSON.stringify(title)}, d=${JSON.stringify(date)}, tries=0;
     function post(o){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); }catch(e){} }
     function findRow(){
-      var dls=document.querySelectorAll('dl.keiji');
+      var dls=qsAll('dl.keiji');
       for(var i=0;i<dls.length;i++){
         var a=dls[i].querySelector('a.ui-commandlink'); if(!a) continue;
         var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
@@ -491,23 +507,21 @@ export function openBulletinDetailJs(title: string, date: string): string {
         var r=findRow();
         if(!r){
           tries++;
-          // 行がまだ描画されていない（PrimeFacesの遅延描画）。少し待って再探索する。
-          if(tries<10){ setTimeout(step, 600); return; }
-          post({type:'nav',ok:false,stage:'detail-notfound',keiji:document.querySelectorAll('dl.keiji').length});
+          // 行がまだ描画されていない（メニュー発火→フレームへ掲示ロードは非同期）。少し待って再探索する。
+          if(tries<12){ setTimeout(step, 600); return; }
+          post({type:'nav',ok:false,stage:'detail-notfound',keiji:qsAll('dl.keiji').length});
           return;
         }
-        var panel=document.querySelector('[id="bsd00702:dialogPanel"]');
+        var panel=qsOne('[id="bsd00702:dialogPanel"]');
         var opened=panel && /本文/.test(panel.innerHTML||'');
-        if(!opened){
-          var oc=r.a.getAttribute('onclick');
-          if(oc){ new Function('event',oc).call(r.a,new MouseEvent('click',{bubbles:true})); } else { r.a.click(); }
-        }
-        // 未読なら少し遅らせて既読化（CLASS側で確実に既読へ）。
+        // 件名リンクをフレーム文脈で発火してモーダルを開く（トップ文脈だとPrimeFaces未解決で空振り）。
+        if(!opened){ fireEl(r.a); }
+        // 未読なら少し遅らせて既読化（CLASS側で確実に既読へ）。この行の既読ボタンだけを叩く（全既読化しない）。
         var row=r.dl.parentNode, btns=row?row.querySelectorAll('.btnRead'):[];
         for(var j=0;j<btns.length;j++){
           if(/既読にする/.test(btns[j].textContent||'')){
             var rbox=btns[j].querySelector('input[type=checkbox]');
-            if(rbox){ setTimeout((function(box){return function(){ box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true})); };})(rbox), 800); }
+            if(rbox){ setTimeout((function(box){return function(){ try{ fireChange(box); }catch(e){} };})(rbox), 800); }
             break;
           }
         }
@@ -515,22 +529,21 @@ export function openBulletinDetailJs(title: string, date: string): string {
       }catch(e){ post({type:'error',message:String(e)}); }
     }
     step();
-    true;
-  })();`
+  })(); true;`
 }
 
 /** 掲示内容モーダルの中身(#bsd00702:dialogPanel)を抽出。テーブル描画済みのときだけ ready=true。 */
 export const COLLECT_BULLETIN_DETAIL_JS = `(function(){
+  ${FRAME_PRELUDE}
   try{
-    var p=document.querySelector('[id="bsd00702:dialogPanel"]');
+    var p=qsOne('[id="bsd00702:dialogPanel"]');
     var html=p?p.innerHTML:'';
     var ready=/singleTable|ui-panelgrid/.test(html) && /本文/.test(html);
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type:'bulletinDetail', html: ready?html:'', ready: ready, panel: p?1:0, plen: html.length
     }));
   }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({ type:'error', message:String(e) })); }
-  true;
-})();`
+})(); true;`
 
 /**
  * 対象行のフラグを「desired（true=フラグ付き）」の状態へ合わせる（インテント絶対・冪等）。
@@ -539,29 +552,35 @@ export const COLLECT_BULLETIN_DETAIL_JS = `(function(){
  */
 export function setBulletinFlagJs(title: string, date: string, desired: boolean): string {
   return `(function(){
-    try{
-      var t=${JSON.stringify(title)}, d=${JSON.stringify(date)}, want=${desired ? 'true' : 'false'};
-      var dls=document.querySelectorAll('dl.keiji');
+    ${FRAME_PRELUDE}
+    var t=${JSON.stringify(title)}, d=${JSON.stringify(date)}, want=${desired ? 'true' : 'false'}, tries=0;
+    function post(o){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); }catch(e){} }
+    function findRow(){
+      var dls=qsAll('dl.keiji');
       for(var i=0;i<dls.length;i++){
         var a=dls[i].querySelector('a.ui-commandlink'); if(!a) continue;
         var tt=(a.textContent||'').replace(/\\s+/g,' ').trim();
         var dd=((dls[i].textContent||'').match(/\\d{4}\\/\\d{1,2}\\/\\d{1,2}/g)||[]).pop()||'';
-        if(tt===t && dd===d){
-          var row=dls[i].parentNode, btns=row?row.querySelectorAll('.btnRead'):[], flagBtn=null;
-          for(var j=0;j<btns.length;j++){ if(/フラグ/.test(btns[j].textContent||'')){ flagBtn=btns[j]; break; } }
-          if(!flagBtn){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'flag-nobtn'})); return true; }
-          var cur=/フラグをはずす/.test(flagBtn.textContent||''); // true=現在フラグ済み
-          if(cur===want){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'flag-nochange'})); return true; }
-          var box=flagBtn.querySelector('input[type=checkbox]');
-          box.checked=!box.checked; box.dispatchEvent(new Event('change',{bubbles:true}));
-          window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:true,stage:'flag-set'}));
-          return true;
-        }
+        if(tt===t && dd===d) return dls[i];
       }
-      window.ReactNativeWebView.postMessage(JSON.stringify({type:'nav',ok:false,stage:'flag-notfound'}));
-    }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',message:String(e)})); }
-    true;
-  })();`
+      return null;
+    }
+    function step(){
+      try{
+        var dl=findRow();
+        if(!dl){ tries++; if(tries<12){ setTimeout(step,600); return; } post({type:'nav',ok:false,stage:'flag-notfound'}); return; }
+        var row=dl.parentNode, btns=row?row.querySelectorAll('.btnRead'):[], flagBtn=null;
+        for(var j=0;j<btns.length;j++){ if(/フラグ/.test(btns[j].textContent||'')){ flagBtn=btns[j]; break; } }
+        if(!flagBtn){ post({type:'nav',ok:false,stage:'flag-nobtn'}); return; }
+        var cur=/フラグをはずす/.test(flagBtn.textContent||''); // true=現在フラグ済み
+        if(cur===want){ post({type:'nav',ok:true,stage:'flag-nochange'}); return; }
+        var box=flagBtn.querySelector('input[type=checkbox]');
+        fireChange(box); // 所属フレームの Event で change 発火（onchange=PrimeFaces.ab をフレーム文脈で起こす）
+        post({type:'nav',ok:true,stage:'flag-set'});
+      }catch(e){ post({type:'error',message:String(e)}); }
+    }
+    step();
+  })(); true;`
 }
 
 /** LETUSマイコース。全履修コースの名前(コード入り)＋course/view.php URL が並ぶ。 */
