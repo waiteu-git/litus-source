@@ -23,6 +23,9 @@ import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
+import { loadCollectionHealth } from '../storage/collectionHealthStore'
+import type { StoredHealth } from '../storage/collectionHealthSerialize'
+import HealthBanner from '../ui/HealthBanner'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
@@ -64,6 +67,8 @@ export default function HomeScreen() {
   const bulletinSyncingRef = useRef(false)
   // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用に画面へ薄く表示する。
   const [bulletinDiag, setBulletinDiag] = useState('')
+  // 掲示収集の最終ヘルス（層1の正直表示バナー用）。
+  const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
 
   useFocusEffect(
     useCallback(() => {
@@ -76,6 +81,9 @@ export default function HomeScreen() {
         .catch(() => undefined)
       loadBulletinDiag()
         .then((d) => active && setBulletinDiag(d))
+        .catch(() => undefined)
+      loadCollectionHealth()
+        .then((m) => active && setBulletinHealth(m.bulletin ?? null))
         .catch(() => undefined)
       loadWeeklyPatterns()
         .then((m) => active && setWeeklyPatterns(m))
@@ -348,6 +356,7 @@ export default function HomeScreen() {
               )}
             </Pressable>
           </View>
+          <HealthBanner health={bulletinHealth?.health} source="class" />
           {unreadBulletin.length > 0 ? (
             <View style={[ui.card, styles.bulletinCard]}>
               <View style={styles.bulletinHead}>
@@ -482,6 +491,7 @@ export default function HomeScreen() {
             setBulletinSyncing(false)
             loadBulletinDigest().then(setBulletin).catch(() => undefined)
             loadBulletinDiag().then(setBulletinDiag).catch(() => undefined)
+            loadCollectionHealth().then((m) => setBulletinHealth(m.bulletin ?? null)).catch(() => undefined)
           }}
         />
       ) : null}
