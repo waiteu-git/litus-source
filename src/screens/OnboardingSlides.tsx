@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
-import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS } from '../theme'
+import { DUR, EASE, SHIFT } from '../ui/motion'
 
 const SLIDES = [
   {
@@ -51,14 +52,8 @@ export default function OnboardingSlides({ onDone }: { onDone: () => void }) {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
       >
-        {SLIDES.map((s) => (
-          <View key={s.title} style={[styles.slide, { width }]}>
-            <View style={styles.iconBox}>
-              <Ionicons name={s.icon} size={64} color={COLORS.white} />
-            </View>
-            <Text style={styles.title}>{s.title}</Text>
-            <Text style={styles.body}>{s.body}</Text>
-          </View>
+        {SLIDES.map((s, i) => (
+          <Slide key={s.title} slide={s} width={width} active={i === page} />
         ))}
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
@@ -72,6 +67,51 @@ export default function OnboardingSlides({ onDone }: { onDone: () => void }) {
         </Pressable>
       </View>
     </LinearGradient>
+  )
+}
+
+/**
+ * 1枚のスライド。アクティブになると中身を fade(0→1)+scale(0.96→1) base で立ち上げ、
+ * イラストだけ translateX(24→0) slow の軽いパララックスを重ねる。非アクティブ時は静止（覗いても崩れない）。
+ */
+function Slide({
+  slide,
+  width,
+  active,
+}: {
+  slide: (typeof SLIDES)[number]
+  width: number
+  active: boolean
+}) {
+  const opacity = useRef(new Animated.Value(1)).current
+  const scale = useRef(new Animated.Value(1)).current
+  const illustX = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    if (active) {
+      opacity.setValue(0)
+      scale.setValue(0.96)
+      illustX.setValue(SHIFT.large)
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+        Animated.timing(illustX, { toValue: 0, duration: DUR.slow, easing: EASE.enter, useNativeDriver: true }),
+      ]).start()
+    } else {
+      opacity.setValue(1)
+      scale.setValue(1)
+      illustX.setValue(0)
+    }
+  }, [active, opacity, scale, illustX])
+
+  return (
+    <Animated.View style={[styles.slide, { width, opacity, transform: [{ scale }] }]}>
+      <Animated.View style={[styles.iconBox, { transform: [{ translateX: illustX }] }]}>
+        <Ionicons name={slide.icon} size={64} color={COLORS.white} />
+      </Animated.View>
+      <Text style={styles.title}>{slide.title}</Text>
+      <Text style={styles.body}>{slide.body}</Text>
+    </Animated.View>
   )
 }
 
