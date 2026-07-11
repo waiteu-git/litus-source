@@ -193,6 +193,8 @@ export default function ClassHeadlessCollector({
 }
 
 const styles = StyleSheet.create({
-  box: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
-  web: { width: 1, height: 1 },
+  // CLASSはデスクトップ向けJSF。1×1では表示解除/遷移スクリプトが走らず blen=0 で固まるため、
+  // 実寸(360×760)を画面外(top/left:-10000)に配置して実描画させる。opacity:0とpointerEventsで不可視・不可触。
+  box: { position: 'absolute', width: 360, height: 760, top: -10000, left: -10000, opacity: 0 },
+  web: { width: 360, height: 760 },
 })

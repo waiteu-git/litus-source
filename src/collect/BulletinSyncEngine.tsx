@@ -22,7 +22,7 @@ import ClassHeadlessCollector from './ClassHeadlessCollector'
  */
 export default function BulletinSyncEngine({ onFinished }: { onFinished: () => void }) {
   // 最後に観測したシグナル（診断用）。ページ未到達でも finish 時に書き出す。
-  const diag = useRef({ page: '', stage: '', keiji: 0, align: 0, rows: 0, got: false, tab: 0, pwd: 0, logout: 0, blen: 0 })
+  const diag = useRef({ page: '', stage: '', keiji: 0, align: 0, rows: 0, got: false, tab: 0, pwd: 0, logout: 0, blen: 0, hlen: 0 })
   // ヘルス判定用の観測（pageシグナル累積＋最終collectペイロード＋最終パース件数）。
   const obs = useRef(createHealthObservation())
   const lastCollect = useRef<BulletinCollectDiag | null>(null)
@@ -31,7 +31,7 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
   const flushDiag = () => {
     const d = diag.current
     saveBulletinDiag(
-      `page=${d.page || '?'} stage=${d.stage || '?'} keiji=${d.keiji} rows=${d.rows} tab=${d.tab} pwd=${d.pwd} logout=${d.logout} blen=${d.blen} got=${d.got}`,
+      `page=${d.page || '?'} stage=${d.stage || '?'} keiji=${d.keiji} rows=${d.rows} tab=${d.tab} pwd=${d.pwd} logout=${d.logout} blen=${d.blen} hlen=${d.hlen} got=${d.got}`,
     ).catch(() => undefined)
   }
 
@@ -57,6 +57,7 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
           if (typeof p.pwd === 'number') diag.current.pwd = p.pwd
           if (typeof p.logout === 'number') diag.current.logout = p.logout
           if (typeof p.blen === 'number') diag.current.blen = p.blen
+          if (typeof p.hlen === 'number') diag.current.hlen = p.hlen
           lastCollect.current = p as BulletinCollectDiag
         }
       }}
