@@ -259,29 +259,36 @@ export default function HomeScreen() {
           {/* 開発ビルドの識別タグ（APK名 litus-...-vNN と一致）。公開前に撤去する。 */}
           <Text style={[styles.devTag, { color: ui.labelColor }]}>{BUILD_TAG}</Text>
           {banner.active && bannerMounted ? (
-            <Animated.View
-              style={{
-                opacity: bannerAnim,
-                transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-SHIFT.large, 0] }) }],
-              }}
-            >
-              <Pressable
-                style={[styles.banner, { backgroundColor: accent }]}
-                onPress={openAttendance}
-                accessibilityRole="button"
+            // 絶対配置で本文の上に重ねる＝展開/格納で下の内容をreflowさせない（配置固定）。
+            <View style={styles.overlayAnchor}>
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  opacity: bannerAnim,
+                  transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-SHIFT.large, 0] }) }],
+                }}
               >
-                <View style={styles.bannerDot}>
-                  <Ionicons name="flash" size={18} color="#ffffff" />
-                </View>
-                <View style={styles.bannerBody}>
-                  <Text style={styles.bannerTitle} numberOfLines={2}>
-                    {banner.text}
-                  </Text>
-                  <Text style={styles.bannerSub}>タップで出席へ</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-              </Pressable>
-            </Animated.View>
+                <Pressable
+                  style={[styles.banner, { backgroundColor: accent }]}
+                  onPress={openAttendance}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.bannerDot}>
+                    <Ionicons name="flash" size={18} color="#ffffff" />
+                  </View>
+                  <View style={styles.bannerBody}>
+                    <Text style={styles.bannerTitle} numberOfLines={2}>
+                      {banner.text}
+                    </Text>
+                    <Text style={styles.bannerSub}>タップで出席へ</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+                </Pressable>
+              </Animated.View>
+            </View>
           ) : null}
 
           {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。 */}
@@ -593,9 +600,15 @@ function BulletinSyncStatus({ syncing }: { syncing: boolean }) {
 
   return (
     <View style={styles.syncZone}>
-      {/* バナーは done 中も exit を見せるため残す（idle で View ごと外れる）。 */}
+      {/* バナーは done 中も exit を見せるため残す（idle で View ごと外れる）。
+          絶対配置で本文の上に重ねる＝マウント/アンマウントしてもレイアウトが動かない。 */}
       <Animated.View
+        pointerEvents="none"
         style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
           opacity: bannerAnim,
           transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-SHIFT.large, 0] }) }],
         }}
@@ -645,7 +658,10 @@ const styles = StyleSheet.create({
   bannerTitle: { color: '#ffffff', fontSize: 15, fontWeight: '700', lineHeight: 20 },
   bannerSub: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 2 },
 
-  syncZone: { position: 'relative' },
+  // 高さ0のアンカー。バナー/ピルは絶対配置でこの上に重ね、本文をreflowさせない（配置の上下ズレ防止）。
+  // 出席バナー・同期バナーで共用。
+  overlayAnchor: { position: 'relative', height: 0, zIndex: 20 },
+  syncZone: { position: 'relative', height: 0, zIndex: 20 },
   syncPill: {
     position: 'absolute',
     top: 6,
