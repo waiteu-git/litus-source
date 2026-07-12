@@ -3,7 +3,7 @@ import { deserializeInfoCampus, serializeInfoCampus } from './infoCampusSerializ
 
 describe('infoCampusSerialize', () => {
   it('各CampusIdを往復できる', () => {
-    for (const v of ['katsushika', 'kagurazaka', 'noda'] as const) {
+    for (const v of ['katsushika', 'kagurazaka', 'noda', 'oshamambe'] as const) {
       expect(deserializeInfoCampus(serializeInfoCampus(v))).toBe(v)
     }
   })

@@ -1,6 +1,6 @@
 import type { CampusId } from '../info/infoLinks'
 
-const KNOWN: CampusId[] = ['katsushika', 'kagurazaka', 'noda']
+const KNOWN: CampusId[] = ['katsushika', 'kagurazaka', 'noda', 'oshamambe']
 
 /** null = 未選択（すべて表示）を空文字で表す。 */
 export function serializeInfoCampus(v: CampusId | null): string {

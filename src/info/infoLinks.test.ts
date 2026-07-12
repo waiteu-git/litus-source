@@ -12,12 +12,12 @@ import {
   type InfoCategory,
 } from './infoLinks'
 
-const CAMPUS_IDS: CampusId[] = ['katsushika', 'kagurazaka', 'noda']
+const CAMPUS_IDS: CampusId[] = ['katsushika', 'kagurazaka', 'noda', 'oshamambe']
 const CATEGORY_IDS: InfoCategory[] = ['cafeteria', 'library', 'station']
 
 describe('infoLinks', () => {
-  it('キャンパス定義は葛飾→神楽坂→野田の順', () => {
-    expect(CAMPUS_DEFS.map((c) => c.id)).toEqual(['katsushika', 'kagurazaka', 'noda'])
+  it('キャンパス定義は葛飾→神楽坂→野田→長万部の順', () => {
+    expect(CAMPUS_DEFS.map((c) => c.id)).toEqual(['katsushika', 'kagurazaka', 'noda', 'oshamambe'])
   })
 
   it('種別定義は学食→図書館→最寄り駅の時刻表の順', () => {
@@ -65,6 +65,22 @@ describe('infoLinks', () => {
       expect(itemsFor(c, 'library').length).toBeGreaterThan(0)
       expect(itemsFor(c, 'station').length).toBeGreaterThan(0)
     }
+  })
+
+  it('図書館は全て統合ポータルtuslibraryを指す', () => {
+    const libs = INFO_ITEMS.filter((i) => i.category === 'library')
+    expect(libs.length).toBeGreaterThan(0)
+    for (const i of libs) expect(i.url).toBe('https://tuslibrary.admin.tus.ac.jp/')
+  })
+
+  it('駅項目は全てYahoo路線情報の時刻表を指す', () => {
+    const stations = INFO_ITEMS.filter((i) => i.category === 'station')
+    expect(stations.length).toBeGreaterThan(0)
+    for (const i of stations) expect(i.url?.startsWith('https://transit.yahoo.co.jp/timetable/')).toBe(true)
+  })
+
+  it('葛飾は金町・京成金町の2駅を持つ', () => {
+    expect(itemsFor('katsushika', 'station').map((i) => i.name)).toEqual(['金町駅', '京成金町駅'])
   })
 
   it('掲示URLはCLASSオリジン', () => {
