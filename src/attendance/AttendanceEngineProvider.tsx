@@ -30,6 +30,20 @@ import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
 import { isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
+import {
+  attendanceOpenKey,
+  shouldNotifyAttendanceOpen,
+  buildAttendanceOpenContent,
+  pruneNotifiedAttendanceKeys,
+} from '../notifications/attendanceOpenNotify'
+import {
+  loadNotifiedAttendanceOpen,
+  mutateNotifiedAttendanceOpen,
+} from '../storage/notifiedAttendanceOpenStore'
+import {
+  presentAttendanceOpenNotification,
+  clearDeliveredAttendanceOpenNotifications,
+} from '../notifications/notifier'
 import { normalizeAttendanceCode } from './normalizeCode'
 import { loadTimetable } from '../storage/timetableStore'
 import type { TimetableCollection } from '../collect/timetableMessage'
@@ -228,9 +242,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // 自動で「受付中」に切り替わるように）。収集使用中・送信中・出席済みは触らない。
   useEffect(() => {
     const id = setInterval(() => {
-      // 受付状況の取り直しは「受付中(未提出)」のときだけ（出席済み/受付終了/受付なし/送信中/収集中/競合は無駄打ち）。
+      // 受付状況の取り直しは「出席済み以外」のとき（受付なし none・受付終了 closed も拾う）。
+      // none/closed も取り直すのは、教員が受付を開き直す再受付ケース（間に合わなかった学生向け・実在）を
+      // 受付open通知で拾うため。attended は取り直す意味がないので除外を維持。送信中/収集中/競合は無駄打ち。
       if (
-        receptionStatusRef.current === 'accepting' &&
+        receptionStatusRef.current !== 'attended' &&
         onAttendanceRef.current &&
         shouldRenderRef.current &&
         !collectActiveRef.current &&
@@ -416,9 +432,34 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     if (parsed.type === 'attendance') {
       const rec = parseAttendanceMessage(data)
       dispatch({ kind: 'reception', reception: rec })
+      // 受付openローカル通知（即時発火・完全独立経路。refreshAllNotifications/serializeRunsは通らない）。
+      // 検知はこの in-class ポーリングに依存し、ポーリングはWebViewが動く前面/授業中在席時にしか回らない
+      // （WebViewはBG継続不可）＝バックグラウンド中の受付openは拾えない。抑制条件（accepting以外/出席済み/
+      // 出席画面フォーカス中/通知済み）は純粋関数 shouldNotifyAttendanceOpen が単独で決める。
+      // 失敗は握りつぶす（受付状況の表示・出席登録は通知の成否に依存せず成立）。
+      if (rec.status === 'accepting') {
+        const nowD = new Date()
+        const key = attendanceOpenKey({ courseName: rec.courseName, confirmWindow: rec.confirmWindow, now: nowD })
+        ;(async () => {
+          const notified = await loadNotifiedAttendanceOpen()
+          if (
+            shouldNotifyAttendanceOpen({
+              status: rec.status,
+              attendedNow: attendedRef.current,
+              attendanceFocused,
+              key,
+              notifiedKeys: notified,
+            })
+          ) {
+            await presentAttendanceOpenNotification(buildAttendanceOpenContent(rec))
+            await mutateNotifiedAttendanceOpen((ks) => pruneNotifiedAttendanceKeys([...ks, key], todayKey(nowD)))
+          }
+        })().catch(() => undefined)
+      }
       // CLASSが「出席済み」を示したら、どのデバイスで出していても記録を更新（授業間の継続表示・
-      // オフライン補助）。CLASSの状態が正。
+      // オフライン補助）。CLASSの状態が正。配信済みの受付open通知も消す（自分の送信/別デバイス出席いずれも）。
       if (rec.status === 'attended') {
+        clearDeliveredAttendanceOpenNotifications().catch(() => undefined)
         const d = new Date()
         // 再アクセス/別デバイス出席では lastCodeRef が空。既存の同日記録のコードを引き継いで消さない。
         const arec = mergeAttendedRecord(attendedRecordRef.current, {
