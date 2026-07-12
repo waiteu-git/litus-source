@@ -14,7 +14,7 @@ import {
 } from '../collect/injectedScripts'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
-import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
+import { loadAssignments, mutateAssignments } from '../storage/assignmentsStore'
 import { isSameTrackedActivity } from '../updates/letusActivityKey'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
@@ -61,9 +61,7 @@ export default function WebViewerScreen() {
 
   async function addOne(a: CollectedAssignment, okMsg: string) {
     try {
-      const existing = await loadAssignments()
-      const merged = upsertAssignments(existing, [a], new Date())
-      await saveAssignments(merged)
+      const merged = await mutateAssignments((existing) => upsertAssignments(existing, [a], new Date()))
       setTrackedUrls(Object.keys(merged))
       await refreshAllNotifications()
       bump()

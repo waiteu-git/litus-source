@@ -8,7 +8,7 @@ import { filterAssignmentCandidates } from '../updates/assignmentCandidates'
 import { selectAssignmentsToVisit } from '../updates/assignmentWindow'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
-import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
+import { loadAssignments, mutateAssignments } from '../storage/assignmentsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { hasLetusLoginMarker, letusAssignmentsHealth, type LetusRunStats } from '../health/collectionSignals'
@@ -121,8 +121,7 @@ export default function AssignmentCollector({
     doneRef.current = true
     ;(async () => {
       if (collectedRef.current.length > 0) {
-        const existing = await loadAssignments()
-        await saveAssignments(upsertAssignments(existing, collectedRef.current, new Date()))
+        await mutateAssignments((existing) => upsertAssignments(existing, collectedRef.current, new Date()))
         await refreshAllNotifications()
         bump()
       }

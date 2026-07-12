@@ -48,9 +48,11 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>()
   const ui = useUi()
   const clearance = useTabBarClearance()
-  const { reception, timetable, now, running, attendedNow } = useAttendanceEngine()
+  const { reception, timetable, running, attendedNow } = useAttendanceEngine()
 
-  // 「今やること」用の現在時刻。engine停止中も分単位で更新して次の授業/締切を追随させる。
+  // 「今やること」・出席バナー用の現在時刻。分単位で更新して次の授業/締切を追随させる
+  // （秒精度のエンジンクロックは購読しない＝出席カウントダウン中にホームが毎秒再レンダーされない。
+  //   受付開始/終了は reception の変化で即時反映される）。
   const [tick, setTick] = useState(() => new Date())
   useEffect(() => {
     const id = setInterval(() => setTick(new Date()), 60000)
@@ -136,7 +138,7 @@ export default function HomeScreen() {
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
   // 出席済みのときは「出席登録受付中/出席を確認」バナーは出さない（案内が不要・紛らわしい）。
-  const rawBanner = computeHomeBanner(timetable, running ? reception : null, now)
+  const rawBanner = computeHomeBanner(timetable, running ? reception : null, tick)
   const banner = attendedNow ? { ...rawBanner, active: false } : rawBanner
 
   const focus = pickFocusClass(timetable, tick, (code) => isClassOnDate(weeklyPatterns[code], tick))

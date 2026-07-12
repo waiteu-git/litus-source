@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import AssignmentCollector from '../collect/AssignmentCollector'
-import { loadAssignments, saveAssignments } from '../storage/assignmentsStore'
+import { loadAssignments, mutateAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
 import { bucketAssignments, BUCKET_ORDER, type BucketKey } from '../assignments/buckets'
@@ -114,12 +114,10 @@ export default function AssignmentsScreen() {
   }, [])
 
   async function setIgnored(a: Assignment, ignored: boolean) {
-    const map = await loadAssignments()
-    if (map[a.url]) {
-      map[a.url] = { ...map[a.url], ignored }
-      await saveAssignments(map)
-      await reload()
-    }
+    await mutateAssignments((map) =>
+      map[a.url] ? { ...map, [a.url]: { ...map[a.url], ignored } } : map,
+    )
+    await reload()
   }
   const hide = (a: Assignment) => setIgnored(a, true)
   const unhide = (a: Assignment) => setIgnored(a, false)

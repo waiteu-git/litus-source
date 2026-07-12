@@ -3,12 +3,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useReducer,
   useRef,
   useState,
   type ReactNode,
 } from 'react'
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useLoginGate } from '../auth/LoginGate'
 import { useClassView } from '../collect/classViewArbiter'
@@ -40,6 +41,7 @@ import {
   conflictDelayMs,
   isConflictExhausted,
 } from './conflictBackoff'
+import { subscribeForeground } from '../app/foregroundOrchestrator'
 
 const CLASS_URL = CLASS_PC_LOGIN_URL
 // 出席状況の取得（メニュー遷移→受付判定）は約7秒・2トライで打ち切る（ユーザー指定）。
@@ -62,7 +64,6 @@ export type AttendanceEngineValue = {
   result: SubmitResult | null
   attended: AttendedRecord | null
   attendedNow: boolean
-  now: Date
   code: string
   setCode: (s: string) => void
   submit: () => void
@@ -83,9 +84,20 @@ export type AttendanceEngineValue = {
 
 const Ctx = createContext<AttendanceEngineValue | null>(null)
 
+// エンジンのクロック（受付中は毎秒更新）。本体contextから分離し、カウントダウン表示が必要な
+// 消費者だけが毎秒再レンダーされるようにする（本体valueはuseMemoで状態変化時のみ差し替え）。
+const NowCtx = createContext<Date | null>(null)
+
 export function useAttendanceEngine(): AttendanceEngineValue {
   const v = useContext(Ctx)
   if (!v) throw new Error('useAttendanceEngine must be used within AttendanceEngineProvider')
+  return v
+}
+
+/** エンジンのクロック（受付中は秒精度）。カウントダウン等、時刻追随が必要な画面だけが購読する。 */
+export function useAttendanceNow(): Date {
+  const v = useContext(NowCtx)
+  if (!v) throw new Error('useAttendanceNow must be used within AttendanceEngineProvider')
   return v
 }
 
@@ -164,13 +176,12 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldRender])
 
-  // 時間割を読み込む（起動ポリシー判定用）。前面復帰時も貼り直す。
+  // 時間割を読み込む（起動ポリシー判定用）。前面復帰時も貼り直す（オーケストレータの即時スロット）。
   useEffect(() => {
     loadTimetable().then((t) => setTimetable(t ?? [])).catch(() => undefined)
-    const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') loadTimetable().then((t) => setTimetable(t ?? [])).catch(() => undefined)
-    })
-    return () => sub.remove()
+    return subscribeForeground('timetableReload', () =>
+      loadTimetable().then((t) => setTimetable(t ?? [])).catch(() => undefined),
+    )
   }, [])
 
   // booting を抜けたらナビタイマーを止める。
@@ -189,10 +200,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     if (state.phase === 'navFailed') setFailCount((n) => n + 1)
   }, [state.phase])
 
-  // フォアグラウンド復帰時に再判定/リフレッシュ。送信中はスキップ。
+  // フォアグラウンド復帰時に再判定/リフレッシュ（オーケストレータのattendanceスロット）。送信中はスキップ。
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => {
-      if (s !== 'active' || phaseRef.current === 'submitting' || !shouldRenderRef.current) return
+    return subscribeForeground('attendance', () => {
+      if (phaseRef.current === 'submitting' || !shouldRenderRef.current) return
       // 競合中の前面復帰は「PCを閉じて戻ってきた」可能性が高い。バックオフを畳み直して即1回試す。
       if (conflictRef.current) {
         resumeConflictRetry()
@@ -201,7 +212,6 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       if (onAttendanceRef.current) refreshAttendance()
       else webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
     })
-    return () => sub.remove()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -473,30 +483,50 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   attendedRef.current = attendedNow
   attendedRecordRef.current = attended
 
-  const value: AttendanceEngineValue = {
-    phase: state.phase,
-    reception: state.reception,
-    result: state.result,
-    attended,
-    attendedNow,
-    now,
-    code,
-    setCode,
-    submit,
-    retry,
-    running,
-    conflict,
-    conflictExhausted,
-    failCount,
-    revealClass,
-    setRevealClass,
-    timetable,
-    setAttendanceFocused,
-  }
+  // 秒間クロック(now)で毎レンダー作り直さないようメモ化する。now は NowCtx へ分離済みなので、
+  // ここの依存は「状態が実際に変わった時」だけ変わる（出席カウントダウン中のアプリ全体再レンダー防止）。
+  // submit/retry は毎レンダー再生成されるが、可変キャプチャは code のみ（依存に含む）。他は ref/setter/dispatch。
+  const value: AttendanceEngineValue = useMemo(
+    () => ({
+      phase: state.phase,
+      reception: state.reception,
+      result: state.result,
+      attended,
+      attendedNow,
+      code,
+      setCode,
+      submit,
+      retry,
+      running,
+      conflict,
+      conflictExhausted,
+      failCount,
+      revealClass,
+      setRevealClass,
+      timetable,
+      setAttendanceFocused,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      state.phase,
+      state.reception,
+      state.result,
+      attended,
+      attendedNow,
+      code,
+      running,
+      conflict,
+      conflictExhausted,
+      failCount,
+      revealClass,
+      timetable,
+      setAttendanceFocused,
+    ],
+  )
 
   return (
     <Ctx.Provider value={value}>
-      {children}
+      <NowCtx.Provider value={now}>{children}</NowCtx.Provider>
       {/* 自動遷移・受付検出は常にこの非表示WebView（画面外1x1）で進める。取得できない時だけ、
           ユーザーが明示的に「CLASSの画面を表示」を押した場合に限り全画面表示する（revealClass）。 */}
       <View
@@ -514,6 +544,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
             thirdPartyCookiesEnabled
             onLoadEnd={onLoadEnd}
             onMessage={(e) => onMessage(e.nativeEvent.data)}
+            // ネットワーク断・5xx・レンダラプロセス死からの復帰（LoginGateと同じ三点セット。
+            // autoRestart は errorRetryRef で回数上限つき＝無限リロードしない）。
+            onError={() => autoRestart()}
+            onHttpError={(e) => {
+              if (e.nativeEvent.statusCode >= 500) autoRestart()
+            }}
+            onRenderProcessGone={() => autoRestart()}
             style={styles.webviewFill}
           />
         ) : null}

@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { AppState } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
@@ -21,6 +20,7 @@ import {
   requestNotificationPermission,
 } from './src/notifications/notifier'
 import { refreshAllNotifications } from './src/notifications/notificationRefresh'
+import { subscribeForeground } from './src/app/foregroundOrchestrator'
 import { navigationRef, flushPendingNavigation, requestOpenAttendance } from './src/navigation/navigationRef'
 
 // 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
@@ -37,11 +37,8 @@ export default function App() {
         console.warn('起動時の通知同期に失敗しました', e)
       }
     })()
-    // 復帰時に貼り直す（日付を跨いだ古い予約の残留対策）。
-    const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') refreshAllNotifications().catch(() => undefined)
-    })
-    return () => sub.remove()
+    // 復帰時に貼り直す（日付を跨いだ古い予約の残留対策）。復帰オーケストレータの段階発火に乗せる。
+    return subscribeForeground('notifications', () => refreshAllNotifications().catch(() => undefined))
   }, [])
 
   // 出席通知タップで出席画面を即開く。cold start（起動時タップ）＋ warm（起動中タップ）の両対応。

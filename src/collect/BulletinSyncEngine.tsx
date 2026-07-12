@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { COLLECT_BULLETIN_TABS_JS, GO_BULLETIN_JS, OPEN_BULLETIN_JS } from './injectedScripts'
 import { parseBulletinList, toBulletinItems } from '../parsers/bulletin'
-import { loadBulletinDigest, saveBulletinDigest, saveBulletinDiag } from '../storage/bulletinDigestStore'
+import { mutateBulletinDigest, saveBulletinDiag } from '../storage/bulletinDigestStore'
 import { mergeBulletinItems } from '../storage/bulletinDigestSerialize'
 import { saveBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import { saveCollectionHealth } from '../storage/collectionHealthStore'
@@ -77,8 +77,7 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
         if (rows0.length === 0) return false
         try {
           const incoming = toBulletinItems(rows0)
-          const prev = await loadBulletinDigest()
-          await saveBulletinDigest(mergeBulletinItems(prev, incoming))
+          await mutateBulletinDigest((prev) => mergeBulletinItems(prev, incoming))
           await saveBulletinRefreshedAt()
           diag.current.got = true
         } catch {

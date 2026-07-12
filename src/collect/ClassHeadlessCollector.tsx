@@ -185,7 +185,13 @@ export default function ClassHeadlessCollector({
         thirdPartyCookiesEnabled
         onLoadEnd={onLoadEnd}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
+        // ネットワーク断・5xx・レンダラプロセス死からの復帰（LoginGateと同じ三点セット。
+        // reboot は MAX_REBOOTS 上限つき＝尽きたら finish で静かに終了）。
         onError={() => reboot()}
+        onHttpError={(e) => {
+          if (e.nativeEvent.statusCode >= 500) reboot()
+        }}
+        onRenderProcessGone={() => reboot()}
         style={styles.web}
       />
     </View>
