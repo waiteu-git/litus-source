@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "scheme": "litus",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true,
