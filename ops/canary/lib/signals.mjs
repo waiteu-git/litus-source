@@ -67,6 +67,10 @@ export function attendanceSignal(html, url, litus) {
   // ポータルは隠しエラーダイアログのテンプレ文言を含むため classifyClassPage の error/conflict
   // 判定は生HTMLに対して誤検知する。到達痕跡を正とする。
   if (attendanceModule || litus.isAttendanceUrl(url)) return { status: 'ok', count: 1 }
+  // 既知の非目的ページ（ポータル/SSO/入口）に留まった＝ナビ失敗の一時的失敗。
+  // classifyCollectionHealth と同じ precedence（offTarget を drift より先に見る）。SSOログイン
+  // ページに紛れる logout 文字列で loggedIn が誤って立っても、ここで blocked に落として偽drift化を防ぐ。
+  if (litus.isKnownOffTargetPage(url)) return { status: 'blocked' }
   // ログイン済・実描画なのに出席モジュールの痕跡が皆無＝構造変更の疑い。
   if (loggedIn && bodyLen(root, html) >= 300) return { status: 'structure_drift' }
   return { status: 'blocked' }
