@@ -31,6 +31,8 @@ import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadAttendanceOverrides, saveAttendanceOverride } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk, type AttendanceRisk } from '../attendance/attendanceRisk'
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
+import { loadBulletinDigest } from '../storage/bulletinDigestStore'
+import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -79,6 +81,7 @@ export default function SubjectDetailScreen() {
   const [pattern, setPattern] = useState<WeeklyPattern>({})
   const [attStats, setAttStats] = useState<AttendanceCourseStats | null>(null)
   const [attTotal, setAttTotal] = useState<number | null>(null)
+  const [unread, setUnread] = useState(0)
   // カレンダー用の週リスト（今週の2週前〜16週後）。画面表示中は固定。
   const weeks = useMemo(() => weekList(new Date(), 2, 16), [])
   const thisKey = weekMondayKey(new Date())
@@ -136,6 +139,12 @@ export default function SubjectDetailScreen() {
       .catch(() => undefined)
   }, [name, version])
 
+  useEffect(() => {
+    loadBulletinDigest()
+      .then((d) => setUnread(courseUnreadCounts(d, new Set([courseCode])).get(courseCode) ?? 0))
+      .catch(() => undefined)
+  }, [courseCode])
+
   const hasDiff = !!snapshot && snapshot.added.length + snapshot.removed.length > 0
 
   return (
@@ -152,6 +161,11 @@ export default function SubjectDetailScreen() {
             <View style={styles.chipRow}>
               {room ? <InfoChip icon="location-outline" label={isRemote ? `${room}・遠隔` : room} /> : null}
               {teachers && teachers[0] ? <InfoChip icon="person-outline" label={teachers[0]} /> : null}
+            </View>
+          ) : null}
+          {unread > 0 ? (
+            <View style={styles.chipRow}>
+              <InfoChip icon="mail-unread-outline" label={`未読の掲示 ${unread}件`} />
             </View>
           ) : null}
         </View>
@@ -292,6 +306,17 @@ export default function SubjectDetailScreen() {
           icon="document-text-outline"
           title="シラバスを開く"
           onPress={() => navigation.navigate('Syllabus', { url: syllabusUrl, name })}
+        />
+        <LinkAction
+          icon="create-outline"
+          title="この科目の課題を追加"
+          onPress={() =>
+            // タブ（課題）→ネストのManualAssignmentへ横断遷移。親ナビゲータの型は緩いため最小I/Fにキャスト。
+            (navigation.getParent() as unknown as { navigate: (name: string, params: object) => void } | undefined)?.navigate('課題', {
+              screen: 'ManualAssignment',
+              params: { presetCourseName: name, presetCourseCode: courseCode },
+            })
+          }
         />
 
         <SectionLabel>更新状況</SectionLabel>
