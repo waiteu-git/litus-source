@@ -31,7 +31,7 @@ export default function ClassEventFormScreen() {
   const clearance = useTabBarClearance()
   const { timetable } = useAttendanceEngine()
   const { bump } = useClassEventsVersion()
-  const { courseName, courseCode, dayKey, editId } = route.params
+  const { courseName, courseCode, dayKey, editId, initialType, initialDate, initialPeriods, initialRoom, initialMakeup } = route.params
 
   const block = useMemo(() => {
     if (!dayKey) return [] as number[]
@@ -42,15 +42,15 @@ export default function ClassEventFormScreen() {
     return [] as number[]
   }, [timetable, dayKey, courseName])
 
-  const [type, setType] = useState<ClassEventType>('cancel')
-  const [date, setDate] = useState<string>(() => (dayKey ? nextDateForWeekday(dayKey, new Date()) : ''))
-  const [periods, setPeriods] = useState<number[]>(block.length ? block : [1])
-  const [room, setRoom] = useState('')
+  const [type, setType] = useState<ClassEventType>(initialType ?? 'cancel')
+  const [date, setDate] = useState<string>(() => initialDate ?? (dayKey ? nextDateForWeekday(dayKey, new Date()) : ''))
+  const [periods, setPeriods] = useState<number[]>(initialPeriods && initialPeriods.length ? initialPeriods : block.length ? block : [1])
+  const [room, setRoom] = useState(initialRoom ?? '')
   const [note, setNote] = useState('')
-  const [makeupStatus, setMakeupStatus] = useState<MakeupStatus>('undecided')
-  const [mkDate, setMkDate] = useState('')
-  const [mkPeriods, setMkPeriods] = useState<number[]>([])
-  const [mkRoom, setMkRoom] = useState('')
+  const [makeupStatus, setMakeupStatus] = useState<MakeupStatus>(initialMakeup ? 'has' : 'undecided')
+  const [mkDate, setMkDate] = useState(initialMakeup?.date ?? '')
+  const [mkPeriods, setMkPeriods] = useState<number[]>(initialMakeup?.periods ?? [])
+  const [mkRoom, setMkRoom] = useState(initialMakeup?.room ?? '')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {

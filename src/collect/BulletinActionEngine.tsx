@@ -97,7 +97,7 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
         if (!p || typeof p.count !== 'number' || p.count <= 0) return false
         const rows = parseBulletinList(p.html ?? '')
         if (rows.length === 0) return false
-        await mutateBulletinDigest((prev) => mergeBulletinItems(prev, toBulletinItems(rows)))
+        await mutateBulletinDigest((prev) => mergeBulletinItems(prev, toBulletinItems(rows), new Date()))
         return true
       }}
       onFinished={onFinished}
