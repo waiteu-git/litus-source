@@ -11,7 +11,10 @@ export type KillSwitchFeature = 'attendance' | 'bulletin' | 'letus'
 export type KillSwitchStatus = {
   disabledAll: boolean
   disabled: KillSwitchFeature[]
+  /** 停止画面/バナーに出す本文。null＝アプリ内既定文言。停止時に status.json で差し替え可。 */
   message: string | null
+  /** 全体停止画面の見出し。null＝既定「リタスは一時停止中です」。停止時に status.json で差し替え可。 */
+  title: string | null
 }
 
 // 復帰のたびに取得しない（スロットル）。停止指示の伝播は起動時＋この間隔で十分（24h要件）。
@@ -35,10 +38,12 @@ export function parseKillSwitchStatus(raw: string): KillSwitchStatus | null {
   const disabledRaw = (v as Record<string, unknown>).disabled
   if (!Array.isArray(disabledRaw)) return null
   const messageRaw = (v as Record<string, unknown>).message
+  const titleRaw = (v as Record<string, unknown>).title
   return {
     disabledAll: disabledRaw.includes('all'),
     disabled: FEATURES.filter((f) => disabledRaw.includes(f)),
     message: typeof messageRaw === 'string' && messageRaw !== '' ? messageRaw : null,
+    title: typeof titleRaw === 'string' && titleRaw !== '' ? titleRaw : null,
   }
 }
 

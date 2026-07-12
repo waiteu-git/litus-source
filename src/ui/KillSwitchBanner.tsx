@@ -13,8 +13,8 @@ export default function KillSwitchBanner({ feature }: { feature: KillSwitchFeatu
   const ui = useUi()
   const { status, isKilled } = useKillSwitch()
   if (!isKilled(feature)) return null
-  const base = 'この機能は現在一時停止中のためご利用いただけません。'
-  const text = status?.message ? `${base}\n${status.message}` : base
+  // message があれば停止時の文言を全文差し替え（status.jsonで随時編集可）。無ければ既定文言。
+  const text = status?.message ?? 'この機能は現在一時停止中のためご利用いただけません。'
   return (
     <View style={[ui.card, styles.banner]}>
       <Ionicons name="pause-circle-outline" size={16} color={ui.labelColor} />

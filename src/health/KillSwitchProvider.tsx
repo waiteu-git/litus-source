@@ -100,7 +100,7 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
     return (
       <View style={[styles.fill, { paddingTop: insets.top }]}>
         <View style={styles.card}>
-          <Text style={styles.title}>リタスは一時停止中です</Text>
+          <Text style={styles.title}>{status?.title ?? 'リタスは一時停止中です'}</Text>
           <Text style={styles.body}>
             {status?.message ??
               '現在、リタスの提供を一時停止しています。ご不便をおかけしますが、再開までしばらくお待ちください。'}
