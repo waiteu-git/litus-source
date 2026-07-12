@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import BulletinSyncEngine from './BulletinSyncEngine'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
-import { maintenanceSystemAt } from '../health/maintenanceWindow'
+import { evaluateAccess } from '../health/accessGate'
+import { isOnlineNow } from '../health/connectivity'
 
 // 起動直後の描画やLETUS同期と競合しないよう、少し待ってから開始する。
 const START_DELAY_MS = 6000
@@ -27,9 +28,9 @@ export default function BackgroundBulletinSync() {
     let cancelled = false
     const t = setTimeout(() => {
       if (cancelled || running) return
-      // CLASS定時メンテナンス帯（2:00–4:00）は収集不能。ムダ打ちと失敗ヘルスの上書きを避けて
-      // スキップする（メンテ表示はHealthBannerが時間帯判定で出す。session.doneにはしない＝後で再試行可）。
-      if (maintenanceSystemAt(new Date()) === 'class') return
+      // CLASS定時メンテ帯 or オフラインは収集不能。ムダ打ちと失敗ヘルスの上書きを避けて
+      // スキップする（メンテ/オフライン表示はHealthBannerが接続/時間帯判定で出す。session.doneにはしない＝後で再試行可）。
+      if (!evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
       loadBulletinRefreshedAt()
         .then((at) => {
           if (cancelled) return

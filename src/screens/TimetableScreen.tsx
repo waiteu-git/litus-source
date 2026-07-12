@@ -12,7 +12,9 @@ import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMe
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
-import { maintenanceSystemAt } from '../health/maintenanceWindow'
+import FreshnessLabel from '../ui/FreshnessLabel'
+import { evaluateAccess } from '../health/accessGate'
+import { isOnlineNow } from '../health/connectivity'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
 import { NowPulse } from '../ui/NowPulse'
@@ -74,6 +76,8 @@ export default function TimetableScreen() {
   const [attendanceSyncing, setAttendanceSyncing] = useState(false)
   // 時間割収集の最終ヘルス（層1の正直表示バナー用）。
   const [health, setHealth] = useState<StoredHealth | null>(null)
+  // 時間割の鮮度時刻（キャッシュ閲覧保証：常設ラベルでいつ取得した情報かを伝える）。
+  const [refreshedAt, setRefreshedAt] = useState(0)
   // 多重起動防止（非同期スロットル判定中の再入も弾く）。setSyncing更新関数の中で副作用を起こさない。
   const syncingRef = useRef(false)
   // 出欠危険/警告に該当する科目コード集合（グリッドの赤バッジ用）。
@@ -100,8 +104,8 @@ export default function TimetableScreen() {
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
   const startSync = useCallback((force: boolean) => {
     if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
-    // CLASS定時メンテナンス帯（2:00–4:00）は収集不能。ヘルスバナーがメンテ表示を出すので無駄打ちを止める。
-    if (maintenanceSystemAt(new Date()) === 'class') return
+    // CLASS定時メンテナンス帯（2:00–4:00）またはオフラインは収集不能。ヘルスバナーがメンテ/オフライン表示を出すので無駄打ちを止める。
+    if (!evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
     const begin = () => {
       syncingRef.current = true
       setSyncing(true)
@@ -134,6 +138,7 @@ export default function TimetableScreen() {
       loadWeeklyPatterns().then((m) => { if (active) setPatterns(m) }).catch(() => undefined)
       loadCollectionHealth().then((m) => { if (active) setHealth(m.timetable ?? null) }).catch(() => undefined)
       reloadAttendance()
+      loadTimetableRefreshedAt().then((at) => { if (active) setRefreshedAt(at) }).catch(() => undefined)
       ;(async () => {
         const map = await loadCourseMap()
         const snaps = await loadCourseSnapshots()
@@ -255,6 +260,7 @@ export default function TimetableScreen() {
 
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} refreshControl={refresh}>
         <HealthBanner health={health?.health} source="class" />
+        <FreshnessLabel at={refreshedAt} />
         {!col ? (
           <View style={[ui.card, { marginTop: 16 }]}>
             <Text style={{ color: ui.valueColor }}>

@@ -26,7 +26,9 @@ import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMeta
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
-import { maintenanceSystemAt } from '../health/maintenanceWindow'
+import FreshnessLabel from '../ui/FreshnessLabel'
+import { evaluateAccess } from '../health/accessGate'
+import { isOnlineNow } from '../health/connectivity'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
@@ -72,6 +74,8 @@ export default function HomeScreen() {
   const [bulletinDiag, setBulletinDiag] = useState('')
   // 掲示収集の最終ヘルス（層1の正直表示バナー用）。
   const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
+  // 掲示の最終更新時刻（層1の鮮度常設表示用）。
+  const [bulletinRefreshedAt, setBulletinRefreshedAt] = useState(0)
 
   useFocusEffect(
     useCallback(() => {
@@ -89,6 +93,9 @@ export default function HomeScreen() {
       }
       loadCollectionHealth()
         .then((m) => active && setBulletinHealth(m.bulletin ?? null))
+        .catch(() => undefined)
+      loadBulletinRefreshedAt()
+        .then((at) => active && setBulletinRefreshedAt(at))
         .catch(() => undefined)
       loadWeeklyPatterns()
         .then((m) => active && setWeeklyPatterns(m))
@@ -113,8 +120,8 @@ export default function HomeScreen() {
   const startBulletinSync = useCallback(
     (force: boolean) => {
       if (bulletinSyncingRef.current) return
-      // CLASS定時メンテナンス帯（2:00–4:00）は収集不能。上部のヘルスバナーがメンテ表示を出すので、ここは無駄打ちを止めるだけ。
-      if (maintenanceSystemAt(new Date()) === 'class') return
+      // CLASS定時メンテナンス帯（2:00–4:00）またはオフラインは収集不能。上部のヘルスバナーがメンテ/オフライン表示を出すので、ここは無駄打ちを止めるだけ。
+      if (!evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
       if (running) {
         setBulletinDiag('授業中のため取得を控えています（授業後に取得できます）')
         return
@@ -371,6 +378,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <HealthBanner health={bulletinHealth?.health} source="class" />
+          <FreshnessLabel at={bulletinRefreshedAt} />
           {unreadBulletin.length > 0 ? (
             <View style={[ui.card, styles.bulletinCard]}>
               <View style={styles.bulletinHead}>
@@ -506,6 +514,7 @@ export default function HomeScreen() {
             loadBulletinDigest().then(setBulletin).catch(() => undefined)
             if (__DEV__) loadBulletinDiag().then(setBulletinDiag).catch(() => undefined)
             loadCollectionHealth().then((m) => setBulletinHealth(m.bulletin ?? null)).catch(() => undefined)
+            loadBulletinRefreshedAt().then(setBulletinRefreshedAt).catch(() => undefined)
           }}
         />
       ) : null}

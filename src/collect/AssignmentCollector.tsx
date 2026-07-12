@@ -13,6 +13,7 @@ import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { hasLetusLoginMarker, letusAssignmentsHealth, type LetusRunStats } from '../health/collectionSignals'
 import { saveCollectionHealth } from '../storage/collectionHealthStore'
+import { saveAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
 
 type Candidate = { url: string; title: string; courseName: string; courseCode: string | null }
 
@@ -122,6 +123,7 @@ export default function AssignmentCollector({
     ;(async () => {
       if (collectedRef.current.length > 0) {
         await mutateAssignments((existing) => upsertAssignments(existing, collectedRef.current, new Date()))
+        await saveAssignmentsRefreshedAt()
         await refreshAllNotifications()
         bump()
       }
