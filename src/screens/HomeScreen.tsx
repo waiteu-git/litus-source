@@ -66,7 +66,7 @@ export default function HomeScreen() {
   // CLASS掲示の裏取得中フラグ。true の間だけ headless エンジンをマウントする。
   const [bulletinSyncing, setBulletinSyncing] = useState(false)
   const bulletinSyncingRef = useRef(false)
-  // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用に画面へ薄く表示する。
+  // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用。開発ビルドでのみ読み書き・表示する。
   const [bulletinDiag, setBulletinDiag] = useState('')
   // 掲示収集の最終ヘルス（層1の正直表示バナー用）。
   const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
@@ -80,9 +80,11 @@ export default function HomeScreen() {
       loadBulletinDigest()
         .then((b) => active && setBulletin(b))
         .catch(() => undefined)
-      loadBulletinDiag()
-        .then((d) => active && setBulletinDiag(d))
-        .catch(() => undefined)
+      if (__DEV__) {
+        loadBulletinDiag()
+          .then((d) => active && setBulletinDiag(d))
+          .catch(() => undefined)
+      }
       loadCollectionHealth()
         .then((m) => active && setBulletinHealth(m.bulletin ?? null))
         .catch(() => undefined)
@@ -407,7 +409,7 @@ export default function HomeScreen() {
                       ? '授業中は取得を控えています。授業後に取得できます。'
                       : 'まだ取得できていません。タップで取得します。'}
                 </Text>
-                {bulletinDiag ? (
+                {__DEV__ && bulletinDiag ? (
                   <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 4 }}>診断: {bulletinDiag}</Text>
                 ) : null}
               </View>
@@ -500,7 +502,7 @@ export default function HomeScreen() {
             bulletinSyncingRef.current = false
             setBulletinSyncing(false)
             loadBulletinDigest().then(setBulletin).catch(() => undefined)
-            loadBulletinDiag().then(setBulletinDiag).catch(() => undefined)
+            if (__DEV__) loadBulletinDiag().then(setBulletinDiag).catch(() => undefined)
             loadCollectionHealth().then((m) => setBulletinHealth(m.bulletin ?? null)).catch(() => undefined)
           }}
         />

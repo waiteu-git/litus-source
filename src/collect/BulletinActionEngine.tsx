@@ -68,10 +68,12 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
           return true
         }}
         onFinished={() => {
-          const d = diag.current
-          saveBulletinDetailDiag(
-            `page=${d.page || '?'} stage=${d.stage || '?'} panel=${d.panel} plen=${d.plen} got=${d.got}`,
-          ).catch(() => undefined)
+          if (__DEV__) {
+            const d = diag.current
+            saveBulletinDetailDiag(
+              `page=${d.page || '?'} stage=${d.stage || '?'} panel=${d.panel} plen=${d.plen} got=${d.got}`,
+            ).catch(() => undefined)
+          }
           onFinished()
         }}
       />

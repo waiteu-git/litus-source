@@ -15,6 +15,7 @@ import type { AssignmentMap } from '../storage/assignmentsSerialize'
 import { loadClassEvents } from '../storage/classEventsStore'
 import { buildClassEventNotifications } from '../timetableEvents/eventSchedule'
 import type { ClassEvent } from '../timetableEvents/classEvent'
+import { serializeRuns } from './serializeRuns'
 
 function toSchedulable(map: AssignmentMap): SchedulableAssignment[] {
   return Object.values(map)
@@ -37,18 +38,25 @@ function classEventNotifications(events: ClassEvent[], now: Date): ScheduledNoti
   }))
 }
 
-export async function refreshAllNotifications(now: Date = new Date()): Promise<void> {
-  const collections = await loadTimetable()
-  const settings = await loadAttendanceSettings()
-  const attendanceAlarms = collections ? computeAttendanceAlarms(collections, settings, now) : []
+/**
+ * 直列化: 起動時/AppState復帰/収集完了/設定変更から多重発火するため、素のまま並走させると
+ * getAllScheduled→cancel→再予約が非アトミックに交錯し二重予約・取りこぼしが起きる。
+ * serializeRuns で1本ずつ実行し、実行中に重なった要求は完了後の1回に合流させる。
+ */
+export const refreshAllNotifications: (now?: Date) => Promise<void> = serializeRuns(
+  async (now: Date = new Date()): Promise<void> => {
+    const collections = await loadTimetable()
+    const settings = await loadAttendanceSettings()
+    const attendanceAlarms = collections ? computeAttendanceAlarms(collections, settings, now) : []
 
-  const assignmentMap = await loadAssignments()
-  const assignmentNotifications = computeNotificationSchedule(toSchedulable(assignmentMap), now)
+    const assignmentMap = await loadAssignments()
+    const assignmentNotifications = computeNotificationSchedule(toSchedulable(assignmentMap), now)
 
-  const classEvents = await loadClassEvents()
-  const eventNotifications = classEventNotifications(classEvents, now)
+    const classEvents = await loadClassEvents()
+    const eventNotifications = classEventNotifications(classEvents, now)
 
-  const plan = planNotifications(attendanceAlarms, [...assignmentNotifications, ...eventNotifications], now)
-  await syncAttendanceAlarms(plan.attendance)
-  await syncAssignmentReminders(plan.assignments)
-}
+    const plan = planNotifications(attendanceAlarms, [...assignmentNotifications, ...eventNotifications], now)
+    await syncAttendanceAlarms(plan.attendance)
+    await syncAssignmentReminders(plan.assignments)
+  },
+)

@@ -392,7 +392,6 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       return
     }
     if (parsed.type === 'nav') {
-      console.log('[attendance nav]', data)
       return
     }
     if (parsed.type === 'attendance') {

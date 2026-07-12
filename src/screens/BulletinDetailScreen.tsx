@@ -52,7 +52,7 @@ export default function BulletinDetailScreen() {
     setItem(it)
     if (it && !it.body) {
       setFetchFailed(true)
-      loadBulletinDetailDiag().then(setDetailDiag).catch(() => undefined)
+      if (__DEV__) loadBulletinDetailDiag().then(setDetailDiag).catch(() => undefined)
     }
   }, [route.params.id])
 
@@ -131,7 +131,7 @@ export default function BulletinDetailScreen() {
               <Text style={{ color: ui.labelColor, fontSize: 13, textAlign: 'center' }}>
                 本文を取得できませんでした。
               </Text>
-              {detailDiag ? (
+              {__DEV__ && detailDiag ? (
                 <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 6, textAlign: 'center' }}>
                   診断: {detailDiag}
                 </Text>
