@@ -4,7 +4,7 @@ import type { AccessReason } from './accessGate'
 
 export type HealthSource = 'class' | 'letus'
 
-function maintenanceTextWithGuarantee(source: HealthSource): string {
+function maintenanceText(source: HealthSource): string {
   return source === 'letus'
     ? `LETUSはメンテナンス中です（毎日${maintenanceWindowLabel('letus')}）。保存済みの情報は閲覧できます。`
     : `CLASSはメンテナンス中です（毎日${maintenanceWindowLabel('class')}）。保存済みの情報は閲覧できます。`
@@ -21,7 +21,7 @@ export function healthBannerText(
   access?: AccessReason,
 ): string | null {
   if (access === 'offline') return 'オフラインです。保存済みの情報を表示しています。'
-  if (access === 'maintenance') return maintenanceTextWithGuarantee(source)
+  if (access === 'maintenance') return maintenanceText(source)
   if (!health) return null
   switch (health.status) {
     case 'structure_drift':
@@ -29,9 +29,7 @@ export function healthBannerText(
     case 'not_logged_in':
       return source === 'letus' ? 'LETUSへのログインが必要です。' : 'CLASSへのログインが必要です。'
     case 'maintenance':
-      return source === 'letus'
-        ? `LETUSはメンテナンス中です（毎日${maintenanceWindowLabel('letus')}）。`
-        : `CLASSはメンテナンス中です（毎日${maintenanceWindowLabel('class')}）。`
+      return maintenanceText(source)
     default:
       return null // ok / empty_valid / blocked
   }

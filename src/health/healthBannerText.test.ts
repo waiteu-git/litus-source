@@ -12,9 +12,9 @@ describe('healthBannerText', () => {
   })
   it('maintenance はソース別の定時メンテ案内', () => {
     expect(healthBannerText({ status: 'maintenance' }, 'class'))
-      .toBe('CLASSはメンテナンス中です（毎日2:00–4:00）。')
+      .toBe('CLASSはメンテナンス中です（毎日2:00–4:00）。保存済みの情報は閲覧できます。')
     expect(healthBannerText({ status: 'maintenance' }, 'letus'))
-      .toBe('LETUSはメンテナンス中です（毎日4:00–5:30）。')
+      .toBe('LETUSはメンテナンス中です（毎日4:00–5:30）。保存済みの情報は閲覧できます。')
   })
   it('ok / empty_valid / blocked / 未保存(null) はバナーなし', () => {
     expect(healthBannerText({ status: 'ok', count: 3 }, 'class')).toBeNull()
