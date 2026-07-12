@@ -4,6 +4,8 @@ import { clearTimetable, loadTimetable } from '../storage/timetableStore'
 import { loadAttendanceSettings, saveAttendanceSettings } from '../storage/attendanceSettingsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
+import { loadBulletinNotifySettings, saveBulletinNotifySettings } from '../storage/bulletinNotifySettingsStore'
+import type { BulletinNotifySettings } from '../notifications/bulletinNotify'
 import { ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemeVariant } from '../theme'
@@ -18,6 +20,7 @@ export default function SettingsScreen() {
   const { timetableView, assignmentsView, setTimetableView, setAssignmentsView } = useDisplaySettings()
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
+  const [bulletinNotify, setBulletinNotify] = useState<BulletinNotifySettings>({ enabled: true, mode: 'all' })
 
   useEffect(() => {
     ;(async () => {
@@ -32,6 +35,7 @@ export default function SettingsScreen() {
       }
       setCourses([...seen].map(([courseCode, name]) => ({ courseCode, name })))
       setSettings(await loadAttendanceSettings())
+      setBulletinNotify(await loadBulletinNotifySettings())
     })()
   }, [])
 
@@ -43,6 +47,15 @@ export default function SettingsScreen() {
       await refreshAllNotifications()
     } catch (e) {
       console.warn('出席アラーム設定の保存/同期に失敗しました', e)
+    }
+  }
+
+  async function updateBulletinNotify(next: BulletinNotifySettings) {
+    setBulletinNotify(next)
+    try {
+      await saveBulletinNotifySettings(next)
+    } catch (e) {
+      console.warn('掲示通知設定の保存に失敗しました', e)
     }
   }
 
@@ -115,6 +128,34 @@ export default function SettingsScreen() {
               ))}
             </View>
           )}
+        </Accordion>
+
+        <Accordion title="新着掲示の通知" icon="notifications-outline">
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>新着掲示を通知</Text>
+            <Switch
+              value={bulletinNotify.enabled}
+              onValueChange={(v) => updateBulletinNotify({ ...bulletinNotify, enabled: v })}
+              trackColor={{ true: COLORS.emerald, false: '#c9d6d0' }}
+              thumbColor="#ffffff"
+            />
+          </View>
+          {bulletinNotify.enabled && (
+            <>
+              <Text style={[styles.fieldLabel, { color: ui.labelColor, marginTop: 10 }]}>通知する掲示</Text>
+              <Segmented
+                options={[
+                  { key: 'all', label: 'すべて' },
+                  { key: 'importantOnly', label: '重要のみ' },
+                ]}
+                value={bulletinNotify.mode}
+                onChange={(k) => updateBulletinNotify({ ...bulletinNotify, mode: k as BulletinNotifySettings['mode'] })}
+              />
+            </>
+          )}
+          <Text style={[styles.note, { color: ui.labelColor }]}>
+            新着掲示の通知はアプリを開いたときに確認されます。バックグラウンド自動取得は今後対応予定です。
+          </Text>
         </Accordion>
 
         <Accordion title="データ" icon="server-outline">
