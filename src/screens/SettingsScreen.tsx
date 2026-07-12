@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { clearTimetable, loadTimetable } from '../storage/timetableStore'
 import { loadAttendanceSettings, saveAttendanceSettings } from '../storage/attendanceSettingsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'

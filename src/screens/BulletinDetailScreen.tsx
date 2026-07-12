@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Alert } from 'react-native'
+import { ScrollView, StyleSheet, View, ActivityIndicator, Pressable, Alert } from 'react-native'
+import { Text } from '../ui/Text'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'

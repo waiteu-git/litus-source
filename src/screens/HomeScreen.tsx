@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Animated, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'

@@ -1,4 +1,5 @@
-import { StyleSheet, Text } from 'react-native'
+import { StyleSheet } from 'react-native'
+import { Text } from './Text'
 import { formatFreshness } from '../health/freshnessText'
 import { useUi } from './screen'
 

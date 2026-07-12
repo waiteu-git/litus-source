@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text, TextInput } from '../ui/Text'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'

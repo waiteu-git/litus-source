@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import { ScreenBg, ScreenHeader, SectionLabel, Segmented, useUi, useTabBarClearance } from '../ui/screen'

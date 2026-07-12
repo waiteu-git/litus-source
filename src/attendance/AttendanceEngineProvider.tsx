@@ -9,7 +9,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { WebView } from 'react-native-webview'
 import { useLoginGate } from '../auth/LoginGate'
 import { useKillSwitch } from '../health/KillSwitchProvider'

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { WebView } from 'react-native-webview'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as Sharing from 'expo-sharing'

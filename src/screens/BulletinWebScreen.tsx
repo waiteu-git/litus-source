@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { WebView } from 'react-native-webview'
 import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native'
 import { useClassView } from '../collect/classViewArbiter'

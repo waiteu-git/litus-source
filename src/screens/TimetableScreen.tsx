@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadTimetable } from '../storage/timetableStore'
