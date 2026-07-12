@@ -8,6 +8,7 @@ import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments, upsertAssignment, removeAssignment } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
+import DeadlineFields from '../assignments/DeadlineFields'
 import {
   MANUAL_PREFIX,
   parseDeadlineInput,
@@ -18,16 +19,6 @@ import {
 
 type Nav = NativeStackNavigationProp<AssignmentsStackParamList>
 type Rt = RouteProp<AssignmentsStackParamList, 'ManualAssignment'>
-
-function pad2(n: number) {
-  return String(n).padStart(2, '0')
-}
-function dateStr(d: Date) {
-  return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
-}
-function addDays(base: Date, days: number) {
-  return new Date(base.getFullYear(), base.getMonth(), base.getDate() + days)
-}
 
 export default function ManualAssignmentScreen() {
   const navigation = useNavigation<Nav>()
@@ -70,11 +61,6 @@ export default function ManualAssignmentScreen() {
     if (editUrl) return
     if (presetCourseName) setCourseName(presetCourseName)
   }, [editUrl, presetCourseName])
-
-  function setPreset(days: number) {
-    setNoDeadline(false)
-    setDate(dateStr(addDays(new Date(), days)))
-  }
 
   async function onSave() {
     const t = title.trim()
@@ -152,41 +138,12 @@ export default function ManualAssignmentScreen() {
         </View>
 
         <View style={[ui.card, styles.card]}>
-          <View style={styles.rowBetween}>
-            {label('締切')}
-            <Pressable onPress={() => setNoDeadline((v) => !v)} style={styles.toggle}>
-              <Text style={[styles.toggleText, noDeadline && styles.toggleOn]}>締切なし</Text>
-            </Pressable>
-          </View>
-          {!noDeadline ? (
-            <>
-              <View style={styles.presetRow}>
-                <Preset label="今日" onPress={() => setPreset(0)} />
-                <Preset label="明日" onPress={() => setPreset(1)} />
-                <Preset label="1週間後" onPress={() => setPreset(7)} />
-              </View>
-              <View style={styles.dtRow}>
-                <TextInput
-                  style={[styles.input, styles.dtDate, { color: ui.valueColor }]}
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="2026/07/15"
-                  placeholderTextColor="#9aa8a2"
-                  keyboardType="numbers-and-punctuation"
-                />
-                <TextInput
-                  style={[styles.input, styles.dtTime, { color: ui.valueColor }]}
-                  value={time}
-                  onChangeText={setTime}
-                  placeholder="23:59"
-                  placeholderTextColor="#9aa8a2"
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
-            </>
-          ) : (
-            <Text style={[styles.noDl, { color: ui.labelColor }]}>締切を設定しません</Text>
-          )}
+          <DeadlineFields
+            value={{ noDeadline, date, time }}
+            onChange={(v) => { setNoDeadline(v.noDeadline); setDate(v.date); setTime(v.time) }}
+            valueColor={ui.valueColor}
+            labelColor={ui.labelColor}
+          />
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -205,14 +162,6 @@ export default function ManualAssignmentScreen() {
   )
 }
 
-function Preset({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable style={styles.preset} onPress={onPress}>
-      <Text style={styles.presetText}>{label}</Text>
-    </Pressable>
-  )
-}
-
 const styles = StyleSheet.create({
   list: { paddingTop: 8, paddingBottom: 40, gap: 12 },
   card: { gap: 8 },
@@ -226,17 +175,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     fontSize: 15,
   },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  toggle: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: '#eef5f2' },
-  toggleText: { fontSize: 12, color: '#7c8b85', fontWeight: '600' },
-  toggleOn: { color: COLORS.emeraldDark },
-  presetRow: { flexDirection: 'row', gap: 8 },
-  preset: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#cfe0d9' },
-  presetText: { fontSize: 12, color: COLORS.emeraldDark, fontWeight: '600' },
-  dtRow: { flexDirection: 'row', gap: 8 },
-  dtDate: { flex: 2 },
-  dtTime: { flex: 1 },
-  noDl: { fontSize: 13 },
   error: { color: '#c0392b', fontSize: 13, marginHorizontal: 4 },
   saveBtn: { backgroundColor: COLORS.cta, borderRadius: 14, height: 52, alignItems: 'center', justifyContent: 'center' },
   saveText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
