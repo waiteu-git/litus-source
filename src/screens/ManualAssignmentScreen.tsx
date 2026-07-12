@@ -36,6 +36,7 @@ export default function ManualAssignmentScreen() {
   const clearance = useTabBarClearance()
   const { bump } = useAssignmentsVersion()
   const editUrl = route.params?.url ?? null
+  const presetCourseName = route.params?.presetCourseName ?? ''
 
   const [existing, setExisting] = useState<Assignment | null>(null)
   const [title, setTitle] = useState('')
@@ -63,6 +64,12 @@ export default function ManualAssignmentScreen() {
       }
     })
   }, [editUrl])
+
+  // 新規追加（編集でない）かつ科目詳細からのプリセットがあれば科目名を初期化する。
+  useEffect(() => {
+    if (editUrl) return
+    if (presetCourseName) setCourseName(presetCourseName)
+  }, [editUrl, presetCourseName])
 
   function setPreset(days: number) {
     setNoDeadline(false)
