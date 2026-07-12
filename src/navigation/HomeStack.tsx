@@ -9,8 +9,7 @@ import LinkViewerScreen from '../screens/LinkViewerScreen'
 import PdfViewerScreen from '../screens/PdfViewerScreen'
 import SettingsScreen from '../screens/SettingsScreen'
 import type { HomeStackParamList } from './types'
-import { COLORS } from '../theme'
-import { FONT } from '../ui/fontFamily'
+import { stackHeaderOptions } from './headerOptions'
 
 const Stack = createNativeStackNavigator<HomeStackParamList>()
 
@@ -21,12 +20,7 @@ const Stack = createNativeStackNavigator<HomeStackParamList>()
 export default function HomeStack() {
   return (
     <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: COLORS.emerald },
-        headerTintColor: '#ffffff',
-        // React Navigation のヘッダは共通Textラッパーを通らないため、fontFamily を直指定（600→700に寄せる）。
-        headerTitleStyle: { fontFamily: FONT.bold },
-      }}
+      screenOptions={stackHeaderOptions}
     >
       <Stack.Screen name="HomeHome" component={HomeScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Attendance" component={AttendanceScreen} options={{ headerShown: false }} />
