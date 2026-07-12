@@ -16,6 +16,7 @@ import { ThemeProvider } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
   addNotificationResponseListener,
+  ATTENDANCE_OPEN_TAG,
   BULLETIN_TAG,
   clearDeliveredBulletinNotifications,
   configureNotifications,
@@ -52,10 +53,10 @@ export default function App() {
     ;(async () => {
       try {
         const initialTag = await getInitialNotificationTag()
-        if (initialTag === ATTENDANCE_TAG) requestOpenAttendance()
+        if (initialTag === ATTENDANCE_TAG || initialTag === ATTENDANCE_OPEN_TAG) requestOpenAttendance()
         else if (initialTag === BULLETIN_TAG) requestOpenBulletins()
         sub = await addNotificationResponseListener((tag) => {
-          if (tag === ATTENDANCE_TAG) requestOpenAttendance()
+          if (tag === ATTENDANCE_TAG || tag === ATTENDANCE_OPEN_TAG) requestOpenAttendance()
           else if (tag === BULLETIN_TAG) requestOpenBulletins()
         })
       } catch (e) {

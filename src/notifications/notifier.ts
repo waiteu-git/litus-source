@@ -22,6 +22,7 @@ import { buildBulletinNotificationContent } from './bulletinNotify'
 const TAG = 'attendance-alarm'
 const ASSIGNMENT_TAG = 'assignment-reminder'
 export const BULLETIN_TAG = 'bulletin-new'
+export const ATTENDANCE_OPEN_TAG = 'attendance-open'
 
 export const ATTENDANCE_CHANNEL_ID = 'attendance'
 export const ASSIGNMENT_CHANNEL_ID = 'assignments'
@@ -182,6 +183,36 @@ export async function presentBulletinNotifications(items: BulletinItem[]): Promi
     content: { title, body, data: { tag: BULLETIN_TAG } },
     trigger: { channelId: BULLETIN_CHANNEL_ID },
   })
+}
+
+/**
+ * 出席受付openを即時ローカル通知する（trigger に channelId のみ＝即時発火＋チャンネル指定）。
+ * 既存 attendance チャンネル（AndroidImportance.MAX）に相乗り。掲示の即時通知と同型。
+ * 出席の予約枠（refreshAllNotifications・iOS 64枠）とは独立。Expo Go では no-op。
+ */
+export async function presentAttendanceOpenNotification(content: {
+  title: string
+  body: string
+}): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  await Notifications.scheduleNotificationAsync({
+    content: { title: content.title, body: content.body, data: { tag: ATTENDANCE_OPEN_TAG } },
+    trigger: { channelId: ATTENDANCE_CHANNEL_ID },
+  })
+}
+
+/** 配信済みの受付open通知を消す（出席済み検出時に呼ぶ）。他タグは触らない。 */
+export async function clearDeliveredAttendanceOpenNotifications(): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  const presented = await Notifications.getPresentedNotificationsAsync()
+  for (const n of presented) {
+    const data = n.request.content.data as { tag?: string } | null
+    if (data?.tag === ATTENDANCE_OPEN_TAG) {
+      await Notifications.dismissNotificationAsync(n.request.identifier)
+    }
+  }
 }
 
 /** 配信済みの新着掲示通知を消す（起動時に呼び、通知欄への溜まりを防ぐ）。他タグは触らない。 */
