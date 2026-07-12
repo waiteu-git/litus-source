@@ -60,6 +60,10 @@ export default function TimetableScreen() {
   }, [])
   const todayKey = TODAY_KEYS[now.getDay()]
   const [selDay, setSelDay] = useState<DayKey>(TODAY_KEYS[new Date().getDay()])
+  // selDay が自動選択（今日）由来か、ユーザーが手動でタブを選んだ結果かを追跡する。
+  // 土日は col/personalEvents の非同期ロード前後で `days` に出たり消えたりするため、
+  // 自動選択中に今日が有効になった/無効になったタイミングで selDay を追従・是正する。
+  const selDayAutoRef = useRef(true)
   // 時間割の裏取得中フラグ。true の間だけ headless エンジンをマウントして収集する。
   const [syncing, setSyncing] = useState(false)
   // 時間割収集の最終ヘルス（層1の正直表示バナー用）。
@@ -127,6 +131,24 @@ export default function TimetableScreen() {
   const personalDays = daysWithPersonal(personalEvents)
   const hasSun = personalDays.has('sun')
   const days = DAY_ORDER.filter((d) => (d === 'sat' ? hasSat || personalDays.has('sat') : d === 'sun' ? hasSun : true))
+
+  // selDay は常に days の要素でなければならない（土日は非同期ロード前後で days に出入りするため）。
+  // - 現在の selDay が days から外れた場合: 今日が有効ならそこへ、無ければ 'mon' へ是正する（自動選択扱い）。
+  // - selDay が有効なままの場合: 自動選択中（ユーザーがタブを手動選択していない）かつ今日が
+  //   新たに有効になったなら、今日へ追従する（例: 日曜の個人予定ロード完了後に 'sun' へ戻る）。
+  //   ユーザーが手動で別タブを選んだ後は追従しない。
+  useEffect(() => {
+    if (days.includes(selDay)) {
+      if (selDayAutoRef.current && selDay !== todayKey && days.includes(todayKey)) {
+        setSelDay(todayKey)
+      }
+      return
+    }
+    selDayAutoRef.current = true
+    setSelDay(days.includes(todayKey) ? todayKey : 'mon')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days.join(','), todayKey])
+
   const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
   // 選択曜日に落ちる補講オカレンス（休講内包＋単独）。時間割の通常コマとは別に一回限りで表示。
   const dayMakeups = upcomingMakeups(events, now).filter((m) => WEEKDAY_KEY[new Date(m.date).getDay()] === selDay)
@@ -194,7 +216,14 @@ export default function TimetableScreen() {
       ) : null}
 
       {timetableView === 'list' && col ? (
-        <Segmented options={days.map((d) => ({ key: d, label: DAY_LABEL[d] }))} value={selDay} onChange={setSelDay} />
+        <Segmented
+          options={days.map((d) => ({ key: d, label: DAY_LABEL[d] }))}
+          value={selDay}
+          onChange={(d) => {
+            selDayAutoRef.current = false
+            setSelDay(d)
+          }}
+        />
       ) : null}
 
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} refreshControl={refresh}>
