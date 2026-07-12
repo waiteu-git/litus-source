@@ -24,6 +24,11 @@ export type CandidateView = {
 
 const SCHEDULE = /休講|補講|教室変更/
 
+/** スケジュール系（休講/補講/教室変更）カテゴリか。保持ルール・掲示一覧タブ「授業」で共有。 */
+export function isScheduleCategory(category: string): boolean {
+  return SCHEDULE.test(category.replace(/\s+/g, ''))
+}
+
 function typeOf(category: string): BulletinEventCandidate['type'] | null {
   const c = category.replace(/\s+/g, '')
   if (c.includes('教室変更')) return 'roomChange'
@@ -76,7 +81,7 @@ export function parseBulletinEvents(item: BulletinItem): BulletinEventCandidate[
   const body = item.body
   if (!body) return []
   const category = body.category || item.category
-  if (!SCHEDULE.test(category.replace(/\s+/g, ''))) return []
+  if (!isScheduleCategory(category)) return []
   const type = typeOf(category)
   if (!type) return []
   const text = body.text || ''

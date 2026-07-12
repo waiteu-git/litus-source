@@ -18,7 +18,18 @@ export type TimetableStackParamList = {
     isRemote?: boolean
   }
   // 各回イベント（休講/補講等）の追加/編集。editId ありで既存を編集。
-  ClassEventForm: { courseName: string; courseCode: string | null; dayKey?: DayOfWeek; editId?: string }
+  // initial* は掲示候補からの新規追加時のプリフィル（editId 無しのときのみ反映）。
+  ClassEventForm: {
+    courseName: string
+    courseCode: string | null
+    dayKey?: DayOfWeek
+    editId?: string
+    initialType?: 'cancel' | 'makeup' | 'roomChange' | 'quiz' | 'midterm' | 'final' | 'other'
+    initialDate?: string
+    initialPeriods?: number[]
+    initialRoom?: string
+    initialMakeup?: { date: string; periods: number[]; room: string | null }
+  }
   Syllabus: { url: string; name: string }
   Web: { url: string; title?: string }
   PdfViewer: { url: string; title?: string }
