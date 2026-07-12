@@ -27,6 +27,10 @@ import {
   weekList,
   type WeeklyPattern,
 } from '../timetableEvents/weeklyPattern'
+import { loadAttendanceStats } from '../storage/attendanceStatsStore'
+import { loadAttendanceOverrides, saveAttendanceOverride } from '../storage/attendanceOverridesStore'
+import { computeAttendanceRisk, type AttendanceRisk } from '../attendance/attendanceRisk'
+import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -73,6 +77,8 @@ export default function SubjectDetailScreen() {
   const [snapshot, setSnapshot] = useState<CourseSnapshot | null>(null)
   const [events, setEvents] = useState<ClassEvent[]>([])
   const [pattern, setPattern] = useState<WeeklyPattern>({})
+  const [attStats, setAttStats] = useState<AttendanceCourseStats | null>(null)
+  const [attTotal, setAttTotal] = useState<number | null>(null)
   // カレンダー用の週リスト（今週の2週前〜16週後）。画面表示中は固定。
   const weeks = useMemo(() => weekList(new Date(), 2, 16), [])
   const thisKey = weekMondayKey(new Date())
@@ -88,6 +94,28 @@ export default function SubjectDetailScreen() {
   const updatePattern = (next: WeeklyPattern) => {
     setPattern(next)
     saveWeeklyPattern(courseCode, next).catch(() => undefined)
+  }
+
+  useEffect(() => {
+    ;(async () => {
+      const data = await loadAttendanceStats()
+      const found = data?.courses.find((c) => c.courseCode === courseCode) ?? null
+      setAttStats(found)
+      const ov = await loadAttendanceOverrides()
+      setAttTotal(ov[courseCode]?.total ?? null)
+    })().catch(() => undefined)
+  }, [courseCode])
+
+  const risk: AttendanceRisk | null = useMemo(
+    () => (attStats ? computeAttendanceRisk(attStats, attTotal != null ? { totalOverride: attTotal } : undefined) : null),
+    [attStats, attTotal],
+  )
+
+  const changeTotal = (delta: number) => {
+    const base = attTotal ?? risk?.scheduledTotal ?? 0
+    const next = Math.max(0, base + delta)
+    setAttTotal(next)
+    saveAttendanceOverride(courseCode, { total: next }).catch(() => undefined)
   }
 
   useEffect(() => {
@@ -127,6 +155,41 @@ export default function SubjectDetailScreen() {
             </View>
           ) : null}
         </View>
+
+        {risk && risk.trackable ? (
+          <>
+            <SectionLabel>出欠</SectionLabel>
+            <View style={[ui.card, { marginBottom: 10 }]}>
+              <View style={styles.attRow}>
+                <Text style={[styles.attRemain, { color: risk.level === 'danger' ? COLORS.danger : risk.level === 'warning' ? COLORS.cta : ui.valueColor }]}>
+                  {risk.remaining > 0 ? `あと${risk.remaining}回休める` : '危険ライン到達'}
+                </Text>
+                <Text style={[styles.attSub, { color: ui.labelColor }]}>
+                  欠席{risk.absent} / 上限{risk.allowedAbsences}（全{risk.scheduledTotal}回）
+                </Text>
+              </View>
+              <Text style={[styles.attSub, { color: ui.labelColor, marginTop: 6 }]}>
+                出席{risk.attended}・欠席{risk.absent}
+                {risk.late ? `・遅刻${risk.late}` : ''}
+                {risk.earlyLeave ? `・早退${risk.earlyLeave}` : ''}
+                {risk.official ? `・公欠${risk.official}` : ''}
+                {risk.canceled ? `・休講${risk.canceled}` : ''}
+              </Text>
+              <View style={[styles.attStepper, { borderTopColor: ui.dividerColor }]}>
+                <Text style={[styles.attSub, { color: ui.labelColor }]}>総回数（隔週などで手動調整）</Text>
+                <View style={styles.attStepBtns}>
+                  <Pressable style={styles.attStepBtn} onPress={() => changeTotal(-1)}>
+                    <Ionicons name="remove" size={16} color={ui.green ? '#eafff7' : COLORS.emerald} />
+                  </Pressable>
+                  <Text style={[styles.attTotalNum, { color: ui.valueColor }]}>{attTotal ?? risk.scheduledTotal}</Text>
+                  <Pressable style={styles.attStepBtn} onPress={() => changeTotal(1)}>
+                    <Ionicons name="add" size={16} color={ui.green ? '#eafff7' : COLORS.emerald} />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </>
+        ) : null}
 
         <SectionLabel>実施パターン</SectionLabel>
         <View style={[ui.card, { marginBottom: 10 }]}>
@@ -313,4 +376,11 @@ const styles = StyleSheet.create({
   patRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
   reanchor: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   patHint: { fontSize: 12, lineHeight: 18, marginTop: 10 },
+  attRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
+  attRemain: { fontSize: 17, fontWeight: '800' },
+  attSub: { fontSize: 12.5 },
+  attStepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  attStepBtns: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  attStepBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.05)' },
+  attTotalNum: { fontSize: 16, fontWeight: '700', minWidth: 28, textAlign: 'center' },
 })
