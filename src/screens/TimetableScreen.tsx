@@ -26,6 +26,10 @@ import type { ClassEvent } from '../timetableEvents/classEvent'
 import { pickCellEvent, upcomingMakeups } from '../timetableEvents/eventSelectors'
 import { cellBadgeText, shortDate } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+import AttendanceStatsSyncEngine from '../collect/AttendanceStatsSyncEngine'
+import { loadAttendanceStats } from '../storage/attendanceStatsStore'
+import { loadAttendanceOverrides } from '../storage/attendanceOverridesStore'
+import { computeAttendanceRisk } from '../attendance/attendanceRisk'
 
 const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
@@ -61,6 +65,26 @@ export default function TimetableScreen() {
   const [health, setHealth] = useState<StoredHealth | null>(null)
   // 多重起動防止（非同期スロットル判定中の再入も弾く）。setSyncing更新関数の中で副作用を起こさない。
   const syncingRef = useRef(false)
+  // 出欠危険/警告に該当する科目コード集合（グリッドの赤バッジ用）。
+  const [dangerCodes, setDangerCodes] = useState<Set<string>>(new Set())
+
+  const reloadAttendance = () => {
+    ;(async () => {
+      const data = await loadAttendanceStats()
+      const ov = await loadAttendanceOverrides()
+      const danger = new Set<string>()
+      for (const c of data?.courses ?? []) {
+        if (!c.courseCode) continue
+        const r = computeAttendanceRisk(c, ov[c.courseCode]?.total != null ? { totalOverride: ov[c.courseCode]!.total } : undefined)
+        if (r.trackable && (r.level === 'danger' || r.level === 'warning')) danger.add(c.courseCode)
+      }
+      setDangerCodes(danger)
+    })().catch(() => undefined)
+  }
+
+  useEffect(() => {
+    reloadAttendance()
+  }, [])
 
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
   const startSync = useCallback((force: boolean) => {
@@ -239,6 +263,7 @@ export default function TimetableScreen() {
                             {cl.name}
                           </Text>
                           {updatedCodes.has(cl.courseCode) ? <View style={styles.gridDot} /> : null}
+                          {cl && dangerCodes.has(cl.courseCode) ? <View style={styles.gridDanger} /> : null}
                           {gev ? <View style={[styles.gridEvDot, gCanceled ? styles.gridEvDotCancel : styles.gridEvDotInfo]} /> : null}
                           {isNow ? (
                             <View style={styles.nowDot}>
@@ -343,6 +368,7 @@ export default function TimetableScreen() {
           }}
         />
       ) : null}
+      {syncing ? <AttendanceStatsSyncEngine onFinished={reloadAttendance} /> : null}
     </ScreenBg>
   )
 }
@@ -382,6 +408,7 @@ const styles = StyleSheet.create({
   nowChipText: { color: '#ffffff', fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },
   gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e8a400' },
+  gridDanger: { position: 'absolute', top: 3, left: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.danger },
   gridEvDot: { position: 'absolute', bottom: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   gridEvDotCancel: { backgroundColor: '#e0533a' },
   gridEvDotInfo: { backgroundColor: '#3a7be0' },
