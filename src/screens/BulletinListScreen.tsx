@@ -13,8 +13,9 @@ import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import type { HomeStackParamList } from '../navigation/types'
 import { COLORS } from '../theme'
+import { isScheduleCategory } from '../timetableEvents/bulletinEvents'
 
-type Tab = 'unread' | 'flagged'
+type Tab = 'unread' | 'flagged' | 'schedule'
 
 /**
  * CLASS掲示のネイティブ一覧。上部で「未読 / フラグ付き」を切替え、行タップで詳細（本文）へ。
@@ -49,7 +50,9 @@ export default function BulletinListScreen() {
 
   const unread = items.filter((i) => i.unread)
   const flagged = items.filter((i) => i.flagged)
-  const shown = tab === 'unread' ? unread : flagged
+  // 授業タブ: 既読/未読を問わずスケジュール系（休講/補講/教室変更）。保持ルールで授業終了まで残る。
+  const schedule = items.filter((i) => isScheduleCategory(i.category))
+  const shown = tab === 'unread' ? unread : tab === 'flagged' ? flagged : schedule
 
   const TabBtn = ({ id, label, count }: { id: Tab; label: string; count: number }) => {
     const on = tab === id
@@ -68,6 +71,7 @@ export default function BulletinListScreen() {
       <View style={styles.tabs}>
         <TabBtn id="unread" label="未読" count={unread.length} />
         <TabBtn id="flagged" label="フラグ付き" count={flagged.length} />
+        <TabBtn id="schedule" label="授業" count={schedule.length} />
       </View>
       <ScrollView
         contentContainerStyle={[styles.list, { paddingBottom: clearance }]}
@@ -80,7 +84,9 @@ export default function BulletinListScreen() {
             <Text style={{ color: ui.valueColor }}>
               {tab === 'unread'
                 ? '未読の掲示はありません。インフォの「更新」で取得してください。'
-                : 'フラグを付けた掲示はありません。'}
+                : tab === 'flagged'
+                  ? 'フラグを付けた掲示はありません。'
+                  : '休講・補講・教室変更の掲示はありません。'}
             </Text>
           </View>
         ) : (

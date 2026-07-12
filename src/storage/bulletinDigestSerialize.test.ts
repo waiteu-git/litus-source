@@ -6,6 +6,7 @@ import {
   setItemBody,
   markItemRead,
   setItemFlag,
+  type BulletinItem,
 } from './bulletinDigestSerialize'
 import { parseBulletinList, toBulletinItems } from '../parsers/bulletin'
 import { BULLETIN_TABS_FIXTURE } from '../parsers/__fixtures__/loadTabs'
@@ -74,5 +75,39 @@ describe('serialize v2', () => {
     expect(got[0].id).toBe('a')
     expect(got[0].unread).toBe(true) // 旧データは未読扱い
     expect(got[0].body).toBeNull()
+  })
+})
+
+describe('mergeBulletinItems 保持ルール（now 引数）', () => {
+  const body = (category: string, text: string, period = '') => ({ from: '', category, subject: '', text, period, hasAttachment: false })
+  const schedItem = (id: string, category: string, text: string, period = ''): BulletinItem => ({
+    id, category, title: 't', date: '2026/06/24', meta: '', unread: false, flagged: false, important: false, body: body(category, text, period),
+  })
+
+  it('now 省略時は現行挙動（incoming に無い prev は落ちる）', () => {
+    const prev = [schedItem('s1', '休講', '休講日：2026/12/01(火) 3限')]
+    expect(mergeBulletinItems(prev, [])).toHaveLength(0)
+  })
+
+  it('スケジュール系・保持期限未到来は既読でも残る', () => {
+    const prev = [schedItem('s1', '休講', '休講日：2026/12/01(火) 3限')]
+    const got = mergeBulletinItems(prev, [], new Date('2026-06-24T00:00:00+09:00'))
+    expect(got.map((i) => i.id)).toEqual(['s1'])
+  })
+
+  it('保持期限超過（授業日が過去）で落ちる', () => {
+    const prev = [schedItem('s1', '休講', '休講日：2026/05/01(金) 3限')]
+    expect(mergeBulletinItems(prev, [], new Date('2026-06-24T00:00:00+09:00'))).toHaveLength(0)
+  })
+
+  it('候補日が読めない場合は掲示期間の終了日で判定', () => {
+    const prev = [schedItem('s1', '教室変更', '変更期間：前期', '2026/04/16(木) 06:12～2026/09/23(水) 23:59')]
+    const got = mergeBulletinItems(prev, [], new Date('2026-06-24T00:00:00+09:00'))
+    expect(got.map((i) => i.id)).toEqual(['s1'])
+  })
+
+  it('非スケジュール系は保持しない', () => {
+    const prev = [schedItem('s1', 'お知らせ', '本文', '2026/04/16(木)～2026/12/31(火) 23:59')]
+    expect(mergeBulletinItems(prev, [], new Date('2026-06-24T00:00:00+09:00'))).toHaveLength(0)
   })
 })
