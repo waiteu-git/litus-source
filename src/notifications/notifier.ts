@@ -16,12 +16,16 @@ import type { AttendanceAlarm } from './attendanceSchedule'
 import { buildAttendanceNotificationContent } from './attendanceSchedule'
 import type { ScheduledNotification } from './schedule'
 import { buildAssignmentNotificationContent } from './assignmentContent'
+import type { BulletinItem } from '../storage/bulletinDigestSerialize'
+import { buildBulletinNotificationContent } from './bulletinNotify'
 
 const TAG = 'attendance-alarm'
 const ASSIGNMENT_TAG = 'assignment-reminder'
+const BULLETIN_TAG = 'bulletin-new'
 
 export const ATTENDANCE_CHANNEL_ID = 'attendance'
 export const ASSIGNMENT_CHANNEL_ID = 'assignments'
+export const BULLETIN_CHANNEL_ID = 'bulletins'
 
 /** Expo Go では expo-notifications を読み込めない（読むと落ちる）。 */
 const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
@@ -71,6 +75,10 @@ export async function configureNotifications(): Promise<void> {
     })
     await Notifications.setNotificationChannelAsync(ASSIGNMENT_CHANNEL_ID, {
       name: '課題リマインド',
+      importance: Notifications.AndroidImportance.HIGH,
+    })
+    await Notifications.setNotificationChannelAsync(BULLETIN_CHANNEL_ID, {
+      name: '新着掲示',
       importance: Notifications.AndroidImportance.HIGH,
     })
   }
@@ -157,5 +165,34 @@ export async function syncAssignmentReminders(notifications: ScheduledNotificati
         channelId: ASSIGNMENT_CHANNEL_ID,
       },
     })
+  }
+}
+
+/**
+ * 新着掲示を即時ローカル通知する（trigger に channelId のみ＝即時発火＋チャンネル指定）。
+ * 出席/課題の予約枠（iOS 64枠・refreshAllNotifications）とは独立。Expo Go では no-op。
+ */
+export async function presentBulletinNotifications(items: BulletinItem[]): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications || items.length === 0) return
+  const { title, body } = buildBulletinNotificationContent(items)
+  // trigger に channelId のみ渡すと即時発火＋Androidチャンネル指定になる（ChannelAwareTriggerInput）。
+  // iOS では channelId は無視され即時提示される。
+  await Notifications.scheduleNotificationAsync({
+    content: { title, body, data: { tag: BULLETIN_TAG } },
+    trigger: { channelId: BULLETIN_CHANNEL_ID },
+  })
+}
+
+/** 配信済みの新着掲示通知を消す（起動時に呼び、通知欄への溜まりを防ぐ）。他タグは触らない。 */
+export async function clearDeliveredBulletinNotifications(): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  const presented = await Notifications.getPresentedNotificationsAsync()
+  for (const n of presented) {
+    const data = n.request.content.data as { tag?: string } | null
+    if (data?.tag === BULLETIN_TAG) {
+      await Notifications.dismissNotificationAsync(n.request.identifier)
+    }
   }
 }
