@@ -300,8 +300,10 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
       inOpacity.setValue(0)
       inShift.setValue(6)
       setIdx(next)
+      // 旧スライドは新より速く抜く（fast<base）。同じ長さでクロスフェードすると新旧が重なって
+      // 半透明で二重に見え「前の掲示が消えるのが遅く見づらい」ため、旧を先に消して重なりを減らす。
       Animated.parallel([
-        Animated.timing(outOpacity, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }),
+        Animated.timing(outOpacity, { toValue: 0, duration: DUR.fast, easing: EASE.exit, useNativeDriver: true }),
         Animated.timing(inOpacity, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
         Animated.timing(inShift, { toValue: 0, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
       ]).start(({ finished }) => {
