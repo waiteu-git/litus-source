@@ -565,14 +565,21 @@ export const COLLECT_BULLETIN_DETAIL_JS = `(function(){
 })(); true;`
 
 /**
- * 対象行のフラグを「desired（true=フラグ付き）」の状態へ合わせる（インテント絶対・冪等）。
- * 現在のボタン文言（フラグをはずす=済 / フラグをつける=未）を読み、desired と異なる時だけ checkbox を切替えて
- * change を発火する。ローカルとCLASSのフラグ状態がズレていても意図どおりに揃い、複数回発火でも二重反転しない。
+ * 対象行のフラグを「desired（true=フラグ付き）」の状態へ合わせ、**サーバ反映をソースで確認してから**完了を返す
+ * （インテント絶対・冪等）。ボタン文言（フラグをはずす=済 / フラグをつける=未）が desired と異なる時だけ
+ * checkbox の change を発火し（onchange=PrimeFaces.ab）、その後ボタン文言が desired へ反転するまでポーリングする。
+ *
+ * 旧実装は toggle 直後に即 nav 成功を返し、呼び出し側が多タブの古いDOMを再収集してフラグ状態を読み戻していた。
+ * PrimeFaces.ab は非同期で、収集が反映前に先着すると古い flagged=false のまま確定していた（=フラグが全体で
+ * 効かない真因）。ここでは既読(openDetail)と同じく「アクションの効果を待って確定」する方式に統一する。
+ *
+ * 再注入されても二重トグルしないよう window.__litusFlagFired で発火済みを記録する（各操作は専用WebView＝
+ * 新規windowなので操作間で混ざらない）。反映確認済み=ok:true、行/ボタン欠落や未反映=ok:false（stage付き）。
  */
 export function setBulletinFlagJs(title: string, date: string, desired: boolean): string {
   return `(function(){
     ${FRAME_PRELUDE}
-    var t=${JSON.stringify(title)}, d=${JSON.stringify(date)}, want=${desired ? 'true' : 'false'}, tries=0;
+    var t=${JSON.stringify(title)}, d=${JSON.stringify(date)}, want=${desired ? 'true' : 'false'};
     function post(o){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); }catch(e){} }
     function findRow(){
       var dls=qsAll('dl.keiji');
@@ -584,19 +591,34 @@ export function setBulletinFlagJs(title: string, date: string, desired: boolean)
       }
       return null;
     }
+    function flagBtnOf(dl){
+      var row=dl.parentNode, btns=row?row.querySelectorAll('.btnRead'):[];
+      for(var j=0;j<btns.length;j++){ if(/フラグ/.test(btns[j].textContent||'')) return btns[j]; }
+      return null;
+    }
+    function isFlagged(btn){ return /フラグをはずす/.test(btn.textContent||''); } // true=現在フラグ済み
+    var findTries=0, confirmTries=0;
     function step(){
       try{
         var dl=findRow();
-        if(!dl){ tries++; if(tries<12){ setTimeout(step,600); return; } post({type:'nav',ok:false,stage:'flag-notfound'}); return; }
-        var row=dl.parentNode, btns=row?row.querySelectorAll('.btnRead'):[], flagBtn=null;
-        for(var j=0;j<btns.length;j++){ if(/フラグ/.test(btns[j].textContent||'')){ flagBtn=btns[j]; break; } }
-        if(!flagBtn){ post({type:'nav',ok:false,stage:'flag-nobtn'}); return; }
-        var cur=/フラグをはずす/.test(flagBtn.textContent||''); // true=現在フラグ済み
-        if(cur===want){ post({type:'nav',ok:true,stage:'flag-nochange'}); return; }
-        var box=flagBtn.querySelector('input[type=checkbox]');
-        fireChange(box); // 所属フレームの Event で change 発火（onchange=PrimeFaces.ab をフレーム文脈で起こす）
-        post({type:'nav',ok:true,stage:'flag-set'});
-      }catch(e){ post({type:'error',message:String(e)}); }
+        // 行がまだ描画されていない（メニュー発火→フレームへ掲示ロードは非同期）。少し待って再探索。
+        if(!dl){ findTries++; if(findTries<12){ setTimeout(step,600); return; } post({type:'bulletinFlag',ok:false,stage:'flag-notfound',keiji:qsAll('dl.keiji').length}); return; }
+        var btn=flagBtnOf(dl);
+        if(!btn){ post({type:'bulletinFlag',ok:false,stage:'flag-nobtn'}); return; }
+        // 希望状態に一致（最初から一致 or トグルが反映済み）→ ソースで確定。
+        if(isFlagged(btn)===want){ post({type:'bulletinFlag',ok:true,stage: window.__litusFlagFired?'flag-confirmed':'flag-nochange'}); return; }
+        // まだ一致しない。未発火なら1度だけトグル。以後は反映を待つ（再注入でも二重トグルしない）。
+        if(!window.__litusFlagFired){
+          var box=btn.querySelector('input[type=checkbox]');
+          if(!box){ post({type:'bulletinFlag',ok:false,stage:'flag-nobox'}); return; }
+          window.__litusFlagFired=true;
+          fireChange(box); // 所属フレームの Event で change 発火（onchange=PrimeFaces.ab をフレーム文脈で起こす）
+        }
+        // ボタン文言が want へ反転するまで最大約6秒ポーリング（PrimeFaces.ab の往復＋行再描画を待つ）。
+        confirmTries++;
+        if(confirmTries<12){ setTimeout(step,500); return; }
+        post({type:'bulletinFlag',ok:false,stage:'flag-unreflected'});
+      }catch(e){ post({type:'bulletinFlag',ok:false,stage:'flag-error',message:String(e)}); }
     }
     step();
   })(); true;`
