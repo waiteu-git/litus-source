@@ -6,6 +6,7 @@ import { parseMyCoursesMessage } from './myCoursesMessage'
 import { buildCourseCodeMap } from '../parsers/letusCourses'
 import { loadCourseMap, saveCourseMap } from '../storage/courseMapStore'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
+import { selectCoursesToSnapshot } from '../updates/courseSnapshotWindow'
 import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { CourseSnapshotMap } from '../storage/courseSnapshotSerialize'
 import AssignmentCollector from './AssignmentCollector'
@@ -91,9 +92,14 @@ export default function LetusSyncEngine({
       const map = await loadCourseMap()
       snapshotsRef.current = await loadCourseSnapshots()
       const unique = [...new Set(Object.values(map).map((c) => c.url))]
-      setUrls(unique)
+      // 鮮度TTL内に収集済みのコースは course/view.php 再巡回をスキップする（保持スナップショットを
+      // そのまま使う）。未収集/TTL超過/収集時刻破損のコースだけ巡回＝どのコースも最大TTLごとに
+      // 必ず再巡回されるので新着課題・更新コースを取りこぼさない（発見遅延 ≤ TTL）。全コースが
+      // 鮮度内なら空配列＝ステージ2を丸ごとスキップして課題ステージへ直行する。
+      const toVisit = selectCoursesToSnapshot(unique, snapshotsRef.current, new Date())
+      setUrls(toVisit)
       setIndex(0)
-      if (unique.length === 0) setStage('assignments')
+      if (toVisit.length === 0) setStage('assignments')
     })()
   }, [stage])
 
