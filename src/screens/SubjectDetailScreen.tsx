@@ -1,5 +1,5 @@
 // app/src/screens/SubjectDetailScreen.tsx
-import { useEffect, useMemo, useState } from 'react'
+import { cloneElement, useEffect, useMemo, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -76,7 +76,7 @@ function SubjectSummaryCard({
       {rows.map((r) => {
         const color = r.attention ? COLORS.danger : ui.valueColor
         const body = (
-          <View key={r.key} style={styles.summaryRow}>
+          <View style={styles.summaryRow}>
             <Ionicons name={r.icon} size={16} color={color} />
             <Text style={[styles.summaryText, { color }]} numberOfLines={1}>
               {r.text}
@@ -89,7 +89,7 @@ function SubjectSummaryCard({
             {body}
           </Pressable>
         ) : (
-          body
+          cloneElement(body, { key: r.key })
         )
       })}
     </View>
@@ -153,14 +153,13 @@ export default function SubjectDetailScreen() {
   )
   const attention = useMemo(() => pickAttentionEvent(events, now), [events]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const WEEKDAY_JP: Record<string, string> = { mon: '月', tue: '火', wed: '水', thu: '木', fri: '金', sat: '土' }
   const fmtNext = (n: NextSession): string => {
-    const [, m, d] = n.date.split('-')
-    const wd = dayKey ? WEEKDAY_JP[dayKey] : ''
+    const [y, mo, d] = n.date.split('-').map(Number)
+    const wd = ['日', '月', '火', '水', '木', '金', '土'][new Date(y, mo - 1, d).getDay()]
     const per = n.period != null ? `${n.period}限` : ''
     const rm = n.room ? `・${n.room}` : ''
     const extra = n.note ? `（${n.note}）` : ''
-    return `次回 ${Number(m)}/${Number(d)}${wd ? `(${wd})` : ''} ${per}${rm}${extra}`.trim()
+    return `次回 ${mo}/${d}(${wd}) ${per}${rm}${extra}`.trim()
   }
 
   type SummaryRow = { key: string; icon: IconName; text: string; attention?: boolean; onPress?: () => void }
@@ -168,8 +167,7 @@ export default function SubjectDetailScreen() {
   if (next) summaryRows.push({ key: 'next', icon: 'calendar-outline', text: fmtNext(next) })
   if (attention) {
     const [, am, ad] = attention.date.split('-')
-    const label =
-      attention.type === 'cancel' ? '休講・補講未入力' : attention.type === 'roomChange' ? '教室変更' : '要対応'
+    const label = attention.type === 'cancel' ? '休講・補講未入力' : '教室変更'
     summaryRows.push({
       key: 'attn',
       icon: 'alert-circle-outline',

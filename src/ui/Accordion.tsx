@@ -76,7 +76,7 @@ export function Accordion({
           </View>
         </View>
         <View style={styles.headRight}>
-          {right ?? null}
+          {right}
           <Animated.View style={{ transform: [{ rotate }] }}>
             <Ionicons name="chevron-down" size={18} color={headColor} />
           </Animated.View>
