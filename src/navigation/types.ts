@@ -1,4 +1,5 @@
 import type { DayOfWeek } from '../parsers/timetable'
+import type { PersonalDayKey } from '../timetableEvents/personalEvent'
 
 export type TimetableStackParamList = {
   TimetableHome: undefined
@@ -19,6 +20,8 @@ export type TimetableStackParamList = {
   }
   // 各回イベント（休講/補講等）の追加/編集。editId ありで既存を編集。
   ClassEventForm: { courseName: string; courseCode: string | null; dayKey?: DayOfWeek; editId?: string }
+  // 個人予定（毎週繰り返し）の追加/編集。editId ありで既存を編集。day/period は空きセルタップ時のプリフィル。
+  PersonalEventForm: { editId?: string; day?: PersonalDayKey; period?: number }
   Syllabus: { url: string; name: string }
   Web: { url: string; title?: string }
   PdfViewer: { url: string; title?: string }

@@ -6,6 +6,7 @@ import UpdateCheckScreen from '../screens/UpdateCheckScreen'
 import LetusCoursesScreen from '../screens/LetusCoursesScreen'
 import SubjectDetailScreen from '../screens/SubjectDetailScreen'
 import ClassEventFormScreen from '../screens/ClassEventFormScreen'
+import PersonalEventFormScreen from '../screens/PersonalEventFormScreen'
 import WebViewerScreen from '../screens/WebViewerScreen'
 import PdfViewerScreen from '../screens/PdfViewerScreen'
 import SyllabusScreen from '../screens/SyllabusScreen'
@@ -34,6 +35,11 @@ export default function TimetableStack() {
         name="ClassEventForm"
         component={ClassEventFormScreen}
         options={({ route }) => ({ title: route.params.editId ? '予定を編集' : '予定を追加' })}
+      />
+      <Stack.Screen
+        name="PersonalEventForm"
+        component={PersonalEventFormScreen}
+        options={({ route }) => ({ title: route.params?.editId ? '個人予定を編集' : '個人予定を追加' })}
       />
       <Stack.Screen name="Syllabus" component={SyllabusScreen} options={{ title: 'シラバス' }} />
       <Stack.Screen
