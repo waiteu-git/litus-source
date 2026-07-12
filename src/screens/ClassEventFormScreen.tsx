@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
-import { COLORS } from '../theme'
+import { COLORS, DARK } from '../theme'
 import type { TimetableStackParamList } from '../navigation/types'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { classBlockPeriods, nextDateForWeekday } from '../timetableEvents/classBlock'
@@ -125,6 +125,10 @@ export default function ClassEventFormScreen() {
     ])
   }
 
+  const inputStyle = { backgroundColor: ui.inputBg, borderColor: ui.colors.inputBorder }
+  const phColor = ui.dark ? DARK.label : '#9aa8a2'
+  const darkChip = ui.dark ? { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder } : null
+  const darkChipText = ui.dark ? { color: COLORS.emeraldLight } : null
   const label = (s: string) => <Text style={[styles.label, { color: ui.labelColor }]}>{s}</Text>
   const showRoom = type === 'roomChange' || type === 'makeup'
 
@@ -133,8 +137,8 @@ export default function ClassEventFormScreen() {
       {PERIOD_CANDIDATES.map((p) => {
         const on = sel.includes(p)
         return (
-          <Pressable key={p} onPress={() => onToggle(p)} style={[styles.pchip, on && styles.pchipOn]}>
-            <Text style={[styles.pchipText, on && styles.pchipTextOn]}>{p}限</Text>
+          <Pressable key={p} onPress={() => onToggle(p)} style={[styles.pchip, !on && darkChip, on && styles.pchipOn]}>
+            <Text style={[styles.pchipText, !on && darkChipText, on && styles.pchipTextOn]}>{p}限</Text>
           </Pressable>
         )
       })}
@@ -154,8 +158,8 @@ export default function ClassEventFormScreen() {
             {TYPES.map((t) => {
               const on = type === t
               return (
-                <Pressable key={t} onPress={() => setType(t)} style={[styles.tchip, on && styles.tchipOn]}>
-                  <Text style={[styles.tchipText, on && styles.tchipTextOn]}>{eventTypeLabel(t)}</Text>
+                <Pressable key={t} onPress={() => setType(t)} style={[styles.tchip, !on && darkChip, on && styles.tchipOn]}>
+                  <Text style={[styles.tchipText, !on && darkChipText, on && styles.tchipTextOn]}>{eventTypeLabel(t)}</Text>
                 </Pressable>
               )
             })}
@@ -165,11 +169,11 @@ export default function ClassEventFormScreen() {
         <View style={[ui.card, styles.card]}>
           {label(type === 'makeup' ? '補講日' : '日付')}
           <TextInput
-            style={[styles.input, { color: ui.valueColor }]}
+            style={[styles.input, inputStyle, { color: ui.valueColor }]}
             value={date}
             onChangeText={setDate}
             placeholder="2026-07-15"
-            placeholderTextColor="#9aa8a2"
+            placeholderTextColor={phColor}
             keyboardType="numbers-and-punctuation"
           />
         </View>
@@ -186,11 +190,11 @@ export default function ClassEventFormScreen() {
           <View style={[ui.card, styles.card]}>
             {label(type === 'roomChange' ? '変更後の教室' : '補講の教室')}
             <TextInput
-              style={[styles.input, { color: ui.valueColor }]}
+              style={[styles.input, inputStyle, { color: ui.valueColor }]}
               value={room}
               onChangeText={setRoom}
               placeholder="例: K404"
-              placeholderTextColor="#9aa8a2"
+              placeholderTextColor={phColor}
             />
           </View>
         ) : null}
@@ -203,8 +207,8 @@ export default function ClassEventFormScreen() {
                 const on = makeupStatus === s
                 const t = s === 'has' ? '補講あり' : s === 'none' ? '補講なし' : '未定'
                 return (
-                  <Pressable key={s} onPress={() => setMakeupStatus(s)} style={[styles.tchip, on && styles.tchipOn]}>
-                    <Text style={[styles.tchipText, on && styles.tchipTextOn]}>{t}</Text>
+                  <Pressable key={s} onPress={() => setMakeupStatus(s)} style={[styles.tchip, !on && darkChip, on && styles.tchipOn]}>
+                    <Text style={[styles.tchipText, !on && darkChipText, on && styles.tchipTextOn]}>{t}</Text>
                   </Pressable>
                 )
               })}
@@ -213,22 +217,22 @@ export default function ClassEventFormScreen() {
               <View style={{ gap: 8, marginTop: 4 }}>
                 {label('補講日')}
                 <TextInput
-                  style={[styles.input, { color: ui.valueColor }]}
+                  style={[styles.input, inputStyle, { color: ui.valueColor }]}
                   value={mkDate}
                   onChangeText={setMkDate}
                   placeholder="2026-07-22"
-                  placeholderTextColor="#9aa8a2"
+                  placeholderTextColor={phColor}
                   keyboardType="numbers-and-punctuation"
                 />
                 {label('補講の時限')}
                 <PeriodChips sel={mkPeriods} onToggle={(p) => setMkPeriods((v) => toggle(v, p))} />
                 {label('補講の教室（任意）')}
                 <TextInput
-                  style={[styles.input, { color: ui.valueColor }]}
+                  style={[styles.input, inputStyle, { color: ui.valueColor }]}
                   value={mkRoom}
                   onChangeText={setMkRoom}
                   placeholder="例: K404"
-                  placeholderTextColor="#9aa8a2"
+                  placeholderTextColor={phColor}
                 />
               </View>
             ) : null}
@@ -238,11 +242,11 @@ export default function ClassEventFormScreen() {
         <View style={[ui.card, styles.card]}>
           {label('メモ（任意）')}
           <TextInput
-            style={[styles.input, { color: ui.valueColor }]}
+            style={[styles.input, inputStyle, { color: ui.valueColor }]}
             value={note}
             onChangeText={setNote}
             placeholder="任意"
-            placeholderTextColor="#9aa8a2"
+            placeholderTextColor={phColor}
           />
         </View>
 

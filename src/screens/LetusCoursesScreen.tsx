@@ -82,8 +82,8 @@ export default function LetusCoursesScreen() {
                 style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
                 onPress={() => navigation.navigate('Web', { url: r.url, title: r.name })}
               >
-                <View style={[styles.icon, { backgroundColor: ui.green ? 'rgba(255,255,255,0.24)' : '#e8f4ee' }]}>
-                  <Ionicons name="book-outline" size={18} color={ui.green ? '#ffffff' : COLORS.emerald} />
+                <View style={[styles.icon, { backgroundColor: ui.softBoxBg }]}>
+                  <Ionicons name="book-outline" size={18} color={ui.accent} />
                 </View>
                 <Text style={[styles.name, { color: ui.valueColor }]} numberOfLines={1}>
                   {r.name}
@@ -93,7 +93,7 @@ export default function LetusCoursesScreen() {
                     <Text style={styles.badgeText}>新着 {r.newCount}</Text>
                   </View>
                 ) : null}
-                <Ionicons name="chevron-forward" size={18} color={ui.green ? 'rgba(255,255,255,0.7)' : '#9bb3ab'} />
+                <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
               </Pressable>
             ))}
             {filtered.length === 0 ? <Text style={{ color: ui.labelColor, padding: 12 }}>該当するコースがありません</Text> : null}

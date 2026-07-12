@@ -4,7 +4,6 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ActionButton, StepList, useUi, type Step } from '../ui/screen'
-import { COLORS, useThemeVariant } from '../theme'
 import AssignmentCollector from '../collect/AssignmentCollector'
 import type { AssignmentsStackParamList } from '../navigation/types'
 
@@ -14,7 +13,6 @@ import type { AssignmentsStackParamList } from '../navigation/types'
  */
 export default function CollectAssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
-  const { variant } = useThemeVariant()
   const ui = useUi()
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [result, setResult] = useState<{ checked: number; saved: number } | null>(null)
@@ -43,8 +41,8 @@ export default function CollectAssignmentsScreen() {
 
   return (
     <View style={styles.root}>
-      {variant === 'green' ? (
-        <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={StyleSheet.absoluteFill} />
+      {ui.colors.gradient ? (
+        <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} />
       ) : null}
       {!done ? <AssignmentCollector onProgress={(d, t) => setProgress({ done: d, total: t })} onFinished={setResult} /> : null}
       <ScrollView contentContainerStyle={styles.body}>

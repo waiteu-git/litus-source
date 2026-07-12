@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { NavigationContainer } from '@react-navigation/native'
+import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
 import RootTabs from './src/navigation/RootTabs'
 import BackgroundLetusSync from './src/collect/BackgroundLetusSync'
@@ -12,7 +12,7 @@ import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion
 import { ClassEventsVersionProvider } from './src/timetableEvents/classEventsVersion'
 import { LoginGate } from './src/auth/LoginGate'
 import { KillSwitchGate, KillSwitchProvider } from './src/health/KillSwitchProvider'
-import { ThemeProvider } from './src/theme'
+import { ThemeProvider, useThemeVariant, COLORS, DARK } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
   addNotificationResponseListener,
@@ -28,6 +28,28 @@ import { navigationRef, flushPendingNavigation, requestOpenAttendance, requestOp
 
 // 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
 const ATTENDANCE_TAG = 'attendance-alarm'
+
+/** variant に応じたナビゲーション地色。gradient/ScreenBg を敷かない画面（科目詳細・各種ビューア）の下地になる。 */
+function navTheme(variant: 'green' | 'white' | 'dark'): Theme {
+  const background = variant === 'dark' ? DARK.bg : variant === 'green' ? COLORS.gradBottom : '#ffffff'
+  return { ...DefaultTheme, colors: { ...DefaultTheme.colors, background } }
+}
+
+/** ダーク地では白飛びしないよう明色アイコンにする（翠/白は従来どおり auto）。 */
+function ThemedStatusBar() {
+  const { variant } = useThemeVariant()
+  return <StatusBar style={variant === 'dark' ? 'light' : 'auto'} />
+}
+
+/** ThemeProvider配下でvariantを読み、NavigationContainerの地色をテーマ連動させるラッパ。 */
+function ThemedContainer({ children }: { children: ReactNode }) {
+  const { variant } = useThemeVariant()
+  return (
+    <NavigationContainer ref={navigationRef} onReady={flushPendingNavigation} theme={navTheme(variant)}>
+      {children}
+    </NavigationContainer>
+  )
+}
 
 export default function App() {
   useEffect(() => {
@@ -74,7 +96,7 @@ export default function App() {
         <DisplaySettingsProvider>
         <AssignmentsVersionProvider>
         <ClassEventsVersionProvider>
-          <NavigationContainer ref={navigationRef} onReady={flushPendingNavigation}>
+          <ThemedContainer>
             {/* KillSwitchProviderはLoginGateの外側: all停止時はログインprobe用WebViewすら
                 マウントさせない（リモート停止指示の設計: docs/2026-07-12-remote-kill-switch-design.md）。 */}
             <KillSwitchProvider>
@@ -94,8 +116,8 @@ export default function App() {
                 </AuthProvider>
               </LoginGate>
             </KillSwitchProvider>
-          </NavigationContainer>
-          <StatusBar style="auto" />
+          </ThemedContainer>
+          <ThemedStatusBar />
         </ClassEventsVersionProvider>
         </AssignmentsVersionProvider>
         </DisplaySettingsProvider>
