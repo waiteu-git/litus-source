@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
+import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import type { HomeStackParamList } from '../navigation/types'
@@ -50,6 +51,7 @@ export default function BulletinListScreen() {
 
   return (
     <ScreenBg>
+      <KillSwitchBanner feature="bulletin" />
       <View style={styles.tabs}>
         <TabBtn id="unread" label="未読" count={unread.length} />
         <TabBtn id="flagged" label="フラグ付き" count={flagged.length} />

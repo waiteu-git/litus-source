@@ -17,6 +17,7 @@ describe('shouldFirePulse', () => {
 
 describe('SLOT_OFFSETS_MS', () => {
   it('重い処理ほど後ろに来る段階配置（即時 → 出席 → 通知 → LETUS同期）', () => {
+    expect(SLOT_OFFSETS_MS.killSwitch).toBe(0)
     expect(SLOT_OFFSETS_MS.authWarmup).toBe(0)
     expect(SLOT_OFFSETS_MS.timetableReload).toBe(0)
     expect(SLOT_OFFSETS_MS.attendance).toBeGreaterThan(0)

@@ -26,6 +26,7 @@ import TermsConsentScreen from '../screens/TermsConsentScreen'
 import { TERMS_VERSION } from '../legal/termsVersion'
 import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
 import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from '../screens/bootLogoHtml'
+import { useKillSwitch } from '../health/KillSwitchProvider'
 import { COLORS, useThemeVariant } from '../theme'
 
 // checking中に本物のログイン状態が判定できない場合の保険（リダイレクト完了待ち）。
@@ -81,6 +82,11 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const recoverTriesRef = useRef(0)
   // この起動が初回チュートリアル経由か（初回のみフル同期を可視で行う）。
   const wasFirstRunRef = useRef(false)
+  // リモートkill switch（コールバックから最新値を読むためのref）。all停止はProvider側で
+  // ゲートされるため、ここでは letus 停止時に初回フル同期をスキップする用途のみ。
+  const killSwitch = useKillSwitch()
+  const killSwitchRef = useRef(killSwitch)
+  killSwitchRef.current = killSwitch
   // 初回フル同期の進捗表示。
   const [syncLabel, setSyncLabel] = useState('データを取り込んでいます…')
   // 起動アニメの背景バリアントはテーマ由来（green=翠グラデ／white=白）。
@@ -212,6 +218,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
 
   /** setup（時間割）完了後の遷移先。初回はフル同期（コース→課題）も可視で済ませる。 */
   function afterSetup(): GateState {
+    if (killSwitchRef.current.isKilled('letus')) return 'authed'
     return wasFirstRunRef.current && !syncSession.didFullSync ? 'sync' : 'authed'
   }
 

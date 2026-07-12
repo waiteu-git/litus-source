@@ -12,6 +12,7 @@ import {
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useLoginGate } from '../auth/LoginGate'
+import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useClassView } from '../collect/classViewArbiter'
 import {
   CLASS_PC_LOGIN_URL,
@@ -108,6 +109,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const phaseRef = useRef<EnginePhase>('booting')
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loginGate = useLoginGate()
+  const killSwitch = useKillSwitch()
   const { collectActive, setAttendanceFocused: arbiterSetFocused } = useClassView()
   const collectActiveRef = useRef(false)
   collectActiveRef.current = collectActive
@@ -141,7 +143,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   phaseRef.current = state.phase
 
   // 起動ポリシー: 授業時間帯 または 出席画面フォーカス中。停止中は WebView をアンマウント。
-  const running = attendanceFocused || isInClassPeriod(timetable, now)
+  // リモートkill switch（attendance）中はどちらでも起動しない（Provider自体は
+  // BackgroundBulletinSync等がcontextを消費するためアンマウントできない。ここで止める）。
+  const running = !killSwitch.isKilled('attendance') && (attendanceFocused || isInClassPeriod(timetable, now))
   const shouldRender = running && !collectActive
   const prevRenderRef = useRef(false)
   const shouldRenderRef = useRef(false)
