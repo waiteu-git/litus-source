@@ -4,6 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadTimetable } from '../storage/timetableStore'
 import type { TimetableCollection } from '../collect/timetableMessage'
+import type { DayOfWeek } from '../parsers/timetable'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
@@ -26,13 +27,16 @@ import type { ClassEvent } from '../timetableEvents/classEvent'
 import { pickCellEvent, upcomingMakeups } from '../timetableEvents/eventSelectors'
 import { cellBadgeText, shortDate } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+import { loadPersonalEvents } from '../storage/personalEventsStore'
+import type { PersonalEvent, PersonalDayKey } from '../timetableEvents/personalEvent'
+import { personalEventAt, daysWithPersonal, hasZeroPeriod, personalEventsOfDay } from '../timetableEvents/personalEventSelectors'
 
-const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
+const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
-const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 type DayKey = (typeof DAY_ORDER)[number]
-const DAY_LABEL: Record<DayKey, string> = { mon: '月', tue: '火', wed: '水', thu: '木', fri: '金', sat: '土' }
-const TODAY_KEYS: DayKey[] = ['mon', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+const DAY_LABEL: Record<DayKey, string> = { mon: '月', tue: '火', wed: '水', thu: '木', fri: '金', sat: '土', sun: '日' }
+const TODAY_KEYS: DayKey[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
 type ClassEntry = TimetableCollection['slots'][number]['classes'][number]
 
@@ -44,6 +48,7 @@ export default function TimetableScreen() {
   const [collections, setCollections] = useState<TimetableCollection[] | null>(null)
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
   const [events, setEvents] = useState<ClassEvent[]>([])
+  const [personalEvents, setPersonalEvents] = useState<PersonalEvent[]>([])
   const [patterns, setPatterns] = useState<WeeklyPatternMap>({})
   const { version: eventsVersion } = useClassEventsVersion()
   const [selCol, setSelCol] = useState(0)
@@ -93,6 +98,9 @@ export default function TimetableScreen() {
         if (active) setCollections(c)
       })
       loadClassEvents().then((e) => { if (active) setEvents(e) }).catch(() => undefined)
+      loadPersonalEvents().then((list) => {
+        if (active) setPersonalEvents(list)
+      }).catch(() => undefined)
       loadWeeklyPatterns().then((m) => { if (active) setPatterns(m) }).catch(() => undefined)
       loadCollectionHealth().then((m) => { if (active) setHealth(m.timetable ?? null) }).catch(() => undefined)
       ;(async () => {
@@ -116,7 +124,9 @@ export default function TimetableScreen() {
   // 今この瞬間が属する時限（当該コマ強調用）。どの時限でもなければ null。
   const curPeriod = currentPeriodNumber(col?.periodTimes ?? null, now)
   const hasSat = !!col?.slots.some((s) => s.day === 'sat')
-  const days = DAY_ORDER.filter((d) => d !== 'sat' || hasSat)
+  const personalDays = daysWithPersonal(personalEvents)
+  const hasSun = personalDays.has('sun')
+  const days = DAY_ORDER.filter((d) => (d === 'sat' ? hasSat || personalDays.has('sat') : d === 'sun' ? hasSun : true))
   const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
   // 選択曜日に落ちる補講オカレンス（休講内包＋単独）。時間割の通常コマとは別に一回限りで表示。
   const dayMakeups = upcomingMakeups(events, now).filter((m) => WEEKDAY_KEY[new Date(m.date).getDay()] === selDay)
@@ -127,14 +137,15 @@ export default function TimetableScreen() {
     if (!col) return []
     let max = 6
     for (const s of col.slots) if (s.period > max) max = s.period
-    return Array.from({ length: max }, (_, i) => i + 1)
-  }, [col])
+    const base = Array.from({ length: max }, (_, i) => i + 1)
+    return hasZeroPeriod(personalEvents) ? [0, ...base] : base
+  }, [col, personalEvents])
 
   function slotAt(day: DayKey, period: number) {
     return col?.slots.find((s) => s.day === day && s.period === period) ?? null
   }
 
-  function openSubject(cl: ClassEntry, day: DayKey, period: number) {
+  function openSubject(cl: ClassEntry, day: DayOfWeek, period: number) {
     navigation.navigate('SubjectDetail', {
       courseCode: cl.courseCode,
       name: cl.name,
@@ -166,7 +177,10 @@ export default function TimetableScreen() {
           syncing ? (
             <Chip label="更新中…" />
           ) : (
-            <Chip label="コース" icon="book-outline" onPress={() => navigation.navigate('LetusCourses')} />
+            <>
+              <Chip label="コース" icon="book-outline" onPress={() => navigation.navigate('LetusCourses')} />
+              <Chip label="個人予定" icon="add-outline" onPress={() => navigation.navigate('PersonalEventForm', {})} />
+            </>
           )
         }
       />
@@ -214,6 +228,7 @@ export default function TimetableScreen() {
                 {days.map((d) => {
                   const slot = slotAt(d, p)
                   const cl = slot?.classes[0]
+                  const pev = personalEventAt(personalEvents, d as PersonalDayKey, p)
                   const today = d === todayKey
                   const isNow = today && !!cl && p === curPeriod
                   const gev = cl ? pickCellEvent(events, cl.name, p, now) : null
@@ -223,14 +238,19 @@ export default function TimetableScreen() {
                   return (
                     <Pressable
                       key={d}
-                      disabled={!cl}
-                      onPress={() => cl && openSubject(cl, d, p)}
+                      disabled={false}
+                      onPress={() => {
+                        if (cl) return openSubject(cl, d as DayOfWeek, p)
+                        if (pev) return navigation.navigate('PersonalEventForm', { editId: pev.id })
+                        return navigation.navigate('PersonalEventForm', { day: d as PersonalDayKey, period: p })
+                      }}
                       style={[
                         styles.gridCell,
                         { backgroundColor: isNow ? cellNowBg : cl ? (today ? cellTodayBg : cellFilledBg) : cellBg },
                         isNow ? styles.gridCellNow : today && cl ? styles.gridCellToday : null,
                         gCanceled ? styles.canceledCard : null,
                         gOff ? styles.offCell : null,
+                        !cl && pev ? styles.personalCell : null,
                       ]}
                     >
                       {cl ? (
@@ -245,7 +265,10 @@ export default function TimetableScreen() {
                               <NowPulse size={7} />
                             </View>
                           ) : null}
+                          {pev ? <View style={styles.personalDot} /> : null}
                         </>
+                      ) : pev ? (
+                        <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText]}>{pev.title}</Text>
                       ) : null}
                     </Pressable>
                   )
@@ -271,7 +294,7 @@ export default function TimetableScreen() {
                   const canceled = ev?.type === 'cancel'
                   const off = !isClassOnDate(patterns[cl.courseCode], now)
                   return (
-                  <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard, canceled && styles.canceledCard, off && styles.offCell]} onPress={() => openSubject(cl, s.day as DayKey, s.period)}>
+                  <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard, canceled && styles.canceledCard, off && styles.offCell]} onPress={() => openSubject(cl, s.day, s.period)}>
                     <View style={styles.clsHeadRow}>
                       <Text style={[styles.clsname, { color: ui.valueColor, flex: 1 }, (canceled || off) && styles.canceledName]} numberOfLines={2}>
                         {cl.name}
@@ -308,6 +331,24 @@ export default function TimetableScreen() {
             )
           })
         )}
+
+        {timetableView === 'list' && col
+          ? personalEventsOfDay(personalEvents, selDay as PersonalDayKey).map((pe) => (
+              <Pressable
+                key={pe.id}
+                style={[ui.card, styles.personalRow]}
+                onPress={() => navigation.navigate('PersonalEventForm', { editId: pe.id })}
+              >
+                <Text style={[styles.pnum, { color: COLORS.emeraldDark }]}>{pe.periods.map((p) => `${p}限`).join('・')}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: ui.valueColor }}>{pe.title}</Text>
+                  {pe.note || pe.place ? (
+                    <Text style={{ fontSize: 12, color: ui.labelColor }}>{[pe.note, pe.place].filter(Boolean).join(' ・ ')}</Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            ))
+          : null}
 
         {timetableView === 'list' && col && dayMakeups.length > 0 ? (
           <View style={{ marginTop: 6 }}>
@@ -386,4 +427,8 @@ const styles = StyleSheet.create({
   gridEvDotCancel: { backgroundColor: '#e0533a' },
   gridEvDotInfo: { backgroundColor: '#3a7be0' },
   gridHint: { fontSize: 11, textAlign: 'center', marginTop: 6 },
+  personalCell: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.emerald, backgroundColor: 'rgba(46,160,120,0.10)' },
+  personalCellText: { color: COLORS.emeraldDark, fontStyle: 'italic' },
+  personalDot: { position: 'absolute', bottom: 3, left: 3, width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.emerald },
+  personalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
 })
