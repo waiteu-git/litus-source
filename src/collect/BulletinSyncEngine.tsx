@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { COLLECT_BULLETIN_TABS_JS, GO_BULLETIN_JS, OPEN_BULLETIN_JS } from './injectedScripts'
 import { parseBulletinList, toBulletinItems } from '../parsers/bulletin'
 import { mutateBulletinDigest, saveBulletinDiag } from '../storage/bulletinDigestStore'
-import { mergeBulletinItems } from '../storage/bulletinDigestSerialize'
+import { mergeBulletinItems, type BulletinItem } from '../storage/bulletinDigestSerialize'
 import { saveBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import { saveCollectionHealth } from '../storage/collectionHealthStore'
 import {
@@ -12,6 +12,10 @@ import {
   type BulletinCollectDiag,
 } from '../health/collectionSignals'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
+import { diffNewBulletins, pruneNotifiedIds } from '../notifications/bulletinNotify'
+import { presentBulletinNotifications } from '../notifications/notifier'
+import { loadNotifiedBulletins, saveNotifiedBulletins } from '../storage/notifiedBulletinsStore'
+import { loadBulletinNotifySettings } from '../storage/bulletinNotifySettingsStore'
 
 /**
  * CLASS掲示の headless 収集エンジン。ページ内の全掲示行を収集し、既存の body キャッシュを保って
@@ -77,9 +81,29 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
         if (rows0.length === 0) return false
         try {
           const incoming = toBulletinItems(rows0)
-          await mutateBulletinDigest((prev) => mergeBulletinItems(prev, incoming))
+          // prev はマージ関数のクロージャで捕捉する（mutateBulletinDigest の直列キュー内で読むため、
+          // 別途 loadBulletinDigest を挟むと lost update が再発する）。差分検知はこの prev を基準にする。
+          let prev: BulletinItem[] = []
+          const merged = await mutateBulletinDigest((cur) => {
+            prev = cur
+            return mergeBulletinItems(cur, incoming)
+          })
           await saveBulletinRefreshedAt()
           diag.current.got = true
+          // 新着ローカル通知（即時発火・完全独立経路）。失敗しても収集は成立済みなので握りつぶす。
+          try {
+            const settings = await loadBulletinNotifySettings()
+            const notified = await loadNotifiedBulletins()
+            const newItems = diffNewBulletins(prev, incoming, notified, settings)
+            if (settings.enabled && newItems.length > 0) {
+              await presentBulletinNotifications(newItems)
+            }
+            const liveIds = merged.map((i) => i.id)
+            const union = [...notified, ...incoming.map((i) => i.id)]
+            await saveNotifiedBulletins(pruneNotifiedIds(union, liveIds))
+          } catch {
+            // 通知/通知済み更新の失敗は無視（次回収集で再評価）。
+          }
         } catch {
           // 保存失敗でも到達済みなので完了扱い（次回再試行）。
         }
