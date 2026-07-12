@@ -32,20 +32,29 @@ export function diffNewBulletins(
 
 /** 単数は件名を本文に、複数は「新着掲示 N件」＋先頭件名を出す。 */
 export function buildBulletinNotificationContent(items: BulletinItem[]): { title: string; body: string } {
+  if (items.length === 0) return { title: '新着掲示', body: '' }
   if (items.length === 1) return { title: '新着掲示', body: items[0].title }
   return { title: `新着掲示 ${items.length}件`, body: `${items[0].title} 他` }
 }
 
-/** 掲示digestに現存するidだけ残す（消えた掲示のidを落とし、重複も畳む）。 */
-export function pruneNotifiedIds(notifiedIds: string[], liveIds: string[]): string[] {
-  const live = new Set(liveIds)
-  const out: string[] = []
+/** 通知済みidの上限。CLASS掲示の1学期規模を十分カバーしつつ無制限成長を防ぐ。 */
+export const NOTIFIED_IDS_CAP = 500
+
+/**
+ * 通知済みidを後勝ちで重複除去（最新の出現位置を残す）し、直近 max 件に丸める。
+ * live集合との交差はしない——一時的に収集から消えた掲示の再流入時も再通知を防ぐため、
+ * 現存しないidも上限まで記憶し続ける。
+ */
+export function capNotifiedIds(ids: string[], max: number): string[] {
   const seen = new Set<string>()
-  for (const id of notifiedIds) {
-    if (live.has(id) && !seen.has(id)) {
+  const out: string[] = []
+  for (let i = ids.length - 1; i >= 0; i--) {
+    const id = ids[i]
+    if (!seen.has(id)) {
       seen.add(id)
       out.push(id)
     }
   }
-  return out
+  out.reverse() // 古い→新しい順に戻す
+  return out.length > max ? out.slice(out.length - max) : out
 }

@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { serializeNotifiedIds, deserializeNotifiedIds } from './notifiedBulletinsSerialize'
+import { createWriteQueue } from './writeQueue'
 
 const KEY = 'info.notifiedBulletins.v1'
+
+const enqueueWrite = createWriteQueue()
 
 /** これまでに新着通知を出した掲示idの集合（再流入時の再通知抑止に使う）。 */
 export async function loadNotifiedBulletins(): Promise<string[]> {
@@ -10,4 +13,15 @@ export async function loadNotifiedBulletins(): Promise<string[]> {
 
 export async function saveNotifiedBulletins(ids: string[]): Promise<void> {
   await AsyncStorage.setItem(KEY, serializeNotifiedIds(ids))
+}
+
+/** 通知済みidを直列キュー内でread-modify-writeする（背景/前景収集の同時進行によるlost update回避）。更新後を返す。 */
+export async function mutateNotifiedBulletins(
+  mutate: (ids: string[]) => string[],
+): Promise<string[]> {
+  return enqueueWrite(async () => {
+    const next = mutate(deserializeNotifiedIds(await AsyncStorage.getItem(KEY)))
+    await AsyncStorage.setItem(KEY, serializeNotifiedIds(next))
+    return next
+  })
 }
