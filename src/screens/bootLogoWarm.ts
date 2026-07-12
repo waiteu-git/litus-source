@@ -18,6 +18,8 @@ function warmAnimationPart(part: string): string {
     })
   }
   // イントロ（both フィル）: duration/delay を捨てて 0s に。both で最終フレームが即適用される。
+  // both を持たない未知パターンは変換せず素通し（生成物が将来変わってもフル版へ自然フォールバック）。
+  if (!p.includes('both')) return part
   const name = p.split(/\s+/)[0]
   return `${name} 0s both`
 }

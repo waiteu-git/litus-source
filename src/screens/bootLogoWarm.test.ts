@@ -61,4 +61,8 @@ describe('toWarmBootHtml', () => {
     expect(WARM_BOOT_LOGO_GREEN).toContain('0s infinite')
     expect(WARM_BOOT_LOGO_WHITE).toContain('0s infinite')
   })
+
+  it('both も infinite も無い未知パターンは素通し（フォールバック）', () => {
+    expect(toWarmBootHtml('animation:spin 2s linear')).toBe('animation:spin 2s linear')
+  })
 })
