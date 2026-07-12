@@ -7,6 +7,7 @@ import WebViewerScreen from '../screens/WebViewerScreen'
 import PdfViewerScreen from '../screens/PdfViewerScreen'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { COLORS } from '../theme'
+import { FONT } from '../ui/fontFamily'
 
 const Stack = createNativeStackNavigator<AssignmentsStackParamList>()
 
@@ -16,7 +17,8 @@ export default function AssignmentsStack() {
       screenOptions={{
         headerStyle: { backgroundColor: COLORS.emerald },
         headerTintColor: '#ffffff',
-        headerTitleStyle: { fontWeight: '600' },
+        // React Navigation のヘッダは共通Textラッパーを通らないため、fontFamily を直指定（600→700に寄せる）。
+        headerTitleStyle: { fontFamily: FONT.bold },
       }}
     >
       <Stack.Screen name="AssignmentsHome" component={AssignmentsScreen} options={{ headerShown: false }} />

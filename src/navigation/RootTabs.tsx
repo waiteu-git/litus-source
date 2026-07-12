@@ -6,6 +6,7 @@ import AssignmentsStack from './AssignmentsStack'
 import HomeStack from './HomeStack'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, DARK, useThemeVariant } from '../theme'
+import { FONT } from '../ui/fontFamily'
 
 const Tab = createBottomTabNavigator()
 
@@ -58,6 +59,8 @@ export default function RootTabs() {
         tabBarActiveTintColor: COLORS.white,
         tabBarInactiveTintColor: dark ? DARK.label : '#0b5c48',
         tabBarStyle,
+        // タブラベルは共通Textラッパーを通らないため、fontFamily を直指定して本文と揃える。
+        tabBarLabelStyle: { fontFamily: FONT.regular },
         tabBarActiveBackgroundColor: COLORS.emerald,
         // overflow:hidden が無いとアクティブ背景が角丸で切り抜かれず四角く見える。外枠(20)に合わせる。
         tabBarItemStyle: { borderRadius: 16, marginHorizontal: 6, overflow: 'hidden' },
