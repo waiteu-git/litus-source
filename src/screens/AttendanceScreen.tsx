@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
-import { ScreenBg, CountdownRing, useUi, useTabBarClearance } from '../ui/screen'
+import { ScreenBg, CountdownRing, IndeterminateBar, useUi, useTabBarClearance } from '../ui/screen'
 import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { countdownClock, countdownFraction } from '../attendance/countdown'
 import { normalizeAttendanceCode } from '../attendance/normalizeCode'
@@ -225,14 +225,22 @@ export default function AttendanceScreen() {
             </View>
 
             <Pressable
-              style={[styles.cta, { backgroundColor: c.cta }]}
+              style={[styles.cta, { backgroundColor: c.cta }, phase === 'submitting' && styles.ctaBusy]}
+              disabled={phase === 'submitting'}
               onPress={() => {
                 // 送信時にキーボードを閉じ、結果メッセージ（成功/失敗）がすぐ見えるようにする。
                 Keyboard.dismiss()
                 submit()
               }}
             >
-              <Text style={styles.ctaText}>{phase === 'submitting' ? '送信中…' : '出席する'}</Text>
+              {phase === 'submitting' ? (
+                <View style={styles.ctaBusyRow}>
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <Text style={styles.ctaText}>送信中…</Text>
+                </View>
+              ) : (
+                <Text style={styles.ctaText}>出席する</Text>
+              )}
             </Pressable>
 
             {result?.ok ? (
@@ -246,10 +254,20 @@ export default function AttendanceScreen() {
               <View style={[styles.result, { backgroundColor: c.dangerBg }]}>
                 <Text style={[styles.resultText, { color: c.danger }]}>{result?.result}</Text>
               </View>
-            ) : verifying ? (
-              <View style={[styles.card, cardStyle, styles.verifyRow]}>
-                <ActivityIndicator size="small" color={c.emerald} />
-                <Text style={[styles.verifyText, { color: valueColor }]}>送信しました。出席を確認しています…</Text>
+            ) : phase === 'submitting' || verifying ? (
+              // 送信タップ〜出席確定までの待機窓。無モーションだと「フリーズ？」と誤解されるため、
+              // スイープする不定進捗バー＋スピナーで「処理中」を通しで明示する。
+              <View style={[styles.card, cardStyle, styles.verifyCard]}>
+                <View style={styles.verifyRow}>
+                  <ActivityIndicator size="small" color={ui.accent} />
+                  <Text style={[styles.verifyText, { color: valueColor }]}>
+                    {phase === 'submitting' ? '出席を送信しています…' : '送信しました。出席を確認しています…'}
+                  </Text>
+                </View>
+                <IndeterminateBar
+                  color={ui.accent}
+                  trackColor={dark ? DARK.softBox : glass ? 'rgba(255,255,255,0.28)' : '#e3ebe7'}
+                />
               </View>
             ) : null}
           </>
@@ -289,10 +307,13 @@ const styles = StyleSheet.create({
   segText: { fontSize: 24, fontWeight: '600' },
   hiddenInput: { position: 'absolute', opacity: 0, height: 54, left: 16, right: 16, top: 40 },
   cta: { marginTop: 16, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  ctaBusy: { opacity: 0.85 },
+  ctaBusyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   ctaText: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
   result: { marginTop: 12, borderRadius: 14, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
-  verifyRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  verifyCard: { marginTop: 12, gap: 12 },
+  verifyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   verifyText: { fontSize: 14, fontWeight: '600', flex: 1 },
   doneHero: { alignItems: 'center', paddingVertical: 24 },
   doneCodeLabel: { fontSize: 12, marginTop: 16 },

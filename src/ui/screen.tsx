@@ -259,6 +259,54 @@ export function CountdownRing({
   )
 }
 
+/**
+ * 不定進捗バー（indeterminate）。進捗率が不明な待機中に、細いトラックの上を明色セグメントが
+ * 左→右へ連続でスイープし「処理中でありフリーズしていない」ことを明示する。translateX のみで
+ * useNativeDriver に載せる。トラック幅は onLayout で実測してからループを開始する。
+ */
+export function IndeterminateBar({
+  color,
+  trackColor,
+  height = 4,
+}: {
+  color: string
+  trackColor: string
+  height?: number
+}) {
+  const [w, setW] = useState(0)
+  const x = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    if (w <= 0) return
+    const loop = Animated.loop(
+      Animated.timing(x, { toValue: 1, duration: 1100, easing: EASE.move, useNativeDriver: true }),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [w, x])
+  const seg = Math.max(48, w * 0.4)
+  const translateX = x.interpolate({ inputRange: [0, 1], outputRange: [-seg, Math.max(w, seg)] })
+  return (
+    <View
+      onLayout={(e) => setW(e.nativeEvent.layout.width)}
+      style={{ height, borderRadius: height / 2, backgroundColor: trackColor, overflow: 'hidden' }}
+    >
+      {w > 0 ? (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            width: seg,
+            borderRadius: height / 2,
+            backgroundColor: color,
+            transform: [{ translateX }],
+          }}
+        />
+      ) : null}
+    </View>
+  )
+}
+
 /** カルーセルのアクティブドット（幅 6⇄18px を micro でアニメ。色は cta/薄地で出し分け）。 */
 function CarouselDot({ active, inactiveColor }: { active: boolean; inactiveColor: string }) {
   const w = useRef(new Animated.Value(active ? 18 : 6)).current
