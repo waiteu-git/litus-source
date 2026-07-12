@@ -17,7 +17,7 @@ export async function loadBulletinDigest(): Promise<BulletinItem[]> {
 
 const DIAG_KEY = 'info.bulletinDiag.v1'
 
-/** 掲示収集の診断（着地ページ・dl.keiji件数・.alignRight件数）を保存する。取得不能の切り分け用。 */
+/** 掲示収集の診断（着地ページ・dl.keiji件数・.alignRight件数）を保存する。取得不能の切り分け用（開発ビルド限定で読み書き）。 */
 export async function saveBulletinDiag(text: string): Promise<void> {
   await AsyncStorage.setItem(DIAG_KEY, text)
 }
@@ -28,7 +28,7 @@ export async function loadBulletinDiag(): Promise<string> {
 
 const DETAIL_DIAG_KEY = 'info.bulletinDetailDiag.v1'
 
-/** 本文取得の診断（着地/行探索/モーダル状態）。詳細画面の失敗表示に使う。 */
+/** 本文取得の診断（着地/行探索/モーダル状態）。詳細画面の失敗表示に使う（開発ビルド限定で読み書き）。 */
 export async function saveBulletinDetailDiag(text: string): Promise<void> {
   await AsyncStorage.setItem(DETAIL_DIAG_KEY, text)
 }

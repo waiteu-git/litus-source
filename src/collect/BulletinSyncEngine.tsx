@@ -17,7 +17,7 @@ import ClassHeadlessCollector from './ClassHeadlessCollector'
  * CLASS掲示の headless 収集エンジン。ページ内の全掲示行を収集し、既存の body キャッシュを保って
  * マージ保存する（フラグ付き既読も保持）。着地に頼らず常設メニューから遷移。行を1件以上取れた時だけ保存。
  * 診断: 収集結果が無くても、最後に見たページ種別/nav段階/keiji件数を saveBulletinDiag に残し、
- * ホームで「なぜ取得できないか」を切り分けられるようにする。
+ * ホームで「なぜ取得できないか」を切り分けられるようにする（開発ビルド限定）。
  * ヘルス(層2): 観測シグナルから ok/empty_valid/structure_drift 等を分類し、finish 時に保存する（層1バナー用）。
  */
 export default function BulletinSyncEngine({ onFinished }: { onFinished: () => void }) {
@@ -29,6 +29,7 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
   const parsedCount = useRef(0)
 
   const flushDiag = () => {
+    if (!__DEV__) return // 診断文字列は開発ビルド限定（一般ユーザーには表示も保存もしない）
     const d = diag.current
     saveBulletinDiag(
       `page=${d.page || '?'} stage=${d.stage || '?'} keiji=${d.keiji} rows=${d.rows} fr=${d.fr} tab=${d.tab} pwd=${d.pwd} logout=${d.logout} blen=${d.blen} hlen=${d.hlen} got=${d.got}`,
