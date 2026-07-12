@@ -26,6 +26,7 @@ import {
 import { refreshAllNotifications } from './src/notifications/notificationRefresh'
 import { subscribeForeground } from './src/app/foregroundOrchestrator'
 import { navigationRef, flushPendingNavigation, requestOpenAttendance, requestOpenBulletins } from './src/navigation/navigationRef'
+import { subscribeWidgetLinks } from './src/widget/widgetLinking'
 
 // 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
 const ATTENDANCE_TAG = 'attendance-alarm'
@@ -65,6 +66,9 @@ export default function App() {
     })()
     return () => sub?.remove()
   }, [])
+
+  // ウィジェットのタップ（litus:// ディープリンク）で対応画面を開く。cold/warm 両対応。
+  useEffect(() => subscribeWidgetLinks(), [])
 
   return (
     <SafeAreaProvider>
