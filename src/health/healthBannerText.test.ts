@@ -24,3 +24,27 @@ describe('healthBannerText', () => {
     expect(healthBannerText(undefined, 'letus')).toBeNull()
   })
 })
+
+describe('healthBannerText access分岐', () => {
+  it('offline は source非依存の保証文言', () => {
+    expect(healthBannerText(null, 'class', 'offline')).toBe('オフラインです。保存済みの情報を表示しています。')
+    expect(healthBannerText({ status: 'ok' } as any, 'letus', 'offline')).toBe(
+      'オフラインです。保存済みの情報を表示しています。',
+    )
+  })
+  it('maintenance は source別・保証訴求つき', () => {
+    expect(healthBannerText(null, 'class', 'maintenance')).toBe(
+      'CLASSはメンテナンス中です（毎日2:00–4:00）。保存済みの情報は閲覧できます。',
+    )
+    expect(healthBannerText(null, 'letus', 'maintenance')).toBe(
+      'LETUSはメンテナンス中です（毎日4:00–5:30）。保存済みの情報は閲覧できます。',
+    )
+  })
+  it('access=ok / 省略時は従来の health.status 分岐', () => {
+    expect(healthBannerText({ status: 'ok' } as any, 'class', 'ok')).toBeNull()
+    expect(healthBannerText({ status: 'structure_drift' } as any, 'class')).toBe(
+      '最新の取得に失敗しました。表示は前回取得時点です。',
+    )
+    expect(healthBannerText(null, 'class')).toBeNull()
+  })
+})
