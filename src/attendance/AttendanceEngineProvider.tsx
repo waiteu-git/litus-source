@@ -30,6 +30,7 @@ import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
 import { isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
+import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { normalizeAttendanceCode } from './normalizeCode'
 import { loadTimetable } from '../storage/timetableStore'
 import type { TimetableCollection } from '../collect/timetableMessage'
@@ -429,6 +430,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         })
         setAttended(arec)
         saveAttendedRecord(arec).catch(() => undefined)
+        notifyWidgetDataChanged()
       }
       return
     }
@@ -450,6 +452,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         })
         setAttended(rec)
         saveAttendedRecord(rec).catch(() => undefined)
+        notifyWidgetDataChanged()
       }
       // 送信後は応答テキスト解析に頼らず、CLASSの確定マーカー(.attendSuc)で「出席済み」を確認する。
       // 出席ページを取り直し、出席済みなら attended に遷移（＝リング→出席済み表示）。まだなら受付フォームに戻る。

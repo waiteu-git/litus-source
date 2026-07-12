@@ -9,6 +9,7 @@ import { selectAssignmentsToVisit } from '../updates/assignmentWindow'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
 import { loadAssignments, mutateAssignments } from '../storage/assignmentsStore'
+import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { hasLetusLoginMarker, letusAssignmentsHealth, type LetusRunStats } from '../health/collectionSignals'
@@ -125,6 +126,7 @@ export default function AssignmentCollector({
         await mutateAssignments((existing) => upsertAssignments(existing, collectedRef.current, new Date()))
         await saveAssignmentsRefreshedAt()
         await refreshAllNotifications()
+        notifyWidgetDataChanged()
         bump()
       }
       // ヘルス(層2): 巡回集計から分類して保存（層1バナー用）。候補0巡回は empty_valid＝正常。

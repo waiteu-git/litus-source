@@ -3,6 +3,7 @@
     "name": "リタス",
     "slug": "litus",
     "version": "1.0.0",
+    "scheme": "litus",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
@@ -41,7 +42,36 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "LitusToday",
+              "label": "リタス: 今日の授業",
+              "description": "次の授業・後続コマ・直近の課題",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "LitusNext",
+              "label": "リタス: 次の授業",
+              "description": "次の授業と残り時間",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "none",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ],
     "extra": {
       "eas": {
