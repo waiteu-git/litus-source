@@ -48,19 +48,22 @@ scp ~/ops/storageState.json pi@<pi-host>:/home/pi/ops/storageState.json
 storageState は**リポジトリに入れない**（`.gitignore` 済）。Conditional Access で失効
 した場合はカナリアが `not_logged_in` を通知するので、その時に再キャプチャ＋再コピー。
 
-### pi セットアップ
+### pi セットアップ（1コマンド）
+
+litus を pi に取得済み（`git clone`/`git pull`）で、`~/ops/ops.env`（OPS_WEBHOOK_URL）と
+`~/ops/storageState.json`（デスクトップから scp 済み）がある前提で、以下を実行するだけ。
 
 ```bash
-cd ~ && git clone <litus-repo> litus       # 既にあれば git pull
-cd ~/litus
-# src/parsers が使う node-html-parser を litus root に置く（軽量・この1つだけでよい）。
-#   全 litus 依存が要るわけではないため pnpm install（重い）は不要。
-npm install --no-save node-html-parser
-cd ops/canary
-npm i && npx playwright install --with-deps chromium
-mkdir -p ~/ops/canary-fixtures ~/ops/logs
-# ~/ops/ops.env に OPS_WEBHOOK_URL があること（既存 ops と共用・#ops-alerts）
-npm run canary                    # 手動スモーク（storageState 必須）
+cd ~/litus/ops/canary && bash deploy-pi.sh
+```
+
+`deploy-pi.sh` が行うこと: litus root へ `node-html-parser` を1つ導入（重い全依存は不要）、
+canary 依存＋chromium 導入、`~/ops/canary-fixtures`・`logs` 作成、前提ファイルの存在チェック、
+cron 登録（JST 08:00/20:00・重複回避）。完了後に手動スモークを促す。
+
+```bash
+npm run smoke                     # 資格情報不要の疎通確認（LETUS公開ログインページ）
+npm run canary                    # 本番スモーク（storageState 必須）
 ```
 
 ### cron（pi・1日2回、JST 08:00 / 20:00）
@@ -90,10 +93,12 @@ cron 時刻自体も帯を避ける。pi の TZ に依存せず run.mjs 内で J
 
 ```bash
 npm test                          # signals/util の純粋テスト（node:test・litus src fixture 直読み）
+npm run smoke                     # 資格情報不要の実TUS疎通（browser→html→litus判定）
 ```
 
-ナビゲーション（Playwright）部は実認証が要るため自動テスト対象外。`npm run canary` の
-手動スモークで確認する。
+`npm run smoke` は認証前パイプライン（chromium 起動・実 LETUS 到達・litus 判定 import）を
+検証済み。**認証後のナビゲーション**（各収集面への到達）は storageState が要るため自動テスト
+対象外で、`npm run canary` の本番スモークで確認する。
 
 ## 初回ライブ検証チェックリスト（storageState 作成後・唯一の未検証領域）
 

@@ -2,11 +2,13 @@
 // 利用者が CLASS/LETUS を手動ログイン（ID/パスワード/MFA/KMSI）し、Enter で cookie を書き出す。
 // このスクリプトは資格情報を一切受け取らない・保持しない（ブラウザ内で利用者が入力する）。
 import { chromium } from 'playwright'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
+import { mkdirSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 
 const OUT = process.env.STORAGE_STATE || join(homedir(), 'ops', 'storageState.json')
+mkdirSync(dirname(OUT), { recursive: true }) // ~/ops が無くても保存できるように
 
 const browser = await chromium.launch({ headless: false })
 const ctx = await browser.newContext({ locale: 'ja-JP' })
