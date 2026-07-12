@@ -11,6 +11,7 @@ import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMe
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
+import FreshnessLabel from '../ui/FreshnessLabel'
 import { maintenanceSystemAt } from '../health/maintenanceWindow'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
@@ -59,6 +60,8 @@ export default function TimetableScreen() {
   const [syncing, setSyncing] = useState(false)
   // 時間割収集の最終ヘルス（層1の正直表示バナー用）。
   const [health, setHealth] = useState<StoredHealth | null>(null)
+  // 時間割の鮮度時刻（キャッシュ閲覧保証：常設ラベルでいつ取得した情報かを伝える）。
+  const [refreshedAt, setRefreshedAt] = useState(0)
   // 多重起動防止（非同期スロットル判定中の再入も弾く）。setSyncing更新関数の中で副作用を起こさない。
   const syncingRef = useRef(false)
 
@@ -95,6 +98,7 @@ export default function TimetableScreen() {
       loadClassEvents().then((e) => { if (active) setEvents(e) }).catch(() => undefined)
       loadWeeklyPatterns().then((m) => { if (active) setPatterns(m) }).catch(() => undefined)
       loadCollectionHealth().then((m) => { if (active) setHealth(m.timetable ?? null) }).catch(() => undefined)
+      loadTimetableRefreshedAt().then((at) => { if (active) setRefreshedAt(at) }).catch(() => undefined)
       ;(async () => {
         const map = await loadCourseMap()
         const snaps = await loadCourseSnapshots()
@@ -185,6 +189,7 @@ export default function TimetableScreen() {
 
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} refreshControl={refresh}>
         <HealthBanner health={health?.health} source="class" />
+        <FreshnessLabel at={refreshedAt} />
         {!col ? (
           <View style={[ui.card, { marginTop: 16 }]}>
             <Text style={{ color: ui.valueColor }}>
