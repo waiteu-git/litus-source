@@ -24,11 +24,15 @@ type IconName = keyof typeof Ionicons.glyphMap
 export function Accordion({
   title,
   icon,
+  subtitle,
+  right,
   defaultOpen = false,
   children,
 }: {
   title: string
   icon?: IconName
+  subtitle?: string
+  right?: ReactNode
   defaultOpen?: boolean
   children: ReactNode
 }) {
@@ -60,11 +64,23 @@ export function Accordion({
       <Pressable style={[ui.card, styles.head]} onPress={toggle}>
         <View style={styles.headLeft}>
           {icon ? <Ionicons name={icon} size={18} color={headColor} /> : null}
-          <Text style={[styles.title, { color: headColor }]}>{title}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.title, { color: headColor }]} numberOfLines={1}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={[styles.subtitle, { color: ui.labelColor }]} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
         </View>
-        <Animated.View style={{ transform: [{ rotate }] }}>
-          <Ionicons name="chevron-down" size={18} color={headColor} />
-        </Animated.View>
+        <View style={styles.headRight}>
+          {right}
+          <Animated.View style={{ transform: [{ rotate }] }}>
+            <Ionicons name="chevron-down" size={18} color={headColor} />
+          </Animated.View>
+        </View>
       </Pressable>
       {open ? (
         <Animated.View style={[styles.body, { opacity: bodyOpacity }]}>{children}</Animated.View>
@@ -76,7 +92,9 @@ export function Accordion({
 const styles = StyleSheet.create({
   wrap: { marginTop: 12 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
   title: { fontSize: 15, fontWeight: '600' },
+  subtitle: { fontSize: 12, marginTop: 2 },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   body: { marginTop: 8, gap: 8 },
 })
