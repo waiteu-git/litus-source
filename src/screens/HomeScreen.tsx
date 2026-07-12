@@ -26,6 +26,7 @@ import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMeta
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
+import FreshnessLabel from '../ui/FreshnessLabel'
 import { maintenanceSystemAt } from '../health/maintenanceWindow'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS } from '../theme'
@@ -72,6 +73,8 @@ export default function HomeScreen() {
   const [bulletinDiag, setBulletinDiag] = useState('')
   // 掲示収集の最終ヘルス（層1の正直表示バナー用）。
   const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
+  // 掲示の最終更新時刻（層1の鮮度常設表示用）。
+  const [bulletinRefreshedAt, setBulletinRefreshedAt] = useState(0)
 
   useFocusEffect(
     useCallback(() => {
@@ -89,6 +92,9 @@ export default function HomeScreen() {
       }
       loadCollectionHealth()
         .then((m) => active && setBulletinHealth(m.bulletin ?? null))
+        .catch(() => undefined)
+      loadBulletinRefreshedAt()
+        .then((at) => active && setBulletinRefreshedAt(at))
         .catch(() => undefined)
       loadWeeklyPatterns()
         .then((m) => active && setWeeklyPatterns(m))
@@ -371,6 +377,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <HealthBanner health={bulletinHealth?.health} source="class" />
+          <FreshnessLabel at={bulletinRefreshedAt} />
           {unreadBulletin.length > 0 ? (
             <View style={[ui.card, styles.bulletinCard]}>
               <View style={styles.bulletinHead}>
@@ -506,6 +513,7 @@ export default function HomeScreen() {
             loadBulletinDigest().then(setBulletin).catch(() => undefined)
             if (__DEV__) loadBulletinDiag().then(setBulletinDiag).catch(() => undefined)
             loadCollectionHealth().then((m) => setBulletinHealth(m.bulletin ?? null)).catch(() => undefined)
+            loadBulletinRefreshedAt().then(setBulletinRefreshedAt).catch(() => undefined)
           }}
         />
       ) : null}
