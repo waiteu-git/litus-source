@@ -11,16 +11,12 @@ export async function loadNotifiedBulletins(): Promise<string[]> {
   return deserializeNotifiedIds(await AsyncStorage.getItem(KEY))
 }
 
-export async function saveNotifiedBulletins(ids: string[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeNotifiedIds(ids))
-}
-
 /** 通知済みidを直列キュー内でread-modify-writeする（背景/前景収集の同時進行によるlost update回避）。更新後を返す。 */
 export async function mutateNotifiedBulletins(
   mutate: (ids: string[]) => string[],
 ): Promise<string[]> {
   return enqueueWrite(async () => {
-    const next = mutate(deserializeNotifiedIds(await AsyncStorage.getItem(KEY)))
+    const next = mutate(await loadNotifiedBulletins())
     await AsyncStorage.setItem(KEY, serializeNotifiedIds(next))
     return next
   })

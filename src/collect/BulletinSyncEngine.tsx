@@ -84,7 +84,7 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
           // prev はマージ関数のクロージャで捕捉する（mutateBulletinDigest の直列キュー内で読むため、
           // 別途 loadBulletinDigest を挟むと lost update が再発する）。差分検知はこの prev を基準にする。
           let prev: BulletinItem[] = []
-          const merged = await mutateBulletinDigest((cur) => {
+          await mutateBulletinDigest((cur) => {
             prev = cur
             return mergeBulletinItems(cur, incoming)
           })
