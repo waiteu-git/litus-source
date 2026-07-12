@@ -15,13 +15,14 @@ import { ThemeProvider } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
   addNotificationResponseListener,
+  clearDeliveredBulletinNotifications,
   configureNotifications,
   getInitialNotificationTag,
   requestNotificationPermission,
 } from './src/notifications/notifier'
 import { refreshAllNotifications } from './src/notifications/notificationRefresh'
 import { subscribeForeground } from './src/app/foregroundOrchestrator'
-import { navigationRef, flushPendingNavigation, requestOpenAttendance } from './src/navigation/navigationRef'
+import { navigationRef, flushPendingNavigation, requestOpenAttendance, requestOpenBulletins } from './src/navigation/navigationRef'
 
 // 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
 const ATTENDANCE_TAG = 'attendance-alarm'
@@ -31,6 +32,7 @@ export default function App() {
     ;(async () => {
       try {
         await configureNotifications()
+        await clearDeliveredBulletinNotifications()
         await requestNotificationPermission()
         await refreshAllNotifications()
       } catch (e) {
@@ -46,9 +48,12 @@ export default function App() {
     let sub: { remove: () => void } | null = null
     ;(async () => {
       try {
-        if ((await getInitialNotificationTag()) === ATTENDANCE_TAG) requestOpenAttendance()
+        const initialTag = await getInitialNotificationTag()
+        if (initialTag === ATTENDANCE_TAG) requestOpenAttendance()
+        else if (initialTag === 'bulletin-new') requestOpenBulletins()
         sub = await addNotificationResponseListener((tag) => {
           if (tag === ATTENDANCE_TAG) requestOpenAttendance()
+          else if (tag === 'bulletin-new') requestOpenBulletins()
         })
       } catch (e) {
         console.warn('通知応答の購読に失敗しました', e)
