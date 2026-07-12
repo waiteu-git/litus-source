@@ -14,10 +14,13 @@ import { loadCourseMap } from '../storage/courseMapStore'
 import { buildSyllabusUrl } from '../links/syllabus'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { CourseSnapshot } from '../storage/courseSnapshotSerialize'
-import { loadClassEvents } from '../storage/classEventsStore'
+import { loadClassEvents, upsertClassEvent } from '../storage/classEventsStore'
 import type { ClassEvent } from '../timetableEvents/classEvent'
 import { cellBadgeText } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+import { useBulletinEventCandidates } from '../timetableEvents/useBulletinEventCandidates'
+import { candidateToClassEvent, type CandidateView } from '../timetableEvents/bulletinEvents'
+import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { loadWeeklyPatterns, saveWeeklyPattern } from '../storage/weeklyPatternStore'
 import {
   mondayOf,
@@ -33,6 +36,8 @@ import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadAttendanceOverrides, saveAttendanceOverride } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk, type AttendanceRisk } from '../attendance/attendanceRisk'
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
+import { loadBulletinDigest } from '../storage/bulletinDigestStore'
+import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -106,13 +111,15 @@ export default function SubjectDetailScreen() {
   const { courseCode, name, day, dayKey, period, room, teachers, isRemote } = route.params
   const { variant } = useThemeVariant()
   const ui = useUi()
-  const { version } = useClassEventsVersion()
+  const { version, bump } = useClassEventsVersion()
+  const candidates = useBulletinEventCandidates(courseCode, name)
   const [letusUrl, setLetusUrl] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<CourseSnapshot | null>(null)
   const [events, setEvents] = useState<ClassEvent[]>([])
   const [pattern, setPattern] = useState<WeeklyPattern>({})
   const [attStats, setAttStats] = useState<AttendanceCourseStats | null>(null)
   const [attTotal, setAttTotal] = useState<number | null>(null)
+  const [unread, setUnread] = useState(0)
   // カレンダー用の週リスト（今週の2週前〜16週後）。画面表示中は固定。
   const weeks = useMemo(() => weekList(new Date(), 2, 16), [])
   const thisKey = weekMondayKey(new Date())
@@ -170,6 +177,12 @@ export default function SubjectDetailScreen() {
       .catch(() => undefined)
   }, [name, version])
 
+  useEffect(() => {
+    loadBulletinDigest()
+      .then((d) => setUnread(courseUnreadCounts(d, new Set([courseCode])).get(courseCode) ?? 0))
+      .catch(() => undefined)
+  }, [courseCode])
+
   const hasDiff = !!snapshot && snapshot.added.length + snapshot.removed.length > 0
 
   const now = new Date()
@@ -213,7 +226,25 @@ export default function SubjectDetailScreen() {
       attention: risk.level !== 'safe',
     })
   }
-  // d: 掲示未読 は掲示未読バッジ機能の着地後に summaryRows へ push。
+  if (unread > 0) {
+    summaryRows.push({ key: 'unread', icon: 'mail-unread-outline', text: `未読の掲示 ${unread}件` })
+  }
+
+  // 候補[追加]: 候補→ClassEvent を保存し、時間割/通知に反映。掲示idを createdAt に用いて決定論ID。
+  const addCandidate = async (v: CandidateView) => {
+    await upsertClassEvent(candidateToClassEvent(v.candidate, v.candidate.sourceBulletinId))
+    bump()
+    refreshAllNotifications().catch(() => undefined)
+  }
+  // 候補[補講を追記]: 既存の休講イベントに補講日を上書きする。
+  const appendMakeup = async (v: CandidateView) => {
+    if (!v.matchedEventId || !v.candidate.makeup) return
+    const target = (await loadClassEvents()).find((e) => e.id === v.matchedEventId)
+    if (!target) return
+    await upsertClassEvent({ ...target, makeupStatus: 'has', makeup: v.candidate.makeup })
+    bump()
+    refreshAllNotifications().catch(() => undefined)
+  }
 
   return (
     <View style={styles.root}>
@@ -229,6 +260,11 @@ export default function SubjectDetailScreen() {
             <View style={styles.chipRow}>
               {room ? <InfoChip icon="location-outline" label={isRemote ? `${room}・遠隔` : room} /> : null}
               {teachers && teachers[0] ? <InfoChip icon="person-outline" label={teachers[0]} /> : null}
+            </View>
+          ) : null}
+          {unread > 0 ? (
+            <View style={styles.chipRow}>
+              <InfoChip icon="mail-unread-outline" label={`未読の掲示 ${unread}件`} />
             </View>
           ) : null}
         </View>
@@ -251,6 +287,17 @@ export default function SubjectDetailScreen() {
           icon="document-text-outline"
           title="シラバスを開く"
           onPress={() => navigation.navigate('Syllabus', { url: syllabusUrl, name })}
+        />
+        <LinkAction
+          icon="create-outline"
+          title="この科目の課題を追加"
+          onPress={() =>
+            // タブ（課題）→ネストのManualAssignmentへ横断遷移。親ナビゲータの型は緩いため最小I/Fにキャスト。
+            (navigation.getParent() as unknown as { navigate: (name: string, params: object) => void } | undefined)?.navigate('課題', {
+              screen: 'ManualAssignment',
+              params: { presetCourseName: name, presetCourseCode: courseCode },
+            })
+          }
         />
 
         {risk && risk.trackable ? (
@@ -306,6 +353,35 @@ export default function SubjectDetailScreen() {
               <Text style={[styles.addBtnText, { color: ui.green ? '#ffffff' : COLORS.emerald }]}>予定を追加</Text>
             </Pressable>
           </View>
+          {candidates.map((v) => (
+            <View key={`cand-${v.candidate.sourceBulletinId}`} style={[ui.card, styles.candRow]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={styles.candHead}>
+                  <View style={styles.candTag}>
+                    <Text style={styles.candTagText}>掲示より</Text>
+                  </View>
+                  <Text style={[styles.eventText, { color: ui.valueColor }]} numberOfLines={1}>
+                    {cellBadgeText(candidateToClassEvent(v.candidate, v.candidate.sourceBulletinId))}
+                  </Text>
+                </View>
+                <Text style={[styles.eventSub, { color: ui.labelColor }]}>
+                  {v.candidate.date} ・ {v.candidate.periods.join('・')}限
+                  {v.candidate.makeup ? ` ・ 補講 ${v.candidate.makeup.date}` : ''}
+                </Text>
+              </View>
+              {v.state === 'added' ? (
+                <Text style={[styles.candDone, { color: ui.labelColor }]}>追加済み</Text>
+              ) : v.state === 'makeupAppend' ? (
+                <Pressable style={styles.candBtn} onPress={() => appendMakeup(v)}>
+                  <Text style={styles.candBtnText}>補講を追記</Text>
+                </Pressable>
+              ) : (
+                <Pressable style={styles.candBtn} onPress={() => addCandidate(v)}>
+                  <Text style={styles.candBtnText}>追加</Text>
+                </Pressable>
+              )}
+            </View>
+          ))}
           {events.length === 0 ? (
             <Text style={{ color: ui.labelColor, fontSize: 13, marginTop: 8 }}>
               休講・補講・教室変更・小テスト・中間・期末などを登録できます。
@@ -435,6 +511,13 @@ const styles = StyleSheet.create({
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   eventText: { fontSize: 14, fontWeight: '600' },
   eventSub: { fontSize: 12, marginTop: 2 },
+  candRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: COLORS.emerald },
+  candHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  candTag: { backgroundColor: '#e8f4ee', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  candTagText: { fontSize: 10, fontWeight: '800', color: COLORS.emeraldDark },
+  candDone: { fontSize: 12, fontWeight: '700' },
+  candBtn: { backgroundColor: COLORS.emerald, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
+  candBtnText: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
   makeupPill: { backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   makeupPillText: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
   segRow: { flexDirection: 'row', gap: 8 },

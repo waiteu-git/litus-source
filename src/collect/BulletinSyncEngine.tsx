@@ -86,7 +86,7 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
           let prev: BulletinItem[] = []
           await mutateBulletinDigest((cur) => {
             prev = cur
-            return mergeBulletinItems(cur, incoming)
+            return mergeBulletinItems(cur, incoming, new Date())
           })
           await saveBulletinRefreshedAt()
           diag.current.got = true

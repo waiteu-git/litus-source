@@ -19,7 +19,18 @@ export type TimetableStackParamList = {
     isRemote?: boolean
   }
   // 各回イベント（休講/補講等）の追加/編集。editId ありで既存を編集。
-  ClassEventForm: { courseName: string; courseCode: string | null; dayKey?: DayOfWeek; editId?: string }
+  // initial* は掲示候補からの新規追加時のプリフィル（editId 無しのときのみ反映）。
+  ClassEventForm: {
+    courseName: string
+    courseCode: string | null
+    dayKey?: DayOfWeek
+    editId?: string
+    initialType?: 'cancel' | 'makeup' | 'roomChange' | 'quiz' | 'midterm' | 'final' | 'other'
+    initialDate?: string
+    initialPeriods?: number[]
+    initialRoom?: string
+    initialMakeup?: { date: string; periods: number[]; room: string | null }
+  }
   // 個人予定（毎週繰り返し）の追加/編集。editId ありで既存を編集。day/period は空きセルタップ時のプリフィル。
   PersonalEventForm: { editId?: string; day?: PersonalDayKey; period?: number }
   Syllabus: { url: string; name: string }
@@ -31,8 +42,8 @@ export type AssignmentsStackParamList = {
   AssignmentsHome: undefined
   CollectAssignments: undefined
   LetusAssignmentDetail: { url: string }
-  // url なし=新規手動追加 / url あり=その手動課題を編集。
-  ManualAssignment: { url?: string } | undefined
+  // url なし=新規手動追加 / url あり=その手動課題を編集。preset* は科目詳細からの新規追加時の初期値。
+  ManualAssignment: { url?: string; presetCourseName?: string; presetCourseCode?: string } | undefined
   Web: { url: string; title?: string }
   PdfViewer: { url: string; title?: string }
 }
