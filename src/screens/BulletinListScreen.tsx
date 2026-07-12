@@ -5,6 +5,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
+import { loadCollectionHealth } from '../storage/collectionHealthStore'
+import type { StoredHealth } from '../storage/collectionHealthSerialize'
+import { loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
+import HealthBanner from '../ui/HealthBanner'
+import FreshnessLabel from '../ui/FreshnessLabel'
 import type { HomeStackParamList } from '../navigation/types'
 import { COLORS } from '../theme'
 
@@ -20,12 +25,20 @@ export default function BulletinListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>()
   const [items, setItems] = useState<BulletinItem[]>([])
   const [tab, setTab] = useState<Tab>('unread')
+  const [health, setHealth] = useState<StoredHealth | null>(null)
+  const [refreshedAt, setRefreshedAt] = useState(0)
 
   useFocusEffect(
     useCallback(() => {
       let active = true
       loadBulletinDigest()
         .then((d) => active && setItems(d))
+        .catch(() => undefined)
+      loadCollectionHealth()
+        .then((m) => active && setHealth(m.bulletin ?? null))
+        .catch(() => undefined)
+      loadBulletinRefreshedAt()
+        .then((at) => active && setRefreshedAt(at))
         .catch(() => undefined)
       return () => {
         active = false
@@ -58,6 +71,8 @@ export default function BulletinListScreen() {
         contentContainerStyle={[styles.list, { paddingBottom: clearance }]}
         showsVerticalScrollIndicator={false}
       >
+        <HealthBanner health={health?.health} source="class" />
+        <FreshnessLabel at={refreshedAt} />
         {shown.length === 0 ? (
           <View style={[ui.card, { marginTop: 12 }]}>
             <Text style={{ color: ui.valueColor }}>
