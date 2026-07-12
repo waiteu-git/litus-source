@@ -8,7 +8,7 @@ import { loadBulletinNotifySettings, saveBulletinNotifySettings } from '../stora
 import type { BulletinNotifySettings } from '../notifications/bulletinNotify'
 import { ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
-import { COLORS, useThemeVariant, type ThemeVariant } from '../theme'
+import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
 import { useDisplaySettings } from '../displaySettings'
 
 type Course = { courseCode: string; name: string }
@@ -16,7 +16,7 @@ type Course = { courseCode: string; name: string }
 export default function SettingsScreen() {
   const ui = useUi()
   const clearance = useTabBarClearance()
-  const { variant, setVariant } = useThemeVariant()
+  const { preference, setPreference } = useThemeVariant()
   const { timetableView, assignmentsView, setTimetableView, setAssignmentsView } = useDisplaySettings()
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
@@ -74,8 +74,8 @@ export default function SettingsScreen() {
               { key: 'green', label: '翠' },
               { key: 'white', label: '白' },
             ]}
-            value={variant}
-            onChange={(k) => setVariant(k as ThemeVariant)}
+            value={preference}
+            onChange={(k) => setPreference(k as ThemePreference)}
           />
           <Text style={[styles.note, { color: ui.labelColor }]}>
             UIと起動アニメーションが選んだテーマに合わせて切り替わります。
