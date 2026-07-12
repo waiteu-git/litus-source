@@ -21,7 +21,7 @@ import { buildBulletinNotificationContent } from './bulletinNotify'
 
 const TAG = 'attendance-alarm'
 const ASSIGNMENT_TAG = 'assignment-reminder'
-const BULLETIN_TAG = 'bulletin-new'
+export const BULLETIN_TAG = 'bulletin-new'
 
 export const ATTENDANCE_CHANNEL_ID = 'attendance'
 export const ASSIGNMENT_CHANNEL_ID = 'assignments'

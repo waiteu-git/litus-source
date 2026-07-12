@@ -16,6 +16,7 @@ import { ThemeProvider } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
   addNotificationResponseListener,
+  BULLETIN_TAG,
   clearDeliveredBulletinNotifications,
   configureNotifications,
   getInitialNotificationTag,
@@ -44,17 +45,18 @@ export default function App() {
     return subscribeForeground('notifications', () => refreshAllNotifications().catch(() => undefined))
   }, [])
 
-  // 出席通知タップで出席画面を即開く。cold start（起動時タップ）＋ warm（起動中タップ）の両対応。
+  // 通知タップで対応画面を即開く。出席通知は出席画面、掲示通知は掲示一覧を開く。
+  // cold start（起動時タップ）＋ warm（起動中タップ）の両対応。
   useEffect(() => {
     let sub: { remove: () => void } | null = null
     ;(async () => {
       try {
         const initialTag = await getInitialNotificationTag()
         if (initialTag === ATTENDANCE_TAG) requestOpenAttendance()
-        else if (initialTag === 'bulletin-new') requestOpenBulletins()
+        else if (initialTag === BULLETIN_TAG) requestOpenBulletins()
         sub = await addNotificationResponseListener((tag) => {
           if (tag === ATTENDANCE_TAG) requestOpenAttendance()
-          else if (tag === 'bulletin-new') requestOpenBulletins()
+          else if (tag === BULLETIN_TAG) requestOpenBulletins()
         })
       } catch (e) {
         console.warn('通知応答の購読に失敗しました', e)

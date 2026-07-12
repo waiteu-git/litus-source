@@ -12,9 +12,9 @@ import {
   type BulletinCollectDiag,
 } from '../health/collectionSignals'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
-import { diffNewBulletins, pruneNotifiedIds } from '../notifications/bulletinNotify'
+import { diffNewBulletins, capNotifiedIds, NOTIFIED_IDS_CAP } from '../notifications/bulletinNotify'
 import { presentBulletinNotifications } from '../notifications/notifier'
-import { loadNotifiedBulletins, saveNotifiedBulletins } from '../storage/notifiedBulletinsStore'
+import { mutateNotifiedBulletins } from '../storage/notifiedBulletinsStore'
 import { loadBulletinNotifySettings } from '../storage/bulletinNotifySettingsStore'
 
 /**
@@ -93,14 +93,16 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
           // 新着ローカル通知（即時発火・完全独立経路）。失敗しても収集は成立済みなので握りつぶす。
           try {
             const settings = await loadBulletinNotifySettings()
-            const notified = await loadNotifiedBulletins()
+            const incomingIds = incoming.map((i) => i.id)
+            let notified: string[] = []
+            await mutateNotifiedBulletins((cur) => {
+              notified = cur
+              return capNotifiedIds([...cur, ...incomingIds], NOTIFIED_IDS_CAP)
+            })
             const newItems = diffNewBulletins(prev, incoming, notified, settings)
-            if (settings.enabled && newItems.length > 0) {
+            if (newItems.length > 0) {
               await presentBulletinNotifications(newItems)
             }
-            const liveIds = merged.map((i) => i.id)
-            const union = [...notified, ...incoming.map((i) => i.id)]
-            await saveNotifiedBulletins(pruneNotifiedIds(union, liveIds))
           } catch {
             // 通知/通知済み更新の失敗は無視（次回収集で再評価）。
           }

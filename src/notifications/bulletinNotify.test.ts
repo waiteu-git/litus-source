@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   diffNewBulletins,
   buildBulletinNotificationContent,
-  pruneNotifiedIds,
+  capNotifiedIds,
   DEFAULT_BULLETIN_NOTIFY_SETTINGS,
   type BulletinNotifySettings,
 } from './bulletinNotify'
@@ -73,15 +73,23 @@ describe('buildBulletinNotificationContent', () => {
     ])
     expect(got).toEqual({ title: '新着掲示 3件', body: '休講のお知らせ 他' })
   })
+
+  it('空配列でも例外を投げない', () => {
+    expect(buildBulletinNotificationContent([])).toEqual({ title: '新着掲示', body: '' })
+  })
 })
 
-describe('pruneNotifiedIds', () => {
-  it('現存idのみ残し重複を畳む', () => {
-    expect(pruneNotifiedIds(['a', 'b', 'b', 'x'], ['a', 'b', 'c'])).toEqual(['a', 'b'])
+describe('capNotifiedIds', () => {
+  it('後勝ちで重複を畳み最新位置を残す（古い→新しい順）', () => {
+    expect(capNotifiedIds(['a', 'b', 'a'], 10)).toEqual(['b', 'a'])
   })
 
-  it('liveが空なら全消去', () => {
-    expect(pruneNotifiedIds(['a', 'b'], [])).toEqual([])
+  it('上限超過は古い方から丸める', () => {
+    expect(capNotifiedIds(['a', 'b', 'c', 'd'], 2)).toEqual(['c', 'd'])
+  })
+
+  it('重複なし・上限内はそのまま', () => {
+    expect(capNotifiedIds(['a', 'b'], 10)).toEqual(['a', 'b'])
   })
 })
 
