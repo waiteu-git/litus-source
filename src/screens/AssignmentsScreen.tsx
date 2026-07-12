@@ -17,6 +17,7 @@ import { byDeadlineAsc, formatDeadline, isSubmitted, relDue, TONE_COLOR, urgency
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
+import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { maintenanceSystemAt } from '../health/maintenanceWindow'
 import { COLORS } from '../theme'
 
@@ -230,6 +231,7 @@ export default function AssignmentsScreen() {
         }
       />
 
+      <KillSwitchBanner feature="letus" />
       <HealthBanner health={health?.health} source="letus" />
 
       {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。 */}

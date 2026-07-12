@@ -11,6 +11,7 @@ import { AuthProvider } from './src/auth/AuthProvider'
 import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion'
 import { ClassEventsVersionProvider } from './src/timetableEvents/classEventsVersion'
 import { LoginGate } from './src/auth/LoginGate'
+import { KillSwitchGate, KillSwitchProvider } from './src/health/KillSwitchProvider'
 import { ThemeProvider } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
@@ -72,17 +73,25 @@ export default function App() {
         <AssignmentsVersionProvider>
         <ClassEventsVersionProvider>
           <NavigationContainer ref={navigationRef} onReady={flushPendingNavigation}>
-            <LoginGate>
-              <AuthProvider>
-                <ClassViewProvider>
-                  <AttendanceEngineProvider>
-                    <RootTabs />
-                    <BackgroundLetusSync />
-                    <BackgroundBulletinSync />
-                  </AttendanceEngineProvider>
-                </ClassViewProvider>
-              </AuthProvider>
-            </LoginGate>
+            {/* KillSwitchProviderはLoginGateの外側: all停止時はログインprobe用WebViewすら
+                マウントさせない（リモート停止指示の設計: docs/2026-07-12-remote-kill-switch-design.md）。 */}
+            <KillSwitchProvider>
+              <LoginGate>
+                <AuthProvider>
+                  <ClassViewProvider>
+                    <AttendanceEngineProvider>
+                      <RootTabs />
+                      <KillSwitchGate feature="letus">
+                        <BackgroundLetusSync />
+                      </KillSwitchGate>
+                      <KillSwitchGate feature="bulletin">
+                        <BackgroundBulletinSync />
+                      </KillSwitchGate>
+                    </AttendanceEngineProvider>
+                  </ClassViewProvider>
+                </AuthProvider>
+              </LoginGate>
+            </KillSwitchProvider>
           </NavigationContainer>
           <StatusBar style="auto" />
         </ClassEventsVersionProvider>

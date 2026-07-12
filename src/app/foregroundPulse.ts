@@ -10,12 +10,14 @@ export const PULSE_MIN_GAP_MS = 5000
 
 /**
  * 復帰後にスロットを発火させる遅延。軽い順に前へ:
+ * - killSwitch: 停止指示の確認（単発GET・大学システムに触らない）。即時。
  * - authWarmup / timetableReload: 軽量（WebView温め直し・ローカル読み込み）。即時。
  * - attendance: 出席WebViewへの再判定注入。授業確認は優先度が高いので早め。
  * - notifications: 通知の貼り直し（時間割再読込の反映後が望ましい）。
  * - letusSync: LETUSフル同期（最も重い）。他が落ち着いてから。
  */
 export const SLOT_OFFSETS_MS = {
+  killSwitch: 0,
   authWarmup: 0,
   timetableReload: 0,
   attendance: 1200,

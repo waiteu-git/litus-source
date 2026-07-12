@@ -3,6 +3,7 @@ import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, Vi
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg, CountdownRing, useTabBarClearance } from '../ui/screen'
+import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { countdownClock, countdownFraction } from '../attendance/countdown'
 import { normalizeAttendanceCode } from '../attendance/normalizeCode'
 import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
@@ -95,6 +96,8 @@ export default function AttendanceScreen() {
                     : '確認中…'}
           </Text>
         </View>
+
+        <KillSwitchBanner feature="attendance" />
 
         {conflict ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
