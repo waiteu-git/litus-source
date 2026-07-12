@@ -8,7 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { SectionLabel, useUi } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
 import { resolveNextSession, pickAttentionEvent, type NextSession } from '../timetableEvents/nextSession'
-import { COLORS, useThemeVariant } from '../theme'
+import { COLORS, DARK } from '../theme'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { buildSyllabusUrl } from '../links/syllabus'
@@ -44,9 +44,9 @@ type IconName = keyof typeof Ionicons.glyphMap
 function InfoChip({ icon, label }: { icon: IconName; label: string }) {
   const ui = useUi()
   return (
-    <View style={[styles.chip, ui.green ? styles.chipGlass : styles.chipSolid]}>
-      <Ionicons name={icon} size={12} color={ui.green ? '#04322a' : COLORS.emeraldDark} />
-      <Text style={[styles.chipText, { color: ui.green ? '#04322a' : COLORS.emeraldDark }]}>{label}</Text>
+    <View style={[styles.chip, { backgroundColor: ui.colors.chipBg, borderWidth: 1, borderColor: ui.colors.chipBorder }]}>
+      <Ionicons name={icon} size={12} color={ui.pillText} />
+      <Text style={[styles.chipText, { color: ui.pillText }]}>{label}</Text>
     </View>
   )
 }
@@ -55,8 +55,8 @@ function LinkAction({ icon, title, sub, onPress }: { icon: IconName; title: stri
   const ui = useUi()
   return (
     <Pressable style={[ui.card, styles.linkRow]} onPress={onPress}>
-      <View style={[styles.linkIcon, { backgroundColor: ui.green ? 'rgba(255,255,255,0.28)' : '#e8f4ee' }]}>
-        <Ionicons name={icon} size={19} color={ui.green ? '#ffffff' : COLORS.emerald} />
+      <View style={[styles.linkIcon, { backgroundColor: ui.softBoxBg }]}>
+        <Ionicons name={icon} size={19} color={ui.accent} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[styles.linkTitle, { color: ui.valueColor }]} numberOfLines={1}>
@@ -68,7 +68,7 @@ function LinkAction({ icon, title, sub, onPress }: { icon: IconName; title: stri
           </Text>
         ) : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={ui.green ? 'rgba(255,255,255,0.7)' : '#9bb3ab'} />
+      <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
     </Pressable>
   )
 }
@@ -90,7 +90,7 @@ function SubjectSummaryCard({
             <Text style={[styles.summaryText, { color }]} numberOfLines={1}>
               {r.text}
             </Text>
-            {r.onPress ? <Ionicons name="chevron-forward" size={15} color={ui.green ? 'rgba(255,255,255,0.7)' : '#9bb3ab'} /> : null}
+            {r.onPress ? <Ionicons name="chevron-forward" size={15} color={ui.chevron} /> : null}
           </View>
         )
         return r.onPress ? (
@@ -109,7 +109,6 @@ export default function SubjectDetailScreen() {
   const route = useRoute<RouteProp<TimetableStackParamList, 'SubjectDetail'>>()
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const { courseCode, name, day, dayKey, period, room, teachers, isRemote } = route.params
-  const { variant } = useThemeVariant()
   const ui = useUi()
   const { version, bump } = useClassEventsVersion()
   const candidates = useBulletinEventCandidates(courseCode, name)
@@ -248,7 +247,7 @@ export default function SubjectDetailScreen() {
 
   return (
     <View style={styles.root}>
-      {variant === 'green' ? <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={StyleSheet.absoluteFill} /> : null}
+      {ui.colors.gradient ? <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} /> : null}
       <ScrollView contentContainerStyle={styles.body}>
         <View style={[ui.card, styles.hero]}>
           <Text style={[styles.name, { color: ui.valueColor }]}>{name}</Text>
@@ -319,12 +318,12 @@ export default function SubjectDetailScreen() {
             <View style={[styles.attStepper, { borderTopColor: ui.dividerColor }]}>
               <Text style={[styles.attSub, { color: ui.labelColor }]}>総回数（隔週などで手動調整）</Text>
               <View style={styles.attStepBtns}>
-                <Pressable style={styles.attStepBtn} onPress={() => changeTotal(-1)}>
-                  <Ionicons name="remove" size={16} color={ui.green ? '#eafff7' : COLORS.emerald} />
+                <Pressable style={[styles.attStepBtn, ui.dark && { backgroundColor: DARK.softBox }]} onPress={() => changeTotal(-1)}>
+                  <Ionicons name="remove" size={16} color={ui.accentSoft} />
                 </Pressable>
                 <Text style={[styles.attTotalNum, { color: ui.valueColor }]}>{attTotal ?? risk.scheduledTotal}</Text>
-                <Pressable style={styles.attStepBtn} onPress={() => changeTotal(1)}>
-                  <Ionicons name="add" size={16} color={ui.green ? '#eafff7' : COLORS.emerald} />
+                <Pressable style={[styles.attStepBtn, ui.dark && { backgroundColor: DARK.softBox }]} onPress={() => changeTotal(1)}>
+                  <Ionicons name="add" size={16} color={ui.accentSoft} />
                 </Pressable>
               </View>
             </View>
@@ -346,11 +345,11 @@ export default function SubjectDetailScreen() {
           <View style={styles.eventsHead}>
             <Text style={{ color: ui.labelColor, fontSize: 12 }}>休講・補講・教室変更・小テスト等</Text>
             <Pressable
-              style={[styles.addBtn, { backgroundColor: ui.green ? 'rgba(255,255,255,0.28)' : '#e8f4ee' }]}
+              style={[styles.addBtn, { backgroundColor: ui.softBoxBg }]}
               onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })}
             >
-              <Ionicons name="add" size={16} color={ui.green ? '#ffffff' : COLORS.emerald} />
-              <Text style={[styles.addBtnText, { color: ui.green ? '#ffffff' : COLORS.emerald }]}>予定を追加</Text>
+              <Ionicons name="add" size={16} color={ui.accent} />
+              <Text style={[styles.addBtnText, { color: ui.accent }]}>予定を追加</Text>
             </Pressable>
           </View>
           {candidates.map((v) => (
@@ -404,7 +403,7 @@ export default function SubjectDetailScreen() {
                     <Text style={styles.makeupPillText}>補講を入力</Text>
                   </View>
                 ) : (
-                  <Ionicons name="chevron-forward" size={18} color={ui.green ? 'rgba(255,255,255,0.7)' : '#9bb3ab'} />
+                  <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
                 )}
               </Pressable>
             ))
@@ -420,13 +419,13 @@ export default function SubjectDetailScreen() {
             実施する週を選びます。既定は全週実施。隔週は「プリセット」で入れて、ずれた週だけタップで切り替えてください。
           </Text>
           <View style={styles.segRow}>
-            <Pressable style={styles.presetBtn} onPress={() => updatePattern(applyBiweeklyPreset(mondayOf(new Date()), weeks))}>
-              <Ionicons name="repeat-outline" size={15} color={ui.green ? '#eafff7' : COLORS.emerald} />
-              <Text style={[styles.presetText, { color: ui.green ? '#eafff7' : COLORS.emerald }]}>隔週プリセット</Text>
+            <Pressable style={[styles.presetBtn, ui.dark && { backgroundColor: DARK.softBox }]} onPress={() => updatePattern(applyBiweeklyPreset(mondayOf(new Date()), weeks))}>
+              <Ionicons name="repeat-outline" size={15} color={ui.accentSoft} />
+              <Text style={[styles.presetText, { color: ui.accentSoft }]}>隔週プリセット</Text>
             </Pressable>
-            <Pressable style={styles.presetBtn} onPress={() => updatePattern(clearPattern())}>
-              <Ionicons name="checkmark-done-outline" size={15} color={ui.green ? '#eafff7' : COLORS.emerald} />
-              <Text style={[styles.presetText, { color: ui.green ? '#eafff7' : COLORS.emerald }]}>全週実施に戻す</Text>
+            <Pressable style={[styles.presetBtn, ui.dark && { backgroundColor: DARK.softBox }]} onPress={() => updatePattern(clearPattern())}>
+              <Ionicons name="checkmark-done-outline" size={15} color={ui.accentSoft} />
+              <Text style={[styles.presetText, { color: ui.accentSoft }]}>全週実施に戻す</Text>
             </Pressable>
           </View>
           <View style={{ marginTop: 8 }}>
@@ -442,8 +441,8 @@ export default function SubjectDetailScreen() {
                   <Text style={[styles.weekLabel, { color: off ? ui.labelColor : ui.valueColor, fontWeight: isThis ? '800' : '500' }]}>
                     {w.getMonth() + 1}/{w.getDate()} の週{isThis ? ' ・ 今週' : ''}
                   </Text>
-                  <View style={[styles.weekPill, { backgroundColor: off ? '#f2ddd6' : ui.green ? 'rgba(255,255,255,0.32)' : '#d6efe4' }]}>
-                    <Text style={{ color: off ? '#a33417' : ui.green ? '#04322a' : COLORS.emeraldDark, fontSize: 12, fontWeight: '700' }}>
+                  <View style={[styles.weekPill, { backgroundColor: off ? '#f2ddd6' : ui.pillBg }]}>
+                    <Text style={{ color: off ? '#a33417' : ui.pillText, fontSize: 12, fontWeight: '700' }}>
                       {off ? '休み' : '実施'}
                     </Text>
                   </View>

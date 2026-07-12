@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
-import { COLORS } from '../theme'
+import { COLORS, DARK } from '../theme'
 import type { TimetableStackParamList } from '../navigation/types'
 import { makePersonalEventId, PERSONAL_DAYS, type PersonalDayKey, type PersonalEvent } from '../timetableEvents/personalEvent'
 import { loadPersonalEvents, upsertPersonalEvent, removePersonalEvent } from '../storage/personalEventsStore'
@@ -85,6 +85,11 @@ export default function PersonalEventFormScreen() {
     ])
   }
 
+  const inputStyle = { backgroundColor: ui.inputBg, borderColor: ui.colors.inputBorder }
+  const phColor = ui.dark ? DARK.label : '#9aa8a2'
+  // ダーク時の非選択チップ（明るい下地→暗い下地＋明翠文字）。翠/白は従来スタイルのまま。
+  const darkChip = ui.dark ? { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder } : null
+  const darkChipText = ui.dark ? { color: COLORS.emeraldLight } : null
   const label = (s: string) => <Text style={[styles.label, { color: ui.labelColor }]}>{s}</Text>
 
   return (
@@ -93,11 +98,11 @@ export default function PersonalEventFormScreen() {
         <View style={[ui.card, styles.card]}>
           {label('タイトル')}
           <TextInput
-            style={[styles.input, { color: ui.valueColor }]}
+            style={[styles.input, inputStyle, { color: ui.valueColor }]}
             value={title}
             onChangeText={setTitle}
             placeholder="例: バイト / サークル"
-            placeholderTextColor="#9aa8a2"
+            placeholderTextColor={phColor}
           />
         </View>
 
@@ -107,8 +112,8 @@ export default function PersonalEventFormScreen() {
             {PERSONAL_DAYS.map((d) => {
               const on = day === d
               return (
-                <Pressable key={d} onPress={() => setDay(d)} style={[styles.tchip, on && styles.tchipOn]}>
-                  <Text style={[styles.tchipText, on && styles.tchipTextOn]}>{DAY_LABEL[d]}</Text>
+                <Pressable key={d} onPress={() => setDay(d)} style={[styles.tchip, !on && darkChip, on && styles.tchipOn]}>
+                  <Text style={[styles.tchipText, !on && darkChipText, on && styles.tchipTextOn]}>{DAY_LABEL[d]}</Text>
                 </Pressable>
               )
             })}
@@ -121,8 +126,8 @@ export default function PersonalEventFormScreen() {
             {PERIOD_CANDIDATES.map((p) => {
               const on = periods.includes(p)
               return (
-                <Pressable key={p} onPress={() => setPeriods((v) => toggle(v, p))} style={[styles.pchip, on && styles.pchipOn]}>
-                  <Text style={[styles.pchipText, on && styles.pchipTextOn]}>{p}限</Text>
+                <Pressable key={p} onPress={() => setPeriods((v) => toggle(v, p))} style={[styles.pchip, !on && darkChip, on && styles.pchipOn]}>
+                  <Text style={[styles.pchipText, !on && darkChipText, on && styles.pchipTextOn]}>{p}限</Text>
                 </Pressable>
               )
             })}
@@ -132,22 +137,22 @@ export default function PersonalEventFormScreen() {
         <View style={[ui.card, styles.card]}>
           {label('場所（任意）')}
           <TextInput
-            style={[styles.input, { color: ui.valueColor }]}
+            style={[styles.input, inputStyle, { color: ui.valueColor }]}
             value={place}
             onChangeText={setPlace}
             placeholder="例: 駅前カフェ"
-            placeholderTextColor="#9aa8a2"
+            placeholderTextColor={phColor}
           />
         </View>
 
         <View style={[ui.card, styles.card]}>
           {label('メモ（実時刻など・任意）')}
           <TextInput
-            style={[styles.input, { color: ui.valueColor }]}
+            style={[styles.input, inputStyle, { color: ui.valueColor }]}
             value={note}
             onChangeText={setNote}
             placeholder="例: 18:30〜23:00"
-            placeholderTextColor="#9aa8a2"
+            placeholderTextColor={phColor}
           />
         </View>
 

@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview'
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import { useClassView } from '../collect/classViewArbiter'
 import { isPdfLikeUrl } from '../collect/injectedScripts'
-import { COLORS } from '../theme'
+import { COLORS, DARK, useThemeVariant } from '../theme'
 
 type Params = { Link: { url: string; title?: string; isClass?: boolean } }
 
@@ -21,6 +21,7 @@ export default function LinkViewerScreen() {
   const webviewRef = useRef<WebView>(null)
   const { setCollectActive } = useClassView()
   const [nonce, setNonce] = useState(0)
+  const dark = useThemeVariant().variant === 'dark'
 
   // 掲示表示中はCLASS使用権を取り、離れたら返す。フォーカスの度にリロードして最新化。
   useFocusEffect(
@@ -34,7 +35,7 @@ export default function LinkViewerScreen() {
   )
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, dark && { backgroundColor: DARK.bg }]}>
       <WebView
         key={nonce}
         ref={webviewRef}

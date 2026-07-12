@@ -12,7 +12,7 @@ import { loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import type { HomeStackParamList } from '../navigation/types'
-import { COLORS } from '../theme'
+import { COLORS, DARK } from '../theme'
 import { isScheduleCategory } from '../timetableEvents/bulletinEvents'
 
 type Tab = 'unread' | 'flagged' | 'schedule'
@@ -57,7 +57,10 @@ export default function BulletinListScreen() {
   const TabBtn = ({ id, label, count }: { id: Tab; label: string; count: number }) => {
     const on = tab === id
     return (
-      <Pressable onPress={() => setTab(id)} style={[styles.tabBtn, on && { backgroundColor: COLORS.emerald }]}>
+      <Pressable
+        onPress={() => setTab(id)}
+        style={[styles.tabBtn, ui.dark && !on && { backgroundColor: DARK.softBox }, on && { backgroundColor: COLORS.emerald }]}
+      >
         <Text style={[styles.tabText, { color: on ? '#fff' : ui.labelColor }]}>
           {label} {count}
         </Text>
@@ -97,8 +100,8 @@ export default function BulletinListScreen() {
               style={[ui.card, styles.item]}
             >
               <View style={styles.itemHead}>
-                <View style={[styles.tag, { backgroundColor: ui.green ? 'rgba(255,255,255,0.5)' : '#d6efe4' }]}>
-                  <Text style={[styles.tagText, { color: ui.green ? '#04322a' : COLORS.emeraldDark }]}>{b.category}</Text>
+                <View style={[styles.tag, { backgroundColor: ui.pillBg }]}>
+                  <Text style={[styles.tagText, { color: ui.pillText }]}>{b.category}</Text>
                 </View>
                 {b.flagged ? <Text style={styles.flag}>🚩</Text> : null}
               </View>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { COLORS } from '../theme'
+import { COLORS, DARK } from '../theme'
+import { useUi } from '../ui/screen'
 import { parseDeadlineInput } from './manualAssignment'
 import DeadlineFields, { type DeadlineValue } from './DeadlineFields'
 
@@ -18,6 +19,8 @@ export default function AddActivityDeadlineSheet({
   onSave: (deadline: string | null) => void
   onSkip: () => void
 }) {
+  const ui = useUi()
+  const dark = ui.dark
   const [value, setValue] = useState<DeadlineValue>({ noDeadline: false, date: '', time: '23:59' })
   const [error, setError] = useState<string | null>(null)
 
@@ -36,17 +39,22 @@ export default function AddActivityDeadlineSheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onSkip}>
       <Pressable style={styles.backdrop} onPress={onSkip} />
-      <View style={styles.sheet}>
-        <Text style={styles.course}>{presetCourseName || '追加'}</Text>
-        <Text style={styles.title} numberOfLines={2}>{presetTitle || '（無題）'}</Text>
-        <Text style={styles.hint}>締切を設定できます（自動収集の対象外アクティビティです）。</Text>
-        <DeadlineFields value={value} onChange={setValue} valueColor="#123" labelColor="#5a6b64" />
+      <View style={[styles.sheet, dark && { backgroundColor: DARK.card }]}>
+        <Text style={[styles.course, dark && { color: COLORS.emeraldLight }]}>{presetCourseName || '追加'}</Text>
+        <Text style={[styles.title, dark && { color: DARK.heading }]} numberOfLines={2}>{presetTitle || '（無題）'}</Text>
+        <Text style={[styles.hint, dark && { color: DARK.label }]}>締切を設定できます（自動収集の対象外アクティビティです）。</Text>
+        <DeadlineFields
+          value={value}
+          onChange={setValue}
+          valueColor={dark ? DARK.value : '#123'}
+          labelColor={dark ? DARK.label : '#5a6b64'}
+        />
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable style={styles.saveBtn} onPress={save}>
           <Text style={styles.saveText}>保存して追加</Text>
         </Pressable>
         <Pressable style={styles.skipBtn} onPress={onSkip}>
-          <Text style={styles.skipText}>締切なしで追加</Text>
+          <Text style={[styles.skipText, dark && { color: DARK.label }]}>締切なしで追加</Text>
         </Pressable>
       </View>
     </Modal>

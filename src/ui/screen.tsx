@@ -4,7 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle, G } from 'react-native-svg'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { COLORS, useThemeVariant } from '../theme'
+import { COLORS, DARK, useThemeVariant } from '../theme'
+import { resolveUiColors } from '../theme.tokens'
 import { DUR, EASE } from './motion'
 
 type IconName = keyof typeof Ionicons.glyphMap
@@ -25,22 +26,24 @@ export function useTabBarClearance() {
  */
 export function ScreenBg({ children }: { children: ReactNode }) {
   const { variant } = useThemeVariant()
+  const c = resolveUiColors(variant)
   const insets = useSafeAreaInsets()
   const pad = { paddingTop: insets.top + 10 }
-  if (variant === 'green') {
+  // gradient を持つ variant（翠・暗）はグラデ地、白は単色地。
+  if (c.gradient) {
     return (
-      <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={[ui.root, pad]}>
+      <LinearGradient colors={c.gradient} style={[ui.root, pad]}>
         {children}
       </LinearGradient>
     )
   }
-  return <View style={[ui.root, pad, { backgroundColor: '#ffffff' }]}>{children}</View>
+  return <View style={[ui.root, pad, { backgroundColor: c.screenSolid }]}>{children}</View>
 }
 
 /** ヘッダー行（アイコン＋タイトル＋右側のアクションチップ群）。 */
 export function ScreenHeader({ title, icon, right }: { title: string; icon?: IconName; right?: ReactNode }) {
   const { variant } = useThemeVariant()
-  const color = variant === 'green' ? COLORS.white : COLORS.emeraldDark
+  const color = resolveUiColors(variant).heading
   return (
     <View style={ui.header}>
       <View style={ui.hLeft}>
@@ -55,10 +58,13 @@ export function ScreenHeader({ title, icon, right }: { title: string; icon?: Ico
 /** 押せる翠チップ（ヘッダーのアクション用）。任意で先頭アイコン。 */
 export function Chip({ label, icon, onPress }: { label: string; icon?: IconName; onPress?: () => void }) {
   const { variant } = useThemeVariant()
-  const green = variant === 'green'
-  const color = green ? '#04322a' : COLORS.emeraldDark
+  const c = resolveUiColors(variant)
+  const color = c.chipText
   return (
-    <Pressable style={[green ? ui.chipGlass : ui.chipSolid, ui.chipRow]} onPress={onPress}>
+    <Pressable
+      style={[ui.chipBase, ui.chipRow, { backgroundColor: c.chipBg, borderColor: c.chipBorder }]}
+      onPress={onPress}
+    >
       {icon ? <Ionicons name={icon} size={14} color={color} /> : null}
       <Text style={{ color, fontSize: 12 }}>{label}</Text>
     </Pressable>
@@ -69,13 +75,14 @@ export function Chip({ label, icon, onPress }: { label: string; icon?: IconName;
 export function ActionButton({ label, onPress, ghost }: { label: string; onPress?: () => void; ghost?: boolean }) {
   const { variant } = useThemeVariant()
   const green = variant === 'green'
+  const dark = variant === 'dark'
   if (ghost) {
     return (
       <Pressable
-        style={[ui.action, { backgroundColor: green ? 'rgba(255,255,255,0.5)' : '#dce9e3' }]}
+        style={[ui.action, { backgroundColor: green ? 'rgba(255,255,255,0.5)' : dark ? DARK.softBox : '#dce9e3' }]}
         onPress={onPress}
       >
-        <Text style={[ui.actionText, { color: COLORS.emeraldDark }]}>{label}</Text>
+        <Text style={[ui.actionText, { color: dark ? COLORS.emeraldLight : COLORS.emeraldDark }]}>{label}</Text>
       </Pressable>
     )
   }
@@ -89,7 +96,7 @@ export function ActionButton({ label, onPress, ghost }: { label: string; onPress
 /** セクション見出し（薄い翠ラベル）。 */
 export function SectionLabel({ children }: { children: ReactNode }) {
   const { variant } = useThemeVariant()
-  const color = variant === 'green' ? '#eafff7' : COLORS.emeraldDark
+  const color = variant === 'green' ? '#eafff7' : variant === 'dark' ? DARK.label : COLORS.emeraldDark
   return <Text style={[ui.section, { color }]}>{children}</Text>
 }
 
@@ -104,7 +111,7 @@ export function Segmented<T extends string>({
   onChange: (k: T) => void
 }) {
   const { variant } = useThemeVariant()
-  const green = variant === 'green'
+  const c = resolveUiColors(variant)
   return (
     <View style={ui.segRow}>
       {options.map((o) => {
@@ -115,19 +122,15 @@ export function Segmented<T extends string>({
             onPress={() => onChange(o.key)}
             style={[
               ui.seg,
-              { borderColor: green ? 'rgba(255,255,255,0.4)' : '#cfe0d9' },
-              on
-                ? green
-                  ? { backgroundColor: 'rgba(255,255,255,0.7)', borderColor: 'transparent' }
-                  : { backgroundColor: COLORS.emerald, borderColor: 'transparent' }
-                : null,
+              { borderColor: c.segBorder },
+              on ? { backgroundColor: c.segOnBg, borderColor: 'transparent' } : null,
             ]}
           >
             <Text
               style={{
                 fontSize: 13,
                 fontWeight: on ? '600' : '400',
-                color: on ? (green ? '#04322a' : COLORS.white) : green ? '#eafff7' : COLORS.emeraldDark,
+                color: on ? c.segOnText : c.segOffText,
               }}
             >
               {o.label}
@@ -150,7 +153,7 @@ export function StepList({ steps }: { steps: Step[] }) {
   const ui2 = useUi()
   const { variant } = useThemeVariant()
   const green = variant === 'green'
-  const trackColor = green ? 'rgba(255,255,255,0.22)' : '#e3ece8'
+  const trackColor = green ? 'rgba(255,255,255,0.22)' : variant === 'dark' ? 'rgba(255,255,255,0.12)' : '#e3ece8'
   return (
     <View>
       {steps.map((s, i) => {
@@ -216,15 +219,16 @@ export function CountdownRing({
 }) {
   const { variant } = useThemeVariant()
   const green = variant === 'green'
+  const dark = variant === 'dark'
   const stroke = 12
   const r = (size - stroke) / 2
   const circ = 2 * Math.PI * r
   const p = progress == null ? 1 : Math.max(0, Math.min(1, progress))
   const cx = size / 2
-  const arcColor = accent ?? (green ? '#ffffff' : COLORS.cta)
-  const trackColor = green ? 'rgba(255,255,255,0.22)' : '#e3ebe7'
-  const textColor = green ? '#ffffff' : COLORS.emeraldDark
-  const subColor = green ? '#eafff7' : '#8a968f'
+  const arcColor = accent ?? (green ? '#ffffff' : dark ? COLORS.emeraldLight : COLORS.cta)
+  const trackColor = green ? 'rgba(255,255,255,0.22)' : dark ? 'rgba(255,255,255,0.12)' : '#e3ebe7'
+  const textColor = green ? '#ffffff' : dark ? DARK.heading : COLORS.emeraldDark
+  const subColor = green ? '#eafff7' : dark ? DARK.label : '#8a968f'
   return (
     <View style={{ width: size, height: size, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
@@ -256,17 +260,14 @@ export function CountdownRing({
 }
 
 /** カルーセルのアクティブドット（幅 6⇄18px を micro でアニメ。色は cta/薄地で出し分け）。 */
-function CarouselDot({ active, green }: { active: boolean; green: boolean }) {
+function CarouselDot({ active, inactiveColor }: { active: boolean; inactiveColor: string }) {
   const w = useRef(new Animated.Value(active ? 18 : 6)).current
   useEffect(() => {
     Animated.timing(w, { toValue: active ? 18 : 6, duration: DUR.micro, easing: EASE.move, useNativeDriver: false }).start()
   }, [active, w])
   return (
     <Animated.View
-      style={[
-        ui.dot,
-        { width: w, backgroundColor: active ? COLORS.cta : green ? 'rgba(255,255,255,0.45)' : '#cfe0d9' },
-      ]}
+      style={[ui.dot, { width: w, backgroundColor: active ? COLORS.cta : inactiveColor }]}
     />
   )
 }
@@ -317,7 +318,8 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
     if (idx >= items.length) setIdx(0)
   }, [items.length, idx])
   const { variant } = useThemeVariant()
-  const green = variant === 'green'
+  const dotInactive =
+    variant === 'green' ? 'rgba(255,255,255,0.45)' : variant === 'dark' ? 'rgba(255,255,255,0.2)' : '#cfe0d9'
   return (
     <View>
       <View>
@@ -335,7 +337,7 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
       {items.length > 1 ? (
         <View style={ui.dotsRow}>
           {items.map((_, i) => (
-            <CarouselDot key={i} active={i === idx} green={green} />
+            <CarouselDot key={i} active={i === idx} inactiveColor={dotInactive} />
           ))}
         </View>
       ) : null}
@@ -343,16 +345,36 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
   )
 }
 
-/** テーマ別のスタイル片を返すフック（画面側で自由に組む）。 */
+/**
+ * テーマ別の色トークン片を返すフック（画面側で自由に組む）。翠/白/暗の3variantを解決する。
+ * green/white の値は従来と一致（回帰なし）、dark のみ実配色を新規に返す。
+ * `pick(green, white, dark)` は個別画面の一点物の色を variant で出し分ける補助。
+ */
 export function useUi() {
   const { variant } = useThemeVariant()
+  const c = resolveUiColors(variant)
   const green = variant === 'green'
+  const dark = variant === 'dark'
   return {
+    variant,
     green,
-    card: green ? ui.cardGlass : ui.cardSolid,
-    labelColor: green ? COLORS.labelOnGlass : COLORS.emeraldDark,
-    valueColor: green ? COLORS.inkOnGlass : COLORS.ink,
-    dividerColor: green ? 'rgba(255,255,255,0.35)' : '#e3ece8',
+    dark,
+    pick: <T,>(greenVal: T, whiteVal: T, darkVal: T): T => (green ? greenVal : dark ? darkVal : whiteVal),
+    card: { backgroundColor: c.cardBg, borderColor: c.cardBorder, borderWidth: 1, borderRadius: 18, padding: 14 },
+    labelColor: c.labelColor,
+    valueColor: c.valueColor,
+    dividerColor: c.dividerColor,
+    heading: c.heading,
+    accent: c.accent,
+    accentSoft: c.accentSoft,
+    pillBg: c.pillBg,
+    pillText: c.pillText,
+    softBoxBg: c.softBoxBg,
+    chevron: c.chevron,
+    subMuted: c.subMuted,
+    inputBg: c.inputBg,
+    inputBorder: c.inputBorder,
+    colors: c,
   }
 }
 
@@ -365,16 +387,8 @@ const ui = StyleSheet.create({
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   action: { backgroundColor: COLORS.emerald, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 11, alignItems: 'center' },
   actionText: { color: '#ffffff', fontSize: 14, fontWeight: '500' },
-  chipGlass: {
-    backgroundColor: 'rgba(255,255,255,0.42)',
+  chipBase: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  chipSolid: {
-    backgroundColor: '#d6efe4',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,

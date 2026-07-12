@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { COLORS } from '../theme'
+import { COLORS, DARK } from '../theme'
+import { useUi } from '../ui/screen'
 
 export type DeadlineValue = { noDeadline: boolean; date: string; time: string }
 
@@ -15,37 +16,42 @@ export default function DeadlineFields({
   valueColor: string
   labelColor: string
 }) {
+  const ui = useUi()
+  const inputStyle = { backgroundColor: ui.inputBg, borderColor: ui.colors.inputBorder }
+  const placeholderColor = ui.dark ? DARK.label : '#9aa8a2'
+  const chipStyle = ui.dark ? { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder } : null
+  const chipText = ui.dark ? COLORS.emeraldLight : COLORS.emeraldDark
   const setPreset = (days: number) => onChange({ ...value, noDeadline: false, date: dateStr(addDays(new Date(), days)) })
   return (
     <View style={{ gap: 8 }}>
       <View style={styles.rowBetween}>
         <Text style={[styles.label, { color: labelColor }]}>締切</Text>
-        <Pressable onPress={() => onChange({ ...value, noDeadline: !value.noDeadline })} style={styles.toggle}>
-          <Text style={[styles.toggleText, value.noDeadline && styles.toggleOn]}>締切なし</Text>
+        <Pressable onPress={() => onChange({ ...value, noDeadline: !value.noDeadline })} style={[styles.toggle, chipStyle]}>
+          <Text style={[styles.toggleText, value.noDeadline && { color: chipText }]}>締切なし</Text>
         </Pressable>
       </View>
       {!value.noDeadline ? (
         <>
           <View style={styles.presetRow}>
-            <Preset label="今日" onPress={() => setPreset(0)} />
-            <Preset label="明日" onPress={() => setPreset(1)} />
-            <Preset label="1週間後" onPress={() => setPreset(7)} />
+            <Preset label="今日" onPress={() => setPreset(0)} chipStyle={chipStyle} chipText={chipText} />
+            <Preset label="明日" onPress={() => setPreset(1)} chipStyle={chipStyle} chipText={chipText} />
+            <Preset label="1週間後" onPress={() => setPreset(7)} chipStyle={chipStyle} chipText={chipText} />
           </View>
           <View style={styles.dtRow}>
             <TextInput
-              style={[styles.input, styles.dtDate, { color: valueColor }]}
+              style={[styles.input, styles.dtDate, inputStyle, { color: valueColor }]}
               value={value.date}
               onChangeText={(t) => onChange({ ...value, date: t })}
               placeholder="2026/07/15"
-              placeholderTextColor="#9aa8a2"
+              placeholderTextColor={placeholderColor}
               keyboardType="numbers-and-punctuation"
             />
             <TextInput
-              style={[styles.input, styles.dtTime, { color: valueColor }]}
+              style={[styles.input, styles.dtTime, inputStyle, { color: valueColor }]}
               value={value.time}
               onChangeText={(t) => onChange({ ...value, time: t })}
               placeholder="23:59"
-              placeholderTextColor="#9aa8a2"
+              placeholderTextColor={placeholderColor}
               keyboardType="numbers-and-punctuation"
             />
           </View>
@@ -57,10 +63,20 @@ export default function DeadlineFields({
   )
 }
 
-function Preset({ label, onPress }: { label: string; onPress: () => void }) {
+function Preset({
+  label,
+  onPress,
+  chipStyle,
+  chipText,
+}: {
+  label: string
+  onPress: () => void
+  chipStyle: { backgroundColor: string; borderColor: string } | null
+  chipText: string
+}) {
   return (
-    <Pressable style={styles.preset} onPress={onPress}>
-      <Text style={styles.presetText}>{label}</Text>
+    <Pressable style={[styles.preset, chipStyle]} onPress={onPress}>
+      <Text style={[styles.presetText, { color: chipText }]}>{label}</Text>
     </Pressable>
   )
 }

@@ -13,7 +13,7 @@ import {
 } from '../collect/injectedScripts'
 import { nextBulletinWebStep, type BulletinWebSignal } from '../collect/bulletinWebFlow'
 import { loadBulletinDigest, updateBulletinItem } from '../storage/bulletinDigestStore'
-import { COLORS } from '../theme'
+import { COLORS, DARK, useThemeVariant } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
 
 // 一手を注入したあと、着地を見直すために現在ページを撃ち直す間隔（postback/AJAXの描画待ち）。
@@ -35,6 +35,7 @@ export default function BulletinWebScreen() {
   const webviewRef = useRef<WebView>(null)
   const { setCollectActive } = useClassView()
   const [nonce, setNonce] = useState(0)
+  const dark = useThemeVariant().variant === 'dark'
   const [target, setTarget] = useState<{ title: string; date: string } | null>(null)
   // 対象掲示を開く操作（openDetail）を撃ったか。掲示ページに再着地しても二重に開かない（多重postback防止の要）。
   const detailFiredRef = useRef(false)
@@ -125,7 +126,7 @@ export default function BulletinWebScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, dark && { backgroundColor: DARK.bg }]}>
       {target === null ? (
         <View style={styles.center}>
           <ActivityIndicator color={COLORS.emerald} />

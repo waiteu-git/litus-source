@@ -228,11 +228,11 @@ export default function TimetableScreen() {
     <RefreshControl refreshing={syncing} onRefresh={() => startSync(true)} tintColor={COLORS.emerald} colors={[COLORS.emerald]} />
   )
 
-  const cellBg = ui.green ? 'rgba(255,255,255,0.16)' : '#f3f7f5'
-  const cellFilledBg = ui.green ? 'rgba(255,255,255,0.5)' : '#e8f4ee'
-  const cellTodayBg = ui.green ? 'rgba(255,255,255,0.62)' : '#d6efe4'
-  const cellNowBg = ui.green ? 'rgba(255,255,255,0.88)' : '#c3ead7'
-  const cellTextColor = ui.green ? '#04322a' : ui.valueColor
+  const cellBg = ui.pick('rgba(255,255,255,0.16)', '#f3f7f5', 'rgba(255,255,255,0.04)')
+  const cellFilledBg = ui.pick('rgba(255,255,255,0.5)', '#e8f4ee', 'rgba(55,201,155,0.14)')
+  const cellTodayBg = ui.pick('rgba(255,255,255,0.62)', '#d6efe4', 'rgba(55,201,155,0.24)')
+  const cellNowBg = ui.pick('rgba(255,255,255,0.88)', '#c3ead7', 'rgba(55,201,155,0.36)')
+  const cellTextColor = ui.pick('#04322a', ui.valueColor, ui.valueColor)
 
   return (
     <ScreenBg>
@@ -344,7 +344,7 @@ export default function TimetableScreen() {
                           {pev ? <View style={styles.personalDot} /> : null}
                         </>
                       ) : pev ? (
-                        <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText]}>{pev.title}</Text>
+                        <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText, ui.dark && { color: COLORS.emeraldLight }]}>{pev.title}</Text>
                       ) : null}
                     </Pressable>
                   )
@@ -361,7 +361,7 @@ export default function TimetableScreen() {
             return (
             <View key={`${s.day}-${s.period}`} style={styles.trow}>
               <View style={styles.per}>
-                <Text style={[styles.pnum, { color: rowNow ? COLORS.cta : ui.green ? COLORS.white : COLORS.emeraldDark }]}>{s.period}</Text>
+                <Text style={[styles.pnum, { color: rowNow ? COLORS.cta : ui.heading }]}>{s.period}</Text>
                 <Text style={[styles.ptime, { color: rowNow ? COLORS.cta : ui.labelColor }]}>{startTime(s.period)}</Text>
               </View>
               <View style={styles.clsCol}>
@@ -416,7 +416,7 @@ export default function TimetableScreen() {
                 style={[ui.card, styles.personalRow]}
                 onPress={() => navigation.navigate('PersonalEventForm', { editId: pe.id })}
               >
-                <Text style={[styles.pnum, { color: COLORS.emeraldDark }]}>{pe.periods.map((p) => `${p}限`).join('・')}</Text>
+                <Text style={[styles.pnum, { color: ui.heading }]}>{pe.periods.map((p) => `${p}限`).join('・')}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 15, fontWeight: '600', color: ui.valueColor }}>{pe.title}</Text>
                   {pe.note || pe.place ? (
