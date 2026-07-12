@@ -35,15 +35,14 @@ type Props = {
  * どちらも 1 セッション 1 アクション（ViewState保護）。
  */
 export default function BulletinActionEngine({ action, title, date, desiredFlag, onFinished }: Props) {
+  const id = `${date}::${title}`
+  const diag = useRef({ page: '', stage: '', panel: 0, plen: 0, got: false })
   // CLASS帯 or オフラインでは掲示アクションは不成立。WebViewを起こさず即終了し、次回操作/収集に委ねる。
   const blocked = !evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed
   useEffect(() => {
     if (blocked) onFinished()
   }, [blocked, onFinished])
   if (blocked) return null
-
-  const id = `${date}::${title}`
-  const diag = useRef({ page: '', stage: '', panel: 0, plen: 0, got: false })
 
   if (action === 'openDetail') {
     return (
