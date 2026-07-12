@@ -1,5 +1,17 @@
-import { describe, expect, it } from 'vitest'
-import { isTimetableStale, TIMETABLE_REFRESH_INTERVAL_MS } from './refreshMetaStore'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { isTimetableStale, TIMETABLE_REFRESH_INTERVAL_MS, loadAssignmentsRefreshedAt, saveAssignmentsRefreshedAt } from './refreshMetaStore'
+
+// Mock AsyncStorage
+const mockStore: Record<string, string> = {}
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: {
+    getItem: vi.fn((key: string) => Promise.resolve(mockStore[key] ?? null)),
+    setItem: vi.fn((key: string, value: string) => {
+      mockStore[key] = value
+      return Promise.resolve()
+    }),
+  },
+}))
 
 describe('isTimetableStale', () => {
   const now = 1_000_000_000_000
@@ -12,5 +24,21 @@ describe('isTimetableStale', () => {
   it('間隔ちょうど/超過なら stale', () => {
     expect(isTimetableStale(now - TIMETABLE_REFRESH_INTERVAL_MS, now)).toBe(true)
     expect(isTimetableStale(now - TIMETABLE_REFRESH_INTERVAL_MS * 2, now)).toBe(true)
+  })
+})
+
+describe('assignments refreshed at', () => {
+  beforeEach(() => {
+    // Clear mock store before each test
+    Object.keys(mockStore).forEach(key => delete mockStore[key])
+  })
+
+  it('未保存は 0', async () => {
+    expect(await loadAssignmentsRefreshedAt()).toBe(0)
+  })
+
+  it('保存した値を読み戻せる', async () => {
+    await saveAssignmentsRefreshedAt(1234567890)
+    expect(await loadAssignmentsRefreshedAt()).toBe(1234567890)
   })
 })
