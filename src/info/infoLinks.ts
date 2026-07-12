@@ -26,8 +26,8 @@ export const CATEGORY_DEFS: { id: InfoCategory; label: string }[] = [
 
 export const INFO_ITEMS: InfoItem[] = [
   // --- 学食（既存ID維持） ---
-  { id: 'kagurazaka-tbd', campusId: 'kagurazaka', category: 'cafeteria', name: '（準備中）', url: null },
-  { id: 'katsushika-tbd', campusId: 'katsushika', category: 'cafeteria', name: '（準備中）', url: null },
+  { id: 'kagurazaka-tbd', campusId: 'kagurazaka', category: 'cafeteria', name: '学食', url: null },
+  { id: 'katsushika-tbd', campusId: 'katsushika', category: 'cafeteria', name: '学食', url: null },
   {
     id: 'noda-canal',
     campusId: 'noda',
