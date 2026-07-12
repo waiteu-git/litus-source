@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { COLORS, DARK } from '../theme'
 import { useUi } from '../ui/screen'
 import { parseDeadlineInput } from './manualAssignment'

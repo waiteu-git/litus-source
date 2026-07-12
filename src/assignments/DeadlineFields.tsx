@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text, TextInput } from '../ui/Text'
 import { COLORS, DARK } from '../theme'
 import { useUi } from '../ui/screen'
 

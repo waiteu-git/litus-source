@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from './Text'
 import { Ionicons } from '@expo/vector-icons'
 import type { CollectionHealth } from '../health/collectionHealth'
 import { healthBannerText, type HealthSource } from '../health/healthBannerText'

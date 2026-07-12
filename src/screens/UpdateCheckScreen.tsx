@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '../ui/Text'
 import { WebView } from 'react-native-webview'
 import { ActionButton } from '../ui/screen'
 import { loadCourseMap } from '../storage/courseMapStore'

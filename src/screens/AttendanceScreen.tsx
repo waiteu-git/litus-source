@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Keyboard, Pressable, StyleSheet, View, type TextInput as RNTextInput } from 'react-native'
+import { Text, TextInput } from '../ui/Text'
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg, CountdownRing, IndeterminateBar, useUi, useTabBarClearance } from '../ui/screen'
@@ -15,7 +16,7 @@ import { COLORS, DARK } from '../theme'
  * この画面を開いている間だけエンジンを起動させる。
  */
 export default function AttendanceScreen() {
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<RNTextInput>(null)
   const ui = useUi()
   const glass = ui.green
   const dark = ui.dark

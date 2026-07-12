@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native'
+import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, UIManager, View } from 'react-native'
+import { Text } from './Text'
 import { Ionicons } from '@expo/vector-icons'
 import { useUi } from './screen'
 import { DUR } from './motion'

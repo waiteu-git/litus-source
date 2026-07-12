@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Animated, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from './Text'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle, G } from 'react-native-svg'
 import { Ionicons } from '@expo/vector-icons'
