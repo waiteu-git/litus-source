@@ -13,6 +13,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useLoginGate } from '../auth/LoginGate'
 import { useClassView } from '../collect/classViewArbiter'
+import { evaluateAccess } from '../health/accessGate'
+import { useConnectivity } from '../health/connectivity'
 import {
   CLASS_PC_LOGIN_URL,
   DESKTOP_UA,
@@ -141,7 +143,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   phaseRef.current = state.phase
 
   // 起動ポリシー: 授業時間帯 または 出席画面フォーカス中。停止中は WebView をアンマウント。
-  const running = attendanceFocused || isInClassPeriod(timetable, now)
+  // CLASSメンテ帯・オフライン中は起動しても失敗するだけなので抑止する。
+  const isOnline = useConnectivity()
+  const classAccessible = evaluateAccess('class', { now, isOnline }).allowed
+  const running = classAccessible && (attendanceFocused || isInClassPeriod(timetable, now))
   const shouldRender = running && !collectActive
   const prevRenderRef = useRef(false)
   const shouldRenderRef = useRef(false)
