@@ -1,5 +1,6 @@
 import { upsertAssignments, type CollectedAssignment } from './assignmentUpsert'
 import type { Assignment, AssignmentMap } from '../storage/assignmentsSerialize'
+import { isUserManagedUrl } from '../assignments/assignmentOwnership'
 
 const T0 = '2026-07-06T00:00:00.000Z'
 const T1 = new Date('2026-07-07T00:00:00.000Z')
@@ -61,5 +62,68 @@ describe('upsertAssignments', () => {
     const snapshot = JSON.parse(JSON.stringify(existing))
     upsertAssignments(existing, [collected({ title: '変更後' })], T1)
     expect(existing).toEqual(snapshot)
+  })
+})
+
+describe('upsertAssignments ユーザー所有項目の保護', () => {
+  const now = new Date('2026-07-12T00:00:00Z')
+  const RES = 'https://letus.ed.tus.ac.jp/mod/resource/view.php?id=5'
+
+  it('ユーザー所有の既存項目は締切・提出状態を上書きしない', () => {
+    const existing = {
+      [RES]: {
+        url: RES,
+        courseCode: null,
+        courseName: '哲学',
+        title: 'レポート課題PDF',
+        deadline: '2026-07-20T14:59:00.000Z',
+        deadlineText: '',
+        submissionStatus: 'submitted' as const,
+        lifecycleStatus: 'active' as const,
+        ignored: false,
+        firstSeenAt: '2026-07-01T00:00:00.000Z',
+        lastSeenAt: '2026-07-01T00:00:00.000Z',
+        lastCheckedAt: '2026-07-01T00:00:00.000Z',
+      },
+    }
+    const incoming = [{
+      url: RES,
+      courseCode: null,
+      courseName: '哲学',
+      title: '別タイトル',
+      deadline: null,
+      deadlineText: '',
+      submissionStatus: 'unknown' as const,
+      lifecycleStatus: 'active' as const,
+    }]
+    const out = upsertAssignments(existing, incoming, now)
+    expect(out[RES].deadline).toBe('2026-07-20T14:59:00.000Z')
+    expect(out[RES].submissionStatus).toBe('submitted')
+    expect(out[RES].title).toBe('レポート課題PDF')
+    expect(out[RES].firstSeenAt).toBe('2026-07-01T00:00:00.000Z')
+    expect(out[RES].lastCheckedAt).toBe(now.toISOString())
+  })
+
+  it('収集所有の既存項目は従来どおり上書きする', () => {
+    const ASSIGN = 'https://letus.ed.tus.ac.jp/mod/assign/view.php?id=7'
+    const existing = {
+      [ASSIGN]: {
+        url: ASSIGN, courseCode: null, courseName: 'A', title: '旧',
+        deadline: null, deadlineText: '', submissionStatus: 'unknown' as const,
+        lifecycleStatus: 'active' as const, ignored: true,
+        firstSeenAt: '2026-07-01T00:00:00.000Z', lastSeenAt: '2026-07-01T00:00:00.000Z', lastCheckedAt: '2026-07-01T00:00:00.000Z',
+      },
+    }
+    const incoming = [{
+      url: ASSIGN, courseCode: null, courseName: 'A', title: '新',
+      deadline: '2026-07-15T14:59:00.000Z', deadlineText: '',
+      submissionStatus: 'submitted' as const, lifecycleStatus: 'active' as const,
+    }]
+    const out = upsertAssignments(existing, incoming, now)
+    expect(out[ASSIGN].title).toBe('新')
+    expect(out[ASSIGN].deadline).toBe('2026-07-15T14:59:00.000Z')
+    expect(out[ASSIGN].submissionStatus).toBe('submitted')
+    expect(out[ASSIGN].ignored).toBe(true) // 既存の ignored 温存は維持
+    expect(out[ASSIGN].firstSeenAt).toBe('2026-07-01T00:00:00.000Z')
   })
 })
