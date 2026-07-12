@@ -30,6 +30,8 @@ import AttendanceStatsSyncEngine from '../collect/AttendanceStatsSyncEngine'
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadAttendanceOverrides } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk } from '../attendance/attendanceRisk'
+import { loadBulletinDigest } from '../storage/bulletinDigestStore'
+import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 
 const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
@@ -69,6 +71,8 @@ export default function TimetableScreen() {
   const syncingRef = useRef(false)
   // 出欠危険/警告に該当する科目コード集合（グリッドの赤バッジ用）。
   const [dangerCodes, setDangerCodes] = useState<Set<string>>(new Set())
+  // 未読掲示のある科目コード集合（グリッド/リストの未読ドット用・保存済み掲示digestから算出）。
+  const [unreadCodes, setUnreadCodes] = useState<Set<string>>(new Set())
 
   const reloadAttendance = () => {
     ;(async () => {
@@ -132,6 +136,14 @@ export default function TimetableScreen() {
         }
         if (active) setUpdatedCodes(set)
       })()
+      ;(async () => {
+        const digest = await loadBulletinDigest()
+        const cols = await loadTimetable()
+        const codes = new Set<string>()
+        for (const c of cols ?? []) for (const s of c.slots) for (const cl of s.classes) if (cl.courseCode) codes.add(cl.courseCode)
+        const counts = courseUnreadCounts(digest, codes)
+        if (active) setUnreadCodes(new Set(counts.keys()))
+      })().catch(() => undefined)
       // フォーカスでの自動裏取得はしない（出席以外でCLASSを不用意に開かない）。更新は引き下げで明示的に。
       return () => {
         active = false
@@ -267,6 +279,7 @@ export default function TimetableScreen() {
                           </Text>
                           {updatedCodes.has(cl.courseCode) ? <View style={styles.gridDot} /> : null}
                           {cl && dangerCodes.has(cl.courseCode) ? <View style={styles.gridDanger} /> : null}
+                          {unreadCodes.has(cl.courseCode) ? <View style={styles.gridUnreadDot} /> : null}
                           {gev ? <View style={[styles.gridEvDot, gCanceled ? styles.gridEvDotCancel : styles.gridEvDotInfo]} /> : null}
                           {isNow ? (
                             <View style={styles.nowDot}>
@@ -304,6 +317,7 @@ export default function TimetableScreen() {
                       <Text style={[styles.clsname, { color: ui.valueColor, flex: 1 }, (canceled || off) && styles.canceledName]} numberOfLines={2}>
                         {cl.name}
                         {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
+                        {unreadCodes.has(cl.courseCode) ? '  ◍' : ''}
                       </Text>
                       {rowNow ? (
                         <View style={styles.nowChip}>
@@ -420,6 +434,7 @@ const styles = StyleSheet.create({
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },
   gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e8a400' },
   gridDanger: { position: 'absolute', top: 3, left: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.danger },
+  gridUnreadDot: { position: 'absolute', bottom: 6, left: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.emerald },
   gridEvDot: { position: 'absolute', bottom: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   gridEvDotCancel: { backgroundColor: '#e0533a' },
   gridEvDotInfo: { backgroundColor: '#3a7be0' },
