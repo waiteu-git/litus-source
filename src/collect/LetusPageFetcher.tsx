@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { COLLECT_ASSIGNMENT_PAGE_JS, DESKTOP_UA } from './injectedScripts'
-import { decideLetusFetch } from './letusFetchDecision'
+import { hasLetusLoginMarker } from '../health/collectionSignals'
 import { parseAssignBody } from '../parsers/letusBody'
 import { setLetusBody } from '../storage/letusBodyStore'
 
@@ -46,20 +46,26 @@ export default function LetusPageFetcher({
       return
     }
     if (payload.type !== 'assignmentpage' || typeof payload.html !== 'string') return
-    const step = decideLetusFetch(payload.html, payload.url ?? url)
-    if (step === 'wait') return
-    if (step === 'needsLogin') {
+    // SSOセッション切れ（ログインページ着地）はフォールバックへ。
+    if (hasLetusLoginMarker(payload.html)) {
       finish(false)
       return
     }
-    // step === 'body': 抽出・保存。パース/保存いずれの例外もフォールバックに落とす
-    // （parseAssignBody は不正な pluginfile URL で decodeURIComponent が throw し得るため try 内に含める）。
+    // 動く実装（AssignmentCollector）に合わせ、URLゲートに頼らず本文が取れたら成功とする。
+    // location.href は SSO リダイレクトや末尾パラメータで課題URL形に着地しないことがあり、
+    // URLゲート方式では永久 wait→タイムアウトになるため（実測: 一覧収集は成功するが本文取得だけ失敗）。
+    // パース/保存の例外はフォールバックへ（parseAssignBody は不正な pluginfile URL で
+    // decodeURIComponent が throw し得るため try 内に含める）。
+    let body
     try {
-      const body = parseAssignBody(payload.html)
-      if (!body.description && body.attachments.length === 0) {
-        finish(false)
-        return
-      }
+      body = parseAssignBody(payload.html)
+    } catch {
+      finish(false)
+      return
+    }
+    // 本文も添付も無い＝SSO中間ページ等でまだ着地していない。次の onLoadEnd を待つ（タイムアウトが保険）。
+    if (!body.description && body.attachments.length === 0) return
+    try {
       await setLetusBody(url, body, new Date().toISOString())
       finish(true)
     } catch {

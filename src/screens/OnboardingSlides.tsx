@@ -52,8 +52,8 @@ export default function OnboardingSlides({ onDone }: { onDone: () => void }) {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
       >
-        {SLIDES.map((s, i) => (
-          <Slide key={s.title} slide={s} width={width} active={i === page} />
+        {SLIDES.map((s) => (
+          <Slide key={s.title} slide={s} width={width} />
         ))}
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
@@ -71,38 +71,29 @@ export default function OnboardingSlides({ onDone }: { onDone: () => void }) {
 }
 
 /**
- * 1枚のスライド。アクティブになると中身を fade(0→1)+scale(0.96→1) base で立ち上げ、
- * イラストだけ translateX(24→0) slow の軽いパララックスを重ねる。非アクティブ時は静止（覗いても崩れない）。
+ * 1枚のスライド。マウント時に一度だけ中身を fade(0→1)+scale(0.96→1) base で立ち上げ、
+ * イラストだけ translateX(24→0) slow の軽いパララックスを重ねる。以降は静止。
+ * スワイプで到達したときに再アニメすると「見えているのに再生し直してカクつく」ため、
+ * active 追従はやめてマウント時1回に固定する（3枚とも起動直後に一度だけ立ち上がる）。
  */
 function Slide({
   slide,
   width,
-  active,
 }: {
   slide: (typeof SLIDES)[number]
   width: number
-  active: boolean
 }) {
-  const opacity = useRef(new Animated.Value(1)).current
-  const scale = useRef(new Animated.Value(1)).current
-  const illustX = useRef(new Animated.Value(0)).current
+  const opacity = useRef(new Animated.Value(0)).current
+  const scale = useRef(new Animated.Value(0.96)).current
+  const illustX = useRef(new Animated.Value(SHIFT.large)).current
 
   useEffect(() => {
-    if (active) {
-      opacity.setValue(0)
-      scale.setValue(0.96)
-      illustX.setValue(SHIFT.large)
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
-        Animated.timing(illustX, { toValue: 0, duration: DUR.slow, easing: EASE.enter, useNativeDriver: true }),
-      ]).start()
-    } else {
-      opacity.setValue(1)
-      scale.setValue(1)
-      illustX.setValue(0)
-    }
-  }, [active, opacity, scale, illustX])
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+      Animated.timing(illustX, { toValue: 0, duration: DUR.slow, easing: EASE.enter, useNativeDriver: true }),
+    ]).start()
+  }, [opacity, scale, illustX])
 
   return (
     <Animated.View style={[styles.slide, { width, opacity, transform: [{ scale }] }]}>
