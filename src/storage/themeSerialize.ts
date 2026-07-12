@@ -1,10 +1,13 @@
-export type ThemeVariant = 'green' | 'white'
+export type ThemePreference = 'green' | 'white' | 'dark' | 'system'
+export type ResolvedVariant = 'green' | 'white' | 'dark'
 
-export function serializeTheme(v: ThemeVariant): string {
+export function serializeTheme(v: ThemePreference): string {
   return v
 }
 
-/** 'green'/旧'glass' のみ green、それ以外（'white'/旧'solid'/null/不正）は既定 white。 */
-export function deserializeTheme(raw: string | null): ThemeVariant {
-  return raw === 'green' || raw === 'glass' ? 'green' : 'white'
+/** 'green'/旧'glass'→green、'dark'/'system'はそのまま、それ以外（'white'/旧'solid'/null/不正）は既定white。 */
+export function deserializeTheme(raw: string | null): ThemePreference {
+  if (raw === 'green' || raw === 'glass') return 'green'
+  if (raw === 'dark' || raw === 'system') return raw
+  return 'white'
 }
