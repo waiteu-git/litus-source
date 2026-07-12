@@ -119,7 +119,26 @@ export const OPEN_ATTENDANCE_JS = `(function(){
       try { el.click(); return 'click-fb'; } catch (e2) { return 'err'; }
     }
   }
+  // 着地ガード（OPEN_TIMETABLE_JS / OPEN_ATTENDANCE_STATS_JS と同型）: 既に出席登録ページ
+  // (Xua00101) に居るならメニューを叩かない。授業中の30秒ポーリングで onLoadEnd 毎に再クリック→
+  // フルPOST連打（1コマ90分で最大約180回のCLASS POST）になるのを防ぐ。着地判定は RN 側の
+  // classifyClassPage と同じ定義＝「出席ページURL(isAttendanceUrl) or 受付フォームあり」。
+  // 受付中の授業が無い状態はフォームが消えて hasClassMenu だけ立つため URL で着地を確定する。
+  // 受付状況の抽出は呼び出し側が別途 DETECT_ATTENDANCE_JS を撃つので、ここは遷移抑止だけ担う。
+  function onAttendancePage(){
+    try {
+      var href = (location && location.href) || '';
+      if (/xua001|Xua00101/i.test(href)) return true;
+      var body = document.body ? (document.body.innerText || '') : '';
+      var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit]'));
+      var hasSubmit = btns.some(function(b){ return (((b.textContent || b.value) || '').replace(/\\s+/g, '')).indexOf('出席登録する') >= 0; });
+      return hasSubmit && body.indexOf('認証コード') >= 0;
+    } catch (e) { return false; }
+  }
   try {
+    if (onAttendancePage()) {
+      post({ type: 'nav', ok: true, stage: 'attendance-already' });
+    } else {
     var target = findAnchor('モバイル出席登録');
     if (target) {
       var m = fire(target);
@@ -137,6 +156,7 @@ export const OPEN_ATTENDANCE_JS = `(function(){
       } else {
         post({ type: 'nav', ok: false, stage: 'menu' });
       }
+    }
     }
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
