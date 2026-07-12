@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable } from 'react-native'
+import { ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -9,6 +9,8 @@ import type { HomeStackParamList } from '../navigation/types'
 import { loadBulletinDigest, loadBulletinDetailDiag } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
+import { evaluateAccess } from '../health/accessGate'
+import { useConnectivity } from '../health/connectivity'
 
 /**
  * 掲示詳細（本文）をネイティブ描画する。初回表示時に body キャッシュが無ければ裏で openDetail を実行し、
@@ -25,6 +27,24 @@ export default function BulletinDetailScreen() {
   const [detailDiag, setDetailDiag] = useState('')
   const [flagBusy, setFlagBusy] = useState(false)
   const startedRef = useRef(false)
+  const isOnline = useConnectivity()
+
+  // 「CLASSで開く」は可視WebViewビューアへの遷移なのでブロックしない。帯内/オフライン時のみ
+  // 確認ダイアログを挟み、続行はユーザーの選択に委ねる。
+  const openInClass = () => {
+    const decision = evaluateAccess('class', { now: new Date(), isOnline })
+    const go = () => navigation.navigate('BulletinWeb', { id: route.params.id })
+    if (decision.allowed) return go()
+    const why = decision.reason === 'offline' ? 'オフライン' : 'CLASSメンテナンス中（毎日2:00–4:00）'
+    Alert.alert(
+      'CLASSで開きますか？',
+      `${why}のため、エラーになる可能性があります。開きますか？`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '開く', onPress: go },
+      ],
+    )
+  }
 
   const reload = useCallback(async () => {
     const items = await loadBulletinDigest()
@@ -107,7 +127,7 @@ export default function BulletinDetailScreen() {
             </Pressable>
             {/* 添付ファイルの確認・DLはCLASS本物ページ側で完結させる。全掲示に常設。 */}
             <Pressable
-              onPress={() => navigation.navigate('BulletinWeb', { id: route.params.id })}
+              onPress={openInClass}
               style={[styles.flagBtn, { borderColor: COLORS.emerald }]}
             >
               <Ionicons name="open-outline" size={16} color={COLORS.emerald} />

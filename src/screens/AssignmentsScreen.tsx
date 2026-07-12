@@ -19,6 +19,10 @@ import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
 import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { maintenanceSystemAt } from '../health/maintenanceWindow'
+import { evaluateAccess } from '../health/accessGate'
+import { isOnlineNow } from '../health/connectivity'
+import { loadAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
+import FreshnessLabel from '../ui/FreshnessLabel'
 import { COLORS } from '../theme'
 
 const SECTION_LABEL: Record<BucketKey, string> = {
@@ -76,9 +80,11 @@ export default function AssignmentsScreen() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   // LETUS課題収集の最終ヘルス（層1の正直表示バナー用）。
   const [health, setHealth] = useState<StoredHealth | null>(null)
+  // 課題一覧の鮮度（最終保存成功時刻）。
+  const [refreshedAt, setRefreshedAt] = useState(0)
   const startUpdate = useCallback(() => {
-    // LETUS定時メンテナンス帯（4:00–5:30）は収集不能。ヘルスバナーがメンテ表示を出すので、無駄打ちを止める。
-    if (maintenanceSystemAt(new Date()) === 'letus') return
+    // LETUS定時メンテナンス帯（4:00–5:30）またはオフラインは収集不能。ヘルスバナーがメンテ/オフライン表示を出すので、無駄打ちを止める。
+    if (!evaluateAccess('letus', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
     setProgress(null)
     setCollecting(true)
   }, [])
@@ -97,6 +103,7 @@ export default function AssignmentsScreen() {
       loadCollectionHealth()
         .then((m) => active && setHealth(m.letusAssignments ?? null))
         .catch(() => undefined)
+      loadAssignmentsRefreshedAt().then((at) => active && setRefreshedAt(at)).catch(() => undefined)
       return () => {
         active = false
       }
@@ -233,6 +240,7 @@ export default function AssignmentsScreen() {
 
       <KillSwitchBanner feature="letus" />
       <HealthBanner health={health?.health} source="letus" />
+      <FreshnessLabel at={refreshedAt} />
 
       {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。 */}
       {collecting ? (
@@ -252,6 +260,7 @@ export default function AssignmentsScreen() {
             setCollecting(false)
             setProgress(null)
             loadCollectionHealth().then((m) => setHealth(m.letusAssignments ?? null)).catch(() => undefined)
+            loadAssignmentsRefreshedAt().then(setRefreshedAt).catch(() => undefined)
           }}
         />
       ) : null}
