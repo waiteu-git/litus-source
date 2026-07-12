@@ -2,19 +2,12 @@ import { useEffect, useRef } from 'react'
 import {
   OPEN_BULLETIN_JS,
   GO_BULLETIN_JS,
-  COLLECT_BULLETIN_TABS_JS,
   COLLECT_BULLETIN_DETAIL_JS,
   openBulletinDetailJs,
   setBulletinFlagJs,
 } from './injectedScripts'
-import { parseBulletinList, toBulletinItems } from '../parsers/bulletin'
 import { parseBulletinDetail } from '../parsers/bulletinDetail'
-import {
-  mutateBulletinDigest,
-  updateBulletinItem,
-  saveBulletinDetailDiag,
-} from '../storage/bulletinDigestStore'
-import { mergeBulletinItems } from '../storage/bulletinDigestSerialize'
+import { updateBulletinItem, saveBulletinDetailDiag } from '../storage/bulletinDigestStore'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
@@ -31,7 +24,7 @@ type Props = {
 /**
  * 掲示1件への headless アクション。
  * - openDetail: 対象の掲示内容モーダルを開いて本文を取得し、ローカルを既読化＋body保存。
- * - setFlag: 対象行のフラグを切替え、2タブを再収集して最新状態をマージ保存。
+ * - setFlag: 対象行のフラグを切替え、ソースで反映を確認してからローカルのフラグを直接更新。
  * どちらも 1 セッション 1 アクション（ViewState保護）。
  */
 export default function BulletinActionEngine({ action, title, date, desiredFlag, onFinished }: Props) {
@@ -87,28 +80,42 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
     )
   }
 
-  // setFlag
+  // setFlag: フラグ切替のJS自身がソースで反映を確認して結果(bulletinFlag)を返す（openDetailが本文出現で
+  // 完了を確認するのと同じく、アクションの効果を待つ）。反映確認できたらローカルのフラグを直接 want に設定する
+  // ＝多タブの古いDOMを再収集して読み戻さない（旧実装は収集がトグルAJAXに先着し古い flagged=false のまま確定
+  // していた＝フラグが全体で効かない真因）。冪等JSなので再注入・再抽出でも二重トグルしない。
+  const want = desiredFlag ?? true
   return (
     <ClassHeadlessCollector
       openJs={OPEN_BULLETIN_JS}
-      actionJs={setBulletinFlagJs(title, date, desiredFlag ?? true)}
-      collectJs={COLLECT_BULLETIN_TABS_JS}
-      resultType="bulletin"
+      collectJs={setBulletinFlagJs(title, date, want)}
+      resultType="bulletinFlag"
       fallbackJs={GO_BULLETIN_JS}
+      onSignal={(p) => {
+        if (p.type === 'page' && typeof p.url === 'string') diag.current.page = (p.url.split('/').pop() as string) || ''
+        if (p.type === 'bulletinFlag' && typeof p.stage === 'string') diag.current.stage = p.stage as string
+      }}
       onData={async (raw) => {
-        let p: { count?: number; html?: string } | null = null
+        let p: { ok?: boolean } | null = null
         try {
           p = JSON.parse(raw)
         } catch {
           return false
         }
-        if (!p || typeof p.count !== 'number' || p.count <= 0) return false
-        const rows = parseBulletinList(p.html ?? '')
-        if (rows.length === 0) return false
-        await mutateBulletinDigest((prev) => mergeBulletinItems(prev, toBulletinItems(rows), new Date()))
+        if (!p || p.ok !== true) return false // 未反映/行欠落 → 再抽出（冪等なのでトグルは重複しない）
+        await updateBulletinItem(id, (i) => ({ ...i, flagged: want }))
+        diag.current.got = true
         return true
       }}
-      onFinished={onFinished}
+      onFinished={() => {
+        if (__DEV__) {
+          const d = diag.current
+          saveBulletinDetailDiag(`flag page=${d.page || '?'} stage=${d.stage || '?'} got=${d.got}`).catch(
+            () => undefined,
+          )
+        }
+        onFinished()
+      }}
     />
   )
 }
