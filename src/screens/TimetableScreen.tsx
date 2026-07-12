@@ -61,6 +61,8 @@ export default function TimetableScreen() {
   const [selDay, setSelDay] = useState<DayKey>(TODAY_KEYS[new Date().getDay()])
   // 時間割の裏取得中フラグ。true の間だけ headless エンジンをマウントして収集する。
   const [syncing, setSyncing] = useState(false)
+  // 出欠統計の裏取得中フラグ。時間割収集の完了後にのみ true にする（CLASSセッションの同時アクセスを避けるため）。
+  const [attendanceSyncing, setAttendanceSyncing] = useState(false)
   // 時間割収集の最終ヘルス（層1の正直表示バナー用）。
   const [health, setHealth] = useState<StoredHealth | null>(null)
   // 多重起動防止（非同期スロットル判定中の再入も弾く）。setSyncing更新関数の中で副作用を起こさない。
@@ -119,6 +121,7 @@ export default function TimetableScreen() {
       loadClassEvents().then((e) => { if (active) setEvents(e) }).catch(() => undefined)
       loadWeeklyPatterns().then((m) => { if (active) setPatterns(m) }).catch(() => undefined)
       loadCollectionHealth().then((m) => { if (active) setHealth(m.timetable ?? null) }).catch(() => undefined)
+      reloadAttendance()
       ;(async () => {
         const map = await loadCourseMap()
         const snaps = await loadCourseSnapshots()
@@ -365,10 +368,18 @@ export default function TimetableScreen() {
             setSyncing(false)
             loadTimetable().then(setCollections).catch(() => undefined)
             loadCollectionHealth().then((m) => setHealth(m.timetable ?? null)).catch(() => undefined)
+            setAttendanceSyncing(true)
           }}
         />
       ) : null}
-      {syncing ? <AttendanceStatsSyncEngine onFinished={reloadAttendance} /> : null}
+      {attendanceSyncing ? (
+        <AttendanceStatsSyncEngine
+          onFinished={() => {
+            setAttendanceSyncing(false)
+            reloadAttendance()
+          }}
+        />
+      ) : null}
     </ScreenBg>
   )
 }
