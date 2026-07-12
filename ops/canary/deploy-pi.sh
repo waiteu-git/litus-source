@@ -16,9 +16,11 @@ echo "[deploy] canary dir = $CANARY_DIR"
 echo "[deploy] installing node-html-parser at litus root (single dep)"
 ( cd "$LITUS_ROOT" && npm install --no-save node-html-parser )
 
-# 2. カナリア自身の依存（playwright/tsx/node-html-parser）と chromium。
-echo "[deploy] installing canary deps + chromium"
-( cd "$CANARY_DIR" && npm install && npx playwright install --with-deps chromium )
+# 2. カナリア自身の依存（playwright/tsx/node-html-parser）と chromium 本体。
+#    --with-deps は sudo(apt) を要求しスクリプトが固まるため付けない。共有ライブラリが不足して
+#    起動に失敗する場合のみ、後述の `sudo npx playwright install-deps chromium` を別途実行する。
+echo "[deploy] installing canary deps + chromium (browser only)"
+( cd "$CANARY_DIR" && npm install && npx playwright install chromium )
 
 # 3. 実行時ディレクトリ。
 mkdir -p "$HOME/ops/canary-fixtures" "$HOME/ops/logs"
@@ -40,3 +42,5 @@ echo ""
 echo "[deploy] done. 次:"
 echo "  1) 資格情報不要の疎通確認: npm run smoke"
 echo "  2) storageState 設置後の本番スモーク: npm run canary"
+echo "  ※ chromium が共有ライブラリ不足で起動失敗する場合のみ:"
+echo "       sudo npx playwright install-deps chromium   （このディレクトリで）"
