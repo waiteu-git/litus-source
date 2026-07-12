@@ -2,6 +2,12 @@ import { useEffect, type ReactNode } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
+import { useFonts } from 'expo-font'
+import * as SplashScreen from 'expo-splash-screen'
+// ルート(index.js)からの import は全7ウェイトのTTFがバンドルされるため、サブパスから3つだけ読む（APKサイズ抑制）。
+import { IBMPlexSansJP_400Regular } from '@expo-google-fonts/ibm-plex-sans-jp/400Regular'
+import { IBMPlexSansJP_500Medium } from '@expo-google-fonts/ibm-plex-sans-jp/500Medium'
+import { IBMPlexSansJP_700Bold } from '@expo-google-fonts/ibm-plex-sans-jp/700Bold'
 import RootTabs from './src/navigation/RootTabs'
 import BackgroundLetusSync from './src/collect/BackgroundLetusSync'
 import BackgroundBulletinSync from './src/collect/BackgroundBulletinSync'
@@ -31,6 +37,10 @@ import { subscribeWidgetLinks } from './src/widget/widgetLinking'
 // 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
 const ATTENDANCE_TAG = 'attendance-alarm'
 
+// フォントロード完了までネイティブスプラッシュを保持する（白画面やシステムフォントの一瞬表示を防ぐ）。
+// ウィジェットのヘッドレス起動でも本モジュールは import されるため、失敗は握りつぶす。
+SplashScreen.preventAutoHideAsync().catch(() => undefined)
+
 /** variant に応じたナビゲーション地色。gradient/ScreenBg を敷かない画面（科目詳細・各種ビューア）の下地になる。 */
 function navTheme(variant: 'green' | 'white' | 'dark'): Theme {
   const background = variant === 'dark' ? DARK.bg : variant === 'green' ? COLORS.gradBottom : '#ffffff'
@@ -54,6 +64,19 @@ function ThemedContainer({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  // アプリ共通フォント（IBM Plex Sans JP）。ロード失敗時は fontError が立つので
+  // ブロックせずシステムフォントで続行する（src/ui/Text.tsx がフォールバックを担う）。
+  const [fontsLoaded, fontError] = useFonts({
+    IBMPlexSansJP_400Regular,
+    IBMPlexSansJP_500Medium,
+    IBMPlexSansJP_700Bold,
+  })
+  const fontsReady = fontsLoaded || fontError != null
+
+  useEffect(() => {
+    if (fontsReady) SplashScreen.hideAsync().catch(() => undefined)
+  }, [fontsReady])
+
   useEffect(() => {
     ;(async () => {
       try {
@@ -91,6 +114,10 @@ export default function App() {
 
   // ウィジェットのタップ（litus:// ディープリンク）で対応画面を開く。cold/warm 両対応。
   useEffect(() => subscribeWidgetLinks(), [])
+
+  // フォント確定前は描画しない（スプラッシュ保持中なので白画面にはならない）。
+  // ローカルアセットのためロードは実質即時で、起動体感には影響しない。
+  if (!fontsReady) return null
 
   return (
     <SafeAreaProvider>
