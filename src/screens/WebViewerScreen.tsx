@@ -14,10 +14,13 @@ import {
 } from '../collect/injectedScripts'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
-import { loadAssignments, mutateAssignments } from '../storage/assignmentsStore'
+import { loadAssignments, mutateAssignments, upsertAssignment } from '../storage/assignmentsStore'
 import { isSameTrackedActivity } from '../updates/letusActivityKey'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
+import { isCollectedAssignmentUrl } from '../assignments/assignmentOwnership'
+import { makeUserManagedActivity } from '../assignments/manualAssignment'
+import AddActivityDeadlineSheet from '../assignments/AddActivityDeadlineSheet'
 import { COLORS } from '../theme'
 
 type Params = { Web: { url: string; title?: string } }
@@ -39,6 +42,7 @@ export default function WebViewerScreen() {
   const [toast, setToast] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [trackedUrls, setTrackedUrls] = useState<string[]>([])
+  const [pending, setPending] = useState<{ url: string; title: string; courseName: string } | null>(null)
 
   useEffect(() => {
     loadAssignments()
@@ -99,23 +103,42 @@ export default function WebViewerScreen() {
       return
     }
     if (p.type === 'addActivity' && typeof p.url === 'string') {
-      // コースページからの直接追加（締切等はページ未訪問なので不明。次回収集で補完される）。
-      await addOne(
-        {
-          url: p.url,
-          courseCode: null,
-          courseName: p.courseName ?? title ?? '',
-          title: p.title || '（無題）',
-          deadline: null,
-          deadlineText: '',
-          submissionStatus: 'unknown',
-          lifecycleStatus: 'active',
-        },
-        `「${p.title || '項目'}」を追加しました`,
-      )
+      const activityUrl = p.url
+      const activityTitle = p.title || '（無題）'
+      const activityCourse = p.courseName ?? title ?? ''
+      if (isCollectedAssignmentUrl(activityUrl)) {
+        // 収集対象: 従来どおり即追加（締切等は次回収集で補完される）。
+        await addOne(
+          {
+            url: activityUrl, courseCode: null, courseName: activityCourse,
+            title: activityTitle, deadline: null, deadlineText: '',
+            submissionStatus: 'unknown', lifecycleStatus: 'active',
+          },
+          `「${activityTitle}」を追加しました`,
+        )
+      } else {
+        // 収集対象外(PDF resource等): 締切ボトムシートを開いてユーザー所有で追加。
+        setPending({ url: activityUrl, title: activityTitle, courseName: activityCourse })
+      }
       return
     }
     setAdding(false)
+  }
+
+  // pending を確定保存するハンドラ（シートの保存/スキップから呼ばれる）。
+  async function commitPending(deadline: string | null) {
+    if (!pending) return
+    try {
+      await upsertAssignment(makeUserManagedActivity({ ...pending, deadline }, new Date().toISOString()))
+      setTrackedUrls(await loadAssignments().then((m) => Object.keys(m)))
+      await refreshAllNotifications()
+      bump()
+      flash(`「${pending.title}」を追加しました`)
+    } catch {
+      flash('追加に失敗しました')
+    } finally {
+      setPending(null)
+    }
   }
 
   function onLoadEnd() {
@@ -160,6 +183,13 @@ export default function WebViewerScreen() {
           <Text style={styles.toastText}>{toast}</Text>
         </View>
       ) : null}
+      <AddActivityDeadlineSheet
+        visible={pending !== null}
+        presetTitle={pending?.title ?? ''}
+        presetCourseName={pending?.courseName ?? ''}
+        onSave={commitPending}
+        onSkip={() => commitPending(null)}
+      />
     </View>
   )
 }
