@@ -27,7 +27,8 @@ import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
-import { maintenanceSystemAt } from '../health/maintenanceWindow'
+import { evaluateAccess } from '../health/accessGate'
+import { isOnlineNow } from '../health/connectivity'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
@@ -119,8 +120,8 @@ export default function HomeScreen() {
   const startBulletinSync = useCallback(
     (force: boolean) => {
       if (bulletinSyncingRef.current) return
-      // CLASS定時メンテナンス帯（2:00–4:00）は収集不能。上部のヘルスバナーがメンテ表示を出すので、ここは無駄打ちを止めるだけ。
-      if (maintenanceSystemAt(new Date()) === 'class') return
+      // CLASS定時メンテナンス帯（2:00–4:00）またはオフラインは収集不能。上部のヘルスバナーがメンテ/オフライン表示を出すので、ここは無駄打ちを止めるだけ。
+      if (!evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
       if (running) {
         setBulletinDiag('授業中のため取得を控えています（授業後に取得できます）')
         return

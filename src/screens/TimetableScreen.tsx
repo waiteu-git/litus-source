@@ -12,7 +12,8 @@ import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
-import { maintenanceSystemAt } from '../health/maintenanceWindow'
+import { evaluateAccess } from '../health/accessGate'
+import { isOnlineNow } from '../health/connectivity'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
 import { NowPulse } from '../ui/NowPulse'
@@ -68,8 +69,8 @@ export default function TimetableScreen() {
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
   const startSync = useCallback((force: boolean) => {
     if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
-    // CLASS定時メンテナンス帯（2:00–4:00）は収集不能。ヘルスバナーがメンテ表示を出すので無駄打ちを止める。
-    if (maintenanceSystemAt(new Date()) === 'class') return
+    // CLASS定時メンテナンス帯（2:00–4:00）またはオフラインは収集不能。ヘルスバナーがメンテ/オフライン表示を出すので無駄打ちを止める。
+    if (!evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
     const begin = () => {
       syncingRef.current = true
       setSyncing(true)

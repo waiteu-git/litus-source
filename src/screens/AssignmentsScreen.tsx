@@ -17,7 +17,8 @@ import { byDeadlineAsc, formatDeadline, isSubmitted, relDue, TONE_COLOR, urgency
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
-import { maintenanceSystemAt } from '../health/maintenanceWindow'
+import { evaluateAccess } from '../health/accessGate'
+import { isOnlineNow } from '../health/connectivity'
 import { loadAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { COLORS } from '../theme'
@@ -80,8 +81,8 @@ export default function AssignmentsScreen() {
   // 課題一覧の鮮度（最終保存成功時刻）。
   const [refreshedAt, setRefreshedAt] = useState(0)
   const startUpdate = useCallback(() => {
-    // LETUS定時メンテナンス帯（4:00–5:30）は収集不能。ヘルスバナーがメンテ表示を出すので、無駄打ちを止める。
-    if (maintenanceSystemAt(new Date()) === 'letus') return
+    // LETUS定時メンテナンス帯（4:00–5:30）またはオフラインは収集不能。ヘルスバナーがメンテ/オフライン表示を出すので、無駄打ちを止める。
+    if (!evaluateAccess('letus', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
     setProgress(null)
     setCollecting(true)
   }, [])
