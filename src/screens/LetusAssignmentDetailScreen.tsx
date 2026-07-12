@@ -85,12 +85,12 @@ export default function LetusAssignmentDetailScreen() {
   }, [assignment])
 
   const onFetched = useCallback(
-    async ({ ok }: { ok: boolean }) => {
+    async (_r: { ok: boolean }) => {
       setFetching(false)
       const m = await loadLetusBody()
       const b = m[route.params.url] ?? null
       setBody(b)
-      if (!b) setFetchFailed(!ok || true)
+      if (!b) setFetchFailed(true)
     },
     [route.params.url],
   )
