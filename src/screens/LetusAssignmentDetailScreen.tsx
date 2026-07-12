@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { Ionicons } from '@expo/vector-icons'
 import { ActionButton, useUi } from '../ui/screen'
 import { COLORS, useThemeVariant } from '../theme'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
+import { loadLetusBody } from '../storage/letusBodyStore'
+import type { LetusBody } from '../storage/letusBodySerialize'
+import LetusPageFetcher from '../collect/LetusPageFetcher'
 
 const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
   not_submitted: '未提出',
@@ -54,6 +58,10 @@ export default function LetusAssignmentDetailScreen() {
   const ui = useUi()
   const [assignment, setAssignment] = useState<Assignment | null>(null)
   const [now, setNow] = useState(() => new Date())
+  const [body, setBody] = useState<LetusBody | null>(null)
+  const [fetching, setFetching] = useState(false)
+  const [fetchFailed, setFetchFailed] = useState(false)
+  const startedRef = useRef(false)
 
   useEffect(() => {
     loadAssignments().then((map) => setAssignment(map[route.params.url] ?? null))
@@ -62,6 +70,35 @@ export default function LetusAssignmentDetailScreen() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(id)
+  }, [])
+
+  // 本文キャッシュを読み込む。
+  useEffect(() => {
+    loadLetusBody().then((m) => setBody(m[route.params.url] ?? null))
+  }, [route.params.url])
+
+  // 画面を開いたら一度だけ取得を起動（キャッシュ有無に関わらず裏で最新化）。
+  useEffect(() => {
+    if (!assignment || startedRef.current) return
+    startedRef.current = true
+    setFetching(true)
+  }, [assignment])
+
+  const onFetched = useCallback(
+    async (_r: { ok: boolean }) => {
+      setFetching(false)
+      const m = await loadLetusBody()
+      const b = m[route.params.url] ?? null
+      setBody(b)
+      if (!b) setFetchFailed(true)
+    },
+    [route.params.url],
+  )
+
+  const retryFetch = useCallback(() => {
+    setFetchFailed(false)
+    setFetching(true)
+    startedRef.current = true
   }, [])
 
   if (!assignment) {
@@ -111,11 +148,52 @@ export default function LetusAssignmentDetailScreen() {
         </View>
 
         <View style={[ui.card, { marginTop: 12 }]}>
-          <Text style={{ color: ui.labelColor, fontSize: 12, lineHeight: 19 }}>
-            課題の説明・添付ファイルはLETUS側にのみ保持されています。「LETUSで開く」から確認・提出してください。
-          </Text>
+          {body ? (
+            <>
+              <Text style={{ color: ui.valueColor, fontSize: 14, lineHeight: 22 }}>
+                {body.description || '（本文なし）'}
+              </Text>
+              {body.attachments.length > 0 ? (
+                <View style={{ marginTop: 14, gap: 8 }}>
+                  <Text style={{ color: ui.labelColor, fontSize: 12 }}>添付ファイル</Text>
+                  {body.attachments.map((att) => (
+                    <Pressable
+                      key={att.url}
+                      onPress={() => navigation.navigate('Web', { url: att.url, title: att.name })}
+                      style={styles.attachRow}
+                    >
+                      <Ionicons name="document-attach-outline" size={18} color={COLORS.emerald} />
+                      <Text style={{ color: COLORS.emerald, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                        {att.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+              {fetching ? (
+                <Text style={{ color: ui.labelColor, fontSize: 11, marginTop: 10 }}>更新中…</Text>
+              ) : null}
+            </>
+          ) : fetchFailed ? (
+            <View style={{ alignItems: 'center', paddingVertical: 8, gap: 10 }}>
+              <Text style={{ color: ui.labelColor, fontSize: 13, textAlign: 'center' }}>
+                本文を取得できませんでした。上の「LETUSで開く」から確認してください。
+              </Text>
+              <Pressable onPress={retryFetch} style={styles.retryBtn}>
+                <Ionicons name="refresh" size={15} color={COLORS.emerald} />
+                <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>再試行</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', paddingVertical: 18 }}>
+              <ActivityIndicator color={COLORS.emerald} />
+              <Text style={{ color: ui.labelColor, marginTop: 8, fontSize: 12 }}>本文を取得しています…</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      {fetching ? <LetusPageFetcher url={assignment.url} onFinished={onFetched} /> : null}
     </View>
   )
 }
@@ -132,4 +210,14 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11 },
   statValue: { fontSize: 16, fontWeight: '700', marginTop: 3 },
   deadlineText: { fontSize: 12, marginTop: 12, marginBottom: 14 },
+  attachRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#f1f8f5',
+  },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 })

@@ -4,6 +4,8 @@
  * 出典: ルート拡張機能 src/background/index.ts の純粋関数群。
  */
 
+import { parse } from 'node-html-parser'
+
 export function normalizeText(text: unknown): string {
   return String(text ?? '').trim().replace(/\s+/g, ' ')
 }
@@ -46,4 +48,18 @@ export function htmlToPlainText(html: string): string {
         .replace(/<\/td>/gi, ' '),
     ),
   )
+}
+
+/**
+ * 要素のリッチHTML（innerHTML文字列）を改行保持のプレーンテキストにする。
+ * <br>を改行に、&nbsp;を空白に。掲示本文(.fr-view)とLETUS課題本文(#intro)で共有する。
+ */
+export function richHtmlToText(innerHtml: string): string {
+  const withBreaks = String(innerHtml).replace(/<br\s*\/?>(\r?\n)?/gi, '\n')
+  const t = parse(withBreaks).text
+  return t
+    .replace(/ /g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
