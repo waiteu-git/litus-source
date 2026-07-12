@@ -35,6 +35,14 @@ describe('computeAttendanceRisk', () => {
     expect(r.allowedAbsences).toBe(1)
   })
 
+  it('休講は分母から除外する', () => {
+    const r = computeAttendanceRisk(stats([S('canceled'), S('canceled'), S('canceled'), S('present'), S('present'), S('present')]))
+    // datedCells 6 - canceled 3 = 3, allowed floor(3/3)=1
+    expect(r.canceled).toBe(3)
+    expect(r.scheduledTotal).toBe(3)
+    expect(r.allowedAbsences).toBe(1)
+  })
+
   it('遅刻・早退は欠席換算せず内訳に出す', () => {
     const r = computeAttendanceRisk(stats([S('late'), S('earlyLeave'), S('present')]))
     expect(r.late).toBe(1)
