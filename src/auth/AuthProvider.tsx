@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { AppState, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { DESKTOP_UA, DETECT_AUTH_JS, MYCOURSES_URL } from '../collect/injectedScripts'
 import { classifyAuthState, type AuthStatus } from './classifyAuthState'
+import { subscribeForeground } from '../app/foregroundOrchestrator'
 
 interface AuthContextValue {
   /** CLASS（出席・時間割）のログイン状態。可視画面が setClass で反映する */
@@ -43,12 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(() => setNonce((n) => n + 1), [])
 
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh()
-    })
-    return () => sub.remove()
-  }, [refresh])
+  useEffect(() => subscribeForeground('authWarmup', refresh), [refresh])
 
   function onLetusMessage(data: string) {
     let parsed: { type?: string; hasPasswordInput?: boolean; hasLogoutLink?: boolean } | null = null

@@ -4,15 +4,29 @@ import {
   deserializeBulletinDigest,
   type BulletinItem,
 } from './bulletinDigestSerialize'
+import { createWriteQueue } from './writeQueue'
 
 const KEY = 'info.bulletinDigest.v1' // キーは据置（deserialize が v1/v2 両対応）
 
-export async function saveBulletinDigest(items: BulletinItem[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeBulletinDigest(items))
-}
+// 単一ライタ: 既読化（詳細画面）と背景収集のマージ保存が並走してもlost updateしない。
+const enqueueWrite = createWriteQueue()
 
 export async function loadBulletinDigest(): Promise<BulletinItem[]> {
   return deserializeBulletinDigest(await AsyncStorage.getItem(KEY))
+}
+
+/**
+ * read-modify-writeを直列キュー内で行う（lost update防止の唯一の更新入口）。
+ * 呼び出し元でload→save分割せず、必ずこの経路で更新すること。更新後の全件を返す。
+ */
+export async function mutateBulletinDigest(
+  mutate: (items: BulletinItem[]) => BulletinItem[],
+): Promise<BulletinItem[]> {
+  return enqueueWrite(async () => {
+    const next = mutate(await loadBulletinDigest())
+    await AsyncStorage.setItem(KEY, serializeBulletinDigest(next))
+    return next
+  })
 }
 
 const DIAG_KEY = 'info.bulletinDiag.v1'
@@ -42,8 +56,5 @@ export async function updateBulletinItem(
   id: string,
   patch: (i: BulletinItem) => BulletinItem,
 ): Promise<BulletinItem[]> {
-  const items = await loadBulletinDigest()
-  const next = items.map((i) => (i.id === id ? patch(i) : i))
-  await saveBulletinDigest(next)
-  return next
+  return mutateBulletinDigest((items) => items.map((i) => (i.id === id ? patch(i) : i)))
 }

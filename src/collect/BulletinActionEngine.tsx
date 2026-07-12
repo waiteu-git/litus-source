@@ -10,8 +10,7 @@ import {
 import { parseBulletinList, toBulletinItems } from '../parsers/bulletin'
 import { parseBulletinDetail } from '../parsers/bulletinDetail'
 import {
-  loadBulletinDigest,
-  saveBulletinDigest,
+  mutateBulletinDigest,
   updateBulletinItem,
   saveBulletinDetailDiag,
 } from '../storage/bulletinDigestStore'
@@ -98,8 +97,7 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
         if (!p || typeof p.count !== 'number' || p.count <= 0) return false
         const rows = parseBulletinList(p.html ?? '')
         if (rows.length === 0) return false
-        const prev = await loadBulletinDigest()
-        await saveBulletinDigest(mergeBulletinItems(prev, toBulletinItems(rows)))
+        await mutateBulletinDigest((prev) => mergeBulletinItems(prev, toBulletinItems(rows)))
         return true
       }}
       onFinished={onFinished}

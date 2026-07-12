@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg, CountdownRing, useTabBarClearance } from '../ui/screen'
 import { countdownClock, countdownFraction } from '../attendance/countdown'
 import { normalizeAttendanceCode } from '../attendance/normalizeCode'
-import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
+import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
 import { COLORS, useThemeVariant } from '../theme'
 
 /**
@@ -28,7 +28,6 @@ export default function AttendanceScreen() {
     attendedNow,
     conflict,
     conflictExhausted,
-    now,
     code,
     setCode,
     submit,
@@ -38,6 +37,8 @@ export default function AttendanceScreen() {
     setRevealClass,
     setAttendanceFocused,
   } = engine
+  // カウントダウン描画用の秒精度クロック（この画面だけが毎秒購読する）。
+  const now = useAttendanceNow()
   const closed = reception?.status === 'closed'
 
   // フォーカスをエンジンへ通知（起動ポリシー＋収集への優先権制御）。
