@@ -30,7 +30,7 @@ import FreshnessLabel from '../ui/FreshnessLabel'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
-import { COLORS } from '../theme'
+import { COLORS, DARK } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
@@ -275,7 +275,7 @@ export default function HomeScreen() {
               accessibilityLabel="設定"
               style={styles.gearBtn}
             >
-              <Ionicons name="settings-outline" size={22} color={ui.green ? COLORS.white : COLORS.emeraldDark} />
+              <Ionicons name="settings-outline" size={22} color={ui.heading} />
             </Pressable>
           }
         />
@@ -347,7 +347,7 @@ export default function HomeScreen() {
                       <Text style={[styles.focusRel, { color: ui.green ? '#ffffff' : toneColor }]}>
                         {relDue(urgent.deadline, tick)}
                       </Text>
-                      <Text style={[styles.focusDue, { color: ui.green ? '#eafff7' : '#8a968f' }]}>
+                      <Text style={[styles.focusDue, { color: ui.subMuted }]}>
                         {formatDeadline(urgent.deadline)}
                       </Text>
                     </View>
@@ -380,9 +380,9 @@ export default function HomeScreen() {
             <SectionLabel>CLASS掲示</SectionLabel>
             <Pressable onPress={() => startBulletinSync(true)} hitSlop={10} disabled={bulletinSyncing} style={styles.refreshBtn}>
               {bulletinSyncing ? (
-                <ActivityIndicator size="small" color={ui.green ? '#eafff7' : COLORS.emerald} />
+                <ActivityIndicator size="small" color={ui.accentSoft} />
               ) : (
-                <Ionicons name="refresh" size={16} color={ui.green ? '#eafff7' : COLORS.emerald} />
+                <Ionicons name="refresh" size={16} color={ui.accentSoft} />
               )}
             </Pressable>
           </View>
@@ -391,7 +391,7 @@ export default function HomeScreen() {
           {unreadBulletin.length > 0 ? (
             <View style={[ui.card, styles.bulletinCard]}>
               <View style={styles.bulletinHead}>
-                <Ionicons name="megaphone-outline" size={18} color={ui.green ? '#ffffff' : COLORS.emerald} />
+                <Ionicons name="megaphone-outline" size={18} color={ui.accent} />
                 <Text style={[styles.bulletinHeadText, { color: ui.valueColor }]}>CLASS掲示</Text>
                 <View style={styles.unreadBadge}>
                   <Text style={styles.unreadBadgeText}>未読 {unreadBulletin.length}</Text>
@@ -401,8 +401,8 @@ export default function HomeScreen() {
                 intervalMs={3500}
                 items={unreadBulletin.map((b) => (
                   <Pressable key={b.id} onPress={openBulletin} style={styles.bulletinSlide}>
-                    <View style={[styles.bulletinTag, { backgroundColor: ui.green ? 'rgba(255,255,255,0.5)' : '#d6efe4' }]}>
-                      <Text style={[styles.bulletinTagText, { color: ui.green ? '#04322a' : COLORS.emeraldDark }]}>
+                    <View style={[styles.bulletinTag, { backgroundColor: ui.pillBg }]}>
+                      <Text style={[styles.bulletinTagText, { color: ui.pillText }]}>
                         {b.category}
                       </Text>
                     </View>
@@ -414,12 +414,12 @@ export default function HomeScreen() {
                 ))}
               />
               <Pressable onPress={openBulletin}>
-                <Text style={[styles.bulletinMore, { color: ui.green ? '#eafff7' : COLORS.emerald }]}>すべて見る ↗</Text>
+                <Text style={[styles.bulletinMore, { color: ui.accentSoft }]}>すべて見る ↗</Text>
               </Pressable>
             </View>
           ) : (
             <Pressable style={[ui.card, styles.bulletinCta]} onPress={() => startBulletinSync(true)}>
-              <Ionicons name="megaphone-outline" size={20} color={COLORS.emerald} />
+              <Ionicons name="megaphone-outline" size={20} color={ui.accent} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.bulletinCtaText, { color: ui.valueColor }]}>
                   {bulletinSyncing
@@ -437,8 +437,8 @@ export default function HomeScreen() {
 
           <SectionLabel>その他</SectionLabel>
           <Pressable style={[ui.card, styles.entry]} onPress={openAttendance}>
-            <View style={[styles.entryIcon, { backgroundColor: ui.green ? 'rgba(255,255,255,0.5)' : '#d6efe4' }]}>
-              <Ionicons name="flash-outline" size={20} color={COLORS.emerald} />
+            <View style={[styles.entryIcon, { backgroundColor: ui.pillBg }]}>
+              <Ionicons name="flash-outline" size={20} color={ui.accent} />
             </View>
             <View style={styles.entryBody}>
               <Text style={[styles.entryTitle, { color: ui.valueColor }]}>出席登録</Text>
@@ -446,17 +446,17 @@ export default function HomeScreen() {
                 {banner.active ? banner.text : 'CLASSの出席コードを入力'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#9bb3ab" />
+            <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
           </Pressable>
           <Pressable style={[ui.card, styles.entry]} onPress={() => navigation.navigate('Info')}>
-            <View style={[styles.entryIcon, { backgroundColor: ui.green ? 'rgba(255,255,255,0.5)' : '#d6efe4' }]}>
-              <Ionicons name="newspaper-outline" size={20} color={COLORS.emerald} />
+            <View style={[styles.entryIcon, { backgroundColor: ui.pillBg }]}>
+              <Ionicons name="newspaper-outline" size={20} color={ui.accent} />
             </View>
             <View style={styles.entryBody}>
               <Text style={[styles.entryTitle, { color: ui.valueColor }]}>インフォ</Text>
               <Text style={[styles.entrySub, { color: ui.labelColor }]}>学食・キャンパス情報</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#9bb3ab" />
+            <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
           </Pressable>
         </ScrollView>
       </ScreenBg>
@@ -543,8 +543,8 @@ function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<
               <Text style={styles.nowLiveText}>今の授業</Text>
             </View>
           ) : (
-            <View style={[styles.nextBadge, { backgroundColor: ui.green ? 'rgba(255,255,255,0.6)' : '#e3f5ee' }]}>
-              <Text style={[styles.nextBadgeText, { color: ui.green ? '#053a2c' : COLORS.cta }]}>次の授業</Text>
+            <View style={[styles.nextBadge, { backgroundColor: ui.pick('rgba(255,255,255,0.6)', '#e3f5ee', DARK.pillBg) }]}>
+              <Text style={[styles.nextBadgeText, { color: ui.pick('#053a2c', COLORS.cta, COLORS.emeraldLight) }]}>次の授業</Text>
             </View>
           )}
         </View>

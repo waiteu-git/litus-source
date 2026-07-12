@@ -21,7 +21,7 @@ import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { isCollectedAssignmentUrl } from '../assignments/assignmentOwnership'
 import { makeUserManagedActivity } from '../assignments/manualAssignment'
 import AddActivityDeadlineSheet from '../assignments/AddActivityDeadlineSheet'
-import { COLORS } from '../theme'
+import { COLORS, DARK, useThemeVariant } from '../theme'
 
 type Params = { Web: { url: string; title?: string } }
 
@@ -36,6 +36,7 @@ export default function WebViewerScreen() {
   const route = useRoute<RouteProp<Params, 'Web'>>()
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const { url, title } = route.params
+  const dark = useThemeVariant().variant === 'dark'
   const webviewRef = useRef<WebView>(null)
   const { bump } = useAssignmentsVersion()
   const [currentUrl, setCurrentUrl] = useState(url)
@@ -148,7 +149,7 @@ export default function WebViewerScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, dark && { backgroundColor: DARK.bg }]}>
       <WebView
         ref={webviewRef}
         source={{ uri: url }}

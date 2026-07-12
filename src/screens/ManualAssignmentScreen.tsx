@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
-import { COLORS } from '../theme'
+import { COLORS, DARK } from '../theme'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments, upsertAssignment, removeAssignment } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
@@ -110,6 +110,8 @@ export default function ManualAssignmentScreen() {
     ])
   }
 
+  const inputStyle = { backgroundColor: ui.inputBg, borderColor: ui.colors.inputBorder }
+  const phColor = ui.dark ? DARK.label : '#9aa8a2'
   const label = (s: string) => <Text style={[styles.label, { color: ui.labelColor }]}>{s}</Text>
 
   return (
@@ -118,22 +120,22 @@ export default function ManualAssignmentScreen() {
         <View style={[ui.card, styles.card]}>
           {label('タイトル')}
           <TextInput
-            style={[styles.input, { color: ui.valueColor }]}
+            style={[styles.input, inputStyle, { color: ui.valueColor }]}
             value={title}
             onChangeText={setTitle}
             placeholder="例: 第3回レポート"
-            placeholderTextColor="#9aa8a2"
+            placeholderTextColor={phColor}
           />
         </View>
 
         <View style={[ui.card, styles.card]}>
           {label('科目名（任意）')}
           <TextInput
-            style={[styles.input, { color: ui.valueColor }]}
+            style={[styles.input, inputStyle, { color: ui.valueColor }]}
             value={courseName}
             onChangeText={setCourseName}
             placeholder="例: 哲学"
-            placeholderTextColor="#9aa8a2"
+            placeholderTextColor={phColor}
           />
         </View>
 

@@ -5,7 +5,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Ionicons } from '@expo/vector-icons'
 import { ActionButton, useUi } from '../ui/screen'
-import { COLORS, useThemeVariant } from '../theme'
+import { COLORS, DARK } from '../theme'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments, mutateAssignments, removeAssignment } from '../storage/assignmentsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
@@ -61,7 +61,6 @@ function formatDeadline(iso: string | null): string {
 export default function LetusAssignmentDetailScreen() {
   const route = useRoute<RouteProp<AssignmentsStackParamList, 'LetusAssignmentDetail'>>()
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
-  const { variant } = useThemeVariant()
   const ui = useUi()
   const [assignment, setAssignment] = useState<Assignment | null>(null)
   const [now, setNow] = useState(() => new Date())
@@ -173,7 +172,7 @@ export default function LetusAssignmentDetailScreen() {
   if (!assignment) {
     return (
       <View style={styles.root}>
-        {variant === 'green' ? <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={StyleSheet.absoluteFill} /> : null}
+        {ui.colors.gradient ? <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} /> : null}
         <View style={styles.body}>
           <Text style={{ color: ui.valueColor }}>課題情報が見つかりませんでした。</Text>
         </View>
@@ -187,31 +186,31 @@ export default function LetusAssignmentDetailScreen() {
 
   return (
     <View style={styles.root}>
-      {variant === 'green' ? <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={StyleSheet.absoluteFill} /> : null}
+      {ui.colors.gradient ? <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} /> : null}
       <ScrollView contentContainerStyle={styles.body}>
         <View style={[ui.card, styles.panel]}>
-          <View style={[styles.courseTag, { backgroundColor: ui.green ? 'rgba(255,255,255,0.5)' : '#d6efe4' }]}>
-            <Text style={[styles.courseTagText, { color: ui.green ? '#04322a' : COLORS.emeraldDark }]}>
+          <View style={[styles.courseTag, { backgroundColor: ui.pillBg }]}>
+            <Text style={[styles.courseTagText, { color: ui.pillText }]}>
               {assignment.courseName || '科目不明'}
             </Text>
           </View>
           <Text style={[styles.title, { color: ui.valueColor }]}>{assignment.title}</Text>
 
           <View style={styles.statsRow}>
-            <View style={[styles.statBox, { backgroundColor: urgent ? '#fff2ef' : ui.green ? 'rgba(255,255,255,0.24)' : '#f1f8f5' }]}>
+            <View style={[styles.statBox, { backgroundColor: urgent ? '#fff2ef' : ui.softBoxBg }]}>
               <Text style={[styles.statLabel, { color: urgent ? '#a33417' : ui.labelColor }]}>締切まで</Text>
               <Text style={[styles.statValue, { color: urgent ? '#e0533a' : ui.valueColor }]}>{rel || '—'}</Text>
             </View>
             {userManaged ? (
               <Pressable
-                style={[styles.statBox, { backgroundColor: ui.green ? 'rgba(255,255,255,0.24)' : '#f1f8f5' }]}
+                style={[styles.statBox, { backgroundColor: ui.softBoxBg }]}
                 onPress={toggleSubmission}
               >
                 <Text style={[styles.statLabel, { color: ui.labelColor }]}>提出状況（タップで切替）</Text>
                 <Text style={[styles.statValue, { color: ui.valueColor }]}>{isSubmitted(assignment) ? '提出済み' : '未提出'}</Text>
               </Pressable>
             ) : (
-              <View style={[styles.statBox, { backgroundColor: ui.green ? 'rgba(255,255,255,0.24)' : '#f1f8f5' }]}>
+              <View style={[styles.statBox, { backgroundColor: ui.softBoxBg }]}>
                 <Text style={[styles.statLabel, { color: ui.labelColor }]}>提出状況</Text>
                 <Text style={[styles.statValue, { color: ui.valueColor }]}>{STATUS_LABEL[assignment.submissionStatus]}</Text>
               </View>
@@ -221,8 +220,8 @@ export default function LetusAssignmentDetailScreen() {
           <View style={styles.deadlineRow}>
             <Text style={[styles.deadlineText, { color: ui.labelColor }]}>期限: {formatDeadline(assignment.deadline)}</Text>
             {userManaged ? (
-              <Pressable onPress={openDeadlineEdit} style={styles.editLinkBtn}>
-                <Text style={styles.editLinkText}>編集</Text>
+              <Pressable onPress={openDeadlineEdit} style={[styles.editLinkBtn, ui.dark && { backgroundColor: DARK.softBox }]}>
+                <Text style={[styles.editLinkText, ui.dark && { color: COLORS.emeraldLight }]}>編集</Text>
               </Pressable>
             ) : null}
           </View>
@@ -260,10 +259,10 @@ export default function LetusAssignmentDetailScreen() {
                       <Pressable
                         key={att.url}
                         onPress={() => navigation.navigate('Web', { url: att.url, title: att.name })}
-                        style={styles.attachRow}
+                        style={[styles.attachRow, ui.dark && { backgroundColor: DARK.softBox }]}
                       >
-                        <Ionicons name="document-attach-outline" size={18} color={COLORS.emerald} />
-                        <Text style={{ color: COLORS.emerald, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                        <Ionicons name="document-attach-outline" size={18} color={ui.accent} />
+                        <Text style={{ color: ui.accent, fontSize: 13, flex: 1 }} numberOfLines={1}>
                           {att.name}
                         </Text>
                       </Pressable>
@@ -280,13 +279,13 @@ export default function LetusAssignmentDetailScreen() {
                   本文を取得できませんでした。上の「LETUSで開く」から確認してください。
                 </Text>
                 <Pressable onPress={retryFetch} style={styles.retryBtn}>
-                  <Ionicons name="refresh" size={15} color={COLORS.emerald} />
-                  <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>再試行</Text>
+                  <Ionicons name="refresh" size={15} color={ui.accent} />
+                  <Text style={{ color: ui.accent, fontWeight: '600', fontSize: 13 }}>再試行</Text>
                 </Pressable>
               </View>
             ) : (
               <View style={{ alignItems: 'center', paddingVertical: 18 }}>
-                <ActivityIndicator color={COLORS.emerald} />
+                <ActivityIndicator color={ui.accent} />
                 <Text style={{ color: ui.labelColor, marginTop: 8, fontSize: 12 }}>本文を取得しています…</Text>
               </View>
             )}
@@ -299,9 +298,14 @@ export default function LetusAssignmentDetailScreen() {
       {userManaged ? (
         <Modal visible={editingDeadline} transparent animationType="slide" onRequestClose={() => setEditingDeadline(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setEditingDeadline(false)} />
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>締切を編集</Text>
-            <DeadlineFields value={dlValue} onChange={setDlValue} valueColor="#123" labelColor="#5a6b64" />
+          <View style={[styles.modalSheet, ui.dark && { backgroundColor: DARK.card }]}>
+            <Text style={[styles.modalTitle, ui.dark && { color: DARK.heading }]}>締切を編集</Text>
+            <DeadlineFields
+              value={dlValue}
+              onChange={setDlValue}
+              valueColor={ui.dark ? DARK.value : '#123'}
+              labelColor={ui.dark ? DARK.label : '#5a6b64'}
+            />
             <Pressable style={styles.editSaveBtn} onPress={saveDeadline}>
               <Text style={styles.editSaveText}>保存</Text>
             </Pressable>

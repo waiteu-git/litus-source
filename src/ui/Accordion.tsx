@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useUi } from './screen'
-import { COLORS } from '../theme'
 import { DUR } from './motion'
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -38,7 +37,7 @@ export function Accordion({
 }) {
   const ui = useUi()
   const [open, setOpen] = useState(defaultOpen)
-  const headColor = ui.green ? COLORS.white : COLORS.emeraldDark
+  const headColor = ui.heading
   // chevron の回転（0→1 で 0→180度）。本文は開くたびに fast フェードイン。
   const rot = useRef(new Animated.Value(defaultOpen ? 1 : 0)).current
   const bodyOpacity = useRef(new Animated.Value(defaultOpen ? 1 : 0)).current

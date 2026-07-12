@@ -2,12 +2,12 @@ import { useEffect, useRef } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
-import { ScreenBg, CountdownRing, useTabBarClearance } from '../ui/screen'
+import { ScreenBg, CountdownRing, useUi, useTabBarClearance } from '../ui/screen'
 import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { countdownClock, countdownFraction } from '../attendance/countdown'
 import { normalizeAttendanceCode } from '../attendance/normalizeCode'
 import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
-import { COLORS, useThemeVariant } from '../theme'
+import { COLORS, DARK } from '../theme'
 
 /**
  * 出席画面。CLASS WebView・受付判定エンジンは AttendanceEngineProvider（アプリ根で常時保持）に
@@ -16,8 +16,9 @@ import { COLORS, useThemeVariant } from '../theme'
  */
 export default function AttendanceScreen() {
   const inputRef = useRef<TextInput>(null)
-  const { variant } = useThemeVariant()
-  const glass = variant === 'green'
+  const ui = useUi()
+  const glass = ui.green
+  const dark = ui.dark
   const clearance = useTabBarClearance()
   const isFocused = useIsFocused()
   const engine = useAttendanceEngine()
@@ -69,11 +70,9 @@ export default function AttendanceScreen() {
 
   const digits = [0, 1, 2, 3].map((i) => code[i] ?? '')
 
-  const cardStyle = glass
-    ? { backgroundColor: 'rgba(255,255,255,0.34)', borderColor: 'rgba(255,255,255,0.55)', borderWidth: 1 }
-    : { backgroundColor: c.white, borderColor: '#e3ece8', borderWidth: 1 }
-  const labelColor = glass ? c.labelOnGlass : c.emeraldDark
-  const valueColor = glass ? c.inkOnGlass : c.ink
+  const cardStyle = { backgroundColor: ui.colors.cardBg, borderColor: ui.colors.cardBorder, borderWidth: 1 }
+  const labelColor = ui.labelColor
+  const valueColor = ui.valueColor
   const accepting = !!reception?.accepting
 
   return (
@@ -81,10 +80,10 @@ export default function AttendanceScreen() {
       <ScreenBg>
         <View style={styles.header}>
           <View style={styles.hLeft}>
-            <Ionicons name="flash-outline" size={22} color={glass ? c.white : c.emeraldDark} />
-            <Text style={[styles.hTitle, { color: glass ? c.white : c.emeraldDark }]}>出席</Text>
+            <Ionicons name="flash-outline" size={22} color={ui.heading} />
+            <Text style={[styles.hTitle, { color: ui.heading }]}>出席</Text>
           </View>
-          <Text style={[styles.pill, glass ? styles.pillGlass : styles.pillSolid]}>
+          <Text style={[styles.pill, { backgroundColor: ui.colors.chipBg, color: ui.colors.chipText }]}>
             {conflict
               ? 'PC等で確認中'
               : attendedNow
@@ -101,8 +100,8 @@ export default function AttendanceScreen() {
 
         {conflict ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
-            <View style={[styles.preIconWrap, glass && styles.preIconWrapGlass]}>
-              <Ionicons name="desktop-outline" size={30} color={glass ? c.white : c.emerald} />
+            <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+              <Ionicons name="desktop-outline" size={30} color={ui.accent} />
             </View>
             <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
               PCなど他の画面でCLASSを開いていると確認できません
@@ -141,8 +140,8 @@ export default function AttendanceScreen() {
           </View>
         ) : closed ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
-            <View style={[styles.preIconWrap, glass && styles.preIconWrapGlass]}>
-              <Ionicons name="time-outline" size={30} color={glass ? c.white : c.emerald} />
+            <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+              <Ionicons name="time-outline" size={30} color={ui.accent} />
             </View>
             <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>この授業の受付は終了しました</Text>
             {reception?.courseName ? (
@@ -179,8 +178,8 @@ export default function AttendanceScreen() {
                 </>
               ) : (
                 <>
-                  <View style={[styles.preIconWrap, glass && styles.preIconWrapGlass]}>
-                    <Ionicons name="time-outline" size={30} color={glass ? c.white : c.emerald} />
+                  <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+                    <Ionicons name="time-outline" size={30} color={ui.accent} />
                   </View>
                   <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>{statusLine}</Text>
                 </>
@@ -197,8 +196,8 @@ export default function AttendanceScreen() {
                     <Text style={styles.failBtnText}>更新</Text>
                   </Pressable>
                   {failCount >= 2 ? (
-                    <Pressable style={[styles.failBtn, styles.failBtnGhost]} onPress={() => setRevealClass(true)}>
-                      <Text style={[styles.failBtnText, { color: c.emeraldDark }]}>CLASSの画面を表示</Text>
+                    <Pressable style={[styles.failBtn, styles.failBtnGhost, dark && { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder }]} onPress={() => setRevealClass(true)}>
+                      <Text style={[styles.failBtnText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>CLASSの画面を表示</Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -209,7 +208,7 @@ export default function AttendanceScreen() {
               <Text style={[styles.inputLabel, { color: labelColor }]}>認証コード（半角数字）</Text>
               <Pressable style={styles.segRow} onPress={() => inputRef.current?.focus()}>
                 {digits.map((d, i) => (
-                  <View key={i} style={[styles.seg, glass && styles.segGlass]}>
+                  <View key={i} style={[styles.seg, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}>
                     <Text style={[styles.segText, { color: valueColor }]}>{d}</Text>
                   </View>
                 ))}

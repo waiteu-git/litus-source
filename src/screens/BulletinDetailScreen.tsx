@@ -121,8 +121,8 @@ export default function BulletinDetailScreen() {
     <ScreenBg>
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
         <View style={[ui.card, styles.panel]}>
-          <View style={[styles.tag, { backgroundColor: ui.green ? 'rgba(255,255,255,0.5)' : '#d6efe4' }]}>
-            <Text style={[styles.tagText, { color: ui.green ? '#04322a' : COLORS.emeraldDark }]}>{item.category}</Text>
+          <View style={[styles.tag, { backgroundColor: ui.pillBg }]}>
+            <Text style={[styles.tagText, { color: ui.pillText }]}>{item.category}</Text>
           </View>
           <Text style={[styles.title, { color: ui.valueColor }]}>{item.title}</Text>
 
@@ -140,10 +140,10 @@ export default function BulletinDetailScreen() {
             {/* 添付ファイルの確認・DLはCLASS本物ページ側で完結させる。全掲示に常設。 */}
             <Pressable
               onPress={openInClass}
-              style={[styles.flagBtn, { borderColor: COLORS.emerald }]}
+              style={[styles.flagBtn, { borderColor: ui.accent }]}
             >
-              <Ionicons name="open-outline" size={16} color={COLORS.emerald} />
-              <Text style={[styles.flagText, { color: COLORS.emerald }]}>CLASSで開く</Text>
+              <Ionicons name="open-outline" size={16} color={ui.accent} />
+              <Text style={[styles.flagText, { color: ui.accent }]}>CLASSで開く</Text>
             </Pressable>
           </View>
 
@@ -170,15 +170,15 @@ export default function BulletinDetailScreen() {
               ) : null}
               <View style={styles.failRow}>
                 <Pressable onPress={retryFetch} style={styles.retryBtn}>
-                  <Ionicons name="refresh" size={15} color={COLORS.emerald} />
-                  <Text style={{ color: COLORS.emerald, fontWeight: '600', fontSize: 13 }}>再試行</Text>
+                  <Ionicons name="refresh" size={15} color={ui.accent} />
+                  <Text style={{ color: ui.accent, fontWeight: '600', fontSize: 13 }}>再試行</Text>
                 </Pressable>
                 {/* 本文取得が不調でも、上部の常設「CLASSで開く」で本物ページを開ける。 */}
               </View>
             </View>
           ) : (
             <View style={styles.loading}>
-              <ActivityIndicator color={COLORS.emerald} />
+              <ActivityIndicator color={ui.accent} />
               <Text style={{ color: ui.labelColor, marginTop: 8, fontSize: 12 }}>本文を取得しています…</Text>
             </View>
           )}
