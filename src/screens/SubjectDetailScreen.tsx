@@ -6,7 +6,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { SectionLabel, useUi } from '../ui/screen'
+import { SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
 import { resolveNextSession, pickAttentionEvent, type NextSession } from '../timetableEvents/nextSession'
 import { COLORS, DARK } from '../theme'
@@ -111,6 +111,7 @@ export default function SubjectDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const { courseCode, name, day, dayKey, period, room, teachers, isRemote } = route.params
   const ui = useUi()
+  const clearance = useTabBarClearance()
   const { version, bump } = useClassEventsVersion()
   const candidates = useBulletinEventCandidates(courseCode, name)
   const [letusUrl, setLetusUrl] = useState<string | null>(null)
@@ -249,7 +250,7 @@ export default function SubjectDetailScreen() {
   return (
     <View style={styles.root}>
       {ui.colors.gradient ? <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} /> : null}
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
         <View style={[ui.card, styles.hero]}>
           <Text style={[styles.name, { color: ui.valueColor }]}>{name}</Text>
           <Text style={[styles.code, { color: ui.labelColor }]}>
