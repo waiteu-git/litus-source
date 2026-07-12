@@ -57,6 +57,7 @@ export function resolveNextSession(params: {
       events.filter((e) => e.type === 'cancel' && periodMatches(e, period)).map((e) => e.date),
     )
     const first = nextWeekdayDate(day, now)
+    // 上限は inclusive: i=0..horizonWeeks で horizonWeeks+1 回分の該当曜日を走査する。
     for (let i = 0; i <= horizonWeeks; i++) {
       const cur = new Date(first)
       cur.setDate(first.getDate() + i * 7)

@@ -53,6 +53,19 @@ describe('resolveNextSession', () => {
     expect(r?.date).toBe('2026-07-20')
   })
 
+  it('別の限の休講は該当回を打ち消さない（periodMatches=false）', () => {
+    // 月3限を照会。7/13 に 4限の休講がある。4限の休講は 3限を打ち消さない → 7/13 を返す。
+    const r = resolveNextSession({
+      day: 'mon',
+      period: 3,
+      baseRoom: 'K404',
+      pattern: {},
+      events: [ev({ type: 'cancel', date: '2026-07-13', periods: [4], makeupStatus: 'undecided' })],
+      now: new Date(2026, 6, 13, 8, 0),
+    })
+    expect(r?.date).toBe('2026-07-13')
+  })
+
   it('教室変更があれば room と note を反映する', () => {
     const r = resolveNextSession({
       day: 'mon',
