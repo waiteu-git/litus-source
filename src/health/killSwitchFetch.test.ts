@@ -9,7 +9,7 @@ describe('fetchKillSwitchStatus', () => {
   it('200＋正常JSONで正規化済みstatusを返す', async () => {
     const fetchImpl = async () => okResponse({ schemaVersion: 1, disabled: ['letus'], message: 'm' })
     const s = await fetchKillSwitchStatus(fetchImpl as typeof fetch)
-    expect(s).toEqual({ disabledAll: false, disabled: ['letus'], message: 'm' })
+    expect(s).toEqual({ disabledAll: false, disabled: ['letus'], message: 'm', title: null })
   })
 
   it('KILL_SWITCH_URLへリクエストする', async () => {

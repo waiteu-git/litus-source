@@ -35,6 +35,7 @@ export function deserializeKillSwitchCache(raw: string | null): KillSwitchCache 
       disabledAll: s.disabledAll === true,
       disabled: FEATURES.filter((f) => (s.disabled as unknown[]).includes(f)),
       message: typeof s.message === 'string' && s.message !== '' ? s.message : null,
+      title: typeof s.title === 'string' && s.title !== '' ? s.title : null,
     },
     fetchedAt,
   }
