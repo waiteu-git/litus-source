@@ -4,4 +4,4 @@
  * 注意: android/app/build/gradle の versionCode も同時に上げること（上げないとAndroidが「更新」と
  * 認識せず上書きインストールがスキップされ、古いビルドが残る）。build.gradleはgitignoreなので手動。
  */
-export const BUILD_TAG = 'v71'
+export const BUILD_TAG = 'v72'
