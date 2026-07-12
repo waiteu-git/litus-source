@@ -26,6 +26,8 @@ import TermsConsentScreen from '../screens/TermsConsentScreen'
 import { TERMS_VERSION } from '../legal/termsVersion'
 import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
 import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from '../screens/bootLogoHtml'
+import { WARM_BOOT_LOGO_GREEN, WARM_BOOT_LOGO_WHITE } from '../screens/bootLogoWarm'
+import { isWarmBoot, loadLastAuthedAt, saveLastAuthedAt } from '../storage/bootMetaStore'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import { COLORS, useThemeVariant } from '../theme'
 
@@ -100,14 +102,19 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const introDoneAtRef = useRef<number | null>(null)
   // authed に最初に到達した時刻。イントロ前に済んだか/ループ中に済んだかの判定に使う。
   const authedAtRef = useRef<number | null>(null)
+  // 起動モード: 決定するまで（null）は起動ロゴをマウントせず下地色のみ表示する。
+  // warm=その日2回目以降（セッション生存・同期不要）→ループのみ版。full=フルイントロ。
+  const [bootMode, setBootMode] = useState<'full' | 'warm' | null>(null)
 
   useEffect(() => {
+    if (bootMode == null) return
+    const introMs = bootMode === 'warm' ? 0 : BOOT_INTRO_MS
     const t = setTimeout(() => {
       introDoneAtRef.current = Date.now()
       setBootAnimDone(true)
-    }, BOOT_INTRO_MS)
+    }, introMs)
     return () => clearTimeout(t)
-  }, [])
+  }, [bootMode])
 
   // authed 到達時刻を記録（初回のみ）。
   useEffect(() => {
@@ -137,13 +144,26 @@ export function LoginGate({ children }: { children: ReactNode }) {
         // 規約同意を最優先で判定（未同意/旧版なら規約 → オンボ → ログインの順）。
         const accepted = await loadAcceptedTermsVersion()
         if (accepted < TERMS_VERSION) {
+          setBootMode('full')
           setState('needsConsent')
           return
         }
         const done = await loadOnboardingDone()
-        if (!done) wasFirstRunRef.current = true
-        setState(done ? 'checking' : 'firstRun')
+        if (!done) {
+          wasFirstRunRef.current = true
+          setBootMode('full')
+          setState('firstRun')
+          return
+        }
+        // 既存ユーザー: その日2回目以降＆同期不要なら warm。
+        const [lastAuthedAt, ttAt] = await Promise.all([
+          loadLastAuthedAt(),
+          loadTimetableRefreshedAt(),
+        ])
+        setBootMode(isWarmBoot(lastAuthedAt, ttAt) ? 'warm' : 'full')
+        setState('checking')
       } catch {
+        setBootMode('full')
         setState('checking')
       }
     })()
@@ -197,6 +217,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
 
   function requireLogin() {
     lastResultRef.current = null
+    setBootMode('warm')
     setNonce((n) => n + 1)
     setState('checking')
   }
@@ -237,6 +258,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
    * CLASSの競合が起きない＝時間割の自動更新に最適なタイミング。
    */
   function proceedToEntry() {
+    // ログイン確認成功＝次回のwarm判定用に時刻を残す（fire-and-forget）。
+    saveLastAuthedAt().catch(() => undefined)
     Promise.all([loadTimetable(), loadTimetableRefreshedAt()])
       .then(([t, at]) => {
         const need = !t || t.length === 0 || isTimetableStale(at)
@@ -395,19 +418,30 @@ export function LoginGate({ children }: { children: ReactNode }) {
           />
         ) : null}
         {!bootAnimDone || state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' || (state === 'authed' && !bootReady) ? (
-          <View style={styles.boot}>
-            {/* 起動ロゴアニメ（純CSS・ローカルHTML）。起動直後は状態に関わらず最前面で完走させ、
-                以降も裏でログイン/取得が進む間は表示。タッチは奪わない。 */}
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              <WebView
-                source={{ html: bootWhite ? BOOT_LOGO_WHITE : BOOT_LOGO_GREEN }}
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-                overScrollMode="never"
-                // 翠版は自前でグラデ背景を描く。白版は白。読込中の一瞬の下地を合わせる。
-                style={{ backgroundColor: bootWhite ? '#ffffff' : COLORS.gradBottom }}
-              />
-            </View>
+          <View style={[styles.boot, { backgroundColor: bootWhite ? '#ffffff' : COLORS.gradBottom }]}>
+            {/* 起動ロゴアニメ（純CSS・ローカルHTML）。bootMode 決定前（null）はマウントせず下地色のみ。
+                warm はループのみ版で即ループへ。以降も裏でログイン/取得が進む間は表示。タッチは奪わない。 */}
+            {bootMode != null ? (
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <WebView
+                  source={{
+                    html:
+                      bootMode === 'warm'
+                        ? bootWhite
+                          ? WARM_BOOT_LOGO_WHITE
+                          : WARM_BOOT_LOGO_GREEN
+                        : bootWhite
+                          ? BOOT_LOGO_WHITE
+                          : BOOT_LOGO_GREEN,
+                  }}
+                  scrollEnabled={false}
+                  showsVerticalScrollIndicator={false}
+                  overScrollMode="never"
+                  // 翠版は自前でグラデ背景を描く。白版は白。読込中の一瞬の下地を合わせる。
+                  style={{ backgroundColor: bootWhite ? '#ffffff' : COLORS.gradBottom }}
+                />
+              </View>
+            ) : null}
             {/* 接続状況（アニメ完了後も長い待ちで固まって見えないよう）。背景色に応じて可読色に。
                 アニメ再生中（!bootAnimDone かつ通常フロー）は邪魔しないよう出さない。 */}
             {bootAnimDone ? (
