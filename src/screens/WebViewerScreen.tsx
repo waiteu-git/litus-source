@@ -114,7 +114,7 @@ export default function WebViewerScreen() {
             title: activityTitle, deadline: null, deadlineText: '',
             submissionStatus: 'unknown', lifecycleStatus: 'active',
           },
-          `「${activityTitle}」を追加しました`,
+          `「${p.title || '項目'}」を追加しました`,
         )
       } else {
         // 収集対象外(PDF resource等): 締切ボトムシートを開いてユーザー所有で追加。
