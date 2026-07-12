@@ -6,7 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
-import { loadBulletinDigest, loadBulletinDetailDiag } from '../storage/bulletinDigestStore'
+import { loadBulletinDigest, loadBulletinDetailDiag, updateBulletinItem } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
 import { evaluateAccess } from '../health/accessGate'
@@ -55,22 +55,34 @@ export default function BulletinDetailScreen() {
     reload()
   }, [reload])
 
-  // 初回、本文キャッシュが無ければ裏で取得（＝既読化）。1度だけ自動起動する。
+  // 初回、本文キャッシュが無い、または未読のあいだは裏で openDetail を実行する。
+  // openDetail はCLASSのモーダルを開く＝二重postbackでCLASS側の既読化を伴うため、
+  // 本文がキャッシュ済みでも未読なら実行しないとCLASS側が未読のまま残り、次の収集で
+  // リストに戻ってしまう（重要掲示はCarouselで本文が先にキャッシュされやすく、旧「!item.body」
+  // 条件だと既読化がスキップされていた）。1度だけ自動起動する。
   useEffect(() => {
     if (!item || startedRef.current) return
-    if (!item.body) {
+    if (!item.body || item.unread) {
       startedRef.current = true
       setFetching(true)
     }
   }, [item])
 
   // 取得完了。本文が入っていなければ失敗扱いにして無限スピナーを避ける。
+  // 本文が取れた＝CLASS側で既読化済みなので、ローカルも既読に落として再実行と再流入を防ぐ。
   const onFetched = useCallback(async () => {
     setFetching(false)
     const items = await loadBulletinDigest()
     const it = items.find((i) => i.id === route.params.id) ?? null
-    setItem(it)
-    if (it && !it.body) {
+    if (it && it.body) {
+      if (it.unread) {
+        await updateBulletinItem(it.id, (i) => ({ ...i, unread: false }))
+        setItem({ ...it, unread: false })
+      } else {
+        setItem(it)
+      }
+    } else {
+      setItem(it)
       setFetchFailed(true)
       if (__DEV__) loadBulletinDetailDiag().then(setDetailDiag).catch(() => undefined)
     }
