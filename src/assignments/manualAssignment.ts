@@ -79,3 +79,28 @@ export function makeManualAssignment(
     manual: true,
   }
 }
+
+/**
+ * 収集対象外アクティビティ（+追加のPDF resource等）を、締切・提出状態をユーザーが所有する形で
+ * 組み立てる。makeManualAssignment と異なり実URLをキーに持ち（タップで開ける）、manualフラグは
+ * 付けない（所有権は isUserManagedUrl がURLから導出する）。now は呼び出し側が注入＝テスト可能。
+ */
+export function makeUserManagedActivity(
+  input: { url: string; title: string; courseName: string; deadline: string | null },
+  nowIso: string,
+): Assignment {
+  return {
+    url: input.url,
+    courseCode: null,
+    courseName: input.courseName.trim() || '追加',
+    title: input.title.trim(),
+    deadline: input.deadline,
+    deadlineText: formatDeadlineText(input.deadline),
+    submissionStatus: 'not_submitted',
+    lifecycleStatus: 'active',
+    ignored: false,
+    firstSeenAt: nowIso,
+    lastSeenAt: nowIso,
+    lastCheckedAt: nowIso,
+  }
+}

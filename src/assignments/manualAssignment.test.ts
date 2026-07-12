@@ -6,6 +6,7 @@ import {
   formatDeadlineText,
   splitDeadline,
   makeManualAssignment,
+  makeUserManagedActivity,
 } from './manualAssignment'
 
 describe('parseDeadlineInput', () => {
@@ -69,5 +70,33 @@ describe('makeManualAssignment', () => {
     const a = makeManualAssignment({ title: 'X', courseName: '  ', deadline: null }, `${MANUAL_PREFIX}z`, now)
     expect(a.courseName).toBe('手動追加')
     expect(a.deadlineText).toBe('締切なし')
+  })
+})
+
+describe('makeUserManagedActivity', () => {
+  const now = '2026-07-12T00:00:00.000Z'
+  const URL = 'https://letus.ed.tus.ac.jp/mod/resource/view.php?id=5'
+
+  it('実URLを保持し締切とnot_submittedで初期化する', () => {
+    const a = makeUserManagedActivity(
+      { url: URL, title: '  レポートPDF ', courseName: ' 哲学 ', deadline: '2026-07-20T14:59:00.000Z' },
+      now,
+    )
+    expect(a.url).toBe(URL)
+    expect(a.title).toBe('レポートPDF')
+    expect(a.courseName).toBe('哲学')
+    expect(a.deadline).toBe('2026-07-20T14:59:00.000Z')
+    expect(a.submissionStatus).toBe('not_submitted')
+    expect(a.lifecycleStatus).toBe('active')
+    expect(a.ignored).toBe(false)
+    expect(a.manual).toBeUndefined()
+    expect(a.firstSeenAt).toBe(now)
+  })
+
+  it('締切なし・科目名空でも安全に組み立てる', () => {
+    const a = makeUserManagedActivity({ url: URL, title: 'X', courseName: '   ', deadline: null }, now)
+    expect(a.deadline).toBeNull()
+    expect(a.deadlineText).toBe('締切なし')
+    expect(a.courseName).toBe('追加')
   })
 })
