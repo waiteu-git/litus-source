@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { COLLECT_TIMETABLE_JS, OPEN_TIMETABLE_JS } from './injectedScripts'
 import { parseCollectionMessage } from './timetableMessage'
 import { saveTimetable } from '../storage/timetableStore'
+import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { saveTimetableRefreshedAt } from '../storage/refreshMetaStore'
 import { saveCollectionHealth } from '../storage/collectionHealthStore'
 import {
@@ -50,6 +51,7 @@ export default function TimetableSyncEngine({ onFinished }: { onFinished: () => 
           await saveTimetable(result.collections)
           await saveTimetableRefreshedAt()
           await refreshAllNotifications()
+          notifyWidgetDataChanged()
         } catch {
           // 保存失敗でも完了扱い（次回再試行）。到達はしているので false で無駄打ちしない。
         }

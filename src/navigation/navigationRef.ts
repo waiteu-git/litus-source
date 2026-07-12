@@ -9,6 +9,9 @@ export const navigationRef = createNavigationContainerRef()
 
 let pendingAttendance = false
 let pendingBulletin = false
+let pendingTimetable = false
+/** 保留中に開くべき課題URL（null=なし）。 */
+let pendingAssignmentUrl: string | null = null
 
 function nav(name: string, params?: object) {
   ;(navigationRef as { navigate: (name: string, params?: object) => void }).navigate(name, params)
@@ -28,6 +31,21 @@ function tryOpenBulletin() {
   }
 }
 
+function tryOpenTimetable() {
+  if (navigationRef.isReady()) {
+    pendingTimetable = false
+    nav('時間割', { screen: 'TimetableHome' })
+  }
+}
+
+function tryOpenAssignment() {
+  if (pendingAssignmentUrl && navigationRef.isReady()) {
+    const url = pendingAssignmentUrl
+    pendingAssignmentUrl = null
+    nav('課題', { screen: 'LetusAssignmentDetail', params: { url } })
+  }
+}
+
 /** 出席画面を即開く（未準備なら onReady まで保留）。 */
 export function requestOpenAttendance() {
   pendingAttendance = true
@@ -40,8 +58,22 @@ export function requestOpenBulletins() {
   tryOpenBulletin()
 }
 
+/** 時間割タブを即開く（未準備なら onReady まで保留）。ウィジェットの授業カードタップ用。 */
+export function requestOpenTimetable() {
+  pendingTimetable = true
+  tryOpenTimetable()
+}
+
+/** 指定URLの課題詳細を即開く（未準備なら onReady まで保留）。ウィジェットの課題タップ用。 */
+export function requestOpenAssignment(url: string) {
+  pendingAssignmentUrl = url
+  tryOpenAssignment()
+}
+
 /** NavigationContainer の onReady から呼ぶ。保留中のオープンを消化する。 */
 export function flushPendingNavigation() {
   if (pendingAttendance) tryOpenAttendance()
   if (pendingBulletin) tryOpenBulletin()
+  if (pendingTimetable) tryOpenTimetable()
+  if (pendingAssignmentUrl) tryOpenAssignment()
 }
