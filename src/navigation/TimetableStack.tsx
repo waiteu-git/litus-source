@@ -12,6 +12,7 @@ import PdfViewerScreen from '../screens/PdfViewerScreen'
 import SyllabusScreen from '../screens/SyllabusScreen'
 import type { TimetableStackParamList } from './types'
 import { COLORS } from '../theme'
+import { FONT } from '../ui/fontFamily'
 
 const Stack = createNativeStackNavigator<TimetableStackParamList>()
 
@@ -21,7 +22,8 @@ export default function TimetableStack() {
       screenOptions={{
         headerStyle: { backgroundColor: COLORS.emerald },
         headerTintColor: '#ffffff',
-        headerTitleStyle: { fontWeight: '600' },
+        // React Navigation のヘッダは共通Textラッパーを通らないため、fontFamily を直指定（600→700に寄せる）。
+        headerTitleStyle: { fontFamily: FONT.bold },
       }}
     >
       <Stack.Screen name="TimetableHome" component={TimetableScreen} options={{ headerShown: false }} />
