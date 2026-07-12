@@ -29,8 +29,8 @@ export function computeAttendanceRisk(stats: AttendanceCourseStats, opts: RiskOp
   const canceled = count('canceled')
 
   const datedCells = sessions.filter((s) => s.date !== null).length
-  // 分母: 上書きがあれば優先。無ければ「日付を持つセル数 − 公欠(免除)」。
-  const scheduledTotal = opts.totalOverride ?? Math.max(0, datedCells - official)
+  // 分母: 上書きがあれば優先。無ければ「日付を持つセル数 − 公欠・休講(いずれも実施回にカウントしない)」。
+  const scheduledTotal = opts.totalOverride ?? Math.max(0, datedCells - official - canceled)
   const allowedAbsences = Math.floor(scheduledTotal / 3)
   const remaining = allowedAbsences - absent
 
