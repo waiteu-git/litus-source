@@ -40,8 +40,10 @@ export function KillSwitchGate({ feature, children }: { feature: KillSwitchFeatu
  * LoginGateの外側に置く: all停止時はログインprobe用WebViewすらマウントさせず、
  * 大学システムへの一切のアクセスを止める。status.jsonを読むだけで何も送らない。
  *
- * - 起動時: キャッシュ読込（完了まで children を保留。ネットは待たない）→ staleなら取得
- * - フォアグラウンド復帰: killSwitchスロット（即時）で staleなら取得
+ * - 起動時: キャッシュ読込（完了まで children を保留。ネットは待たない）→ 常に取得(force)。
+ *   fetchは非ブロッキング（children はキャッシュから即描画）なので起動時間は延びない。停止指示を
+ *   コールドスタートで確実に反映する（手順書「起動時に必ず確認」と一致）。
+ * - フォアグラウンド復帰: killSwitchスロット（即時）で staleなら取得（15分スロットルで乱打防止）
  * - 取得失敗は直近キャッシュ維持・キャッシュ無しは通常動作（fail-open）
  * 設計: docs/2026-07-12-remote-kill-switch-design.md
  */
@@ -82,7 +84,7 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
       .finally(() => {
         if (!active) return
         setCacheLoaded(true)
-        refresh(false)
+        refresh(true) // 起動時は常に取得（非ブロッキング＝起動時間に影響なし）。復帰時のみ15分スロットル。
       })
     return () => {
       active = false
