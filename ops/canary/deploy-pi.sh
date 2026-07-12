@@ -9,8 +9,17 @@ set -euo pipefail
 CANARY_DIR="$(cd "$(dirname "$0")" && pwd)"
 LITUS_ROOT="$(cd "$CANARY_DIR/../.." && pwd)"
 
+# node/npm が PATH に無い場合は nvm の最新 node を PATH に載せる（非対話/cron 対策）。
+if ! command -v npm >/dev/null 2>&1; then
+  NVM_NODE_BIN="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  [ -n "$NVM_NODE_BIN" ] && export PATH="$NVM_NODE_BIN:$PATH"
+fi
+command -v npm >/dev/null 2>&1 || { echo "[deploy] ERROR: npm が見つからない（nvm/node を確認）"; exit 1; }
+NODE_BIN_DIR="$(dirname "$(command -v node)")"
+
 echo "[deploy] litus root = $LITUS_ROOT"
 echo "[deploy] canary dir = $CANARY_DIR"
+echo "[deploy] node = $(node -v) at $NODE_BIN_DIR"
 
 # 1. litus src/parsers が内部で使う node-html-parser を litus root に1つだけ置く（重い全依存は不要）。
 echo "[deploy] installing node-html-parser at litus root (single dep)"
@@ -30,8 +39,10 @@ mkdir -p "$HOME/ops/canary-fixtures" "$HOME/ops/logs"
 [ -f "$HOME/ops/storageState.json" ] || echo "[deploy] WARN: ~/ops/storageState.json が無い（デスクトップで capture→scp してください。無いとスモークは storageState エラー）"
 
 # 5. cron 登録（1日2回・JST 08:00/20:00・メンテ帯回避。既存の同一行は重複させない）。
-CRON_LINE="0 8,20 * * * cd $CANARY_DIR && /usr/bin/npm run canary >> $HOME/ops/logs/canary.log 2>&1"
-if crontab -l 2>/dev/null | grep -Fq "$CANARY_DIR && /usr/bin/npm run canary"; then
+#    cron は最小 PATH なので nvm の node を絶対パスで呼ぶ（node があれば tsx/deps は node_modules から解決）。
+CRON_CMD="cd $CANARY_DIR && $NODE_BIN_DIR/node --import tsx run.mjs >> $HOME/ops/logs/canary.log 2>&1"
+CRON_LINE="0 8,20 * * * $CRON_CMD"
+if crontab -l 2>/dev/null | grep -Fq "$CANARY_DIR && $NODE_BIN_DIR/node --import tsx run.mjs"; then
   echo "[deploy] cron already registered; skip"
 else
   ( crontab -l 2>/dev/null; echo "$CRON_LINE" ) | crontab -
