@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
  */
 const TIMETABLE_KEY = 'refresh.timetable.at.v1'
 const BULLETIN_KEY = 'refresh.bulletin.at.v1'
+const ASSIGNMENTS_KEY = 'refresh.assignments.at.v1'
 
 // この間隔以内に更新済みならスキップする（起動のたびにCLASSを触らない）。
 export const TIMETABLE_REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000 // 20時間
@@ -40,4 +41,14 @@ export async function saveBulletinRefreshedAt(at: number = Date.now()): Promise<
 /** 掲示の前回更新から間隔を過ぎていれば true。 */
 export function isBulletinStale(lastAt: number, now: number = Date.now()): boolean {
   return now - lastAt >= BULLETIN_REFRESH_INTERVAL_MS
+}
+
+export async function loadAssignmentsRefreshedAt(): Promise<number> {
+  const raw = await AsyncStorage.getItem(ASSIGNMENTS_KEY)
+  const n = raw ? Number(raw) : 0
+  return Number.isFinite(n) ? n : 0
+}
+
+export async function saveAssignmentsRefreshedAt(at: number = Date.now()): Promise<void> {
+  await AsyncStorage.setItem(ASSIGNMENTS_KEY, String(at))
 }
