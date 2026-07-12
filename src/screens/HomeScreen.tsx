@@ -10,8 +10,8 @@ import { formatDeadline, pickUrgentAssignment, relDue, TONE_COLOR, urgencyTone }
 import { loadAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import { loadClassEvents } from '../storage/classEventsStore'
-import { todayEvents, todayKey } from '../timetableEvents/eventSelectors'
-import { makeupOccurrences, type ClassEvent } from '../timetableEvents/classEvent'
+import { todaySchedule, type TodayScheduleItem } from '../timetableEvents/eventSelectors'
+import type { ClassEvent } from '../timetableEvents/classEvent'
 import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
@@ -39,6 +39,14 @@ const COLLAPSE_AFTER_MS = 5000
 // 今日の予定タグの色（タイプ別）。
 const EVENT_TONE: Record<string, string> = {
   cancel: '#e0533a', makeup: COLORS.cta, roomChange: '#e8a400', quiz: '#3a7be0', midterm: '#7a5cff', final: '#7a5cff', other: '#8a968f',
+}
+
+/** 今日の予定1件のサブ行（時限＋教室/補足）。教室変更は「→ 教室」、それ以外は「・ 教室」で付す。 */
+function eventSubText(it: TodayScheduleItem): string {
+  const base = `${it.periods.join('・')}限`
+  const room = it.room ? (it.kind === 'roomChange' ? ` → ${it.room}` : ` ・ ${it.room}`) : ''
+  const note = it.note ? ` ・ ${it.note}` : ''
+  return `${base}${room}${note}`
 }
 
 /**
@@ -153,22 +161,10 @@ export default function HomeScreen() {
   // ストアは全件（既読・フラグ付き含む）を持つため、ホームの「未読」スライドは未読のみに絞る。
   const unreadBulletin = bulletin.filter((b) => b.unread)
 
-  // 今日の予定（当日のイベント＋当日の補講オカレンス）。
-  const todaysItems: { tag: string; tone: string; course: string; sub: string }[] = []
-  for (const e of todayEvents(classEvents, tick)) {
-    const extra = e.type === 'roomChange' && e.room ? ` → ${e.room}` : ''
-    todaysItems.push({
-      tag: eventTypeLabel(e.type),
-      tone: EVENT_TONE[e.type] ?? '#8a968f',
-      course: e.courseName,
-      sub: `${e.periods.join('・')}限${extra}${e.note ? ` ・ ${e.note}` : ''}`,
-    })
-  }
-  const tkey = todayKey(tick)
-  for (const m of makeupOccurrences(classEvents)) {
-    if (m.date !== tkey) continue
-    todaysItems.push({ tag: '補講', tone: COLORS.cta, course: m.courseName, sub: `${m.periods.join('・')}限${m.room ? ` ・ ${m.room}` : ''}` })
-  }
+  // 「今やること」に集約する当日の内部予定（休講/補講/教室変更/小テスト等）。純粋ロジックで抽出（TDD済み）。
+  // 集約対象は内部データ（授業・補講・課題・掲示）のみ。天気などの外部データは通信先制約
+  // （LETUS/CLASS/自前バックエンドのみ・CLAUDE.md）に抵触するため不採用。
+  const todayItems = todaySchedule(classEvents, tick)
 
   const [expanded, setExpanded] = useState(true)
   // バナーがマウント中か（引っ込むアニメの間は残し、終わってから外す）。
@@ -268,7 +264,21 @@ export default function HomeScreen() {
   return (
     <View style={styles.wrap}>
       <ScreenBg>
-        <ScreenHeader title="ホーム" icon="home-outline" />
+        <ScreenHeader
+          title="ホーム"
+          icon="home-outline"
+          right={
+            <Pressable
+              onPress={() => navigation.navigate('Settings')}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="設定"
+              style={styles.gearBtn}
+            >
+              <Ionicons name="settings-outline" size={22} color={ui.green ? COLORS.white : COLORS.emeraldDark} />
+            </Pressable>
+          }
+        />
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: clearance }]}>
           {/* 開発ビルドの識別タグ（APK名 litus-...-vNN と一致）。公開前に撤去する。 */}
           <Text style={[styles.devTag, { color: ui.labelColor }]}>{BUILD_TAG}</Text>
@@ -308,14 +318,15 @@ export default function HomeScreen() {
           {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。 */}
           <BulletinSyncStatus syncing={bulletinSyncing} />
 
-          {/* 今やること: 次の授業＋直近の未提出課題。どちらも無ければセクションごと隠す。 */}
-          {focus || urgent ? (
+          {/* 今やること: 次の授業＋直近の未提出課題＋当日の内部予定（休講/補講/教室変更/小テスト等）を1枚に集約。
+              すべて無ければセクションごと隠す。天気は通信先制約により集約対象外（不採用）。 */}
+          {focus || urgent || todayItems.length > 0 ? (
             <>
               <SectionLabel>今やること</SectionLabel>
               <View style={[ui.card, styles.focusCard]}>
                 {focus ? (
                   <Pressable onPress={() => openSubject(focus)}>
-                    <FocusClassRow focus={focus} ui={ui} last={!urgent} />
+                    <FocusClassRow focus={focus} ui={ui} last={!urgent && todayItems.length === 0} />
                   </Pressable>
                 ) : null}
                 {focus && urgent ? <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} /> : null}
@@ -342,26 +353,24 @@ export default function HomeScreen() {
                     </View>
                   </Pressable>
                 ) : null}
-              </View>
-            </>
-          ) : null}
-
-          {/* 今日の予定: 休講/補講/教室変更/小テスト/中間/期末など当日分。無ければ節ごと非表示。 */}
-          {todaysItems.length > 0 ? (
-            <>
-              <SectionLabel>今日の予定</SectionLabel>
-              <View style={[ui.card, { gap: 8 }]}>
-                {todaysItems.map((it, i) => (
-                  <View key={`te-${i}`} style={styles.todayEvRow}>
-                    <View style={[styles.todayEvTag, { backgroundColor: it.tone }]}>
-                      <Text style={styles.todayEvTagText}>{it.tag}</Text>
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.todayEvTitle, { color: ui.valueColor }]} numberOfLines={1}>{it.course}</Text>
-                      <Text style={[styles.todayEvSub, { color: ui.labelColor }]} numberOfLines={1}>{it.sub}</Text>
-                    </View>
+                {(focus || urgent) && todayItems.length > 0 ? (
+                  <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} />
+                ) : null}
+                {todayItems.length > 0 ? (
+                  <View style={styles.todayGroup}>
+                    {todayItems.map((it, i) => (
+                      <View key={`te-${i}`} style={styles.todayEvRow}>
+                        <View style={[styles.todayEvTag, { backgroundColor: EVENT_TONE[it.kind] ?? '#8a968f' }]}>
+                          <Text style={styles.todayEvTagText}>{eventTypeLabel(it.kind)}</Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={[styles.todayEvTitle, { color: ui.valueColor }]} numberOfLines={1}>{it.courseName}</Text>
+                          <Text style={[styles.todayEvSub, { color: ui.labelColor }]} numberOfLines={1}>{eventSubText(it)}</Text>
+                        </View>
+                      </View>
+                    ))}
                   </View>
-                ))}
+                ) : null}
               </View>
             </>
           ) : null}
@@ -446,16 +455,6 @@ export default function HomeScreen() {
             <View style={styles.entryBody}>
               <Text style={[styles.entryTitle, { color: ui.valueColor }]}>インフォ</Text>
               <Text style={[styles.entrySub, { color: ui.labelColor }]}>学食・キャンパス情報</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#9bb3ab" />
-          </Pressable>
-          <Pressable style={[ui.card, styles.entry]} onPress={() => navigation.navigate('Settings')}>
-            <View style={[styles.entryIcon, { backgroundColor: ui.green ? 'rgba(255,255,255,0.5)' : '#d6efe4' }]}>
-              <Ionicons name="settings-outline" size={20} color={COLORS.emerald} />
-            </View>
-            <View style={styles.entryBody}>
-              <Text style={[styles.entryTitle, { color: ui.valueColor }]}>設定</Text>
-              <Text style={[styles.entrySub, { color: ui.labelColor }]}>テーマ・出席アラーム・表示</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#9bb3ab" />
           </Pressable>
@@ -655,6 +654,7 @@ const styles = StyleSheet.create({
   wrap: { flex: 1 },
   scroll: { paddingBottom: 24 },
   devTag: { alignSelf: 'flex-end', fontSize: 11, fontWeight: '700', opacity: 0.7, marginBottom: 2 },
+  gearBtn: { padding: 2 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -738,6 +738,7 @@ const styles = StyleSheet.create({
   entryBody: { flex: 1 },
   entryTitle: { fontSize: 15, fontWeight: '600' },
   entrySub: { fontSize: 12, marginTop: 2 },
+  todayGroup: { gap: 8, paddingVertical: 12 },
   todayEvRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   todayEvTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, minWidth: 52, alignItems: 'center' },
   todayEvTagText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
