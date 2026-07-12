@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { syncSession } from './syncSession'
 import LetusSyncEngine from './LetusSyncEngine'
-import { maintenanceSystemAt } from '../health/maintenanceWindow'
+import { evaluateAccess } from '../health/accessGate'
+import { isOnlineNow } from '../health/connectivity'
 import { subscribeForeground } from '../app/foregroundOrchestrator'
 
 // タブ入場直後の描画と競合しないよう開始を遅らせる。
@@ -27,9 +28,9 @@ export default function BackgroundLetusSync() {
 
   useEffect(() => {
     if (active || finished || syncSession.didFullSync) return
-    // LETUS定時メンテナンス帯（4:00–5:30）は同期不能。ムダ打ちせずスキップし、復帰時に再評価する
-    // （メンテ表示はHealthBannerが時間帯判定で出す）。
-    if (maintenanceSystemAt(new Date()) === 'letus') return
+    // LETUS定時メンテ帯 or オフラインは同期不能。ムダ打ちせずスキップし、復帰時に再評価する
+    // （メンテ/オフライン表示はHealthBannerが接続/時間帯判定で出す）。
+    if (!evaluateAccess('letus', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
     if (auth.letus === 'authenticated') {
       const t = setTimeout(() => setActive(true), START_DELAY_MS)
       return () => clearTimeout(t)
