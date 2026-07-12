@@ -50,25 +50,24 @@ export function letusRunHealth(stats, litus) {
   return litus.letusAssignmentsHealth(stats)
 }
 
-/** 出席: classifyClassPage によるマーカーチェック。件数概念が無いため drift はマーカー皆無で判定。 */
+/**
+ * 出席: 件数概念が無いためマーカーチェック。出席モジュール(モバイル出席登録[Xua001]/Kmd008 等)へ
+ * 到達できたかで判定する。受付中の授業が無くても「到達＝正常(ok)」。ログイン済・実描画なのに
+ * 出席モジュールの痕跡が皆無なら構造drift。ログイン画面なら not_logged_in。
+ */
 export function attendanceSignal(html, url, litus) {
   const root = parse(html)
-  const sig = {
-    hasPasswordInput: !!root.querySelector('input[type=password]'),
-    hasAttendanceForm: /出席|attendance|shukketsu/i.test(html) && !!root.querySelector('form'),
-    hasEnterSplash: false,
-    hasClassMenu: false,
-    hasSystemError: /システムエラー|ViewExpired|エラーが発生/i.test(html),
-    hasMultiScreen: /複数の画面|別の画面で操作/i.test(html),
-    url,
-  }
-  const kind = litus.classifyClassPage(sig)
-  if (kind === 'attendance') return { status: 'ok', count: 1 }
-  if (kind === 'login') return { status: 'not_logged_in' }
-  if (kind === 'conflict' || kind === 'error') return { status: 'blocked' }
-  // 出席URL着地・実描画・ログイン画面でないのに attendance と判定できない → 構造drift の疑い。
-  if (litus.isAttendanceUrl(url) && bodyLen(root, html) >= 300 && !sig.hasPasswordInput) {
-    return { status: 'structure_drift' }
-  }
+  const hasPwd = !!root.querySelector('input[type=password]')
+  const loggedIn = /ログアウト|logout/i.test(html)
+  // 出席セクション到達の痕跡（受付フォームの有無に依存しない）。
+  const attendanceModule = /モバイル出席登録|出席登録|出席確認|xua001|kmd008/i.test(html)
+  // ログイン画面が最優先（xua001 URL でも中身がログインなら未ログイン）。
+  if (hasPwd && !loggedIn) return { status: 'not_logged_in' }
+  // 出席セクションへ到達できていれば正常（受付中の授業が無くても ok）。
+  // ポータルは隠しエラーダイアログのテンプレ文言を含むため classifyClassPage の error/conflict
+  // 判定は生HTMLに対して誤検知する。到達痕跡を正とする。
+  if (attendanceModule || litus.isAttendanceUrl(url)) return { status: 'ok', count: 1 }
+  // ログイン済・実描画なのに出席モジュールの痕跡が皆無＝構造変更の疑い。
+  if (loggedIn && bodyLen(root, html) >= 300) return { status: 'structure_drift' }
   return { status: 'blocked' }
 }

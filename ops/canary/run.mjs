@@ -10,10 +10,8 @@ import { withBrowser } from './lib/browser.mjs'
 import { loadEnv } from './lib/env.mjs'
 import { notifyDiscord } from './lib/notify.mjs'
 import { saveFixture } from './lib/fixtures.mjs'
-import { probe as bulletin } from './surfaces/bulletin.mjs'
-import { probe as timetable } from './surfaces/timetable.mjs'
+import { probeClass } from './surfaces/class.mjs'
 import { probe as letus } from './surfaces/letus.mjs'
-import { probe as attendance } from './surfaces/attendance.mjs'
 
 const NOW = new Date()
 const env = loadEnv()
@@ -26,20 +24,21 @@ if (maint) {
   process.exit(0)
 }
 
-const probes = [
-  ['bulletin', bulletin],
-  ['timetable', timetable],
-  ['attendance', attendance],
-  ['letus', letus],
-]
 const results = []
 await withBrowser(async (ctx) => {
-  for (const [name, p] of probes) {
-    try {
-      results.push(await p(ctx, litus))
-    } catch (e) {
-      results.push({ surface: name, health: { status: 'blocked' }, html: '', error: e.message })
+  // CLASS 3面は1入場で共有セッション巡回（deep-link直GET不可のため）。
+  try {
+    results.push(...(await probeClass(ctx, litus)))
+  } catch (e) {
+    for (const s of ['bulletin', 'timetable', 'attendance']) {
+      results.push({ surface: s, health: { status: 'blocked' }, html: '', error: e.message })
     }
+  }
+  // LETUS(Moodle)はURL直遷移で到達可。
+  try {
+    results.push(await letus(ctx, litus))
+  } catch (e) {
+    results.push({ surface: 'letus', health: { status: 'blocked' }, html: '', error: e.message })
   }
 })
 
