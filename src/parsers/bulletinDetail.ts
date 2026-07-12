@@ -1,4 +1,5 @@
 import { parse, type HTMLElement } from 'node-html-parser'
+import { richHtmlToText } from './text'
 
 /** 掲示内容モーダル(bsd00702)から抽出した本文情報。 */
 export type BulletinBody = {
@@ -17,13 +18,7 @@ function plainText(el: HTMLElement): string {
 
 /** 本文セル。<br> を改行に変換し、リッチHTMLをプレーンテキスト化（改行保持）。 */
 function bodyText(el: HTMLElement): string {
-  const withBreaks = el.innerHTML.replace(/<br\s*\/?>(\r?\n)?/gi, '\n')
-  const t = parse(withBreaks).text
-  return t
-    .replace(/ /g, ' ')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  return richHtmlToText(el.innerHTML)
 }
 
 /**
