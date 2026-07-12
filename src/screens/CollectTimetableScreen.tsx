@@ -5,7 +5,6 @@ import { WebView } from 'react-native-webview'
 import { useIsFocused, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ActionButton, StepList, useUi, type Step } from '../ui/screen'
-import { COLORS, useThemeVariant } from '../theme'
 import { parseCollectionMessage } from '../collect/timetableMessage'
 import {
   DESKTOP_UA,
@@ -33,7 +32,6 @@ export default function CollectTimetableScreen() {
   const webviewRef = useRef<WebView>(null)
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const auth = useAuth()
-  const { variant } = useThemeVariant()
   const ui = useUi()
   // CLASSは複数画面同時操作を禁止。この画面がフォーカス中は調停（classViewArbiter）で
   // CLASSの使用権を取り、出席タブの持続WebViewに譲ってもらう。離れたら返す。
@@ -118,8 +116,8 @@ export default function CollectTimetableScreen() {
 
   return (
     <View style={styles.root}>
-      {variant === 'green' ? (
-        <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={StyleSheet.absoluteFill} />
+      {ui.colors.gradient ? (
+        <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} />
       ) : null}
       <View style={styles.webviewBox}>
         {isFocused ? (

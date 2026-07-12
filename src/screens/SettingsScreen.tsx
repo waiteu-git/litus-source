@@ -73,12 +73,14 @@ export default function SettingsScreen() {
             options={[
               { key: 'green', label: '翠' },
               { key: 'white', label: '白' },
+              { key: 'dark', label: 'ダーク' },
+              { key: 'system', label: '自動' },
             ]}
             value={preference}
             onChange={(k) => setPreference(k as ThemePreference)}
           />
           <Text style={[styles.note, { color: ui.labelColor }]}>
-            UIと起動アニメーションが選んだテーマに合わせて切り替わります。
+            UIと起動アニメーションが選んだテーマに合わせて切り替わります。「自動」は端末のダークモード設定に追従します。
           </Text>
         </Accordion>
 

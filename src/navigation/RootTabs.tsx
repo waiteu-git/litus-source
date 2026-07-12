@@ -5,7 +5,7 @@ import TimetableStack from './TimetableStack'
 import AssignmentsStack from './AssignmentsStack'
 import HomeStack from './HomeStack'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { COLORS } from '../theme'
+import { COLORS, DARK, useThemeVariant } from '../theme'
 
 const Tab = createBottomTabNavigator()
 
@@ -16,6 +16,8 @@ const icon =
 
 export default function RootTabs() {
   const insets = useSafeAreaInsets()
+  const { variant } = useThemeVariant()
+  const dark = variant === 'dark'
   // ジェスチャーバー/ホームインジケータ分だけ底上げしないと、浮遊タブバーが下部で見切れる。
   const bottomInset = Math.max(insets.bottom, 8)
 
@@ -30,11 +32,12 @@ export default function RootTabs() {
     marginBottom: bottomInset,
     height: 62,
     borderRadius: 20,
-    backgroundColor: COLORS.white,
-    borderTopWidth: 0,
+    backgroundColor: dark ? DARK.card : COLORS.white,
+    borderTopWidth: dark ? 1 : 0,
+    borderColor: DARK.cardBorder,
     elevation: 8,
-    shadowColor: '#0a6650',
-    shadowOpacity: 0.18,
+    shadowColor: dark ? '#000000' : '#0a6650',
+    shadowOpacity: dark ? 0.4 : 0.18,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     paddingBottom: 8,
@@ -53,7 +56,7 @@ export default function RootTabs() {
         headerShown: false,
         sceneStyle: { backgroundColor: 'transparent' },
         tabBarActiveTintColor: COLORS.white,
-        tabBarInactiveTintColor: '#0b5c48',
+        tabBarInactiveTintColor: dark ? DARK.label : '#0b5c48',
         tabBarStyle,
         tabBarActiveBackgroundColor: COLORS.emerald,
         // overflow:hidden が無いとアクティブ背景が角丸で切り抜かれず四角く見える。外枠(20)に合わせる。

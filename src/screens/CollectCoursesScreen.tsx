@@ -4,7 +4,6 @@ import { StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { useNavigation } from '@react-navigation/native'
 import { ActionButton, StepList, useUi, type Step } from '../ui/screen'
-import { COLORS, useThemeVariant } from '../theme'
 import { DESKTOP_UA, MYCOURSES_URL, COLLECT_MYCOURSES_JS } from '../collect/injectedScripts'
 import { parseMyCoursesMessage } from '../collect/myCoursesMessage'
 import { buildCourseCodeMap } from '../parsers/letusCourses'
@@ -14,7 +13,6 @@ import { saveCourseMap } from '../storage/courseMapStore'
 export default function CollectCoursesScreen() {
   const webviewRef = useRef<WebView>(null)
   const navigation = useNavigation()
-  const { variant } = useThemeVariant()
   const ui = useUi()
   const [loaded, setLoaded] = useState(false)
   const [collecting, setCollecting] = useState(false)
@@ -57,8 +55,8 @@ export default function CollectCoursesScreen() {
 
   return (
     <View style={styles.root}>
-      {variant === 'green' ? (
-        <LinearGradient colors={[COLORS.gradTop, COLORS.gradBottom]} style={StyleSheet.absoluteFill} />
+      {ui.colors.gradient ? (
+        <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} />
       ) : null}
       <View style={styles.webviewBox}>
         <WebView
