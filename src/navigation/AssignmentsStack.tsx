@@ -6,20 +6,14 @@ import ManualAssignmentScreen from '../screens/ManualAssignmentScreen'
 import WebViewerScreen from '../screens/WebViewerScreen'
 import PdfViewerScreen from '../screens/PdfViewerScreen'
 import type { AssignmentsStackParamList } from '../navigation/types'
-import { COLORS } from '../theme'
-import { FONT } from '../ui/fontFamily'
+import { stackHeaderOptions } from './headerOptions'
 
 const Stack = createNativeStackNavigator<AssignmentsStackParamList>()
 
 export default function AssignmentsStack() {
   return (
     <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: COLORS.emerald },
-        headerTintColor: '#ffffff',
-        // React Navigation のヘッダは共通Textラッパーを通らないため、fontFamily を直指定（600→700に寄せる）。
-        headerTitleStyle: { fontFamily: FONT.bold },
-      }}
+      screenOptions={stackHeaderOptions}
     >
       <Stack.Screen name="AssignmentsHome" component={AssignmentsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CollectAssignments" component={CollectAssignmentsScreen} options={{ title: '課題を収集' }} />

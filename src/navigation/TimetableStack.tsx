@@ -11,20 +11,14 @@ import WebViewerScreen from '../screens/WebViewerScreen'
 import PdfViewerScreen from '../screens/PdfViewerScreen'
 import SyllabusScreen from '../screens/SyllabusScreen'
 import type { TimetableStackParamList } from './types'
-import { COLORS } from '../theme'
-import { FONT } from '../ui/fontFamily'
+import { stackHeaderOptions } from './headerOptions'
 
 const Stack = createNativeStackNavigator<TimetableStackParamList>()
 
 export default function TimetableStack() {
   return (
     <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: COLORS.emerald },
-        headerTintColor: '#ffffff',
-        // React Navigation のヘッダは共通Textラッパーを通らないため、fontFamily を直指定（600→700に寄せる）。
-        headerTitleStyle: { fontFamily: FONT.bold },
-      }}
+      screenOptions={stackHeaderOptions}
     >
       <Stack.Screen name="TimetableHome" component={TimetableScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Collect" component={CollectTimetableScreen} options={{ title: '時間割を収集' }} />

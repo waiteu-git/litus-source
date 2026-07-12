@@ -13,27 +13,42 @@ export const FONT = {
   bold: 'IBMPlexSansJP_700Bold',
 } as const
 
-/** fontWeight 値（'600' / 700 / 'bold' / 'normal' / undefined）を family 名へ写像する。 */
+// RN の名前付き fontWeight（'medium' / 'semibold' 等）も TextStyle 型として通るため、数値へ正規化する。
+const NAMED_WEIGHTS: Record<string, number> = {
+  thin: 100,
+  ultralight: 200,
+  light: 300,
+  normal: 400,
+  regular: 400,
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+  heavy: 800,
+  black: 900,
+}
+
+/** fontWeight 値（'600' / 700 / 'bold' / 'medium' / 'normal' / undefined）を family 名へ写像する。 */
 export function fontFamilyForWeight(weight?: string | number): string {
-  if (weight == null || weight === 'normal') return FONT.regular
-  if (weight === 'bold') return FONT.bold
-  const n = typeof weight === 'number' ? weight : Number.parseInt(weight, 10)
+  if (weight == null) return FONT.regular
+  const n =
+    typeof weight === 'number'
+      ? weight
+      : (NAMED_WEIGHTS[weight] ?? Number.parseInt(weight, 10))
   if (Number.isNaN(n)) return FONT.regular
   if (n >= 600) return FONT.bold
   if (n >= 500) return FONT.medium
   return FONT.regular
 }
 
-type WeightProps = { fontFamily?: string; fontWeight?: string | number }
-
 /**
- * flatten 済み style に fontFamily を付与し fontWeight を除去した新オブジェクトを返す。
- * 明示的に fontFamily が指定されている場合（等幅など）はそのまま返し、意図を尊重する。
+ * flatten 済み style から fontWeight を除去し、fontFamily を付与した新オブジェクトを返す。
+ * fontWeight は常に落とす（RN Android はカスタムフォントで fontWeight を無視するため、残すと型と実挙動が食い違う）。
+ * 明示的に fontFamily が指定されている場合（等幅など）はその family を尊重し、weight からの写像はしない。
  */
 export function toPlexStyle<T extends object>(
   style?: T | null,
-): T & { fontFamily?: string; fontWeight?: undefined } {
-  const flat = (style ?? {}) as T & WeightProps
-  if (flat.fontFamily != null) return flat as T & { fontFamily: string; fontWeight?: undefined }
-  return { ...flat, fontFamily: fontFamilyForWeight(flat.fontWeight), fontWeight: undefined }
+): Omit<T, 'fontWeight'> & { fontFamily: string } {
+  const s = (style ?? {}) as T & { fontFamily?: string; fontWeight?: string | number }
+  const { fontWeight, ...rest } = s
+  return { ...rest, fontFamily: s.fontFamily ?? fontFamilyForWeight(fontWeight) }
 }

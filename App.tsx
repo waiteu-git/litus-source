@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native'
 import { StatusBar } from 'expo-status-bar'
@@ -37,6 +37,10 @@ import { subscribeWidgetLinks } from './src/widget/widgetLinking'
 // 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
 const ATTENDANCE_TAG = 'attendance-alarm'
 
+// フォントロードがまれに解決も棄却もしない端末があっても、この時間で強制的に起動を続行する
+// （バンドル同梱アセットのため通常は即時。スプラッシュに永久に留まる事故を防ぐ保険）。
+const FONT_LOAD_TIMEOUT_MS = 4000
+
 // フォントロード完了までネイティブスプラッシュを保持する（白画面やシステムフォントの一瞬表示を防ぐ）。
 // ウィジェットのヘッドレス起動でも本モジュールは import されるため、失敗は握りつぶす。
 SplashScreen.preventAutoHideAsync().catch(() => undefined)
@@ -71,7 +75,13 @@ export default function App() {
     IBMPlexSansJP_500Medium,
     IBMPlexSansJP_700Bold,
   })
-  const fontsReady = fontsLoaded || fontError != null
+  // タイムアウト保険。useFonts が万一決着しなくても FONT_LOAD_TIMEOUT_MS で起動を続行させる。
+  const [fontTimedOut, setFontTimedOut] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setFontTimedOut(true), FONT_LOAD_TIMEOUT_MS)
+    return () => clearTimeout(t)
+  }, [])
+  const fontsReady = fontsLoaded || fontError != null || fontTimedOut
 
   useEffect(() => {
     if (fontsReady) SplashScreen.hideAsync().catch(() => undefined)

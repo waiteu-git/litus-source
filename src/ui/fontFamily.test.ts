@@ -24,33 +24,40 @@ describe('fontFamilyForWeight', () => {
     expect(fontFamilyForWeight('bold')).toBe(FONT.bold)
     expect(fontFamilyForWeight(700)).toBe(FONT.bold)
   })
+
+  it('RNの名前付きウェイトも数値へ正規化して写像する', () => {
+    expect(fontFamilyForWeight('regular')).toBe(FONT.regular)
+    expect(fontFamilyForWeight('light')).toBe(FONT.regular)
+    expect(fontFamilyForWeight('medium')).toBe(FONT.medium)
+    expect(fontFamilyForWeight('semibold')).toBe(FONT.bold)
+    expect(fontFamilyForWeight('heavy')).toBe(FONT.bold)
+    expect(fontFamilyForWeight('black')).toBe(FONT.bold)
+  })
+
+  it('未知の文字列は Regular にフォールバックする', () => {
+    expect(fontFamilyForWeight('nonsense')).toBe(FONT.regular)
+  })
 })
 
 describe('toPlexStyle', () => {
-  it('flatten済みstyleに fontFamily を付与し fontWeight を除去する', () => {
-    expect(toPlexStyle({ fontSize: 14, fontWeight: '600', color: '#000' })).toEqual({
-      fontSize: 14,
-      color: '#000',
-      fontFamily: FONT.bold,
-      fontWeight: undefined,
-    })
+  it('flatten済みstyleに fontFamily を付与し fontWeight キーを取り除く', () => {
+    const out = toPlexStyle({ fontSize: 14, fontWeight: '600', color: '#000' })
+    expect(out).toEqual({ fontSize: 14, color: '#000', fontFamily: FONT.bold })
+    expect('fontWeight' in out).toBe(false)
   })
 
   it('fontWeight が無い style は Regular を付与する', () => {
-    expect(toPlexStyle({ fontSize: 12 })).toEqual({
-      fontSize: 12,
-      fontFamily: FONT.regular,
-      fontWeight: undefined,
-    })
+    expect(toPlexStyle({ fontSize: 12 })).toEqual({ fontSize: 12, fontFamily: FONT.regular })
   })
 
   it('style 未指定（null/undefined）でも Regular を返す', () => {
-    expect(toPlexStyle(null)).toEqual({ fontFamily: FONT.regular, fontWeight: undefined })
-    expect(toPlexStyle(undefined)).toEqual({ fontFamily: FONT.regular, fontWeight: undefined })
+    expect(toPlexStyle(null)).toEqual({ fontFamily: FONT.regular })
+    expect(toPlexStyle(undefined)).toEqual({ fontFamily: FONT.regular })
   })
 
-  it('明示的な fontFamily 指定がある場合は上書きしない（等幅などの意図を尊重）', () => {
-    const s = { fontFamily: 'monospace', fontWeight: '700' as const }
-    expect(toPlexStyle(s)).toEqual(s)
+  it('明示的な fontFamily 指定はその family を尊重し、fontWeight は必ず落とす', () => {
+    const out = toPlexStyle({ fontFamily: 'monospace', fontWeight: '700' as const })
+    expect(out).toEqual({ fontFamily: 'monospace' })
+    expect('fontWeight' in out).toBe(false)
   })
 })
