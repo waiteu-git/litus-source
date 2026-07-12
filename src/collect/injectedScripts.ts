@@ -708,3 +708,74 @@ export const COLLECT_COURSE_PAGE_JS = `(function(){
   }
   true;
 })();`
+
+/**
+ * 現在ページから出欠状況テーブル（funcForm:jugyoKaisuTbl の部分木）を抽出して postMessage する。
+ * 未描画（行なし）でも html を送り、RN側パースが0件→再試行する（着地駆動）。
+ */
+export const COLLECT_ATTENDANCE_STATS_JS = `(function(){
+  try {
+    var box = document.querySelector('div[id$="jugyoKaisuTbl"]');
+    var body = document.body ? (document.body.innerText || '') : '';
+    var hasPwd = !!document.querySelector('input[type=password]');
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'attendanceStats',
+      html: box ? box.outerHTML : '',
+      page: (location.pathname||'').split('/').pop() || '',
+      pwd: hasPwd?1:0, blen: body.length
+    }));
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
+/**
+ * メニュー『出欠管理』→『学生出欠状況確認』へ遷移する。a要素のみを対象に onclick を直接実行する
+ * （OPEN_TIMETABLE_JS と同型）。着地ガード: 既に出欠テーブルに居るならメニューを叩かない。
+ */
+export const OPEN_ATTENDANCE_STATS_JS = `(function(){
+  function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
+  function findAnchor(text){
+    var as = Array.prototype.slice.call(document.querySelectorAll('a'));
+    var hits = as.filter(function(a){ return ((a.textContent || '').replace(/\\s+/g, '')).indexOf(text) >= 0; });
+    var menu = hits.filter(function(a){ var idn = (a.id || a.name || ''); return idn.indexOf('menuForm') >= 0 || idn.indexOf('mainMenu') >= 0; });
+    return (menu.length ? menu : hits)[0] || null;
+  }
+  function fire(el){
+    var oc = el.getAttribute('onclick');
+    try {
+      if (oc) { new Function('event', oc).call(el, new MouseEvent('click', { bubbles: true })); return 'onclick'; }
+      el.click(); return 'click';
+    } catch (e) {
+      try { el.click(); return 'click-fb'; } catch (e2) { return 'err'; }
+    }
+  }
+  try {
+    if (document.querySelector('div[id$="jugyoKaisuTbl"] td.colSizeFixed')) {
+      post({ type: 'nav', ok: true, stage: 'attendance-already' });
+    } else {
+      var target = findAnchor('学生出欠状況確認');
+      if (target) {
+        var m = fire(target);
+        post({ type: 'nav', ok: m !== 'err', stage: 'attendance-click', method: m, id: target.id || '' });
+      } else {
+        var parent = findAnchor('出欠管理');
+        if (parent) {
+          var m2 = fire(parent);
+          post({ type: 'nav', ok: m2 !== 'err', stage: 'menu-opened', method: m2, id: parent.id || '' });
+          setTimeout(function(){
+            var t2 = findAnchor('学生出欠状況確認');
+            if (t2) { var m3 = fire(t2); post({ type: 'nav', ok: m3 !== 'err', stage: 'attendance-click', method: m3, id: t2.id || '' }); }
+            else { post({ type: 'nav', ok: false, stage: 'submenu' }); }
+          }, 500);
+        } else {
+          post({ type: 'nav', ok: false, stage: 'menu' });
+        }
+      }
+    }
+  } catch (e) {
+    post({ type: 'error', message: String(e) });
+  }
+  true;
+})();`
