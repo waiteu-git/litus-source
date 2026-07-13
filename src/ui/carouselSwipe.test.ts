@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { classifySwipe, shouldCaptureSwipe, stepIndex, SWIPE_DISTANCE, SWIPE_SLOP } from './carouselSwipe'
+import {
+  classifySwipe,
+  shouldCaptureSwipe,
+  stepIndex,
+  SWIPE_DISTANCE,
+  SWIPE_SLOP,
+  SWIPE_VELOCITY,
+} from './carouselSwipe'
 
 describe('stepIndex', () => {
   it('前進で次のインデックスに進む', () => {
@@ -27,18 +34,30 @@ describe('stepIndex', () => {
 })
 
 describe('classifySwipe', () => {
-  it('左スワイプ（負のdxが閾値超え）は next', () => {
-    expect(classifySwipe(-SWIPE_DISTANCE)).toBe('next')
-    expect(classifySwipe(-120)).toBe('next')
+  it('左スワイプ（負のdxが確定距離超え）は +1＝次へ', () => {
+    expect(classifySwipe(-SWIPE_DISTANCE, 0)).toBe(1)
+    expect(classifySwipe(-120, 0)).toBe(1)
   })
-  it('右スワイプ（正のdxが閾値超え）は prev', () => {
-    expect(classifySwipe(SWIPE_DISTANCE)).toBe('prev')
-    expect(classifySwipe(120)).toBe('prev')
+  it('右スワイプ（正のdxが確定距離超え）は -1＝前へ', () => {
+    expect(classifySwipe(SWIPE_DISTANCE, 0)).toBe(-1)
+    expect(classifySwipe(120, 0)).toBe(-1)
   })
-  it('閾値未満はスワイプ扱いしない（タップに譲る）', () => {
-    expect(classifySwipe(0)).toBeNull()
-    expect(classifySwipe(SWIPE_DISTANCE - 1)).toBeNull()
-    expect(classifySwipe(-(SWIPE_DISTANCE - 1))).toBeNull()
+  it('距離不足かつ低速はスワイプ扱いしない', () => {
+    expect(classifySwipe(0, 0)).toBeNull()
+    expect(classifySwipe(SWIPE_DISTANCE - 1, 0)).toBeNull()
+    expect(classifySwipe(-(SWIPE_DISTANCE - 1), 0)).toBeNull()
+  })
+  it('距離不足でも速いフリックはスワイプ確定（キャプチャ済みタップの死にゾーン縮小）', () => {
+    expect(classifySwipe(-(SWIPE_SLOP + 5), -SWIPE_VELOCITY)).toBe(1)
+    expect(classifySwipe(SWIPE_SLOP + 5, SWIPE_VELOCITY)).toBe(-1)
+  })
+  it('速くても移動がスロップ以内なら確定しない', () => {
+    expect(classifySwipe(-SWIPE_SLOP, -1)).toBeNull()
+    expect(classifySwipe(SWIPE_SLOP, 1)).toBeNull()
+  })
+  it('速度と移動の向きが食い違うフリックは確定しない（行って戻る指）', () => {
+    expect(classifySwipe(-(SWIPE_SLOP + 5), SWIPE_VELOCITY)).toBeNull()
+    expect(classifySwipe(SWIPE_SLOP + 5, -SWIPE_VELOCITY)).toBeNull()
   })
 })
 
