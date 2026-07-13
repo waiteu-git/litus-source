@@ -18,7 +18,9 @@ export default function ChangelogModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: ui.colors.cardBg, borderColor: ui.colors.cardBorder }]}>
+      {/* 地色は不透明トークン。翠のcardBg(半透明ガラス)は画面グラデ地の上に置く前提で、
+          他画面コンテンツの上に敷く全画面シートでは下が透けて可読性が落ちる。 */}
+      <View style={[styles.sheet, { backgroundColor: ui.colors.screenSolid, borderColor: ui.colors.cardBorder }]}>
         <View style={styles.headRow}>
           <Text style={[styles.headTitle, { color: ui.heading }]}>変更履歴</Text>
           <Pressable onPress={onClose} hitSlop={10}>

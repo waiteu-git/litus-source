@@ -27,6 +27,8 @@ import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
 import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
 import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
+import { refreshAllNotifications } from '../notifications/notificationRefresh'
+import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { loadAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { COLORS } from '../theme'
@@ -200,7 +202,7 @@ export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const ui = useUi()
   const clearance = useTabBarClearance()
-  const { message: syncNotice, show: showSyncNotice } = useSyncSkipNotice()
+  const { message: syncNotice, show: showSyncNotice, clear: clearSyncNotice } = useSyncSkipNotice()
   const { assignmentsView } = useDisplaySettings()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [now, setNow] = useState(() => new Date())
@@ -227,9 +229,11 @@ export default function AssignmentsScreen() {
       showSyncNotice(syncSkipMessage('letus', skip))
       return
     }
+    // 収集開始時は残っているスキップ通知（と自動消去タイマー）を確実に片付ける（HomeScreenと同契約）。
+    clearSyncNotice()
     setProgress(null)
     setCollecting(true)
-  }, [showSyncNotice])
+  }, [showSyncNotice, clearSyncNotice])
 
   const reload = useCallback(async () => {
     const map = await loadAssignments()
@@ -267,6 +271,10 @@ export default function AssignmentsScreen() {
     async (a: Assignment, ignored: boolean) => {
       await mutateAssignments((map) => (map[a.url] ? { ...map, [a.url]: { ...map[a.url], ignored } } : map))
       await reload()
+      // 非表示/戻すは通知予約とウィジェットの対象集合を変える。次回収集を待たず即座に貼り直す
+      // （旧実装は貼り直さず、非表示にした課題のリマインドが発火し続けた）。失敗は無視（次回収集で回復）。
+      refreshAllNotifications().catch(() => undefined)
+      notifyWidgetDataChanged()
     },
     [reload],
   )

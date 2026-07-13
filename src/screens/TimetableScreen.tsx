@@ -95,7 +95,7 @@ export default function TimetableScreen() {
   // 未読掲示のある科目コード集合（グリッド/リストの未読ドット用・保存済み掲示digestから算出）。
   const [unreadCodes, setUnreadCodes] = useState<Set<string>>(new Set())
   // 手動更新をガードでスキップした理由の一時表示（リリースでも出す）。
-  const { message: syncNotice, show: showSyncNotice } = useSyncSkipNotice()
+  const { message: syncNotice, show: showSyncNotice, clear: clearSyncNotice } = useSyncSkipNotice()
 
   const reloadAttendance = () => {
     ;(async () => {
@@ -129,6 +129,8 @@ export default function TimetableScreen() {
       return
     }
     const begin = () => {
+      // 収集開始時は残っているスキップ通知（と自動消去タイマー）を確実に片付ける（HomeScreenと同契約）。
+      clearSyncNotice()
       syncingRef.current = true
       setSyncing(true)
     }
@@ -141,7 +143,7 @@ export default function TimetableScreen() {
         if (!syncingRef.current && isTimetableStale(at)) begin()
       })
       .catch(() => undefined)
-  }, [showSyncNotice, running])
+  }, [showSyncNotice, clearSyncNotice, running])
 
   useEffect(() => {
     loadClassEvents().then(setEvents).catch(() => undefined)
