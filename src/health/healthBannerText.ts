@@ -1,13 +1,11 @@
 import type { CollectionHealth } from './collectionHealth'
-import { maintenanceWindowLabel } from './maintenanceWindow'
+import { maintenanceWindowLabel, systemDisplayName } from './maintenanceWindow'
 import type { AccessReason } from './accessGate'
 
 export type HealthSource = 'class' | 'letus'
 
 function maintenanceText(source: HealthSource): string {
-  return source === 'letus'
-    ? `LETUSはメンテナンス中です（毎日${maintenanceWindowLabel('letus')}）。保存済みの情報は閲覧できます。`
-    : `CLASSはメンテナンス中です（毎日${maintenanceWindowLabel('class')}）。保存済みの情報は閲覧できます。`
+  return `${systemDisplayName(source)}はメンテナンス中です（毎日${maintenanceWindowLabel(source)}）。保存済みの情報は閲覧できます。`
 }
 
 /**
@@ -27,7 +25,7 @@ export function healthBannerText(
     case 'structure_drift':
       return '最新の取得に失敗しました。表示は前回取得時点です。'
     case 'not_logged_in':
-      return source === 'letus' ? 'LETUSへのログインが必要です。' : 'CLASSへのログインが必要です。'
+      return `${systemDisplayName(source)}へのログインが必要です。`
     case 'maintenance':
       return maintenanceText(source)
     default:
