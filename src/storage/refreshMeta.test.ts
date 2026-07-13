@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { isTimetableStale, TIMETABLE_REFRESH_INTERVAL_MS, loadAssignmentsRefreshedAt, saveAssignmentsRefreshedAt } from './refreshMetaStore'
 
-// Mock AsyncStorage
+// AsyncStorage をモック
 const mockStore: Record<string, string> = {}
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -29,7 +29,7 @@ describe('isTimetableStale', () => {
 
 describe('assignments refreshed at', () => {
   beforeEach(() => {
-    // Clear mock store before each test
+    // 各テスト前にモックストアをクリア
     Object.keys(mockStore).forEach(key => delete mockStore[key])
   })
 

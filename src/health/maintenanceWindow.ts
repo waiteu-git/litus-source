@@ -25,11 +25,6 @@ export function maintenanceSystemAt(date: Date): MaintenanceSystem | null {
   return null
 }
 
-/** 指定システムがその時刻にメンテナンス中か。 */
-export function isUnderMaintenance(system: MaintenanceSystem, date: Date): boolean {
-  return maintenanceSystemAt(date) === system
-}
-
 /** 表示用の時間帯ラベル（例: '2:00–4:00'）。 */
 export function maintenanceWindowLabel(system: MaintenanceSystem): string {
   return WINDOWS.find((w) => w.system === system)?.label ?? ''
