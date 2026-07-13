@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { KILL_SWITCH_URL, fetchKillSwitchStatus } from './killSwitchFetch'
 
+const BUILD = 78
+
 function okResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 })
 }
@@ -8,8 +10,15 @@ function okResponse(body: unknown): Response {
 describe('fetchKillSwitchStatus', () => {
   it('200＋正常JSONで正規化済みstatusを返す', async () => {
     const fetchImpl = async () => okResponse({ schemaVersion: 1, disabled: ['letus'], message: 'm' })
-    const s = await fetchKillSwitchStatus(fetchImpl as typeof fetch)
+    const s = await fetchKillSwitchStatus(BUILD, fetchImpl as typeof fetch)
     expect(s).toEqual({ disabledAll: false, disabled: ['letus'], message: 'm', title: null })
+  })
+
+  it('versionRulesを自ビルドへ解決して返す', async () => {
+    const body = { disabled: [], versionRules: [{ disabled: ['attendance'], maxBuild: 77 }] }
+    const fetchImpl = async () => okResponse(body)
+    expect((await fetchKillSwitchStatus(77, fetchImpl as typeof fetch))?.disabled).toEqual(['attendance'])
+    expect((await fetchKillSwitchStatus(78, fetchImpl as typeof fetch))?.disabled).toEqual([])
   })
 
   it('KILL_SWITCH_URLへリクエストする', async () => {
@@ -18,25 +27,25 @@ describe('fetchKillSwitchStatus', () => {
       requested = String(input)
       return okResponse({ disabled: [] })
     }
-    await fetchKillSwitchStatus(fetchImpl as typeof fetch)
+    await fetchKillSwitchStatus(BUILD, fetchImpl as typeof fetch)
     expect(requested).toBe(KILL_SWITCH_URL)
   })
 
   it('非2xxはnull（呼び出し側がキャッシュ維持）', async () => {
     const fetchImpl = async () => new Response('not found', { status: 404 })
-    expect(await fetchKillSwitchStatus(fetchImpl as typeof fetch)).toBeNull()
+    expect(await fetchKillSwitchStatus(BUILD, fetchImpl as typeof fetch)).toBeNull()
   })
 
   it('ネットワーク例外はnull', async () => {
     const fetchImpl = async () => {
       throw new TypeError('Network request failed')
     }
-    expect(await fetchKillSwitchStatus(fetchImpl as typeof fetch)).toBeNull()
+    expect(await fetchKillSwitchStatus(BUILD, fetchImpl as typeof fetch)).toBeNull()
   })
 
   it('200でも本文がパース不能ならnull', async () => {
     const fetchImpl = async () => new Response('<!doctype html>', { status: 200 })
-    expect(await fetchKillSwitchStatus(fetchImpl as typeof fetch)).toBeNull()
+    expect(await fetchKillSwitchStatus(BUILD, fetchImpl as typeof fetch)).toBeNull()
   })
 
   it('タイムアウトでnull（abortシグナルをfetchへ渡す）', async () => {
@@ -44,6 +53,6 @@ describe('fetchKillSwitchStatus', () => {
       new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
       })
-    expect(await fetchKillSwitchStatus(fetchImpl as typeof fetch, 20)).toBeNull()
+    expect(await fetchKillSwitchStatus(BUILD, fetchImpl as typeof fetch, 20)).toBeNull()
   })
 })
