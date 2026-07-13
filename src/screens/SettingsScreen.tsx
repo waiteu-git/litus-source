@@ -14,6 +14,8 @@ import { FONT_LICENSE_TEXT, FONT_LICENSE_TITLE } from '../legal/fontLicense'
 import { useDisplaySettings } from '../displaySettings'
 import Constants from 'expo-constants'
 import { formatVersionLabel } from '../appVersion'
+import { CHANGELOG, getRecentChangelog } from '../changelog'
+import ChangelogModal from '../ui/ChangelogModal'
 
 type Course = { courseCode: string; name: string }
 
@@ -25,6 +27,8 @@ export default function SettingsScreen() {
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
   const [bulletinNotify, setBulletinNotify] = useState<BulletinNotifySettings>({ enabled: true, mode: 'all' })
+  const [changelogOpen, setChangelogOpen] = useState(false)
+  const recentChangelog = getRecentChangelog(CHANGELOG, 3)
 
   useEffect(() => {
     ;(async () => {
@@ -180,6 +184,26 @@ export default function SettingsScreen() {
               <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
             </Pressable>
           </View>
+          <View style={[ui.card, { marginTop: 8 }]}>
+            <Text style={[styles.changelogHeading, { color: ui.valueColor }]}>変更履歴</Text>
+            {recentChangelog.map((entry) => (
+              <View key={entry.build} style={styles.changelogEntry}>
+                <Text style={[styles.changelogEntryTitle, { color: ui.labelColor }]}>
+                  build {entry.build}（{entry.date}）
+                </Text>
+                {entry.items.map((item, i) => (
+                  <Text key={i} style={[styles.changelogItem, { color: ui.labelColor }]} numberOfLines={2}>
+                    ・{item}
+                  </Text>
+                ))}
+              </View>
+            ))}
+            {CHANGELOG.length > recentChangelog.length ? (
+              <Pressable onPress={() => setChangelogOpen(true)}>
+                <Text style={[styles.changelogMore, { color: ui.labelColor }]}>すべて見る ›</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </Accordion>
 
         <Accordion title="ライセンス" icon="document-text-outline">
@@ -192,6 +216,7 @@ export default function SettingsScreen() {
           </View>
         </Accordion>
       </ScrollView>
+      <ChangelogModal visible={changelogOpen} entries={CHANGELOG} onClose={() => setChangelogOpen(false)} />
     </ScreenBg>
   )
 }
@@ -206,4 +231,9 @@ const styles = StyleSheet.create({
   note: { fontSize: 12, marginTop: 8, marginLeft: 2 },
   licenseBody: { fontSize: 10, lineHeight: 15, marginTop: 10 },
   fieldLabel: { fontSize: 13, marginLeft: 2, marginBottom: 2 },
+  changelogHeading: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  changelogEntry: { marginBottom: 10 },
+  changelogEntryTitle: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
+  changelogItem: { fontSize: 12, lineHeight: 17 },
+  changelogMore: { fontSize: 13, fontWeight: '600', marginTop: 4 },
 })
