@@ -20,6 +20,7 @@ import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
 import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
+import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { NowPulse } from '../ui/NowPulse'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
@@ -56,6 +57,8 @@ export default function TimetableScreen() {
   const ui = useUi()
   const clearance = useTabBarClearance()
   const { timetableView } = useDisplaySettings()
+  // 授業中（出席WebViewが稼働／CLASSセッションを専有中）フラグ。手動更新の授業中ガードに使う。
+  const { running } = useAttendanceEngine()
   const [collections, setCollections] = useState<TimetableCollection[] | null>(null)
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
   const [events, setEvents] = useState<ClassEvent[]>([])
@@ -114,9 +117,11 @@ export default function TimetableScreen() {
   const startSync = useCallback((force: boolean) => {
     if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
     // CLASS定時メンテナンス帯/オフラインは収集不能。手動(force=引っ張り)時はスキップ理由を短時間表示する。
-    // running(授業中)ガードは Home と異なり Timetable では未導入（実機で競合検証後に判断＝別件）。
+    // running(授業中)は Home と同様にガードする: 授業中は収集が背景の出席WebViewをアンマウントして
+    // プリエンプトする（classViewArbiter＋shouldRender=running&&!collectActive）ため、静的で実益の薄い
+    // 授業中の時間割手動更新は控える（'attending' を表示）。
     const access = evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() })
-    const skip = syncSkipReason({ access })
+    const skip = syncSkipReason({ access, running })
     if (skip) {
       if (force) showSyncNotice(syncSkipMessage('class', skip))
       return
@@ -134,7 +139,7 @@ export default function TimetableScreen() {
         if (!syncingRef.current && isTimetableStale(at)) begin()
       })
       .catch(() => undefined)
-  }, [showSyncNotice])
+  }, [showSyncNotice, running])
 
   useEffect(() => {
     loadClassEvents().then(setEvents).catch(() => undefined)
