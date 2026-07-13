@@ -12,3 +12,12 @@ export function formatVersionLabel(
   const b = build != null && String(build).trim() !== '' ? String(build).trim() : null
   return b ? `v${v} (build ${b})` : `v${v}`
 }
+
+/**
+ * ホーム画面の開発ビルド識別タグ（APK名 litus-...-vNN の vNN と一致する短表記）。
+ * versionCode(build) が取れない環境（Expo Go 等）では 'dev' を返す。
+ */
+export function formatBuildTag(build: string | number | null | undefined): string {
+  const b = build != null && String(build).trim() !== '' ? String(build).trim() : null
+  return b ? `v${b}` : 'dev'
+}
