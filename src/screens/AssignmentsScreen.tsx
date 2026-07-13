@@ -22,6 +22,8 @@ import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { maintenanceSystemAt } from '../health/maintenanceWindow'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
+import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
+import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import { loadAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { COLORS } from '../theme'
@@ -67,6 +69,7 @@ export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const ui = useUi()
   const clearance = useTabBarClearance()
+  const { message: syncNotice, show: showSyncNotice } = useSyncSkipNotice()
   const { assignmentsView } = useDisplaySettings()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [now, setNow] = useState(() => new Date())
@@ -84,11 +87,17 @@ export default function AssignmentsScreen() {
   // 課題一覧の鮮度（最終保存成功時刻）。
   const [refreshedAt, setRefreshedAt] = useState(0)
   const startUpdate = useCallback(() => {
-    // LETUS定時メンテナンス帯（4:00–5:30）またはオフラインは収集不能。ヘルスバナーがメンテ/オフライン表示を出すので、無駄打ちを止める。
-    if (!evaluateAccess('letus', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
+    // LETUS定時メンテナンス帯(4:00–5:30)/オフラインは収集不能。押しても無反応にせず理由を短時間表示する。
+    // LETUSは出席セッションと無関係なので running(授業中)は渡さない＝attending は発生しない。
+    const access = evaluateAccess('letus', { now: new Date(), isOnline: isOnlineNow() })
+    const skip = syncSkipReason({ access })
+    if (skip) {
+      showSyncNotice(syncSkipMessage('letus', skip))
+      return
+    }
     setProgress(null)
     setCollecting(true)
-  }, [])
+  }, [showSyncNotice])
 
   const reload = useCallback(async () => {
     const map = await loadAssignments()
@@ -242,6 +251,9 @@ export default function AssignmentsScreen() {
       <KillSwitchBanner feature="letus" />
       <HealthBanner health={health?.health} source="letus" />
       <FreshnessLabel at={refreshedAt} />
+      {syncNotice ? (
+        <Text style={[styles.syncNotice, { color: ui.labelColor }]}>{syncNotice}</Text>
+      ) : null}
 
       {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。 */}
       {collecting ? (
@@ -394,4 +406,5 @@ const styles = StyleSheet.create({
   collapseText: { fontSize: 13, fontWeight: '600' },
   restoreBtn: { backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#b9ddcd', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
   restoreText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
+  syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
 })
