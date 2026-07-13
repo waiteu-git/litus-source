@@ -5,9 +5,11 @@
  * - `.attendSuc`（「出席」）＝出席が記録された確定マーカー（どのデバイスで出しても付く＝cross-device）
  * - 認証コード入力欄／「出席登録する」ボタン＝未提出（受付中）
  * - `.signFlging`（「出席確認終了」）/ `.timeSum<=0` ＝受付終了
+ * - `.reactionMsg`（リアペ必須授業）＝コード送信後の「出席登録は完了していません。」等。
+ *   ③提出済みにも同クラスで「リアクションペーパー提出済み」が付くため**文言で**未完了を判定する
  */
 
-export type AttendanceStatus = 'none' | 'accepting' | 'attended' | 'closed' | 'unknown'
+export type AttendanceStatus = 'none' | 'accepting' | 'attended' | 'closed' | 'reaction_pending' | 'unknown'
 
 export type AttendanceReception = {
   status: AttendanceStatus
@@ -33,6 +35,8 @@ type Payload = {
   hasCodeInput?: unknown
   signEnded?: unknown
   timeSum?: unknown
+  /** label.reactionMsg 全件の連結テキスト（リアペ必須授業のみ出現）。 */
+  reactionMsg?: unknown
 }
 
 function base(status: AttendanceStatus): AttendanceReception {
@@ -98,7 +102,20 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
 
   const cw = windowOf()
 
-  // 3) 受付中（未提出）: コード入力欄／出席登録するボタンあり
+  // 3) リアペ待ち: 出席コードは受理されたがリアクションペーパー未提出（attendSuc無しは1)で担保）。
+  //    ①ではコード入力欄・出席登録するボタンが消えるため、この検知が無いと unknown に落ちて
+  //    ユーザーに理由が見えない。受付終了(closed)より優先して「リアペを出せば出席になる」を見せる。
+  //    ③提出済みの「リアクションペーパー提出済み」に誤マッチしないよう未完了文言のみで判定する。
+  const reactionMsg = typeof p.reactionMsg === 'string' ? p.reactionMsg : ''
+  if (/完了していません|提出してください/.test(reactionMsg)) {
+    const r = base('reaction_pending')
+    r.courseName = courseNameOf(p)
+    r.confirmWindow = cw
+    r.remaining = extractRemaining(text) ?? remainingFromSec(p.timeSum)
+    return r
+  }
+
+  // 4) 受付中（未提出）: コード入力欄／出席登録するボタンあり
   if (p.hasCodeInput === true) {
     const r = base('accepting')
     r.courseName = courseNameOf(p)
@@ -107,7 +124,7 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     return r
   }
 
-  // 4) 受付終了・未提出: 科目表示あり・入力なし・受付終了（signEnded or timeSum<=0）
+  // 5) 受付終了・未提出: 科目表示あり・入力なし・受付終了（signEnded or timeSum<=0）
   const ended = p.signEnded === true || (typeof p.timeSum === 'number' && p.timeSum <= 0)
   if (cw && ended) {
     const r = base('closed')
@@ -116,6 +133,6 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     return r
   }
 
-  // 5) 遷移中/その他
+  // 6) 遷移中/その他
   return base('unknown')
 }

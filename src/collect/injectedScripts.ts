@@ -198,6 +198,11 @@ export const DETECT_ATTENDANCE_JS = `(function(){
     var timeSum = null;
     if (tsEl) { var n = parseInt((tsEl.textContent||'').replace(/[^0-9-]/g,''),10); if(!isNaN(n)) timeSum = n; }
     if (timeSum!==null && timeSum<=0) signEnded = true;
+    // リアペ必須授業（実DOM 2026-07-13: label.reactionMsg）。①未提出=「出席登録は完了していません。」
+    // 「リアクションペーパーを提出してください。」/ ③提出済み=「リアクションペーパー提出済み」。
+    // 同クラスが両状態に付くため全件連結して送り、未完了かの文言判定はRN側 parseAttendanceMessage。
+    var rms = Array.prototype.slice.call(document.querySelectorAll('.reactionMsg'));
+    var reactionMsg = rms.map(function(e){ return e.textContent||''; }).join(' ');
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'attendance',
       text: body,
@@ -206,10 +211,39 @@ export const DETECT_ATTENDANCE_JS = `(function(){
       attendSuc: attendSuc,
       hasCodeInput: hasCodeInput,
       signEnded: signEnded,
-      timeSum: timeSum
+      timeSum: timeSum,
+      reactionMsg: reactionMsg
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
+/**
+ * リアペ待ち（①）カードの「リアクションペーパー」ボタンを押して②入力フォームへ遷移する（遷移のみ）。
+ * 実DOM 2026-07-13: ボタンテキストは①=「リアクションペーパー」/③=「リアクションペーパー確認」なので
+ * **完全一致**で引く（部分一致だと③の確認ボタンに誤爆する）。idはj_idt系自動採番のため不使用。
+ * 合成 .click() はPrimeFacesに無視されることがある（出席送信actuatorの実機実績）ため、
+ * onclick属性を new Function で直接実行し、無ければ .click() にフォールバックする。
+ */
+export const OPEN_REACTION_FORM_JS = `(function(){
+  function post(o){ try { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); } catch (e) {} }
+  try {
+    var btns = Array.prototype.slice.call(document.querySelectorAll('button'));
+    var btn = btns.find(function(b){ return ((b.textContent||'').replace(/\\s+/g,'')) === 'リアクションペーパー'; });
+    if (!btn) { post({ type: 'reaction', stage: 'open', ok: false }); return true; }
+    var ok = true;
+    try {
+      var oc = btn.getAttribute('onclick');
+      if (oc) { new Function('event', oc).call(btn, new MouseEvent('click', { bubbles: true })); }
+      else { btn.click(); }
+    } catch (e1) {
+      try { btn.click(); } catch (e2) { ok = false; }
+    }
+    post({ type: 'reaction', stage: 'open', ok: ok });
+  } catch (e) {
+    post({ type: 'reaction', stage: 'open', ok: false });
   }
   true;
 })();`
