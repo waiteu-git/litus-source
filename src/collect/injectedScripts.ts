@@ -507,15 +507,26 @@ const FRAME_PRELUDE = `
 `
 
 /**
- * 日付＋件名で行を特定し、(1)掲示内容モーダルが未オープンなら件名リンクで開く、(2)未読なら少し遅らせて
- * 既読化する（CLASS側で確実に既読へ）。冪等なので複数回発火しても二重操作にならない（モーダル既開/既読は
- * スキップ）。onLoadEnd毎の再注入やRN側タイマの取りこぼしに対して安全。frameset対応でフレーム内も横断。
+ * 日付＋件名で行を特定し、(1)掲示内容モーダルを開き（本文取得＝通常掲示はこれだけでCLASS既読化）、
+ * (2)モーダルを開いても行が未読のまま（＝重要/新着掲示はCLASSが明示的な既読確認を要求）なら、
+ * **モーダル開き後の最新行**の「既読にする」チェックボックスを1度だけトグルして既読へ反転させる。
+ *
+ * v62/v63の回帰対策: 旧実装は「モーダル開き→固定800ms後に既読トグル」を無条件に撃ち、モーダル開きが更新
+ * した行バージョンに対し古いバージョンで既読postbackを送って楽観ロック競合を起こしていた。ここでは
+ * モーダルが開くのを待ってから行を**再探索**し、まだ未読の行にだけ最新バージョンでトグルするので競合しない
+ * （既にモーダル開きで既読化された通常掲示は追加postbackを撃たない＝無操作）。
+ *
+ * 既読確定は window.__litusReadDone に載せ、COLLECT_BULLETIN_DETAIL_JS がそれを readDone として返す。
+ * 呼び出し側は body 取得だけでなく readDone も待って完了するので、確認前に WebView が畳まれてトグルAJAXが
+ * 中断されることを防ぐ。再注入されても window.__litusReadFired で二重トグルしない（各操作は専用WebView）。
+ * frameset対応でフレーム内も横断。
  */
 export function openBulletinDetailJs(title: string, date: string): string {
   return `(function(){
     ${FRAME_PRELUDE}
-    var t=${JSON.stringify(title)}, d=${JSON.stringify(date)}, tries=0;
+    var t=${JSON.stringify(title)}, d=${JSON.stringify(date)};
     function post(o){ try{ window.ReactNativeWebView.postMessage(JSON.stringify(o)); }catch(e){} }
+    function done(stage){ window.__litusReadDone=true; post({type:'nav',ok:true,stage:stage}); }
     function findRow(){
       var dls=qsAll('dl.keiji');
       for(var i=0;i<dls.length;i++){
@@ -526,32 +537,61 @@ export function openBulletinDetailJs(title: string, date: string): string {
       }
       return null;
     }
+    function modalOpen(){ var p=qsOne('[id="bsd00702:dialogPanel"]'); return !!(p && /本文/.test(p.innerHTML||'')); }
+    // 行右の「既読にする/未読にする」ボタン（フラグボタンではない方）。
+    function readBtnOf(dl){
+      var row=dl.parentNode, btns=row?row.querySelectorAll('.btnRead'):[];
+      for(var j=0;j<btns.length;j++){ if(/(既読|未読)にする/.test(btns[j].textContent||'')) return btns[j]; }
+      return null;
+    }
+    function isRead(btn){ return /未読にする/.test(btn.textContent||''); } // 「未読にする」表示 = 現在既読
+    var findTries=0, openTries=0, readTries=0;
     function step(){
       try{
+        if(window.__litusReadDone){ post({type:'nav',ok:true,stage:'detail-read-already'}); return; }
         var r=findRow();
         if(!r){
-          tries++;
+          findTries++;
           // 行がまだ描画されていない（メニュー発火→フレームへ掲示ロードは非同期）。少し待って再探索する。
-          if(tries<12){ setTimeout(step, 600); return; }
+          if(findTries<12){ setTimeout(step, 600); return; }
           post({type:'nav',ok:false,stage:'detail-notfound',keiji:qsAll('dl.keiji').length});
           return;
         }
-        var panel=qsOne('[id="bsd00702:dialogPanel"]');
-        var opened=panel && /本文/.test(panel.innerHTML||'');
-        // 件名リンクをフレーム文脈で発火してモーダルを開く（トップ文脈だとPrimeFaces未解決で空振り）。
-        // モーダルを開くこと自体でCLASS側は既読になる（一覧行が「未読にする」表示へ変わる）。
-        // ここで別途「既読にする」チェックボックスを撃つと、モーダル開閉で更新された行バージョンに対し
-        // 古いバージョンの既読postbackを送る形になり「対象データは他のユーザによって編集されました」の
-        // 楽観ロック競合を誘発する。よって明示的な既読トグルは行わない（ローカル既読は呼び出し側が設定）。
-        if(!opened){ fireEl(r.a); }
-        post({type:'nav',ok:true,stage:'detail-open'});
+        // (1) モーダルを開く（本文取得＝通常掲示はこれでCLASS既読化）。開くまで待つ。
+        if(!modalOpen()){
+          fireEl(r.a); // 件名リンクをフレーム文脈で発火（トップ文脈だとPrimeFaces未解決で空振り）
+          openTries++;
+          if(openTries<12){ setTimeout(step, 500); return; }
+          // 開けなくても本文収集は collectJs が担う。既読確認は諦めて完了扱い（無限化を防ぐ）。
+          done('detail-open-noconfirm');
+          return;
+        }
+        // (2) モーダルが開いた。行を最新DOMで再取得し、既読ボタンで既読化を確認する
+        //     （モーダル開きの postback で行が再描画され得るため findRow をやり直す＝最新バージョンで操作）。
+        var fresh=findRow();
+        var rb=fresh?readBtnOf(fresh.dl):null;
+        if(!rb){ done('detail-open'); return; } // 既読ボタンが無い（旧HTML等）→ モーダル開きに委ねる
+        // 既読表示（未読にする）＝モーダル開きで既読になった通常掲示 → 追加postback無しで完了（競合無し）。
+        if(isRead(rb)){ done(window.__litusReadFired?'detail-read-confirmed':'detail-open'); return; }
+        // 未読のまま（既読にする）＝重要/新着掲示。最新行のチェックボックスを1度だけ既読トグル。
+        if(!window.__litusReadFired){
+          var box=rb.querySelector('input[type=checkbox]');
+          if(!box){ done('detail-read-nobox'); return; }
+          window.__litusReadFired=true;
+          fireChange(box); // onchange=PrimeFaces.ab（モーダル開き後の最新行バージョンで発火＝v63競合を回避）
+        }
+        // 「未読にする」へ反転するまで確認（約4秒）。反転＝サーバ既読化完了。呼び出し側の collectJs
+        // リトライ上限に先を越されないよう短めにし、未反映でも done で完了扱いにして無限化を防ぐ。
+        readTries++;
+        if(readTries<10){ setTimeout(step, 400); return; }
+        done('detail-read-unreflected'); // 反映が見えなくてもAJAXは撃てているので完了扱い
       }catch(e){ post({type:'error',message:String(e)}); }
     }
     step();
   })(); true;`
 }
 
-/** 掲示内容モーダルの中身(#bsd00702:dialogPanel)を抽出。テーブル描画済みのときだけ ready=true。 */
+/** 掲示内容モーダルの中身(#bsd00702:dialogPanel)を抽出。テーブル描画済み かつ 既読処理完了(readDone)時に完了扱い。 */
 export const COLLECT_BULLETIN_DETAIL_JS = `(function(){
   ${FRAME_PRELUDE}
   try{
@@ -559,7 +599,8 @@ export const COLLECT_BULLETIN_DETAIL_JS = `(function(){
     var html=p?p.innerHTML:'';
     var ready=/singleTable|ui-panelgrid/.test(html) && /本文/.test(html);
     window.ReactNativeWebView.postMessage(JSON.stringify({
-      type:'bulletinDetail', html: ready?html:'', ready: ready, panel: p?1:0, plen: html.length
+      type:'bulletinDetail', html: ready?html:'', ready: ready, readDone: !!window.__litusReadDone,
+      panel: p?1:0, plen: html.length
     }));
   }catch(e){ window.ReactNativeWebView.postMessage(JSON.stringify({ type:'error', message:String(e) })); }
 })(); true;`
