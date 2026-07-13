@@ -12,6 +12,8 @@ import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
 import { FONT_LICENSE_TEXT, FONT_LICENSE_TITLE } from '../legal/fontLicense'
 import { useDisplaySettings } from '../displaySettings'
+import Constants from 'expo-constants'
+import { formatVersionLabel } from '../appVersion'
 
 type Course = { courseCode: string; name: string }
 
@@ -171,7 +173,9 @@ export default function SettingsScreen() {
 
         <Accordion title="アプリ情報" icon="information-circle-outline">
           <View style={ui.card}>
-            <Text style={{ color: ui.valueColor, fontWeight: '500' }}>リタス v1.0.0（開発版）</Text>
+            <Text style={{ color: ui.valueColor, fontWeight: '500' }}>
+              リタス {formatVersionLabel(Constants.nativeAppVersion, Constants.nativeBuildVersion)}（開発版）
+            </Text>
             <Pressable onPress={() => Linking.openURL('https://lms.waiteu.dev/app')}>
               <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
             </Pressable>
