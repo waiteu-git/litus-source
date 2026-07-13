@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isUnderMaintenance, maintenanceSystemAt, maintenanceWindowLabel, systemDisplayName } from './maintenanceWindow'
+import { maintenanceSystemAt, maintenanceWindowLabel, systemDisplayName } from './maintenanceWindow'
 
 // ローカル時刻で h:m の Date を作る（テストは端末ローカル＝実行環境のTZに依存しない: getHours/getMinutesで判定）。
 const at = (h: number, m = 0) => new Date(2026, 6, 12, h, m, 0)
@@ -22,17 +22,6 @@ describe('maintenanceSystemAt', () => {
     expect(maintenanceSystemAt(at(6, 0))).toBeNull()
     expect(maintenanceSystemAt(at(12, 0))).toBeNull()
     expect(maintenanceSystemAt(at(23, 59))).toBeNull()
-  })
-})
-
-describe('isUnderMaintenance', () => {
-  it('CLASSはCLASS帯のみ真（LETUS帯ではCLASSは稼働）', () => {
-    expect(isUnderMaintenance('class', at(3, 0))).toBe(true)
-    expect(isUnderMaintenance('class', at(4, 30))).toBe(false)
-  })
-  it('LETUSはLETUS帯のみ真（CLASS帯ではLETUSは稼働）', () => {
-    expect(isUnderMaintenance('letus', at(4, 30))).toBe(true)
-    expect(isUnderMaintenance('letus', at(3, 0))).toBe(false)
   })
 })
 
