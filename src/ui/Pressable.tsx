@@ -7,8 +7,6 @@ import { reducedPressScale } from './reducedMotion'
 /** 押下フィードバックの正典値（motion.ts 割当表「押下: scale(0.97)+opacity0.92 / DUR.micro」）。 */
 const PRESS_SCALE = 0.97
 const PRESS_OPACITY = 0.92
-/** スクロール誤発火回避のタップ確定遅延（80-120msの中間）。 */
-const PRESS_DELAY_MS = 100
 
 export type PressFeedbackProps = PressableProps & {
   style?: StyleProp<ViewStyle>
@@ -40,7 +38,6 @@ function Feedback({ style, disableGesture, onPressIn: userPressIn, onPressOut: u
   const { scale, opacity, onPressIn, onPressOut } = usePressFeedback()
   return (
     <AnimatedPressable
-      unstable_pressDelay={PRESS_DELAY_MS}
       onPressIn={(e) => { onPressIn(); userPressIn?.(e) }}
       onPressOut={(e) => { onPressOut(); userPressOut?.(e) }}
       style={[style, { transform: [{ scale }], opacity }, disableGesture ? { pointerEvents: 'none' } : null]}
