@@ -87,7 +87,7 @@ export default function BulletinListScreen() {
           <View style={[ui.card, { marginTop: 12 }]}>
             <Text style={{ color: ui.valueColor }}>
               {tab === 'unread'
-                ? '未読の掲示はありません。インフォの「更新」で取得してください。'
+                ? '未読の掲示はありません。ホームの「更新」で再取得できます。'
                 : tab === 'flagged'
                   ? 'フラグを付けた掲示はありません。'
                   : '休講・補講・教室変更の掲示はありません。'}
