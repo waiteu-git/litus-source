@@ -12,3 +12,8 @@ export function reducedStagger(reduce: boolean, ms: number): number {
 export function shouldAnimateAmbient(reduce: boolean): boolean {
   return !reduce
 }
+
+/** reduce時は押下スケールを1（無効）に。opacityは動きでなく陰影の状態変化なので別管理で維持する。 */
+export function reducedPressScale(reduce: boolean, scale: number): number {
+  return reduce ? 1 : scale
+}
