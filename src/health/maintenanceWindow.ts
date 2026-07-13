@@ -34,3 +34,8 @@ export function isUnderMaintenance(system: MaintenanceSystem, date: Date): boole
 export function maintenanceWindowLabel(system: MaintenanceSystem): string {
   return WINDOWS.find((w) => w.system === system)?.label ?? ''
 }
+
+/** 表示用のシステム名（'class' → 'CLASS' / 'letus' → 'LETUS'）。表示名の単一の真実。 */
+export function systemDisplayName(system: MaintenanceSystem): 'CLASS' | 'LETUS' {
+  return system === 'letus' ? 'LETUS' : 'CLASS'
+}
