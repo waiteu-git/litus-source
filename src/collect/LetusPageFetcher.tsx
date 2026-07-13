@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview'
 import { COLLECT_ASSIGNMENT_PAGE_JS, DESKTOP_UA } from './injectedScripts'
 import { hasLetusLoginMarker } from '../health/collectionSignals'
 import { parseAssignBody } from '../parsers/letusBody'
+import { isAssignPageLanded } from '../parsers/letus'
 import { setLetusBody } from '../storage/letusBodyStore'
 
 // 読込ハングの保険。超えたら失敗として返し、無限スピナーを避ける。
@@ -63,8 +64,10 @@ export default function LetusPageFetcher({
       finish(false)
       return
     }
-    // 本文も添付も無い＝SSO中間ページ等でまだ着地していない。次の onLoadEnd を待つ（タイムアウトが保険）。
-    if (!body.description && body.attachments.length === 0) return
+    // 本文も添付も無い場合、締切/提出状況が読めれば課題ページには着地済み（本文パーサが実DOMの
+    // コンテナに一致せず空を返したケース）。この場合は空本文として確定し「本文なし」を表示する
+    // ＝無限待ち→タイムアウト失敗を断つ。どちらも読めなければSSO中間ページ等なので次を待つ。
+    if (!body.description && body.attachments.length === 0 && !isAssignPageLanded(payload.html, payload.url ?? url)) return
     try {
       await setLetusBody(url, body, new Date().toISOString())
       finish(true)
