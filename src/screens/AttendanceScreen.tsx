@@ -43,6 +43,8 @@ export default function AttendanceScreen() {
   // カウントダウン描画用の秒精度クロック（この画面だけが毎秒購読する）。
   const now = useAttendanceNow()
   const closed = reception?.status === 'closed'
+  // リアペ必須授業: 出席コードは受理済み・リアクションペーパー未提出（提出して初めて .attendSuc「出席」になる）
+  const reactionPending = reception?.status === 'reaction_pending'
 
   // フォーカスをエンジンへ通知（起動ポリシー＋収集への優先権制御）。
   useEffect(() => {
@@ -138,6 +140,27 @@ export default function AttendanceScreen() {
               // コード未保持＝このアプリで送信していない（PC等の他端末で出席）。混乱しないよう明示する。
               <Text style={[styles.doneOther, { color: labelColor }]}>他の端末で出席登録済み</Text>
             )}
+          </View>
+        ) : reactionPending ? (
+          // リアペ待ち: コード入力UIは出さず（CLASS側でも入力欄は消えている）、CLASS画面の可視表示で
+          // ユーザー自身にリアペを提出してもらう（独自textarea流し込みはv2）。提出後は既存の
+          // .attendSuc 検知が attended に切り替える。
+          <View style={[styles.card, cardStyle, styles.hero]}>
+            <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+              <Ionicons name="create-outline" size={30} color={ui.accent} />
+            </View>
+            <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
+              出席コードは受理されました。リアクションペーパーを提出すると出席になります
+            </Text>
+            {reception?.courseName || reception?.confirmWindow ? (
+              <Text style={[styles.conflictSub, { color: labelColor }]}>
+                {reception?.courseName ?? ''}
+                {reception?.confirmWindow ? `${reception?.courseName ? ' ・ ' : ''}${reception.confirmWindow}` : ''}
+              </Text>
+            ) : null}
+            <Pressable style={[styles.cta, styles.conflictBtn, { backgroundColor: c.cta }]} onPress={() => setRevealClass(true)}>
+              <Text style={styles.ctaText}>リアクションペーパーを書く</Text>
+            </Pressable>
           </View>
         ) : closed ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
