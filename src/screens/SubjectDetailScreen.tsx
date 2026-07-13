@@ -297,6 +297,9 @@ export default function SubjectDetailScreen() {
             (navigation.getParent() as unknown as { navigate: (name: string, params: object) => void } | undefined)?.navigate('課題', {
               screen: 'ManualAssignment',
               params: { presetCourseName: name, presetCourseCode: courseCode },
+              // 課題タブ未訪問時に ManualAssignment がスタックのルート化して戻れなくなるのを防ぐ。
+              // initial:false で AssignmentsHome を下に敷き、ヘッダ戻る＝取消を常に残す。
+              initial: false,
             })
           }
         />
