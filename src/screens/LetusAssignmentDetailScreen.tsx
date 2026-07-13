@@ -5,7 +5,7 @@ import { Text } from '../ui/Text'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Ionicons } from '@expo/vector-icons'
-import { ActionButton, useUi } from '../ui/screen'
+import { ActionButton, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS, DARK } from '../theme'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments, mutateAssignments, removeAssignment } from '../storage/assignmentsStore'
@@ -63,6 +63,7 @@ export default function LetusAssignmentDetailScreen() {
   const route = useRoute<RouteProp<AssignmentsStackParamList, 'LetusAssignmentDetail'>>()
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const ui = useUi()
+  const clearance = useTabBarClearance()
   const [assignment, setAssignment] = useState<Assignment | null>(null)
   const [now, setNow] = useState(() => new Date())
   const [body, setBody] = useState<LetusBody | null>(null)
@@ -188,7 +189,7 @@ export default function LetusAssignmentDetailScreen() {
   return (
     <View style={styles.root}>
       {ui.colors.gradient ? <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} /> : null}
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
         <View style={[ui.card, styles.panel]}>
           <View style={[styles.courseTag, { backgroundColor: ui.pillBg }]}>
             <Text style={[styles.courseTagText, { color: ui.pillText }]}>
