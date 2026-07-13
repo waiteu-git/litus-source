@@ -21,10 +21,11 @@ export function parseAssignBody(html: string): AssignBody {
     root.querySelector('[role="main"]') ??
     root
 
+  // 注: [data-region="activity-information"] は本文候補に含めない。Moodle 4.x 標準の活動日程
+  // 表示（開始日時/期限テキスト）のコンテナで、有効化されると日程が本文として誤保存されるため。
   const introEl =
     main.querySelector('#intro') ??
     main.querySelector('.activity-description') ??
-    main.querySelector('[data-region="activity-information"]') ??
     main.querySelector('.box.generalbox')
   // 本文テキストは .no-overflow（本文ラッパ）を優先し、添付ファイルツリー(assign_files_tree)の
   // ファイル名が本文へ混入するのを避ける。.no-overflow が無い旧構成は intro 全体から抽出する。
