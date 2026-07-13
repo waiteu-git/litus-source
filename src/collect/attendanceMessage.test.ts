@@ -56,6 +56,51 @@ describe('parseAttendanceMessage', () => {
     expect(r.status).toBe('closed')
   })
 
+  it('リアペ未提出: attendSuc無し＋未完了文言 → reaction_pending・確認時間/科目抽出', () => {
+    // 実DOM①: コード送信後は verification 欄と「出席登録する」が消え、reactionMsg だけが残る。
+    const text = '12:50〜14:30 法学１\n出席確認時間：12:50～14:30\n出席確認中\n出席登録は完了していません。\nリアクションペーパーを提出してください。'
+    const r = parseAttendanceMessage(
+      msg({
+        text,
+        courseName: '法学１',
+        signSize: '出席確認時間：12:50～14:30',
+        reactionMsg: '出席登録は完了していません。 リアクションペーパーを提出してください。',
+      }),
+    )
+    expect(r.status).toBe('reaction_pending')
+    expect(r.accepting).toBe(false)
+    expect(r.courseName).toBe('法学１')
+    expect(r.confirmWindow).toBe('12:50〜14:30')
+    expect(r.error).toBeNull()
+  })
+
+  it('リアペ提出済み: attendSuc優先 → attended（reactionMsg提出済み文言では未完了扱いしない）', () => {
+    // 実DOM③: attendSuc「出席」と reactionMsg「リアクションペーパー提出済み」が同時に付く。
+    const r = parseAttendanceMessage(
+      msg({ text: '出席確認中\n出席\nリアクションペーパー提出済み', attendSuc: true, reactionMsg: 'リアクションペーパー提出済み' }),
+    )
+    expect(r.status).toBe('attended')
+  })
+
+  it('reactionMsgが提出済み文言のみ（attendSuc無しの異常系）→ reaction_pendingにしない', () => {
+    // .reactionMsg クラスは①③両方に付くため、クラス存在（=フィールド有無）でなく文言で判定する。
+    const r = parseAttendanceMessage(msg({ text: 'リアクションペーパー提出済み', reactionMsg: 'リアクションペーパー提出済み' }))
+    expect(r.status).not.toBe('reaction_pending')
+  })
+
+  it('受付終了後でもリアペ未完了文言があれば reaction_pending を優先（理由を見せる）', () => {
+    const r = parseAttendanceMessage(
+      msg({
+        text: '出席確認時間：12:50～14:30\n出席確認終了\n出席登録は完了していません。',
+        signSize: '出席確認時間：12:50～14:30',
+        reactionMsg: '出席登録は完了していません。',
+        signEnded: true,
+        timeSum: -1,
+      }),
+    )
+    expect(r.status).toBe('reaction_pending')
+  })
+
   it('遷移中/判定不能: どの目印もない → unknown', () => {
     const r = parseAttendanceMessage(msg({ text: '読み込み中...' }))
     expect(r.status).toBe('unknown')

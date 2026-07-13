@@ -198,6 +198,11 @@ export const DETECT_ATTENDANCE_JS = `(function(){
     var timeSum = null;
     if (tsEl) { var n = parseInt((tsEl.textContent||'').replace(/[^0-9-]/g,''),10); if(!isNaN(n)) timeSum = n; }
     if (timeSum!==null && timeSum<=0) signEnded = true;
+    // リアペ必須授業（実DOM 2026-07-13: label.reactionMsg）。①未提出=「出席登録は完了していません。」
+    // 「リアクションペーパーを提出してください。」/ ③提出済み=「リアクションペーパー提出済み」。
+    // 同クラスが両状態に付くため全件連結して送り、未完了かの文言判定はRN側 parseAttendanceMessage。
+    var rms = Array.prototype.slice.call(document.querySelectorAll('.reactionMsg'));
+    var reactionMsg = rms.map(function(e){ return e.textContent||''; }).join(' ');
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'attendance',
       text: body,
@@ -206,7 +211,8 @@ export const DETECT_ATTENDANCE_JS = `(function(){
       attendSuc: attendSuc,
       hasCodeInput: hasCodeInput,
       signEnded: signEnded,
-      timeSum: timeSum
+      timeSum: timeSum,
+      reactionMsg: reactionMsg
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
