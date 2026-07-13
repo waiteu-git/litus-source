@@ -5,10 +5,10 @@ import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Chip, ScreenBg, ScreenHeader, useUi, useTabBarClearance } from '../ui/screen'
-import { COLORS } from '../theme'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { TimetableStackParamList } from '../navigation/types'
+import { Badge } from '../ui/Badge'
 
 type Row = { code: string; name: string; url: string; newCount: number }
 
@@ -89,11 +89,7 @@ export default function LetusCoursesScreen() {
                 <Text style={[styles.name, { color: ui.valueColor }]} numberOfLines={1}>
                   {r.name}
                 </Text>
-                {r.newCount > 0 ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>新着 {r.newCount}</Text>
-                  </View>
-                ) : null}
+                {r.newCount > 0 ? <Badge variant="count" label="新着" count={r.newCount} /> : null}
                 <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
               </Pressable>
             ))}
@@ -112,6 +108,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   icon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   name: { flex: 1, fontSize: 15, fontWeight: '500' },
-  badge: { backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
 })

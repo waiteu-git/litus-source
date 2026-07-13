@@ -12,6 +12,7 @@ import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
 import { evaluateAccess } from '../health/accessGate'
 import { useConnectivity } from '../health/connectivity'
+import { Tag } from '../ui/Tag'
 
 /**
  * 掲示詳細（本文）をネイティブ描画する。初回表示時に body キャッシュが無ければ裏で openDetail を実行し、
@@ -122,9 +123,7 @@ export default function BulletinDetailScreen() {
     <ScreenBg>
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
         <View style={[ui.card, styles.panel]}>
-          <View style={[styles.tag, { backgroundColor: ui.pillBg }]}>
-            <Text style={[styles.tagText, { color: ui.pillText }]}>{item.category}</Text>
-          </View>
+          <Tag label={item.category} size="md" />
           <Text style={[styles.title, { color: ui.valueColor }]}>{item.title}</Text>
 
           <View style={styles.actionsRow}>
@@ -206,8 +205,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   body: { padding: 14, paddingTop: 12 },
   panel: { gap: 4 },
-  tag: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-  tagText: { fontSize: 12, fontWeight: '600' },
   title: { fontSize: 18, fontWeight: '700', marginTop: 10, lineHeight: 25 },
   actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   flagBtn: {

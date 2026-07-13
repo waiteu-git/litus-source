@@ -20,7 +20,8 @@ import Constants from 'expo-constants'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
 import { formatBuildTag } from '../appVersion'
 import { isManualUrl } from '../assignments/manualAssignment'
-import { NowPulse } from '../ui/NowPulse'
+import { Tag } from '../ui/Tag'
+import { Badge } from '../ui/Badge'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
@@ -37,6 +38,7 @@ import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS, DARK } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
+import { PressableCard, PressableRow } from '../ui/Pressable'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
@@ -351,13 +353,13 @@ export default function HomeScreen() {
               <SectionLabel>今やること</SectionLabel>
               <View style={[ui.card, styles.focusCard]}>
                 {focus ? (
-                  <Pressable onPress={() => openSubject(focus)}>
+                  <PressableRow onPress={() => openSubject(focus)}>
                     <FocusClassRow focus={focus} ui={ui} last={!urgent && todayItems.length === 0} />
-                  </Pressable>
+                  </PressableRow>
                 ) : null}
                 {focus && urgent ? <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} /> : null}
                 {urgent ? (
-                  <Pressable style={styles.focusRow} onPress={() => openAssignment(urgent.url)}>
+                  <PressableRow style={styles.focusRow} onPress={() => openAssignment(urgent.url)}>
                     <View style={styles.focusLead}>
                       <View style={[styles.focusDot, { backgroundColor: toneColor }]} />
                     </View>
@@ -377,7 +379,7 @@ export default function HomeScreen() {
                         {formatDeadline(urgent.deadline)}
                       </Text>
                     </View>
-                  </Pressable>
+                  </PressableRow>
                 ) : null}
                 {(focus || urgent) && todayItems.length > 0 ? (
                   <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} />
@@ -422,18 +424,14 @@ export default function HomeScreen() {
               <View style={styles.bulletinHead}>
                 <Ionicons name="megaphone-outline" size={18} color={ui.accent} />
                 <Text style={[styles.bulletinHeadText, { color: ui.valueColor }]}>CLASS掲示</Text>
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>未読 {unreadBulletin.length}</Text>
-                </View>
+                <Badge variant="count" label="未読" count={unreadBulletin.length} />
               </View>
               <Carousel
                 intervalMs={3500}
                 items={unreadBulletin.map((b) => (
                   <Pressable key={b.id} onPress={() => openBulletinDetail(b.id)} style={styles.bulletinSlide}>
-                    <View style={[styles.bulletinTag, { backgroundColor: ui.pillBg }]}>
-                      <Text style={[styles.bulletinTagText, { color: ui.pillText }]}>
-                        {b.category}
-                      </Text>
+                    <View style={{ marginBottom: 6 }}>
+                      <Tag label={b.category} size="sm" />
                     </View>
                     <Text style={[styles.bulletinTitle, { color: ui.valueColor }]} numberOfLines={2}>
                       {b.title}
@@ -442,14 +440,14 @@ export default function HomeScreen() {
                   </Pressable>
                 ))}
               />
-              <Pressable onPress={openBulletin}>
+              <PressableRow onPress={openBulletin}>
                 <Text style={[styles.bulletinMore, { color: ui.accentSoft }]}>すべて見る ↗</Text>
-              </Pressable>
+              </PressableRow>
             </View>
           ) : (
             // 未読0件でも、取得済みなら「新着・未読なし」を明示しつつ一覧（フラグ付き/授業タブ）への
             // 導線を残す。未取得の時だけタップで取得を促す。
-            <Pressable
+            <PressableCard
               style={[ui.card, styles.bulletinCta]}
               onPress={bulletinEmpty.action === 'list' ? openBulletin : () => startBulletinSync(true)}
             >
@@ -463,7 +461,7 @@ export default function HomeScreen() {
               {bulletinEmpty.showAllLink ? (
                 <Text style={[styles.bulletinEmptyLink, { color: ui.accentSoft }]}>すべて見る ↗</Text>
               ) : null}
-            </Pressable>
+            </PressableCard>
           )}
 
           <SectionLabel>その他</SectionLabel>
@@ -479,7 +477,7 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
           </Pressable>
-          <Pressable style={[ui.card, styles.entry]} onPress={() => navigation.navigate('Info')}>
+          <PressableCard style={[ui.card, styles.entry]} onPress={() => navigation.navigate('Info')}>
             <View style={[styles.entryIcon, { backgroundColor: ui.pillBg }]}>
               <Ionicons name="newspaper-outline" size={20} color={ui.accent} />
             </View>
@@ -488,7 +486,7 @@ export default function HomeScreen() {
               <Text style={[styles.entrySub, { color: ui.labelColor }]}>学食・キャンパス情報</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
-          </Pressable>
+          </PressableCard>
         </ScrollView>
       </ScreenBg>
 
@@ -569,10 +567,7 @@ function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<
             {focus.name}
           </Text>
           {focus.isNow ? (
-            <View style={styles.nowLiveBadge}>
-              <NowPulse size={6} color="#ffffff" />
-              <Text style={styles.nowLiveText}>今の授業</Text>
-            </View>
+            <Badge variant="live" label="今の授業" size="md" />
           ) : (
             <View style={[styles.nextBadge, { backgroundColor: ui.pick('rgba(255,255,255,0.6)', '#e3f5ee', DARK.pillBg) }]}>
               <Text style={[styles.nextBadgeText, { color: ui.pick('#053a2c', COLORS.cta, COLORS.emeraldLight) }]}>次の授業</Text>
@@ -740,8 +735,6 @@ const styles = StyleSheet.create({
   focusTitle: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
   focusSub: { fontSize: 12, marginTop: 3 },
   nextBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
-  nowLiveBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
-  nowLiveText: { color: '#ffffff', fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
   nextBadgeText: { fontSize: 10, fontWeight: '700' },
   focusDot: { width: 10, height: 10, borderRadius: 5 },
   focusRight: { alignItems: 'flex-end' },
@@ -754,11 +747,7 @@ const styles = StyleSheet.create({
   bulletinCard: { paddingBottom: 12 },
   bulletinHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   bulletinHeadText: { fontSize: 15, fontWeight: '600', flex: 1 },
-  unreadBadge: { backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  unreadBadgeText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
   bulletinSlide: { minHeight: 76 },
-  bulletinTag: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 6 },
-  bulletinTagText: { fontSize: 10, fontWeight: '700' },
   bulletinTitle: { fontSize: 15, fontWeight: '600', lineHeight: 21 },
   bulletinMeta: { fontSize: 11, marginTop: 5 },
   bulletinMore: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 4 },
