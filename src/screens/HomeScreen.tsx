@@ -150,16 +150,19 @@ export default function HomeScreen() {
       if (bulletinSyncingRef.current) return
       // CLASS定時メンテナンス帯（2:00–4:00）/オフライン/授業中（出席WebViewがCLASSセッション専有中）は収集しない。
       // 手動タップ(force)時はスキップ理由を短時間表示する（自動起動のスキップでは出さない）。
-      const access = evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).reason
+      const access = evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() })
       const skip = bulletinSyncSkipReason({ running, access })
       if (skip) {
-        if (skip === 'attending') setBulletinDiag('授業中のため取得を控えています（授業後に取得できます）')
-        if (force) showSyncNotice(bulletinSyncSkipMessage(skip))
+        const message = bulletinSyncSkipMessage(skip)
+        if (skip === 'attending') setBulletinDiag(message)
+        if (force) showSyncNotice(message)
         return
       }
       const begin = () => {
         bulletinSyncingRef.current = true
         setBulletinSyncing(true)
+        // 収集開始時は残っているスキップ通知（と自動消去タイマー）を確実に片付ける。
+        if (syncNoticeTimer.current) clearTimeout(syncNoticeTimer.current)
         setSyncNotice('')
       }
       if (force) {

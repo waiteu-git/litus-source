@@ -3,21 +3,27 @@
  * リリースビルドでは診断表示（__DEV__限定）が出ないため、ボタンを押しても無反応＝故障に見える。
  * スキップ理由を判定し、更新ボタン付近に短時間出す文言へ写像する。
  */
-import type { AccessReason } from '../health/accessGate'
+import type { AccessDecision } from '../health/accessGate'
 import { maintenanceWindowLabel } from '../health/maintenanceWindow'
 
 export type BulletinSyncSkipReason = 'offline' | 'maintenance' | 'attending'
 
 /**
  * 手動更新をスキップすべき理由。null なら収集を開始してよい。
+ * ゲート判定は AccessDecision.allowed を単一の真実とする（reason だけを見て分岐しない）。
+ * こうすることで accessGate に将来 'ok/offline/maintenance' 以外の不許可理由が増えても、
+ * 収集は必ず止まりユーザーにも理由が出る（null に落ちて収集ガードが静かに外れる＝本バグ再発を防ぐ）。
  * 優先度は既存ガード順と同じ accessGate（offline > maintenance）→ 授業中。
  */
 export function bulletinSyncSkipReason(opts: {
   running: boolean
-  access: AccessReason
+  access: AccessDecision
 }): BulletinSyncSkipReason | null {
-  if (opts.access === 'offline') return 'offline'
-  if (opts.access === 'maintenance') return 'maintenance'
+  if (!opts.access.allowed) {
+    // allowed:false のとき reason は 'offline' | 'maintenance'（accessGateの全単射）。
+    // 万一それ以外でも、収集は止めたうえでメンテ扱いの文言を出す（無反応にはしない）。
+    return opts.access.reason === 'offline' ? 'offline' : 'maintenance'
+  }
   if (opts.running) return 'attending'
   return null
 }
