@@ -34,7 +34,7 @@ function usePressFeedback() {
   }
 }
 
-function Feedback({ style, disableGesture, ...props }: PressFeedbackProps) {
+function Feedback({ style, disableGesture, onPressIn: userPressIn, onPressOut: userPressOut, ...props }: PressFeedbackProps) {
   const { scale, opacity, onPressIn, onPressOut } = usePressFeedback()
   return (
     <Animated.View
@@ -43,8 +43,8 @@ function Feedback({ style, disableGesture, ...props }: PressFeedbackProps) {
     >
       <Pressable
         unstable_pressDelay={PRESS_DELAY_MS}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
+        onPressIn={(e) => { onPressIn(); userPressIn?.(e) }}
+        onPressOut={(e) => { onPressOut(); userPressOut?.(e) }}
         style={style}
         {...props}
       />
