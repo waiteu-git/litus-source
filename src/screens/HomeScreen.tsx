@@ -30,12 +30,16 @@ import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
+import { bulletinSyncSkipMessage, bulletinSyncSkipReason } from '../home/bulletinSyncNotice'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS, DARK } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
+
+// 手動更新をガードでスキップした理由テキストを出しておく時間。
+const SYNC_NOTICE_MS = 5000
 
 // 今日の予定タグの色（タイプ別）。
 const EVENT_TONE: Record<string, string> = {
@@ -85,6 +89,21 @@ export default function HomeScreen() {
   const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
   // 掲示の最終更新時刻（層1の鮮度常設表示用）。
   const [bulletinRefreshedAt, setBulletinRefreshedAt] = useState(0)
+  // 手動更新をガードでスキップした理由の一時表示。リリースビルドでも出す
+  // （診断bulletinDiagは__DEV__限定のため、これが無いと更新ボタンが無反応＝故障に見える）。
+  const [syncNotice, setSyncNotice] = useState('')
+  const syncNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (syncNoticeTimer.current) clearTimeout(syncNoticeTimer.current)
+    },
+    [],
+  )
+  const showSyncNotice = useCallback((msg: string) => {
+    setSyncNotice(msg)
+    if (syncNoticeTimer.current) clearTimeout(syncNoticeTimer.current)
+    syncNoticeTimer.current = setTimeout(() => setSyncNotice(''), SYNC_NOTICE_MS)
+  }, [])
 
   useFocusEffect(
     useCallback(() => {
@@ -129,15 +148,19 @@ export default function HomeScreen() {
   const startBulletinSync = useCallback(
     (force: boolean) => {
       if (bulletinSyncingRef.current) return
-      // CLASS定時メンテナンス帯（2:00–4:00）またはオフラインは収集不能。上部のヘルスバナーがメンテ/オフライン表示を出すので、ここは無駄打ちを止めるだけ。
-      if (!evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
-      if (running) {
-        setBulletinDiag('授業中のため取得を控えています（授業後に取得できます）')
+      // CLASS定時メンテナンス帯（2:00–4:00）/オフライン/授業中（出席WebViewがCLASSセッション専有中）は収集しない。
+      // 手動タップ(force)時はスキップ理由を短時間表示する（自動起動のスキップでは出さない）。
+      const access = evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).reason
+      const skip = bulletinSyncSkipReason({ running, access })
+      if (skip) {
+        if (skip === 'attending') setBulletinDiag('授業中のため取得を控えています（授業後に取得できます）')
+        if (force) showSyncNotice(bulletinSyncSkipMessage(skip))
         return
       }
       const begin = () => {
         bulletinSyncingRef.current = true
         setBulletinSyncing(true)
+        setSyncNotice('')
       }
       if (force) {
         begin()
@@ -149,7 +172,7 @@ export default function HomeScreen() {
         })
         .catch(() => undefined)
     },
-    [running],
+    [running, showSyncNotice],
   )
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
@@ -392,6 +415,9 @@ export default function HomeScreen() {
           </View>
           <HealthBanner health={bulletinHealth?.health} source="class" />
           <FreshnessLabel at={bulletinRefreshedAt} />
+          {syncNotice ? (
+            <Text style={[styles.syncNotice, { color: ui.labelColor }]}>{syncNotice}</Text>
+          ) : null}
           {unreadBulletin.length > 0 ? (
             <View style={[ui.card, styles.bulletinCard]}>
               <View style={styles.bulletinHead}>
@@ -723,6 +749,7 @@ const styles = StyleSheet.create({
 
   bulletinSectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   refreshBtn: { padding: 6, marginTop: 8 },
+  syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
   bulletinCard: { paddingBottom: 12 },
   bulletinHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   bulletinHeadText: { fontSize: 15, fontWeight: '600', flex: 1 },
