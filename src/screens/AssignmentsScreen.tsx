@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View, type ViewStyle } from 'react-native'
 import { Text } from '../ui/Text'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
@@ -8,18 +8,21 @@ import AssignmentCollector from '../collect/AssignmentCollector'
 import { loadAssignments, mutateAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
-import { bucketAssignments, BUCKET_ORDER, type BucketKey } from '../assignments/buckets'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { isManualUrl } from '../assignments/manualAssignment'
+import {
+  buildAssignmentListItems,
+  type AssignmentFilter,
+  type ListItem,
+} from '../assignments/assignmentListItems'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { Chip, ScreenBg, ScreenHeader, Segmented, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { useDisplaySettings } from '../displaySettings'
-import { byDeadlineAsc, formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone } from '../assignments/deadline'
+import { formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone } from '../assignments/deadline'
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
 import KillSwitchBanner from '../ui/KillSwitchBanner'
-import { maintenanceSystemAt } from '../health/maintenanceWindow'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
 import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
@@ -27,16 +30,6 @@ import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import { loadAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { COLORS } from '../theme'
-
-const SECTION_LABEL: Record<BucketKey, string> = {
-  within24h: '24時間以内',
-  tomorrow: '明日',
-  thisWeek: '今週',
-  later: 'それ以降',
-  beforeStart: '開始前',
-  overdue: '期限切れ',
-  submitted: '提出済み',
-}
 
 const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
   not_submitted: '未提出',
@@ -46,7 +39,9 @@ const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
   unknown: '未提出',
 }
 
-const URGENT: Set<BucketKey> = new Set(['within24h', 'overdue'])
+const OVERDUE_COLOR = '#e0533a'
+
+type RowUi = { card: ViewStyle; labelColor: string; valueColor: string }
 
 function isSameLocalDate(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
@@ -63,7 +58,143 @@ function StatusChip({ status }: { status: AssignmentSubmissionStatus }) {
   )
 }
 
-type Filter = 'not_submitted' | 'submitted' | 'all'
+const FlatRow = memo(function FlatRow({
+  a,
+  now,
+  rowUi,
+  onOpen,
+  onHide,
+}: {
+  a: Assignment
+  now: Date
+  rowUi: RowUi
+  onOpen: (a: Assignment) => void
+  onHide: (a: Assignment) => void
+}) {
+  const tone = urgencyTone(a, now)
+  const rel = relDue(a.deadline, now)
+  return (
+    <Pressable onPress={() => onOpen(a)} onLongPress={() => onHide(a)} style={[rowUi.card, styles.flatRow]}>
+      <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.courseRow}>
+          <Text style={[styles.course, { color: rowUi.labelColor }]} numberOfLines={1}>
+            {a.courseName || '科目不明'}
+          </Text>
+          {isManualUrl(a.url) ? (
+            <View style={styles.manualBadge}>
+              <Text style={styles.manualBadgeText}>手動</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={[styles.title, { color: rowUi.valueColor }]} numberOfLines={1}>
+          {a.title}
+        </Text>
+      </View>
+      <View style={styles.flatRight}>
+        <Text style={[styles.flatRel, { color: TONE_COLOR[tone] }]}>{rel || (isSubmitted(a) ? '提出済み' : '')}</Text>
+        <Text style={[styles.flatDue, { color: rowUi.labelColor }]}>{formatDeadline(a.deadline)}</Text>
+      </View>
+      <Pressable onPress={() => onHide(a)} hitSlop={8} style={styles.hideBtn}>
+        <Ionicons name="eye-off-outline" size={18} color={rowUi.labelColor} />
+      </Pressable>
+    </Pressable>
+  )
+})
+
+const CardRow = memo(function CardRow({
+  a,
+  now,
+  urgent,
+  done,
+  rowUi,
+  onOpen,
+  onHide,
+}: {
+  a: Assignment
+  now: Date
+  urgent: boolean
+  done: boolean
+  rowUi: RowUi
+  onOpen: (a: Assignment) => void
+  onHide: (a: Assignment) => void
+}) {
+  const rel = relDue(a.deadline, now)
+  return (
+    <Pressable
+      onPress={() => onOpen(a)}
+      onLongPress={() => onHide(a)}
+      style={[rowUi.card, urgent && styles.urgent, styles.card, done && { opacity: 0.72 }]}
+    >
+      <View style={styles.rowTop}>
+        <Text style={[styles.course, { color: rowUi.labelColor }]} numberOfLines={1}>
+          {a.courseName || '科目不明'}
+        </Text>
+        <Pressable onPress={() => onHide(a)} hitSlop={8} style={styles.hideBtn}>
+          <Ionicons name="eye-off-outline" size={18} color={rowUi.labelColor} />
+        </Pressable>
+      </View>
+      <Text style={[styles.title, { color: rowUi.valueColor }]} numberOfLines={2}>
+        {a.title}
+      </Text>
+      <View style={styles.meta}>
+        <Text style={[styles.due, { color: rowUi.labelColor }]} numberOfLines={1}>
+          {formatDeadline(a.deadline)}
+          {rel ? ` ・ ${rel}` : ''}
+        </Text>
+        <StatusChip status={a.submissionStatus} />
+      </View>
+    </Pressable>
+  )
+})
+
+const HiddenRow = memo(function HiddenRow({
+  a,
+  rowUi,
+  onUnhide,
+}: {
+  a: Assignment
+  rowUi: RowUi
+  onUnhide: (a: Assignment) => void
+}) {
+  return (
+    <View style={[rowUi.card, styles.flatRow]}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[styles.course, { color: rowUi.labelColor }]} numberOfLines={1}>
+          {a.courseName || '科目不明'}
+        </Text>
+        <Text style={[styles.title, { color: rowUi.valueColor }]} numberOfLines={1}>
+          {a.title}
+        </Text>
+      </View>
+      <Pressable onPress={() => onUnhide(a)} style={styles.restoreBtn}>
+        <Text style={styles.restoreText}>戻す</Text>
+      </Pressable>
+    </View>
+  )
+})
+
+const CollapseHeaderRow = memo(function CollapseHeaderRow({
+  group,
+  label,
+  open,
+  rowUi,
+  onToggle,
+}: {
+  group: 'overdue' | 'hidden'
+  label: string
+  open: boolean
+  rowUi: RowUi
+  onToggle: (group: 'overdue' | 'hidden') => void
+}) {
+  const color = group === 'overdue' ? OVERDUE_COLOR : rowUi.labelColor
+  return (
+    <Pressable onPress={() => onToggle(group)} style={[styles.collapseHead, styles.collapseSpacing]}>
+      <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={16} color={color} />
+      <Text style={[styles.collapseText, { color }]}>{label}</Text>
+    </Pressable>
+  )
+})
 
 export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
@@ -73,7 +204,7 @@ export default function AssignmentsScreen() {
   const { assignmentsView } = useDisplaySettings()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [now, setNow] = useState(() => new Date())
-  const [filter, setFilter] = useState<Filter>('not_submitted')
+  const [filter, setFilter] = useState<AssignmentFilter>('not_submitted')
   // 期限切れ・非表示はデフォルト折りたたみ（主役はこれから迫る締切）。
   const [showOverdue, setShowOverdue] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
@@ -86,6 +217,7 @@ export default function AssignmentsScreen() {
   const [health, setHealth] = useState<StoredHealth | null>(null)
   // 課題一覧の鮮度（最終保存成功時刻）。
   const [refreshedAt, setRefreshedAt] = useState(0)
+
   const startUpdate = useCallback(() => {
     // LETUS定時メンテナンス帯(4:00–5:30)/オフラインは収集不能。押しても無反応にせず理由を短時間表示する。
     // LETUSは出席セッションと無関係なので running(授業中)は渡さない＝attending は発生しない。
@@ -131,109 +263,136 @@ export default function AssignmentsScreen() {
     return () => clearInterval(id)
   }, [])
 
-  async function setIgnored(a: Assignment, ignored: boolean) {
-    await mutateAssignments((map) =>
-      map[a.url] ? { ...map, [a.url]: { ...map[a.url], ignored } } : map,
-    )
-    await reload()
-  }
-  const hide = (a: Assignment) => setIgnored(a, true)
-  const unhide = (a: Assignment) => setIgnored(a, false)
+  const setIgnored = useCallback(
+    async (a: Assignment, ignored: boolean) => {
+      await mutateAssignments((map) => (map[a.url] ? { ...map, [a.url]: { ...map[a.url], ignored } } : map))
+      await reload()
+    },
+    [reload],
+  )
+  const hide = useCallback((a: Assignment) => setIgnored(a, true), [setIgnored])
+  const unhide = useCallback((a: Assignment) => setIgnored(a, false), [setIgnored])
 
-  function openDetail(a: Assignment) {
-    // 手動課題はLETUS詳細を持たないので編集画面へ。LETUS由来は従来どおり詳細へ。
-    if (isManualUrl(a.url)) navigation.navigate('ManualAssignment', { url: a.url })
-    else navigation.navigate('LetusAssignmentDetail', { url: a.url })
-  }
+  const openDetail = useCallback(
+    (a: Assignment) => {
+      // 手動課題はLETUS詳細を持たないので編集画面へ。LETUS由来は従来どおり詳細へ。
+      if (isManualUrl(a.url)) navigation.navigate('ManualAssignment', { url: a.url })
+      else navigation.navigate('LetusAssignmentDetail', { url: a.url })
+    },
+    [navigation],
+  )
 
-  const live = assignments.filter((a) => !a.ignored)
+  const onToggle = useCallback((group: 'overdue' | 'hidden') => {
+    if (group === 'overdue') setShowOverdue((v) => !v)
+    else setShowHidden((v) => !v)
+  }, [])
+
+  const live = useMemo(() => assignments.filter((a) => !a.ignored), [assignments])
   const hidden = useMemo(() => assignments.filter((a) => a.ignored), [assignments])
-  const buckets = bucketAssignments(live, now)
-  const total = BUCKET_ORDER.reduce((n, k) => n + buckets[k].length, 0)
 
   const stats = useMemo(() => {
-    const dueToday = live.filter((a) => !isSubmitted(a) && a.deadline && isSameLocalDate(new Date(a.deadline), now)).length
+    const dueToday = live.filter(
+      (a) => !isSubmitted(a) && a.deadline && isSameLocalDate(new Date(a.deadline), now),
+    ).length
     const notSubmitted = live.filter((a) => !isSubmitted(a)).length
     const submitted = live.filter(isSubmitted).length
     return { dueToday, notSubmitted, submitted }
   }, [live, now])
 
-  // 締切順表示: 未提出を「これから迫る(upcoming)」と「期限切れ(overdue)」に分け、overdueは別枠へ格納。
-  const { flatMain, flatOverdue } = useMemo(() => {
-    const notSub = live.filter((a) => !isSubmitted(a))
-    const submitted = [...live.filter(isSubmitted)].sort(byDeadlineAsc)
-    const isOverdue = (a: Assignment) => a.deadline !== null && new Date(a.deadline).getTime() < now.getTime()
-    const upcoming = [...notSub.filter((a) => !isOverdue(a))].sort(byDeadlineAsc)
-    const overdue = [...notSub.filter(isOverdue)].sort(
-      (a, b) => new Date(b.deadline as string).getTime() - new Date(a.deadline as string).getTime(),
-    )
-    if (filter === 'submitted') return { flatMain: submitted, flatOverdue: [] as Assignment[] }
-    if (filter === 'all') return { flatMain: [...upcoming, ...submitted], flatOverdue: overdue }
-    return { flatMain: upcoming, flatOverdue: overdue } // not_submitted（既定）
-  }, [live, filter, now])
-
-  const HideBtn = ({ a }: { a: Assignment }) => (
-    <Pressable onPress={() => hide(a)} hitSlop={8} style={styles.hideBtn}>
-      <Ionicons name="eye-off-outline" size={18} color={ui.labelColor} />
-    </Pressable>
+  // useUi() は毎レンダー新オブジェクトを返す。行の memo を効かせるため、テーマ由来の値だけで安定化する。
+  const rowUi = useMemo<RowUi>(
+    () => ({
+      card: {
+        backgroundColor: ui.card.backgroundColor,
+        borderColor: ui.card.borderColor,
+        borderWidth: 1,
+        borderRadius: 18,
+        padding: 14,
+      },
+      labelColor: ui.labelColor,
+      valueColor: ui.valueColor,
+    }),
+    [ui.card.backgroundColor, ui.card.borderColor, ui.labelColor, ui.valueColor],
   )
 
-  const FlatRow = ({ a }: { a: Assignment }) => {
-    const tone = urgencyTone(a, now)
-    const rel = relDue(a.deadline, now)
-    return (
-      <Pressable onPress={() => openDetail(a)} onLongPress={() => hide(a)} style={[ui.card, styles.flatRow]}>
-        <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={styles.courseRow}>
-            <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
-              {a.courseName || '科目不明'}
-            </Text>
-            {isManualUrl(a.url) ? (
-              <View style={styles.manualBadge}>
-                <Text style={styles.manualBadgeText}>手動</Text>
-              </View>
-            ) : null}
-          </View>
-          <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={1}>
-            {a.title}
-          </Text>
-        </View>
-        <View style={styles.flatRight}>
-          <Text style={[styles.flatRel, { color: TONE_COLOR[tone] }]}>{rel || (isSubmitted(a) ? '提出済み' : '')}</Text>
-          <Text style={[styles.flatDue, { color: ui.labelColor }]}>{formatDeadline(a.deadline)}</Text>
-        </View>
-        <HideBtn a={a} />
-      </Pressable>
-    )
-  }
+  const listItems = useMemo(
+    () =>
+      buildAssignmentListItems({
+        assignments,
+        now,
+        filter,
+        view: assignmentsView,
+        showOverdue,
+        showHidden,
+      }),
+    [assignments, now, filter, assignmentsView, showOverdue, showHidden],
+  )
 
-  const HiddenSection = () =>
-    hidden.length === 0 ? null : (
-      <View style={{ marginTop: 14 }}>
-        <Pressable onPress={() => setShowHidden((v) => !v)} style={styles.collapseHead}>
-          <Ionicons name={showHidden ? 'chevron-down' : 'chevron-forward'} size={16} color={ui.labelColor} />
-          <Text style={[styles.collapseText, { color: ui.labelColor }]}>非表示 {hidden.length}件</Text>
-        </Pressable>
-        {showHidden
-          ? hidden.map((a) => (
-              <View key={a.url} style={[ui.card, styles.flatRow]}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
-                    {a.courseName || '科目不明'}
-                  </Text>
-                  <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={1}>
-                    {a.title}
-                  </Text>
-                </View>
-                <Pressable onPress={() => unhide(a)} style={styles.restoreBtn}>
-                  <Text style={styles.restoreText}>戻す</Text>
-                </Pressable>
-              </View>
-            ))
-          : null}
+  const keyExtractor = useCallback((item: ListItem) => item.key, [])
+
+  const renderItem = useCallback(
+    ({ item }: { item: ListItem }) => {
+      switch (item.type) {
+        case 'assignment':
+          return item.variant === 'flat' ? (
+            <FlatRow a={item.a} now={now} rowUi={rowUi} onOpen={openDetail} onHide={hide} />
+          ) : (
+            <CardRow
+              a={item.a}
+              now={now}
+              urgent={item.urgent}
+              done={item.done}
+              rowUi={rowUi}
+              onOpen={openDetail}
+              onHide={hide}
+            />
+          )
+        case 'sectionHeader':
+          return <SectionLabel>{item.label}</SectionLabel>
+        case 'collapseHeader':
+          return (
+            <CollapseHeaderRow group={item.group} label={item.label} open={item.open} rowUi={rowUi} onToggle={onToggle} />
+          )
+        case 'hiddenRow':
+          return <HiddenRow a={item.a} rowUi={rowUi} onUnhide={unhide} />
+        case 'note':
+          return <Text style={[styles.note, { color: rowUi.labelColor }]}>{item.label}</Text>
+      }
+    },
+    [now, rowUi, openDetail, hide, unhide, onToggle],
+  )
+
+  const listHeader =
+    assignmentsView === 'flat' ? (
+      <View>
+        <View style={[rowUi.card, styles.statsRow]}>
+          <View style={styles.statCol}>
+            <Text style={[styles.statNum, { color: OVERDUE_COLOR }]}>{stats.dueToday}</Text>
+            <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>今日締切</Text>
+          </View>
+          <View style={styles.statCol}>
+            <Text style={[styles.statNum, { color: rowUi.valueColor }]}>{stats.notSubmitted}</Text>
+            <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>未提出</Text>
+          </View>
+          <View style={styles.statCol}>
+            <Text style={[styles.statNum, { color: rowUi.valueColor }]}>{stats.submitted}</Text>
+            <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>提出済み</Text>
+          </View>
+        </View>
+        <Segmented
+          options={[
+            { key: 'not_submitted', label: '未提出' },
+            { key: 'submitted', label: '提出済み' },
+            { key: 'all', label: 'すべて' },
+          ]}
+          value={filter}
+          onChange={setFilter}
+        />
+        <View style={{ height: 12 }} />
       </View>
-    )
+    ) : null
+
+  const isEmpty = live.length === 0 && hidden.length === 0
 
   return (
     <ScreenBg>
@@ -257,9 +416,9 @@ export default function AssignmentsScreen() {
 
       {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。 */}
       {collecting ? (
-        <View style={[ui.card, styles.updatingBar]}>
+        <View style={[rowUi.card, styles.updatingBar]}>
           <ActivityIndicator size="small" color={COLORS.emerald} />
-          <Text style={[styles.updatingText, { color: ui.valueColor }]} numberOfLines={1}>
+          <Text style={[styles.updatingText, { color: rowUi.valueColor }]} numberOfLines={1}>
             課題を更新中…{progress ? ` ${progress.done}/${progress.total} 件` : ''}
           </Text>
         </View>
@@ -278,95 +437,25 @@ export default function AssignmentsScreen() {
         />
       ) : null}
 
-      {total === 0 && hidden.length === 0 ? (
-        <View style={[ui.card, { marginTop: 16 }]}>
-          <Text style={{ color: ui.valueColor }}>
+      {isEmpty ? (
+        <View style={[rowUi.card, { marginTop: 16 }]}>
+          <Text style={{ color: rowUi.valueColor }}>
             表示できる課題がありません。「更新」でLETUSから取得、「追加」で手動でも登録できます。
           </Text>
         </View>
-      ) : assignmentsView === 'flat' ? (
-        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
-          <View style={[ui.card, styles.statsRow]}>
-            <View style={styles.statCol}>
-              <Text style={[styles.statNum, { color: '#e0533a' }]}>{stats.dueToday}</Text>
-              <Text style={[styles.statLabel, { color: ui.labelColor }]}>今日締切</Text>
-            </View>
-            <View style={styles.statCol}>
-              <Text style={[styles.statNum, { color: ui.valueColor }]}>{stats.notSubmitted}</Text>
-              <Text style={[styles.statLabel, { color: ui.labelColor }]}>未提出</Text>
-            </View>
-            <View style={styles.statCol}>
-              <Text style={[styles.statNum, { color: ui.valueColor }]}>{stats.submitted}</Text>
-              <Text style={[styles.statLabel, { color: ui.labelColor }]}>提出済み</Text>
-            </View>
-          </View>
-          <Segmented
-            options={[
-              { key: 'not_submitted', label: '未提出' },
-              { key: 'submitted', label: '提出済み' },
-              { key: 'all', label: 'すべて' },
-            ]}
-            value={filter}
-            onChange={setFilter}
-          />
-          <View style={{ marginTop: 12, gap: 8 }}>
-            {flatMain.length === 0 ? (
-              <Text style={{ color: ui.labelColor, marginLeft: 2 }}>該当する課題はありません</Text>
-            ) : (
-              flatMain.map((a) => <FlatRow key={a.url} a={a} />)
-            )}
-          </View>
-
-          {flatOverdue.length > 0 ? (
-            <View style={{ marginTop: 14 }}>
-              <Pressable onPress={() => setShowOverdue((v) => !v)} style={styles.collapseHead}>
-                <Ionicons name={showOverdue ? 'chevron-down' : 'chevron-forward'} size={16} color="#e0533a" />
-                <Text style={[styles.collapseText, { color: '#e0533a' }]}>期限切れ {flatOverdue.length}件</Text>
-              </Pressable>
-              {showOverdue ? <View style={{ gap: 8 }}>{flatOverdue.map((a) => <FlatRow key={a.url} a={a} />)}</View> : null}
-            </View>
-          ) : null}
-
-          <HiddenSection />
-        </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
-          {BUCKET_ORDER.filter((k) => buckets[k].length > 0).map((k) => (
-            <View key={k}>
-              <SectionLabel>{SECTION_LABEL[k]}</SectionLabel>
-              {buckets[k].map((a) => {
-                const rel = relDue(a.deadline, now)
-                const done = k === 'submitted'
-                return (
-                  <Pressable
-                    key={a.url}
-                    onPress={() => openDetail(a)}
-                    onLongPress={() => hide(a)}
-                    style={[ui.card, URGENT.has(k) && styles.urgent, styles.card, done && { opacity: 0.72 }]}
-                  >
-                    <View style={styles.rowTop}>
-                      <Text style={[styles.course, { color: ui.labelColor }]} numberOfLines={1}>
-                        {a.courseName || '科目不明'}
-                      </Text>
-                      <HideBtn a={a} />
-                    </View>
-                    <Text style={[styles.title, { color: ui.valueColor }]} numberOfLines={2}>
-                      {a.title}
-                    </Text>
-                    <View style={styles.meta}>
-                      <Text style={[styles.due, { color: ui.labelColor }]} numberOfLines={1}>
-                        {formatDeadline(a.deadline)}
-                        {rel ? ` ・ ${rel}` : ''}
-                      </Text>
-                      <StatusChip status={a.submissionStatus} />
-                    </View>
-                  </Pressable>
-                )
-              })}
-            </View>
-          ))}
-          <HiddenSection />
-        </ScrollView>
+        <FlatList
+          style={{ flex: 1 }}
+          data={listItems}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          ListHeaderComponent={listHeader}
+          contentContainerStyle={[styles.list, { paddingBottom: clearance }]}
+          removeClippedSubviews
+          initialNumToRender={12}
+          windowSize={11}
+          keyboardShouldPersistTaps="handled"
+        />
       )}
     </ScreenBg>
   )
@@ -393,7 +482,7 @@ const styles = StyleSheet.create({
   statCol: { flex: 1, alignItems: 'flex-start' },
   statNum: { fontSize: 24, fontWeight: '700' },
   statLabel: { fontSize: 11, marginTop: 2 },
-  flatRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  flatRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 9 },
   courseRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   manualBadge: { backgroundColor: '#e5f3ec', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
   manualBadgeText: { fontSize: 10, color: COLORS.emeraldDark, fontWeight: '700' },
@@ -403,7 +492,9 @@ const styles = StyleSheet.create({
   flatDue: { fontSize: 11, marginTop: 2 },
   hideBtn: { padding: 4, marginLeft: 2 },
   collapseHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, marginLeft: 2 },
+  collapseSpacing: { marginTop: 14 },
   collapseText: { fontSize: 13, fontWeight: '600' },
+  note: { marginLeft: 2 },
   restoreBtn: { backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#b9ddcd', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
   restoreText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
   syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
