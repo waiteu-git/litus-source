@@ -44,6 +44,7 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
 import { DUR, EASE, SHIFT } from '../ui/motion'
+import { Badge } from '../ui/Badge'
 
 const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
@@ -436,10 +437,7 @@ export default function TimetableScreen() {
                         {unreadCodes.has(cl.courseCode) ? '  ◍' : ''}
                       </Text>
                       {rowNow ? (
-                        <View style={styles.nowChip}>
-                          <NowPulse size={6} color="#ffffff" />
-                          <Text style={styles.nowChipText}>実施中</Text>
-                        </View>
+                        <Badge variant="live" label="実施中" size="sm" />
                       ) : off ? (
                         <View style={styles.offChip}>
                           <Text style={styles.offChipText}>今週休み・隔週</Text>
@@ -566,8 +564,6 @@ const styles = StyleSheet.create({
   offCell: { opacity: 0.45 },
   offChip: { backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   offChipText: { fontSize: 10, fontWeight: '700', color: '#7a8a83' },
-  nowChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  nowChipText: { color: '#ffffff', fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },
   gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e8a400' },
   gridDanger: { position: 'absolute', top: 3, left: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.danger },
