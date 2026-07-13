@@ -11,12 +11,18 @@ export type AssignBody = { description: string; attachments: LetusAttachment[] }
  */
 export function parseAssignBody(html: string): AssignBody {
   const root = parse(html)
+  // Moodle 3系/4.x のコンテナ候補を順に試す（実LETUSは 4.x で role="main"/#region-main を
+  // 持たない構成があるため #page-content 等も候補に加える。いずれも無ければ root 全体）。
   const main =
-    root.querySelector('[role="main"]') ?? root.querySelector('#region-main') ?? root
+    root.querySelector('[role="main"]') ??
+    root.querySelector('#region-main') ??
+    root.querySelector('#page-content') ??
+    root
 
   const introEl =
     main.querySelector('#intro') ??
     main.querySelector('.activity-description') ??
+    main.querySelector('[data-region="activity-information"]') ??
     main.querySelector('.box.generalbox')
   // richHtmlToText は行末の空白しか畳まないため、Moodle側のpretty-print由来の
   // 行頭インデントを追加で除去する（改行構造自体はrichHtmlToTextの結果を尊重）。

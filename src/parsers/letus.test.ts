@@ -5,6 +5,7 @@ import {
   extractSubmissionStatus,
   resolveLifecycleStatus,
   parseAssignmentPage,
+  isAssignPageLanded,
 } from './letus'
 import {
   ASSIGN_NOT_SUBMITTED,
@@ -39,6 +40,16 @@ describe('extractSubmissionStatus（実DOMフィクスチャ）', () => {
   })
   it('「評定のために提出済み」→ submitted', () => {
     expect(parseAssignmentPage(submitted, ASSIGN_URL).submissionStatus).toBe('submitted')
+  })
+
+  // 本文フェッチャの着地判定: 本文パーサが空を返しても、提出状況/締切が読めれば着地済みと判定し
+  // 無限待ち→タイムアウト失敗を断つ（LetusPageFetcher が使う）。
+  it('着地済み課題ページは isAssignPageLanded=true（本文が空でも失敗にしない）', () => {
+    expect(isAssignPageLanded(notSubmitted, ASSIGN_URL)).toBe(true)
+    expect(isAssignPageLanded(submitted, ASSIGN_URL)).toBe(true)
+  })
+  it('SSO中間ページ/ポータル等（提出状況も締切も無い）は isAssignPageLanded=false（次を待つ）', () => {
+    expect(isAssignPageLanded('<html><body>リダイレクトしています…</body></html>', ASSIGN_URL)).toBe(false)
   })
 })
 

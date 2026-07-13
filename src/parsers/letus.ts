@@ -217,3 +217,14 @@ export function parseAssignmentPage(html: string, url: string): ParsedAssignment
   const lifecycleStatus = resolveLifecycleStatus(plainText, submissionStatus, deadline)
   return { deadline, submissionStatus, lifecycleStatus }
 }
+
+/**
+ * 課題/小テストページに着地済みか（提出状況か締切のどちらかが読めれば着地とみなす）。
+ * 本文パーサ(letusBody)がコンテナ構造依存で空を返しても、本関数は本文全体のプレーンテキスト
+ * 照合なので着地を検知でき、本文フェッチャの「空→無限待ち→タイムアウト失敗」を断てる。
+ * SSO中間ページ/ポータルでは submissionStatus='unknown' かつ deadline=null になり false。
+ */
+export function isAssignPageLanded(html: string, url: string): boolean {
+  const { submissionStatus, deadline } = parseAssignmentPage(html, url)
+  return submissionStatus !== 'unknown' || deadline != null
+}
