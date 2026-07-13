@@ -11,6 +11,7 @@ export const KILL_SWITCH_URL = 'https://waiteu.dev/litus/status.json'
 const FETCH_TIMEOUT_MS = 8000
 
 export async function fetchKillSwitchStatus(
+  build: number | null,
   fetchImpl: typeof fetch = fetch,
   timeoutMs: number = FETCH_TIMEOUT_MS,
 ): Promise<KillSwitchStatus | null> {
@@ -22,7 +23,7 @@ export async function fetchKillSwitchStatus(
       headers: { 'Cache-Control': 'no-cache' },
     })
     if (!res.ok) return null
-    return parseKillSwitchStatus(await res.text())
+    return parseKillSwitchStatus(await res.text(), build)
   } catch {
     return null
   } finally {

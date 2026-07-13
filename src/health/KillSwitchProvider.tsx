@@ -2,10 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import Constants from 'expo-constants'
 import {
   isAppKilled,
   isFeatureKilled,
   isKillSwitchStale,
+  parseBuildNumber,
   type KillSwitchFeature,
   type KillSwitchStatus,
 } from './killSwitch'
@@ -23,6 +25,9 @@ type KillSwitchValue = {
 
 // Provider外（テスト等）はfail-open: 何も止めない。
 const Ctx = createContext<KillSwitchValue>({ status: null, isKilled: () => false, refresh: () => {} })
+
+// 自ビルド番号（versionCode）。versionRulesの対象判定と、キャッシュの帰属確認に使う。
+const APP_BUILD = parseBuildNumber(Constants.nativeBuildVersion)
 
 export function useKillSwitch(): KillSwitchValue {
   return useContext(Ctx)
@@ -58,12 +63,14 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
     if (!force && !isKillSwitchStale(fetchedAtRef.current, Date.now())) return
     if (inFlightRef.current) return
     inFlightRef.current = true
-    fetchKillSwitchStatus()
+    fetchKillSwitchStatus(APP_BUILD)
       .then((s) => {
         if (!s) return // 失敗: 直近取得値を維持（fetchedAtも進めない＝次の機会に再試行）
         fetchedAtRef.current = Date.now()
         setStatus(s)
-        return saveKillSwitchCache({ status: s, fetchedAt: fetchedAtRef.current }).catch(() => undefined)
+        return saveKillSwitchCache({ status: s, fetchedAt: fetchedAtRef.current, build: APP_BUILD }).catch(
+          () => undefined,
+        )
       })
       .finally(() => {
         inFlightRef.current = false
@@ -75,7 +82,9 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
     loadKillSwitchCache()
       .then((cache) => {
         if (!active) return
-        if (cache) {
+        // versionRulesは自ビルドへ解決済みで保存されるため、別ビルドで解決したキャッシュは使わない
+        // （アップデート直後に旧ビルド向け停止が一瞬適用されるのを防ぐ）。破棄しても起動時のforce取得で埋まる。
+        if (cache && cache.build === APP_BUILD) {
           fetchedAtRef.current = cache.fetchedAt
           setStatus(cache.status)
         }
