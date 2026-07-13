@@ -234,7 +234,7 @@ export function CountdownRing({
   const textColor = green ? '#ffffff' : dark ? DARK.heading : COLORS.emeraldDark
   const subColor = green ? '#eafff7' : dark ? DARK.label : '#8a968f'
   return (
-    <View style={{ width: size, height: size, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, alignSelf: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
         <Circle cx={cx} cy={cx} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
         <G rotation={-90} originX={cx} originY={cx}>
@@ -251,14 +251,38 @@ export function CountdownRing({
           />
         </G>
       </Svg>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        style={{ fontSize: 36, fontWeight: '700', color: textColor, paddingHorizontal: 14, textAlign: 'center' }}
+      {/* centerText を円の幾何中心へ固定する。subText の有無でここが動かないよう、全面オーバーレイの
+          中央寄せに置く（従来は centerText と subText を縦グループとして中央寄せしていたため、
+          subText がある場合に時刻が中心より上へずれていた）。 */}
+      <View
+        style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}
+        pointerEvents="none"
       >
-        {centerText}
-      </Text>
-      {subText ? <Text style={{ fontSize: 13, marginTop: 4, color: subColor }}>{subText}</Text> : null}
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          // adjustsFontSizeToFit × custom font は includeFontPadding:false だと Android で
+          // 下端がクリップされる実績があるため、この 36px の時刻だけ padding を残す
+          // （共通 Text ラッパーの既定 false を style で上書き）。中央寄せは上のコンテナが
+          // 担うので、padding が対称に入っても中心はずれない。
+          style={{
+            fontSize: 36,
+            fontWeight: '700',
+            color: textColor,
+            paddingHorizontal: 14,
+            textAlign: 'center',
+            includeFontPadding: true,
+          }}
+        >
+          {centerText}
+        </Text>
+      </View>
+      {/* subText は中心のすぐ下へ絶対配置する（中心の位置決めには一切関与しない）。 */}
+      {subText ? (
+        <View style={{ position: 'absolute', top: '50%', left: 0, right: 0, alignItems: 'center' }} pointerEvents="none">
+          <Text style={{ fontSize: 13, marginTop: 24, color: subColor }}>{subText}</Text>
+        </View>
+      ) : null}
     </View>
   )
 }

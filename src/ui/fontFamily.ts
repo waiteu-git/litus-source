@@ -44,11 +44,25 @@ export function fontFamilyForWeight(weight?: string | number): string {
  * flatten 済み style から fontWeight を除去し、fontFamily を付与した新オブジェクトを返す。
  * fontWeight は常に落とす（RN Android はカスタムフォントで fontWeight を無視するため、残すと型と実挙動が食い違う）。
  * 明示的に fontFamily が指定されている場合（等幅など）はその family を尊重し、weight からの写像はしない。
+ *
+ * includeFontPadding は既定で false にする。Android はフォントメトリクス由来の余分な上下パディングを
+ * 加えるため、IBM Plex Sans JP のような custom font では文字が行ボックス内で上へ寄って見えたり、
+ * リング中央などの縦センタリングがずれて見える。false で glyph 実寸に詰めると見た目が安定する。
+ * iOS では無視される Android 専用プロパティのため、純粋関数のまま無条件に付与してよい。
+ * 呼び出し側が明示指定した場合（クリップ回避で true にしたい等）はその値を尊重する。
  */
 export function toPlexStyle<T extends object>(
   style?: T | null,
-): Omit<T, 'fontWeight'> & { fontFamily: string } {
-  const s = (style ?? {}) as T & { fontFamily?: string; fontWeight?: string | number }
-  const { fontWeight, ...rest } = s
-  return { ...rest, fontFamily: s.fontFamily ?? fontFamilyForWeight(fontWeight) }
+): Omit<T, 'fontWeight' | 'includeFontPadding'> & { fontFamily: string; includeFontPadding: boolean } {
+  const s = (style ?? {}) as T & {
+    fontFamily?: string
+    fontWeight?: string | number
+    includeFontPadding?: boolean
+  }
+  const { fontWeight, includeFontPadding, ...rest } = s
+  return {
+    ...rest,
+    fontFamily: s.fontFamily ?? fontFamilyForWeight(fontWeight),
+    includeFontPadding: includeFontPadding ?? false,
+  }
 }
