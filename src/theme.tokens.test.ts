@@ -37,3 +37,35 @@ describe('resolveUiColors', () => {
     }
   })
 })
+
+describe('resolveUiColors 意味色ロール（新設）', () => {
+  it('green は白地上で読める意味色＋白系priorityBorderを返す', () => {
+    const t = resolveUiColors('green')
+    expect(t.danger).toBe('#b3261e')
+    expect(t.dangerBg).toBe('#fdecea')
+    expect(t.warn).toBe('#9a5b00')
+    expect(t.warnBg).toBe('#fdf3e1')
+    expect(t.info).toBe('#1c5fb2')
+    expect(t.infoBg).toBe('#e8f1fb')
+    expect(t.success).toBe('#0b6b2f')
+    expect(t.successBg).toBe('#e6f4ea')
+    expect(t.priorityBorder).toBe('rgba(255,255,255,0.72)')
+  })
+
+  it('white はlightと同じ意味色＋緑系priorityBorderを返す', () => {
+    const t = resolveUiColors('white')
+    expect(t.danger).toBe('#b3261e')
+    expect(t.info).toBe('#1c5fb2')
+    expect(t.priorityBorder).toBe('#a3d4bf')
+  })
+
+  it('dark は脱飽和した意味色＋夜の翠priorityBorderを返す', () => {
+    const t = resolveUiColors('dark')
+    expect(t.danger).toBe('#ff8f85')
+    expect(t.dangerBg).toBe('rgba(255,143,133,0.14)')
+    expect(t.warn).toBe('#ffb95e')
+    expect(t.info).toBe('#7db3ff')
+    expect(t.success).toBe('#6fd598')
+    expect(t.priorityBorder).toBe('rgba(55,201,155,0.45)')
+  })
+})
