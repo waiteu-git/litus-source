@@ -21,6 +21,7 @@ import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { parseDeadlineInput, splitDeadline, formatDeadlineText } from '../assignments/manualAssignment'
 import DeadlineFields, { type DeadlineValue } from '../assignments/DeadlineFields'
 import { isSubmitted } from '../assignments/deadline'
+import { Tag } from '../ui/Tag'
 
 const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
   not_submitted: '未提出',
@@ -191,11 +192,7 @@ export default function LetusAssignmentDetailScreen() {
       {ui.colors.gradient ? <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} /> : null}
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
         <View style={[ui.card, styles.panel]}>
-          <View style={[styles.courseTag, { backgroundColor: ui.pillBg }]}>
-            <Text style={[styles.courseTagText, { color: ui.pillText }]}>
-              {assignment.courseName || '科目不明'}
-            </Text>
-          </View>
+          <Tag label={assignment.courseName || '科目不明'} size="md" />
           <Text style={[styles.title, { color: ui.valueColor }]}>{assignment.title}</Text>
 
           <View style={styles.statsRow}>
@@ -322,8 +319,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   body: { padding: 14, paddingBottom: 28 },
   panel: { gap: 4 },
-  courseTag: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-  courseTagText: { fontSize: 12, fontWeight: '600' },
   title: { fontSize: 18, fontWeight: '700', marginTop: 10, lineHeight: 25 },
   statsRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
   statBox: { flex: 1, borderRadius: 13, padding: 11 },
