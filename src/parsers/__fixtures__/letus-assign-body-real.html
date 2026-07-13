@@ -1,0 +1,69 @@
+<!--
+  実LETUS(Moodle 4.x / LETUS 2026)の mod/assign/view.php 構造を再現したfixture。
+  実ページから採取した骨格を、氏名・学籍番号・コース名・実ファイル名を合成値に置換して収録。
+  要点（v76バグの再現条件）:
+    - 本文 #intro/.activity-description は #region-main 直下・[role="main"] の「前」にある
+    - [role="main"] は送信ボタン等を持つ内側の別div（#intro を子に持たない）
+    - 課題添付(introattachment)は #intro 内の assign_files_tree に描画される
+    - 提出ファイル(assignsubmission_file)は #intro の外＝提出状況テーブルにある
+-->
+<div id="page">
+  <div id="region-main" class="region-main-content">
+    <div class="activity-header" data-for="page-activity-header">
+      <div class="activity-information" data-region="activity-information"></div>
+    </div>
+    <div class="activity-description" id="intro">
+      <div class="box py-3 generalbox boxaligncenter">
+        <div class="no-overflow">
+          <p><strong>第4回レポート課題</strong></p>
+          <p>次の設問に答えてください。</p>
+          <ul>
+            <li>設問1: 概要を200字で説明する。</li>
+            <li>設問2: 具体例を1つ挙げる。</li>
+          </ul>
+          <p>提出形式: PDF。&nbsp;分量は2ページ以内。</p>
+        </div>
+      </div>
+      <div class="box py-3 generalbox boxaligncenter">
+        <div id="assign_files_tree_abcd">
+          <div class="ygtvitem">
+            <table><tbody><tr><td class="ygtvcell ygtvhtml ygtvcontent">
+              <div>
+                <div class="fileuploadsubmission">
+                  <img class="icon" alt="課題4_問題.pdf" src="https://letus.ed.tus.ac.jp/theme/image.php/classic/core/1/f/pdf">
+                  <a target="_blank" href="https://letus.ed.tus.ac.jp/pluginfile.php/1000001/mod_assign/introattachment/0/%E8%AA%B2%E9%A1%8C4_%E5%95%8F%E9%A1%8C.pdf?forcedownload=1">課題4_問題.pdf</a>
+                </div>
+                <div class="fileuploadsubmissiontime">2026年 06月 08日 11:09</div>
+              </div>
+            </td></tr></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div role="main">
+      <div class="container-fluid mb-4">
+        <div class="row">
+          <div class="col-xs-6 me-3">
+            <div class="singlebutton">
+              <form method="get" action="https://letus.ed.tus.ac.jp/mod/assign/view.php">
+                <input type="hidden" name="id" value="1000001">
+                <input type="hidden" name="action" value="editsubmission">
+                <button type="submit" class="btn btn-secondary">提出を編集する</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="submissionstatustable">
+      <table class="generaltable"><tbody>
+        <tr><th class="cell">提出ステータス</th><td class="cell">提出済み</td></tr>
+        <tr><th class="cell">提出ファイル</th><td class="cell">
+          <div class="fileuploadsubmission">
+            <a target="_blank" href="https://letus.ed.tus.ac.jp/pluginfile.php/1000001/assignsubmission_file/submission_files/2000002/my_submission.docx?forcedownload=1">my_submission.docx</a>
+          </div>
+        </td></tr>
+      </tbody></table>
+    </div>
+  </div>
+</div>
