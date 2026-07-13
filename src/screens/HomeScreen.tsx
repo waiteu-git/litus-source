@@ -30,16 +30,14 @@ import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
-import { bulletinSyncSkipMessage, bulletinSyncSkipReason } from '../home/bulletinSyncNotice'
+import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
+import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS, DARK } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
-
-// 手動更新をガードでスキップした理由テキストを出しておく時間。
-const SYNC_NOTICE_MS = 5000
 
 // 今日の予定タグの色（タイプ別）。
 const EVENT_TONE: Record<string, string> = {
@@ -89,21 +87,8 @@ export default function HomeScreen() {
   const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
   // 掲示の最終更新時刻（層1の鮮度常設表示用）。
   const [bulletinRefreshedAt, setBulletinRefreshedAt] = useState(0)
-  // 手動更新をガードでスキップした理由の一時表示。リリースビルドでも出す
-  // （診断bulletinDiagは__DEV__限定のため、これが無いと更新ボタンが無反応＝故障に見える）。
-  const [syncNotice, setSyncNotice] = useState('')
-  const syncNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (syncNoticeTimer.current) clearTimeout(syncNoticeTimer.current)
-    },
-    [],
-  )
-  const showSyncNotice = useCallback((msg: string) => {
-    setSyncNotice(msg)
-    if (syncNoticeTimer.current) clearTimeout(syncNoticeTimer.current)
-    syncNoticeTimer.current = setTimeout(() => setSyncNotice(''), SYNC_NOTICE_MS)
-  }, [])
+  // 手動更新をガードでスキップした理由の一時表示（リリースでも出す。診断bulletinDiagは__DEV__限定）。
+  const { message: syncNotice, show: showSyncNotice, clear: clearSyncNotice } = useSyncSkipNotice()
 
   useFocusEffect(
     useCallback(() => {
@@ -151,9 +136,9 @@ export default function HomeScreen() {
       // CLASS定時メンテナンス帯（2:00–4:00）/オフライン/授業中（出席WebViewがCLASSセッション専有中）は収集しない。
       // 手動タップ(force)時はスキップ理由を短時間表示する（自動起動のスキップでは出さない）。
       const access = evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() })
-      const skip = bulletinSyncSkipReason({ running, access })
+      const skip = syncSkipReason({ running, access })
       if (skip) {
-        const message = bulletinSyncSkipMessage(skip)
+        const message = syncSkipMessage('class', skip)
         if (skip === 'attending') setBulletinDiag(message)
         if (force) showSyncNotice(message)
         return
@@ -162,8 +147,7 @@ export default function HomeScreen() {
         bulletinSyncingRef.current = true
         setBulletinSyncing(true)
         // 収集開始時は残っているスキップ通知（と自動消去タイマー）を確実に片付ける。
-        if (syncNoticeTimer.current) clearTimeout(syncNoticeTimer.current)
-        setSyncNotice('')
+        clearSyncNotice()
       }
       if (force) {
         begin()
@@ -175,7 +159,7 @@ export default function HomeScreen() {
         })
         .catch(() => undefined)
     },
-    [running, showSyncNotice],
+    [running, showSyncNotice, clearSyncNotice],
   )
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
