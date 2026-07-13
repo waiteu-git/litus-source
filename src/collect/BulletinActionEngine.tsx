@@ -54,7 +54,7 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
           }
         }}
         onData={async (raw) => {
-          let p: { html?: string; ready?: boolean } | null = null
+          let p: { html?: string; ready?: boolean; readDone?: boolean } | null = null
           try {
             p = JSON.parse(raw)
           } catch {
@@ -63,6 +63,10 @@ export default function BulletinActionEngine({ action, title, date, desiredFlag,
           if (!p || !p.ready || !p.html) return false
           const body = parseBulletinDetail(p.html)
           if (!body) return false
+          // 既読処理の完了(readDone)も待ってから確定する。重要/新着掲示はモーダル開きだけでは
+          // CLASS既読にならず openBulletinDetailJs が明示トグルするため、その反映前に WebView を畳むと
+          // 既読AJAXが中断される。readDone=本文取得済み＋既読処理完了 の両立で完了扱いにする。
+          if (!p.readDone) return false
           await updateBulletinItem(id, (i) => ({ ...i, body, unread: false }))
           diag.current.got = true
           return true
