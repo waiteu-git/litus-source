@@ -1,0 +1,8 @@
+#!/bin/sh
+# デザイン再統一のガバナンス: コミット前に型チェックとテスト（生色ガード含む）を走らせる。
+# 無効化したい場合は `git commit --no-verify`（原則使わない）。
+set -e
+echo "[pre-commit] pnpm typecheck"
+pnpm typecheck
+echo "[pre-commit] pnpm test"
+pnpm test
