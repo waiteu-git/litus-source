@@ -236,6 +236,10 @@ export default function HomeScreen() {
   function openBulletin() {
     navigation.navigate('Bulletin')
   }
+  // 掲示カルーセルのスライドから、その掲示の詳細へ直接飛ぶ（「すべて見る」は一覧のまま）。
+  function openBulletinDetail(id: string) {
+    navigation.navigate('BulletinDetail', { id })
+  }
   // 「今やること」の課題カードから、その課題の詳細（課題タブ内）へ直接飛ぶ。
   function openAssignment(url: string) {
     const screen = isManualUrl(url) ? 'ManualAssignment' : 'LetusAssignmentDetail'
@@ -401,7 +405,7 @@ export default function HomeScreen() {
               <Carousel
                 intervalMs={3500}
                 items={unreadBulletin.map((b) => (
-                  <Pressable key={b.id} onPress={openBulletin} style={styles.bulletinSlide}>
+                  <Pressable key={b.id} onPress={() => openBulletinDetail(b.id)} style={styles.bulletinSlide}>
                     <View style={[styles.bulletinTag, { backgroundColor: ui.pillBg }]}>
                       <Text style={[styles.bulletinTagText, { color: ui.pillText }]}>
                         {b.category}
