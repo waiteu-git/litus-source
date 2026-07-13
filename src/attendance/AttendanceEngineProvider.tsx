@@ -548,7 +548,15 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     }
     if (parsed.type === 'attendance') {
       const rec = parseAttendanceMessage(data)
+      // dispatch前のrefは遷移前status（refは各レンダーで更新されるため、このハンドラ内では旧値）。
+      const prevStatus = receptionStatusRef.current
       dispatch({ kind: 'reception', reception: rec })
+      // リアペ待ちへ「新規に」遷移した時、前回（別授業等）の失敗表示を持ち越さない。
+      // busy中は同一提出フローの確認中なのでリセットしない。同一授業で status が
+      // reaction_pending のまま続く限りはエッジが立たず、直近の失敗メッセージは残る。
+      if (rec.status === 'reaction_pending' && prevStatus !== 'reaction_pending' && !reactionBusyRef.current) {
+        setReactionSubmitState((s) => (s.status === 'failed' ? { status: 'idle', message: null } : s))
+      }
       // 受付openローカル通知（即時発火・完全独立経路。refreshAllNotifications/serializeRunsは通らない）。
       // 検知はこの in-class ポーリングに依存し、ポーリングはWebViewが動く前面/授業中在席時にしか回らない
       // （WebViewはBG継続不可）＝バックグラウンド中の受付openは拾えない。抑制条件（accepting以外/出席済み/
