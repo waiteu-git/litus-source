@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reducedShift, reducedStagger, shouldAnimateAmbient } from './reducedMotion'
+import { reducedShift, reducedStagger, shouldAnimateAmbient, reducedPressScale } from './reducedMotion'
 
 describe('Reduce Motion 純マッピング', () => {
   it('reduce時は変位・staggerを0にする', () => {
@@ -11,5 +11,9 @@ describe('Reduce Motion 純マッピング', () => {
   it('reduce時はambientループを止める', () => {
     expect(shouldAnimateAmbient(true)).toBe(false)
     expect(shouldAnimateAmbient(false)).toBe(true)
+  })
+  it('reduce時は押下スケールを1にする（opacityは別管理のため対象外）', () => {
+    expect(reducedPressScale(true, 0.97)).toBe(1)
+    expect(reducedPressScale(false, 0.97)).toBe(0.97)
   })
 })
