@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, Pressable, StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from './Text'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle, G } from 'react-native-svg'
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, DARK, useThemeVariant } from '../theme'
 import { resolveUiColors } from '../theme.tokens'
 import { DUR, EASE } from './motion'
+import { classifySwipe, shouldCaptureSwipe, stepIndex } from './carouselSwipe'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -328,44 +329,87 @@ function CarouselDot({ active, inactiveColor }: { active: boolean; inactiveColor
  * 汎用の自動スライドカルーセル（一定間隔でクロスディゾルブ）。インフォタブのCLASS掲示など、
  * 今後アイテム数が増減するモジュールをそのまま差し替えられるよう中身は ReactNode[] で受け取る。
  * 切替は旧スライドの exit フェードと新スライドの enter フェード＋微ドリフト(6→0)を重ね、空白を作らない。
+ * 横スワイプで手動送りにも対応（左=次・右=前）。スライドがタップ遷移の Pressable でも共存できるよう、
+ * 横移動がスロップ超えのときだけレスポンダを奪う（判定は carouselSwipe.ts の純ロジック）。
  */
 export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; intervalMs?: number }) {
   const [idx, setIdx] = useState(0)
   // 出ていく旧スライドを重ねるためのオーバーレイ（クロスディゾルブ中だけ描画）。
   const [outgoing, setOutgoing] = useState<{ node: ReactNode; key: number } | null>(null)
   const inOpacity = useRef(new Animated.Value(1)).current
-  const inShift = useRef(new Animated.Value(0)).current
+  // ドリフトは自動送り=縦(6→0)・スワイプ=横(スワイプ方向から±8→0)で軸を分ける。
+  const inShiftX = useRef(new Animated.Value(0)).current
+  const inShiftY = useRef(new Animated.Value(0)).current
   const outOpacity = useRef(new Animated.Value(0)).current
-  // setInterval クロージャの陳腐化を避けるため、最新の items と idx を ref で参照する。
+  // タイマー/ジェスチャのクロージャ陳腐化を避けるため、最新の items と idx を ref で参照する。
   const itemsRef = useRef(items)
   itemsRef.current = items
   const idxRef = useRef(idx)
   idxRef.current = idx
+  // 手動操作でインクリメントし、自動送りタイマーを仕切り直す（直後の自動送りで操作感を壊さない）。
+  const [autoEpoch, setAutoEpoch] = useState(0)
+  // スワイプ中（指が触れている間）は自動送りを見送る。離した瞬間の切替と二重に進むのを防ぐ。
+  const gestureActiveRef = useRef(false)
 
-  useEffect(() => {
-    if (items.length <= 1) return
-    const id = setInterval(() => {
+  // 自動送り・スワイプ共通の切替。参照するのは ref と Animated 値（すべて安定）のみ。
+  const goTo = useCallback(
+    (delta: 1 | -1, drift: { x?: number; y?: number }) => {
       const list = itemsRef.current
+      if (list.length <= 1) return
       const cur = idxRef.current
-      const next = (cur + 1) % list.length
-      setOutgoing({ node: list[cur], key: cur })
+      const next = stepIndex(cur, delta, list.length)
+      setOutgoing({ node: list[cur] ?? null, key: cur })
       outOpacity.setValue(1)
       inOpacity.setValue(0)
-      inShift.setValue(6)
+      inShiftX.setValue(drift.x ?? 0)
+      inShiftY.setValue(drift.y ?? 0)
       setIdx(next)
       // 旧スライドは新より速く抜く（fast<base）。同じ長さでクロスフェードすると新旧が重なって
       // 半透明で二重に見え「前の掲示が消えるのが遅く見づらい」ため、旧を先に消して重なりを減らす。
       Animated.parallel([
         Animated.timing(outOpacity, { toValue: 0, duration: DUR.fast, easing: EASE.exit, useNativeDriver: true }),
         Animated.timing(inOpacity, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
-        Animated.timing(inShift, { toValue: 0, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+        Animated.timing(inShiftX, { toValue: 0, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+        Animated.timing(inShiftY, { toValue: 0, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
       ]).start(({ finished }) => {
         if (finished) setOutgoing(null)
       })
+    },
+    [inOpacity, inShiftX, inShiftY, outOpacity],
+  )
+
+  useEffect(() => {
+    if (items.length <= 1) return
+    const id = setInterval(() => {
+      if (gestureActiveRef.current) return
+      goTo(1, { y: 6 })
     }, intervalMs)
     return () => clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length, intervalMs])
+  }, [items.length, intervalMs, autoEpoch, goTo])
+
+  // 横スワイプで手動送り。タップは子 Pressable に譲る（スロップ以内は奪わない）。
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) => itemsRef.current.length > 1 && shouldCaptureSwipe(g.dx, g.dy),
+        onPanResponderGrant: () => {
+          gestureActiveRef.current = true
+        },
+        onPanResponderTerminationRequest: () => true,
+        onPanResponderTerminate: () => {
+          gestureActiveRef.current = false
+        },
+        onPanResponderRelease: (_, g) => {
+          gestureActiveRef.current = false
+          const action = classifySwipe(g.dx)
+          if (!action) return
+          setAutoEpoch((e) => e + 1)
+          // 新スライドはスワイプの進行方向から入る（左スワイプ=次は右から、右スワイプ=前は左から）。
+          goTo(action === 'next' ? 1 : -1, { x: action === 'next' ? 8 : -8 })
+        },
+      }),
+    [goTo],
+  )
   useEffect(() => {
     if (idx >= items.length) setIdx(0)
   }, [items.length, idx])
@@ -374,9 +418,9 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
     variant === 'green' ? 'rgba(255,255,255,0.45)' : variant === 'dark' ? 'rgba(255,255,255,0.2)' : '#cfe0d9'
   return (
     <View>
-      <View>
-        {/* 新スライドは通常フローで高さを決める（enter フェード＋6→0ドリフト）。 */}
-        <Animated.View style={{ opacity: inOpacity, transform: [{ translateY: inShift }] }}>
+      <View {...panResponder.panHandlers}>
+        {/* 新スライドは通常フローで高さを決める（enter フェード＋微ドリフト）。 */}
+        <Animated.View style={{ opacity: inOpacity, transform: [{ translateX: inShiftX }, { translateY: inShiftY }] }}>
           {items[idx] ?? null}
         </Animated.View>
         {/* 旧スライドは絶対配置で重ね、exit フェードで抜ける（空白を作らない）。 */}
