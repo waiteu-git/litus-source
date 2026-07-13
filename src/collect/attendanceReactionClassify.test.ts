@@ -107,4 +107,19 @@ describe('リアペfixtureのセレクタ番人（sensorが依存するクラス
     expect(root.querySelector('.attendSuc')?.text).toBe('出席')
     expect(root.querySelector('.reactionMsg')?.text).toBe('リアクションペーパー提出済み')
   })
+
+  it('②入力フォーム: textarea は安定ID funcForm:reactionData・提出ボタンは processSave 持ちの「提出」', () => {
+    // アプリ内提出（actuator）が依存する2点。壊れたらCLASS側のDOM変更を疑う。
+    const root = load('reaction-paper-form-real.html')
+    const ta = root.querySelector('textarea#funcForm\\:reactionData')
+    expect(ta).toBeTruthy()
+    const submit = root
+      .querySelectorAll('button')
+      .find(
+        (b) => (b.text ?? '').replace(/\s+/g, '') === '提出' && (b.getAttribute('onclick') ?? '').includes('processSave'),
+      )
+    expect(submit).toBeTruthy()
+    // 送信前確認ダイアログはCLASS側に無い（onclickが直接PrimeFaces.ab）＝アプリ側confirm必須の根拠
+    expect(submit?.getAttribute('onclick') ?? '').toContain('PrimeFaces.ab')
+  })
 })
