@@ -221,6 +221,34 @@ export const DETECT_ATTENDANCE_JS = `(function(){
 })();`
 
 /**
+ * リアペ待ち（①）カードの「リアクションペーパー」ボタンを押して②入力フォームへ遷移する（遷移のみ）。
+ * 実DOM 2026-07-13: ボタンテキストは①=「リアクションペーパー」/③=「リアクションペーパー確認」なので
+ * **完全一致**で引く（部分一致だと③の確認ボタンに誤爆する）。idはj_idt系自動採番のため不使用。
+ * 合成 .click() はPrimeFacesに無視されることがある（出席送信actuatorの実機実績）ため、
+ * onclick属性を new Function で直接実行し、無ければ .click() にフォールバックする。
+ */
+export const OPEN_REACTION_FORM_JS = `(function(){
+  function post(o){ try { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); } catch (e) {} }
+  try {
+    var btns = Array.prototype.slice.call(document.querySelectorAll('button'));
+    var btn = btns.find(function(b){ return ((b.textContent||'').replace(/\\s+/g,'')) === 'リアクションペーパー'; });
+    if (!btn) { post({ type: 'reaction', stage: 'open', ok: false }); return true; }
+    var ok = true;
+    try {
+      var oc = btn.getAttribute('onclick');
+      if (oc) { new Function('event', oc).call(btn, new MouseEvent('click', { bubbles: true })); }
+      else { btn.click(); }
+    } catch (e1) {
+      try { btn.click(); } catch (e2) { ok = false; }
+    }
+    post({ type: 'reaction', stage: 'open', ok: ok });
+  } catch (e) {
+    post({ type: 'reaction', stage: 'open', ok: false });
+  }
+  true;
+})();`
+
+/**
  * 入口スプラッシュのPC ENTER先（実DOM確認 2026-07-07: 静的HTMLの素の <a href>。PC幅は「ENTER」1個、
  * モバイル幅は「スマートフォン ENTER」「PC ENTER」の2個で、PC側は同じこのURL）。
  */

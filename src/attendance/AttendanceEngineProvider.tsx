@@ -24,9 +24,14 @@ import {
   DETECT_PAGE_JS,
   ENTER_CLASS_PC_JS,
   OPEN_ATTENDANCE_JS,
+  OPEN_REACTION_FORM_JS,
 } from '../collect/injectedScripts'
 import { buildSubmitAttendanceJs } from '../collect/attendanceSubmit.private'
+import { buildSubmitReactionJs } from '../collect/reactionSubmit.private'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
+import { parseReactionMessage } from '../collect/reactionMessage'
+import { canSubmitReaction } from './reactionPaper'
+import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
 import { isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
@@ -77,6 +82,9 @@ const ATTENDANCE_POLL_MS = 30000
  *   WebViewを起動する（電池・CLASSセッション負荷回避）。停止中も reception はキャッシュ保持。
  * - 収集(時間割/掲示)がCLASSを使う間は WebView を譲る（classViewArbiter）。
  */
+/** アプリ内リアペ提出の進行状態。sending中は入力・再提出を閉じ、failedは本文保持のまま案内を出す。 */
+export type ReactionSubmitState = { status: 'idle' | 'sending' | 'failed'; message: string | null }
+
 export type AttendanceEngineValue = {
   phase: EnginePhase
   reception: AttendanceReception | null
@@ -87,6 +95,9 @@ export type AttendanceEngineValue = {
   setCode: (s: string) => void
   submit: () => void
   retry: () => void
+  /** アプリ内リアペ提出（reaction_pending時のみ有効）。②フォームへの流し込み→提出→出席確定まで進める。 */
+  reactionSubmit: ReactionSubmitState
+  submitReaction: (text: string) => void
   /** WebViewが起動中か（バナー判定で reception を信頼してよいかの目安）。 */
   running: boolean
   /** PC等の他画面でCLASSを開いていて確認できない状態（複数画面競合）。UIは専用表示にする。 */
@@ -146,6 +157,12 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const [timetable, setTimetable] = useState<TimetableCollection[]>([])
   const [attendanceFocused, setAttendanceFocusedState] = useState(false)
   const [conflict, setConflict] = useState(false)
+  // アプリ内リアペ提出の進行状態。ref はタイマー/onMessage クロージャからの最新参照用。
+  const [reactionSubmitState, setReactionSubmitState] = useState<ReactionSubmitState>({ status: 'idle', message: null })
+  const reactionBusyRef = useRef(false)
+  const reactionTextRef = useRef('')
+  const reactionFillTriesRef = useRef(0)
+  const reactionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   // 上限到達で自動再試行を打ち切った状態。UIの案内文を切り替えるため state で持つ。
   const [conflictExhausted, setConflictExhausted] = useState(false)
   // 再試行スケジューラの内部状態（タイマークロージャから最新値を読むため ref）。
@@ -228,7 +245,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // フォアグラウンド復帰時に再判定/リフレッシュ（オーケストレータのattendanceスロット）。送信中はスキップ。
   useEffect(() => {
     return subscribeForeground('attendance', () => {
-      if (phaseRef.current === 'submitting' || !shouldRenderRef.current) return
+      if (phaseRef.current === 'submitting' || reactionBusyRef.current || !shouldRenderRef.current) return
       // 競合中の前面復帰は「PCを閉じて戻ってきた」可能性が高い。バックオフを畳み直して即1回試す。
       if (conflictRef.current) {
         resumeConflictRetry()
@@ -252,7 +269,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         onAttendanceRef.current &&
         shouldRenderRef.current &&
         !collectActiveRef.current &&
-        phaseRef.current !== 'submitting'
+        phaseRef.current !== 'submitting' &&
+        !reactionBusyRef.current // リアペ提出中は②フォーム上に居る。取り直しで流し込みを壊さない
       ) {
         refreshAttendance()
       }
@@ -287,6 +305,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // 「出席済み」記録の読み込み（起動時）。
   useEffect(() => {
     loadAttendedRecord().then(setAttended).catch(() => undefined)
+  }, [])
+
+  // アンマウント時にリアペ提出フローのタイマーを畳む（リーク・遅延injectの防止）。
+  useEffect(() => {
+    return () => clearReactionTimers()
   }, [])
 
   function clearConflictTimer() {
@@ -369,6 +392,52 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     setTimeout(() => inject(DETECT_ATTENDANCE_JS), 1600)
   }
 
+  // ---- アプリ内リアペ提出フロー（reaction_pending → ②フォーム遷移 → 流し込み+提出 → ③検知で確定）----
+  // タイミング制御（JSF postbackのAJAX再描画待ち）はここに集約し、判定は純粋関数
+  // （parseReactionMessage / parseAttendanceMessage）に寄せる。全タイマーは reactionTimersRef で
+  // 一括解除できるようにし、成功（attended検知）・失敗・retry() のどこからでも安全に畳める。
+  function scheduleReaction(fn: () => void, ms: number) {
+    reactionTimersRef.current.push(setTimeout(fn, ms))
+  }
+
+  function clearReactionTimers() {
+    for (const id of reactionTimersRef.current) clearTimeout(id)
+    reactionTimersRef.current = []
+  }
+
+  function failReaction(message: string) {
+    clearReactionTimers()
+    reactionBusyRef.current = false
+    setReactionSubmitState({ status: 'failed', message })
+  }
+
+  function resetReaction() {
+    clearReactionTimers()
+    reactionBusyRef.current = false
+    setReactionSubmitState((s) => (s.status === 'idle' && s.message === null ? s : { status: 'idle', message: null }))
+  }
+
+  function submitReaction(text: string) {
+    if (reactionBusyRef.current) return
+    if (!canSubmitReaction(text)) return
+    if (!shouldRenderRef.current || collectActiveRef.current) {
+      // WebView停止中（授業時間外で画面も非フォーカス等）や収集使用中は流し込み先が無い。
+      setReactionSubmitState({ status: 'failed', message: 'CLASSに接続できていません。少し待ってからやり直してください' })
+      return
+    }
+    reactionTextRef.current = text
+    reactionFillTriesRef.current = 0
+    reactionBusyRef.current = true
+    setReactionSubmitState({ status: 'sending', message: null })
+    inject(OPEN_REACTION_FORM_JS)
+    // 応答が一切来ない場合の最終保険（進行できていれば fill 側の確認タイマーが先に決着させる）。
+    scheduleReaction(() => {
+      if (reactionBusyRef.current) {
+        failReaction('提出を確認できませんでした。本文は保存されています。「CLASSの画面で書く」から状況を確認してください')
+      }
+    }, 20000)
+  }
+
   function onLoadEnd() {
     if (state.phase === 'booting') armNavTimeout()
     inject(DETECT_PAGE_JS)
@@ -431,6 +500,52 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     if (parsed.type === 'nav') {
       return
     }
+    if (parsed.type === 'reaction') {
+      const m = parseReactionMessage(data)
+      if (!m || !reactionBusyRef.current) return
+      if (m.kind === 'open') {
+        if (!m.ok) {
+          failReaction('リアクションペーパーの画面を開けませんでした。「CLASSの画面で書く」から提出してください')
+          return
+        }
+        // ①→②はPrimeFacesのAJAX postback（ページロードなし＝onLoadEnd不発）。再描画を待って流し込む。
+        scheduleReaction(() => inject(buildSubmitReactionJs(reactionTextRef.current)), 1800)
+        return
+      }
+      // m.kind === 'fill'
+      if (m.ok) {
+        // 提出発火済み。応答テキストに頼らず、出席状態を取り直して③（.attendSuc）で確定する
+        // （コード送信後の確認と同じ流儀）。確定は attendance ハンドラ側の resetReaction が担う。
+        scheduleReaction(() => {
+          if (shouldRenderRef.current && !collectActiveRef.current) refreshAttendance()
+        }, 2500)
+        scheduleReaction(() => {
+          if (shouldRenderRef.current && !collectActiveRef.current && receptionStatusRef.current !== 'attended') {
+            refreshAttendance()
+          }
+        }, 6000)
+        scheduleReaction(() => {
+          if (reactionBusyRef.current && receptionStatusRef.current !== 'attended') {
+            failReaction('提出結果を確認できませんでした。本文は保存されています。「CLASSの画面で書く」から状況を確認してください')
+          }
+        }, 11000)
+        return
+      }
+      if (m.reason === 'form-missing' && reactionFillTriesRef.current < 1) {
+        // ②フォームの描画がまだ間に合っていない可能性。少し待って1回だけやり直す。
+        reactionFillTriesRef.current += 1
+        scheduleReaction(() => inject(buildSubmitReactionJs(reactionTextRef.current)), 1800)
+        return
+      }
+      failReaction(
+        m.reason === 'stub'
+          ? 'このビルドではアプリ内提出を使えません。「CLASSの画面で書く」から提出してください'
+          : m.reason === 'verify-failed'
+            ? '本文を正しく流し込めたか確認できませんでした。「CLASSの画面で書く」から提出してください'
+            : '提出画面を操作できませんでした。「CLASSの画面で書く」から提出してください',
+      )
+      return
+    }
     if (parsed.type === 'attendance') {
       const rec = parseAttendanceMessage(data)
       dispatch({ kind: 'reception', reception: rec })
@@ -461,6 +576,12 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       // CLASSが「出席済み」を示したら、どのデバイスで出していても記録を更新（授業間の継続表示・
       // オフライン補助）。CLASSの状態が正。配信済みの受付open通知も消す（自分の送信/別デバイス出席いずれも）。
       if (rec.status === 'attended') {
+        // リアペ提出フロー中（または直前までリアペ待ち）だった場合はここが成功の確定点。
+        // 進行状態を畳み、保全していた下書きを消す（提出済み本文を別授業へ誤復元しない）。
+        if (reactionBusyRef.current || receptionStatusRef.current === 'reaction_pending') {
+          resetReaction()
+          clearReactionDraft().catch(() => undefined)
+        }
         clearDeliveredAttendanceOpenNotifications().catch(() => undefined)
         const d = new Date()
         // 再アクセス/別デバイス出席では lastCodeRef が空。既存の同日記録のコードを引き継いで消さない。
@@ -520,6 +641,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   function retry() {
     setCode('')
+    resetReaction()
     setRevealClass(false)
     clearConflictTimer()
     conflictAttemptRef.current = 0
@@ -551,6 +673,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       setCode,
       submit,
       retry,
+      reactionSubmit: reactionSubmitState,
+      submitReaction,
       running,
       conflict,
       conflictExhausted,
@@ -568,6 +692,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       attended,
       attendedNow,
       code,
+      reactionSubmitState,
       running,
       conflict,
       conflictExhausted,

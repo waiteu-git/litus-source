@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, View, type TextInput as RNTextInput } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { ActivityIndicator, Alert, Keyboard, Pressable, StyleSheet, View, type TextInput as RNTextInput } from 'react-native'
 import { Text, TextInput } from '../ui/Text'
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
@@ -7,6 +7,9 @@ import { ScreenBg, CountdownRing, IndeterminateBar, useUi, useTabBarClearance } 
 import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { countdownClock, countdownFraction } from '../attendance/countdown'
 import { normalizeAttendanceCode } from '../attendance/normalizeCode'
+import { REACTION_MAX_LEN, canSubmitReaction, reactionDraftApplies, reactionLength } from '../attendance/reactionPaper'
+import { todayKey } from '../attendance/attendedState'
+import { loadReactionDraft, saveReactionDraft } from '../storage/reactionDraftStore'
 import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
 import { COLORS, DARK } from '../theme'
 
@@ -35,6 +38,8 @@ export default function AttendanceScreen() {
     setCode,
     submit,
     retry,
+    reactionSubmit,
+    submitReaction,
     failCount,
     revealClass,
     setRevealClass,
@@ -45,6 +50,42 @@ export default function AttendanceScreen() {
   const closed = reception?.status === 'closed'
   // リアペ必須授業: 出席コードは受理済み・リアクションペーパー未提出（提出して初めて .attendSuc「出席」になる）
   const reactionPending = reception?.status === 'reaction_pending'
+  const reactionCourse = reception?.courseName ?? null
+  // リアペ本文（アプリ内提出用）。提出確定（出席済み検知）までAsyncStorageに下書き保全し、
+  // 失敗・アプリ再起動でも本文を失わない。復元条件（同日＋科目照合）は純粋関数側。
+  const [reactionText, setReactionText] = useState('')
+  useEffect(() => {
+    if (!reactionPending) return
+    let alive = true
+    loadReactionDraft()
+      .then((d) => {
+        if (!alive) return
+        if (d && reactionDraftApplies(d, todayKey(new Date()), reactionCourse)) setReactionText(d.text)
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [reactionPending, reactionCourse])
+  const onChangeReactionText = (t: string) => {
+    setReactionText(t)
+    saveReactionDraft({ date: todayKey(new Date()), courseName: reactionCourse, text: t }).catch(() => undefined)
+  }
+  const reactionSending = reactionSubmit.status === 'sending'
+  const reactionLen = reactionLength(reactionText)
+  const reactionOver = reactionLen > REACTION_MAX_LEN
+  const confirmReactionSubmit = () => {
+    // CLASS側の「提出」に事前確認は無い（onclickが直接PrimeFaces.ab）ため、確認はアプリ側で行う。
+    Keyboard.dismiss()
+    Alert.alert(
+      'リアクションペーパーを提出',
+      `${reactionCourse ?? 'この授業'}にこの内容で提出します。よろしいですか？`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '提出する', onPress: () => submitReaction(reactionText) },
+      ],
+    )
+  }
 
   // フォーカスをエンジンへ通知（起動ポリシー＋収集への優先権制御）。
   useEffect(() => {
@@ -142,26 +183,91 @@ export default function AttendanceScreen() {
             )}
           </View>
         ) : reactionPending ? (
-          // リアペ待ち: コード入力UIは出さず（CLASS側でも入力欄は消えている）、CLASS画面の可視表示で
-          // ユーザー自身にリアペを提出してもらう（独自textarea流し込みはv2）。提出後は既存の
-          // .attendSuc 検知が attended に切り替える。
-          <View style={[styles.card, cardStyle, styles.hero]}>
-            <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
-              <Ionicons name="create-outline" size={30} color={ui.accent} />
-            </View>
-            <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
-              出席コードは受理されました。リアクションペーパーを提出すると出席になります
-            </Text>
-            {reception?.courseName || reception?.confirmWindow ? (
-              <Text style={[styles.conflictSub, { color: labelColor }]}>
-                {reception?.courseName ?? ''}
-                {reception?.confirmWindow ? `${reception?.courseName ? ' ・ ' : ''}${reception.confirmWindow}` : ''}
+          // リアペ待ち: 出席コードは受理済み。本文をアプリ内で書いて提出できる（②フォームへ流し込み）。
+          // 提出後は既存の .attendSuc 検知が attended に切り替える。CLASS画面での手動提出も常に併設
+          // （actuatorスタブ環境・DOM変化時の逃げ道）。
+          <>
+            <View style={[styles.card, cardStyle, styles.hero]}>
+              <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+                <Ionicons name="create-outline" size={30} color={ui.accent} />
+              </View>
+              <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
+                出席コードは受理されました。リアクションペーパーを提出すると出席になります
               </Text>
-            ) : null}
-            <Pressable style={[styles.cta, styles.conflictBtn, { backgroundColor: c.cta }]} onPress={() => setRevealClass(true)}>
-              <Text style={styles.ctaText}>リアクションペーパーを書く</Text>
+              {reception?.courseName || reception?.confirmWindow ? (
+                <Text style={[styles.conflictSub, { color: labelColor }]}>
+                  {reception?.courseName ?? ''}
+                  {reception?.confirmWindow ? `${reception?.courseName ? ' ・ ' : ''}${reception.confirmWindow}` : ''}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
+              <Text style={[styles.inputLabel, { color: labelColor }]}>本文（600文字以内・全角は2文字換算）</Text>
+              <TextInput
+                style={[
+                  styles.reactionInput,
+                  { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder, color: valueColor },
+                ]}
+                value={reactionText}
+                onChangeText={onChangeReactionText}
+                editable={!reactionSending}
+                multiline
+                textAlignVertical="top"
+                placeholder="ここに本文を入力（自動で下書き保存されます）"
+                placeholderTextColor={labelColor}
+              />
+              <Text style={[styles.reactionCount, { color: reactionOver ? c.danger : labelColor }]}>
+                {reactionLen}/{REACTION_MAX_LEN}
+              </Text>
+            </View>
+
+            <Pressable
+              style={[
+                styles.cta,
+                { backgroundColor: c.cta },
+                (reactionSending || !canSubmitReaction(reactionText)) && styles.ctaBusy,
+              ]}
+              disabled={reactionSending || !canSubmitReaction(reactionText)}
+              onPress={confirmReactionSubmit}
+            >
+              {reactionSending ? (
+                <View style={styles.ctaBusyRow}>
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <Text style={styles.ctaText}>提出中…</Text>
+                </View>
+              ) : (
+                <Text style={styles.ctaText}>リアクションペーパーを提出</Text>
+              )}
             </Pressable>
-          </View>
+
+            {reactionSending ? (
+              <View style={[styles.card, cardStyle, styles.verifyCard]}>
+                <View style={styles.verifyRow}>
+                  <ActivityIndicator size="small" color={ui.accent} />
+                  <Text style={[styles.verifyText, { color: valueColor }]}>提出しています。出席への反映を確認中…</Text>
+                </View>
+                <IndeterminateBar
+                  color={ui.accent}
+                  trackColor={dark ? DARK.softBox : glass ? 'rgba(255,255,255,0.28)' : '#e3ebe7'}
+                />
+              </View>
+            ) : reactionSubmit.status === 'failed' ? (
+              <View style={[styles.result, { backgroundColor: c.dangerBg }]}>
+                <Text style={[styles.resultText, { color: c.danger }]}>{reactionSubmit.message}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              style={[styles.reactionGhost, dark && { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder }]}
+              disabled={reactionSending}
+              onPress={() => setRevealClass(true)}
+            >
+              <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
+                CLASSの画面で書く
+              </Text>
+            </Pressable>
+          </>
         ) : closed ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
             <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
@@ -348,6 +454,10 @@ const styles = StyleSheet.create({
   doneCheck: { width: 76, height: 76, borderRadius: 38, backgroundColor: COLORS.success, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   doneTitle: { fontSize: 18, fontWeight: '700' },
   doneSub: { fontSize: 13, marginTop: 6, textAlign: 'center' },
+  reactionInput: { minHeight: 120, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, lineHeight: 22 },
+  reactionCount: { fontSize: 12, textAlign: 'right', marginTop: 6 },
+  reactionGhost: { marginTop: 12, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: '#b9ddcd' },
+  reactionGhostText: { fontSize: 14, fontWeight: '600' },
   failRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   failBtn: { flex: 1, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   failBtnGhost: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: '#b9ddcd' },
