@@ -45,14 +45,14 @@ type ShadowStyle = {
 export const SHADOW: { card: null; floating: ShadowStyle; fab: ShadowStyle } = {
   card: null,
   floating: {
-    shadowColor: '#04281e',
+    shadowColor: '#04281e', // design-allow
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 4,
   },
   fab: {
-    shadowColor: '#04281e',
+    shadowColor: '#04281e', // design-allow
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
