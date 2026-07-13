@@ -15,8 +15,9 @@ import { todaySchedule, type TodayScheduleItem } from '../timetableEvents/eventS
 import type { ClassEvent } from '../timetableEvents/classEvent'
 import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+import Constants from 'expo-constants'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
-import { BUILD_TAG } from '../buildTag'
+import { formatBuildTag } from '../appVersion'
 import { isManualUrl } from '../assignments/manualAssignment'
 import { NowPulse } from '../ui/NowPulse'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
@@ -284,8 +285,8 @@ export default function HomeScreen() {
           }
         />
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: clearance }]}>
-          {/* 開発ビルドの識別タグ（APK名 litus-...-vNN と一致）。公開前に撤去する。 */}
-          <Text style={[styles.devTag, { color: ui.labelColor }]}>{BUILD_TAG}</Text>
+          {/* 開発ビルドの識別タグ（versionCode 由来＝APK名 litus-...-vNN と一致）。公開前に撤去する。 */}
+          <Text style={[styles.devTag, { color: ui.labelColor }]}>{formatBuildTag(Constants.nativeBuildVersion)}</Text>
           {banner.active && bannerMounted ? (
             // 絶対配置で本文の上に重ねる＝展開/格納で下の内容をreflowさせない（配置固定）。
             <View style={styles.overlayAnchor}>
