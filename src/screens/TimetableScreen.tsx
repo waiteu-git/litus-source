@@ -16,8 +16,11 @@ import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
+import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
+import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
+import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { NowPulse } from '../ui/NowPulse'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
@@ -56,6 +59,8 @@ export default function TimetableScreen() {
   const ui = useUi()
   const clearance = useTabBarClearance()
   const { timetableView } = useDisplaySettings()
+  // 授業中（出席WebViewが稼働／CLASSセッションを専有中）フラグ。手動更新の授業中ガードに使う。
+  const { running } = useAttendanceEngine()
   const [collections, setCollections] = useState<TimetableCollection[] | null>(null)
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
   const [events, setEvents] = useState<ClassEvent[]>([])
@@ -89,6 +94,8 @@ export default function TimetableScreen() {
   const [dangerCodes, setDangerCodes] = useState<Set<string>>(new Set())
   // 未読掲示のある科目コード集合（グリッド/リストの未読ドット用・保存済み掲示digestから算出）。
   const [unreadCodes, setUnreadCodes] = useState<Set<string>>(new Set())
+  // 手動更新をガードでスキップした理由の一時表示（リリースでも出す）。
+  const { message: syncNotice, show: showSyncNotice } = useSyncSkipNotice()
 
   const reloadAttendance = () => {
     ;(async () => {
@@ -111,8 +118,16 @@ export default function TimetableScreen() {
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
   const startSync = useCallback((force: boolean) => {
     if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
-    // CLASS定時メンテナンス帯（2:00–4:00）またはオフラインは収集不能。ヘルスバナーがメンテ/オフライン表示を出すので無駄打ちを止める。
-    if (!evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
+    // CLASS定時メンテナンス帯/オフラインは収集不能。手動(force=引っ張り)時はスキップ理由を短時間表示する。
+    // running(授業中)は Home と同様にガードする: 授業中は収集が背景の出席WebViewをアンマウントして
+    // プリエンプトする（classViewArbiter＋shouldRender=running&&!collectActive）ため、静的で実益の薄い
+    // 授業中の時間割手動更新は控える（'attending' を表示）。
+    const access = evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() })
+    const skip = syncSkipReason({ access, running })
+    if (skip) {
+      if (force) showSyncNotice(syncSkipMessage('class', skip))
+      return
+    }
     const begin = () => {
       syncingRef.current = true
       setSyncing(true)
@@ -126,7 +141,7 @@ export default function TimetableScreen() {
         if (!syncingRef.current && isTimetableStale(at)) begin()
       })
       .catch(() => undefined)
-  }, [])
+  }, [showSyncNotice, running])
 
   useEffect(() => {
     loadClassEvents().then(setEvents).catch(() => undefined)
@@ -309,6 +324,9 @@ export default function TimetableScreen() {
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} refreshControl={refresh}>
         <HealthBanner health={health?.health} source="class" />
         <FreshnessLabel at={refreshedAt} />
+        {syncNotice ? (
+          <Text style={[styles.syncNotice, { color: ui.labelColor }]}>{syncNotice}</Text>
+        ) : null}
         {!col ? (
           <View style={[ui.card, { marginTop: 16 }]}>
             <Text style={{ color: ui.valueColor }}>
@@ -516,6 +534,7 @@ export default function TimetableScreen() {
 const styles = StyleSheet.create({
   swipeArea: { flex: 1 },
   list: { paddingTop: 12, paddingBottom: 12 },
+  syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
   trow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
   per: { width: 44, alignItems: 'center', paddingTop: 8 },
   pnum: { fontSize: 17, fontWeight: '600' },
