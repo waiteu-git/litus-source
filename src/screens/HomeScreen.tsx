@@ -239,7 +239,8 @@ export default function HomeScreen() {
   // 「今やること」の課題カードから、その課題の詳細（課題タブ内）へ直接飛ぶ。
   function openAssignment(url: string) {
     const screen = isManualUrl(url) ? 'ManualAssignment' : 'LetusAssignmentDetail'
-    navigation.navigate('課題', { screen, params: { url } })
+    // initial:false でタブ未訪問時も一覧を下に敷き、詳細から戻れるようにする（stuck防止）。
+    navigation.navigate('課題', { screen, params: { url }, initial: false })
   }
   // 「今やること」の授業カードから、その科目の詳細（時間割タブ内）へ飛ぶ。
   function openSubject(f: FocusClass) {
@@ -253,6 +254,8 @@ export default function HomeScreen() {
         teachers: f.teachers,
         isRemote: f.isRemote,
       },
+      // initial:false で時間割タブ未訪問時も一覧を下に敷き、科目詳細から戻れるようにする。
+      initial: false,
     })
   }
 
