@@ -15,6 +15,7 @@ import FreshnessLabel from '../ui/FreshnessLabel'
 import type { HomeStackParamList } from '../navigation/types'
 import { COLORS, DARK } from '../theme'
 import { isScheduleCategory } from '../timetableEvents/bulletinEvents'
+import { Tag } from '../ui/Tag'
 
 type Tab = 'unread' | 'flagged' | 'schedule'
 
@@ -101,8 +102,8 @@ export default function BulletinListScreen() {
               style={[ui.card, styles.item]}
             >
               <View style={styles.itemHead}>
-                <View style={[styles.tag, { backgroundColor: ui.pillBg }]}>
-                  <Text style={[styles.tagText, { color: ui.pillText }]}>{b.category}</Text>
+                <View style={{ marginBottom: 6 }}>
+                  <Tag label={b.category} size="sm" />
                 </View>
                 {b.flagged ? <Text style={styles.flag}>🚩</Text> : null}
               </View>
@@ -123,8 +124,6 @@ const styles = StyleSheet.create({
   list: { padding: 14, paddingTop: 12, paddingBottom: 24 },
   item: { marginBottom: 10 },
   itemHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  tag: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, marginBottom: 6 },
-  tagText: { fontSize: 10, fontWeight: '700' },
   flag: { fontSize: 13 },
   title: { fontSize: 15, fontWeight: '600', lineHeight: 21 },
   meta: { fontSize: 11, marginTop: 5 },
