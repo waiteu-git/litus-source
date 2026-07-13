@@ -8,7 +8,8 @@
     "android": "expo run:android",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "hooks:install": "git config core.hooksPath scripts/githooks"
   },
   "dependencies": {
     "@expo-google-fonts/ibm-plex-sans-jp": "^0.4.1",
