@@ -22,6 +22,10 @@ export const COLORS = {
   warn: '#b26a00',
   danger: '#b3261e',
   dangerBg: '#fdecea',
+  warnStrong: '#9a5b00',
+  info: '#1c5fb2',
+  infoBg: '#e8f1fb',
+  warnBg: '#fdf3e1',
 }
 
 /** ダークテーマの地色・前景・境界。翠アクセントは COLORS.emeraldLight を流用する。 */
@@ -44,4 +48,13 @@ export const DARK = {
   segBorder: 'rgba(255,255,255,0.14)',
   chipBg: 'rgba(255,255,255,0.08)',
   chipBorder: 'rgba(255,255,255,0.10)',
+  danger: '#ff8f85',
+  dangerBg: 'rgba(255,143,133,0.14)',
+  warn: '#ffb95e',
+  warnBg: 'rgba(255,185,94,0.14)',
+  info: '#7db3ff',
+  infoBg: 'rgba(125,179,255,0.14)',
+  success: '#6fd598',
+  successBg: 'rgba(111,213,152,0.14)',
+  priorityBorder: 'rgba(55,201,155,0.45)',
 }

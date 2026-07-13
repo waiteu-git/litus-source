@@ -46,6 +46,17 @@ export type UiColors = {
   chipBg: string
   chipText: string
   chipBorder: string
+  /** 意味色ロール（「色が付いている＝異常」。通常状態には使わない）。 */
+  danger: string
+  dangerBg: string
+  warn: string
+  warnBg: string
+  info: string
+  infoBg: string
+  success: string
+  successBg: string
+  /** 最優先の縁（「いまの授業」専用）。翠地=明るい白縁／白=緑縁／夜の翠=翠縁。 */
+  priorityBorder: string
 }
 
 const GREEN: UiColors = {
@@ -73,6 +84,15 @@ const GREEN: UiColors = {
   chipBg: 'rgba(255,255,255,0.42)',
   chipText: '#04322a',
   chipBorder: 'rgba(255,255,255,0.5)',
+  danger: '#b3261e',
+  dangerBg: '#fdecea',
+  warn: COLORS.warnStrong,
+  warnBg: COLORS.warnBg,
+  info: COLORS.info,
+  infoBg: COLORS.infoBg,
+  success: COLORS.success,
+  successBg: COLORS.successBg,
+  priorityBorder: 'rgba(255,255,255,0.72)',
 }
 
 const WHITE: UiColors = {
@@ -100,6 +120,15 @@ const WHITE: UiColors = {
   chipBg: '#d6efe4',
   chipText: COLORS.emeraldDark,
   chipBorder: 'transparent',
+  danger: COLORS.danger,
+  dangerBg: COLORS.dangerBg,
+  warn: COLORS.warnStrong,
+  warnBg: COLORS.warnBg,
+  info: COLORS.info,
+  infoBg: COLORS.infoBg,
+  success: COLORS.success,
+  successBg: COLORS.successBg,
+  priorityBorder: '#a3d4bf',
 }
 
 const DARK_TOKENS: UiColors = {
@@ -127,6 +156,15 @@ const DARK_TOKENS: UiColors = {
   chipBg: DARK.chipBg,
   chipText: COLORS.emeraldLight,
   chipBorder: DARK.chipBorder,
+  danger: DARK.danger,
+  dangerBg: DARK.dangerBg,
+  warn: DARK.warn,
+  warnBg: DARK.warnBg,
+  info: DARK.info,
+  infoBg: DARK.infoBg,
+  success: DARK.success,
+  successBg: DARK.successBg,
+  priorityBorder: DARK.priorityBorder,
 }
 
 export function resolveUiColors(variant: ResolvedVariant): UiColors {
