@@ -34,21 +34,18 @@ function usePressFeedback() {
   }
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
+
 function Feedback({ style, disableGesture, onPressIn: userPressIn, onPressOut: userPressOut, ...props }: PressFeedbackProps) {
   const { scale, opacity, onPressIn, onPressOut } = usePressFeedback()
   return (
-    <Animated.View
-      style={{ transform: [{ scale }], opacity }}
-      pointerEvents={disableGesture ? 'none' : 'auto'}
-    >
-      <Pressable
-        unstable_pressDelay={PRESS_DELAY_MS}
-        onPressIn={(e) => { onPressIn(); userPressIn?.(e) }}
-        onPressOut={(e) => { onPressOut(); userPressOut?.(e) }}
-        style={style}
-        {...props}
-      />
-    </Animated.View>
+    <AnimatedPressable
+      unstable_pressDelay={PRESS_DELAY_MS}
+      onPressIn={(e) => { onPressIn(); userPressIn?.(e) }}
+      onPressOut={(e) => { onPressOut(); userPressOut?.(e) }}
+      style={[style, { transform: [{ scale }], opacity }, disableGesture ? { pointerEvents: 'none' } : null]}
+      {...props}
+    />
   )
 }
 

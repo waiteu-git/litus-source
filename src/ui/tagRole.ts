@@ -21,7 +21,9 @@ export function tagRoleColors(colors: UiColors, role: TagRole): { bg: string; te
   }
 }
 
-/** size→padding/font。虚偽の'800'は使わない（Plexは700まで）。 */
+/** size→padding/font。虚偽の'800'は使わない（Plexは700まで）。
+ * 注意: Plexは400/500/700のみバンドルのためfontFamilyForWeightが≥600を700に畳む＝
+ * md('600')とsm('700')は同じ太さでレンダーされ寸法差のみになる（現行ピルと同挙動・意図的）。 */
 export function tagSizeStyle(size: TagSize): { padH: number; padV: number; fontSize: number; fontWeight: '600' | '700' } {
   return size === 'sm'
     ? { padH: 8, padV: 2, fontSize: 10, fontWeight: '700' }
