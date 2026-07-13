@@ -38,6 +38,7 @@ import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS, DARK } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
+import { PressableCard, PressableRow } from '../ui/Pressable'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
@@ -352,13 +353,13 @@ export default function HomeScreen() {
               <SectionLabel>今やること</SectionLabel>
               <View style={[ui.card, styles.focusCard]}>
                 {focus ? (
-                  <Pressable onPress={() => openSubject(focus)}>
+                  <PressableRow onPress={() => openSubject(focus)}>
                     <FocusClassRow focus={focus} ui={ui} last={!urgent && todayItems.length === 0} />
-                  </Pressable>
+                  </PressableRow>
                 ) : null}
                 {focus && urgent ? <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} /> : null}
                 {urgent ? (
-                  <Pressable style={styles.focusRow} onPress={() => openAssignment(urgent.url)}>
+                  <PressableRow style={styles.focusRow} onPress={() => openAssignment(urgent.url)}>
                     <View style={styles.focusLead}>
                       <View style={[styles.focusDot, { backgroundColor: toneColor }]} />
                     </View>
@@ -378,7 +379,7 @@ export default function HomeScreen() {
                         {formatDeadline(urgent.deadline)}
                       </Text>
                     </View>
-                  </Pressable>
+                  </PressableRow>
                 ) : null}
                 {(focus || urgent) && todayItems.length > 0 ? (
                   <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} />
@@ -439,14 +440,14 @@ export default function HomeScreen() {
                   </Pressable>
                 ))}
               />
-              <Pressable onPress={openBulletin}>
+              <PressableRow onPress={openBulletin}>
                 <Text style={[styles.bulletinMore, { color: ui.accentSoft }]}>すべて見る ↗</Text>
-              </Pressable>
+              </PressableRow>
             </View>
           ) : (
             // 未読0件でも、取得済みなら「新着・未読なし」を明示しつつ一覧（フラグ付き/授業タブ）への
             // 導線を残す。未取得の時だけタップで取得を促す。
-            <Pressable
+            <PressableCard
               style={[ui.card, styles.bulletinCta]}
               onPress={bulletinEmpty.action === 'list' ? openBulletin : () => startBulletinSync(true)}
             >
@@ -460,7 +461,7 @@ export default function HomeScreen() {
               {bulletinEmpty.showAllLink ? (
                 <Text style={[styles.bulletinEmptyLink, { color: ui.accentSoft }]}>すべて見る ↗</Text>
               ) : null}
-            </Pressable>
+            </PressableCard>
           )}
 
           <SectionLabel>その他</SectionLabel>
@@ -476,7 +477,7 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
           </Pressable>
-          <Pressable style={[ui.card, styles.entry]} onPress={() => navigation.navigate('Info')}>
+          <PressableCard style={[ui.card, styles.entry]} onPress={() => navigation.navigate('Info')}>
             <View style={[styles.entryIcon, { backgroundColor: ui.pillBg }]}>
               <Ionicons name="newspaper-outline" size={20} color={ui.accent} />
             </View>
@@ -485,7 +486,7 @@ export default function HomeScreen() {
               <Text style={[styles.entrySub, { color: ui.labelColor }]}>学食・キャンパス情報</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
-          </Pressable>
+          </PressableCard>
         </ScrollView>
       </ScreenBg>
 
