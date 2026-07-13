@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
+import { Animated, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -39,6 +39,8 @@ import type { PersonalEvent, PersonalDayKey } from '../timetableEvents/personalE
 import { personalEventAt, daysWithPersonal, hasZeroPeriod, personalEventsOfDay } from '../timetableEvents/personalEventSelectors'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
+import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
+import { DUR, EASE, SHIFT } from '../ui/motion'
 
 const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
@@ -194,6 +196,38 @@ export default function TimetableScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days.join(','), todayKey])
 
+  // リスト表示のコンテンツ領域を左右スワイプで曜日移動する。
+  // 縦ScrollView＋pull-to-refreshと共存させるため、capture段のmove判定で
+  // 「横方向が明確に優勢なドラッグ」だけを奪う（タップ・縦スクロールは素通し）。
+  // days/selDay はレンダーごとに変わるので ref 経由で最新値を参照する。
+  const swipeStateRef = useRef({ days, selDay, enabled: false })
+  swipeStateRef.current = { days, selDay, enabled: timetableView === 'list' && !!col }
+  const swipeShift = useRef(new Animated.Value(0)).current
+  const swipeOpacity = useRef(new Animated.Value(1)).current
+  const swipePan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_e, g) =>
+        swipeStateRef.current.enabled && Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderRelease: (_e, g) => {
+        if (Math.abs(g.dx) < 40) return
+        const dir: SwipeDirection = g.dx < 0 ? 'next' : 'prev'
+        const { days: ds, selDay: cur } = swipeStateRef.current
+        const target = swipeTargetDay(ds, cur, dir)
+        if (!target) return
+        selDayAutoRef.current = false // スワイプもタブ手動選択と同じ扱い（今日への自動追従を止める）
+        setSelDay(target)
+        // 移動方向から新しい曜日が滑り込む控えめなフィードバック（既存モーショントークンと同トーン）。
+        swipeShift.setValue(dir === 'next' ? SHIFT.medium : -SHIFT.medium)
+        swipeOpacity.setValue(0.3)
+        Animated.parallel([
+          Animated.timing(swipeShift, { toValue: 0, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+          Animated.timing(swipeOpacity, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
+        ]).start()
+      },
+    }),
+  ).current
+
   const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
   // 選択曜日に落ちる補講オカレンス（休講内包＋単独）。時間割の通常コマとは別に一回限りで表示。
   const dayMakeups = upcomingMakeups(events, now).filter((m) => WEEKDAY_KEY[new Date(m.date).getDay()] === selDay)
@@ -271,6 +305,7 @@ export default function TimetableScreen() {
         />
       ) : null}
 
+      <View style={styles.swipeArea} {...swipePan.panHandlers}>
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} refreshControl={refresh}>
         <HealthBanner health={health?.health} source="class" />
         <FreshnessLabel at={refreshedAt} />
@@ -354,7 +389,9 @@ export default function TimetableScreen() {
             ))}
             <Text style={[styles.gridHint, { color: ui.labelColor }]}>タップで科目詳細 ・ ●は更新あり</Text>
           </View>
-        ) : daySlots.length === 0 ? (
+        ) : (
+          <Animated.View style={{ opacity: swipeOpacity, transform: [{ translateX: swipeShift }] }}>
+          {daySlots.length === 0 ? (
           <Text style={{ color: ui.labelColor, marginLeft: 2, marginTop: 10 }}>この曜日の授業はありません</Text>
         ) : (
           daySlots.map((s) => {
@@ -410,8 +447,7 @@ export default function TimetableScreen() {
           })
         )}
 
-        {timetableView === 'list' && col
-          ? personalEventsOfDay(personalEvents, selDay as PersonalDayKey).map((pe) => (
+          {personalEventsOfDay(personalEvents, selDay as PersonalDayKey).map((pe) => (
               <Pressable
                 key={pe.id}
                 style={[ui.card, styles.personalRow]}
@@ -425,10 +461,9 @@ export default function TimetableScreen() {
                   ) : null}
                 </View>
               </Pressable>
-            ))
-          : null}
+            ))}
 
-        {timetableView === 'list' && col && dayMakeups.length > 0 ? (
+          {dayMakeups.length > 0 ? (
           <View style={{ marginTop: 6 }}>
             {dayMakeups.map((m, i) => (
               <View key={`mk-${i}`} style={styles.trow}>
@@ -449,8 +484,11 @@ export default function TimetableScreen() {
               </View>
             ))}
           </View>
-        ) : null}
+          ) : null}
+          </Animated.View>
+        )}
       </ScrollView>
+      </View>
 
       {syncing ? (
         <TimetableSyncEngine
@@ -476,6 +514,7 @@ export default function TimetableScreen() {
 }
 
 const styles = StyleSheet.create({
+  swipeArea: { flex: 1 },
   list: { paddingTop: 12, paddingBottom: 12 },
   trow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
   per: { width: 44, alignItems: 'center', paddingTop: 8 },
