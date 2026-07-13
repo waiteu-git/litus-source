@@ -42,22 +42,34 @@ describe('fontFamilyForWeight', () => {
 describe('toPlexStyle', () => {
   it('flatten済みstyleに fontFamily を付与し fontWeight キーを取り除く', () => {
     const out = toPlexStyle({ fontSize: 14, fontWeight: '600', color: '#000' })
-    expect(out).toEqual({ fontSize: 14, color: '#000', fontFamily: FONT.bold })
+    expect(out).toEqual({ fontSize: 14, color: '#000', fontFamily: FONT.bold, includeFontPadding: false })
     expect('fontWeight' in out).toBe(false)
   })
 
   it('fontWeight が無い style は Regular を付与する', () => {
-    expect(toPlexStyle({ fontSize: 12 })).toEqual({ fontSize: 12, fontFamily: FONT.regular })
+    expect(toPlexStyle({ fontSize: 12 })).toEqual({
+      fontSize: 12,
+      fontFamily: FONT.regular,
+      includeFontPadding: false,
+    })
   })
 
   it('style 未指定（null/undefined）でも Regular を返す', () => {
-    expect(toPlexStyle(null)).toEqual({ fontFamily: FONT.regular })
-    expect(toPlexStyle(undefined)).toEqual({ fontFamily: FONT.regular })
+    expect(toPlexStyle(null)).toEqual({ fontFamily: FONT.regular, includeFontPadding: false })
+    expect(toPlexStyle(undefined)).toEqual({ fontFamily: FONT.regular, includeFontPadding: false })
   })
 
   it('明示的な fontFamily 指定はその family を尊重し、fontWeight は必ず落とす', () => {
     const out = toPlexStyle({ fontFamily: 'monospace', fontWeight: '700' as const })
-    expect(out).toEqual({ fontFamily: 'monospace' })
+    expect(out).toEqual({ fontFamily: 'monospace', includeFontPadding: false })
     expect('fontWeight' in out).toBe(false)
+  })
+
+  it('Android の余分な行間パディングを切るため includeFontPadding:false を既定で付与する', () => {
+    expect(toPlexStyle({ fontSize: 16 }).includeFontPadding).toBe(false)
+  })
+
+  it('呼び出し側が includeFontPadding を明示した場合はその値を尊重する', () => {
+    expect(toPlexStyle({ fontSize: 16, includeFontPadding: true }).includeFontPadding).toBe(true)
   })
 })
