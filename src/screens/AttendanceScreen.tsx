@@ -309,9 +309,23 @@ export default function AttendanceScreen() {
               ) : (
                 <>
                   <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
-                    <Ionicons name="time-outline" size={30} color={ui.accent} />
+                    {phase === 'booting' ? (
+                      // 受付状況の確認・更新中。静止アイコンだけだと「フリーズ？」と誤解されるため、
+                      // スピナー＋下のスイープバーで処理中を明示する（送信中〜確認中の表示と同系）。
+                      <ActivityIndicator size="large" color={ui.accent} />
+                    ) : (
+                      <Ionicons name="time-outline" size={30} color={ui.accent} />
+                    )}
                   </View>
                   <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>{statusLine}</Text>
+                  {phase === 'booting' ? (
+                    <View style={styles.statusBarWrap}>
+                      <IndeterminateBar
+                        color={ui.accent}
+                        trackColor={dark ? DARK.softBox : glass ? 'rgba(255,255,255,0.28)' : '#e3ebe7'}
+                      />
+                    </View>
+                  ) : null}
                 </>
               )}
             </View>
@@ -429,6 +443,7 @@ const styles = StyleSheet.create({
   status: { fontSize: 16, fontWeight: '600' },
   statusCenter: { textAlign: 'center' },
   conflictSub: { fontSize: 13, textAlign: 'center', marginTop: 8, paddingHorizontal: 8, lineHeight: 19 },
+  statusBarWrap: { alignSelf: 'stretch', marginTop: 16, paddingHorizontal: 4 },
   conflictBtn: { alignSelf: 'stretch' },
   inputLabel: { fontSize: 13, marginBottom: 10 },
   segRow: { flexDirection: 'row', gap: 9 },

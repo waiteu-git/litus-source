@@ -7,6 +7,7 @@ import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearan
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { computeHomeBanner } from '../attendance/homeBanner'
 import { pickFocusClass, type FocusClass } from '../home/focusClass'
+import { bulletinEmptyCard } from '../home/bulletinEmptyCard'
 import { formatDeadline, pickUrgentAssignment, relDue, TONE_COLOR, urgencyTone } from '../assignments/deadline'
 import { loadAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
@@ -172,6 +173,12 @@ export default function HomeScreen() {
   const urgent = pickUrgentAssignment(assignments, tick)
   // ストアは全件（既読・フラグ付き含む）を持つため、ホームの「未読」スライドは未読のみに絞る。
   const unreadBulletin = bulletin.filter((b) => b.unread)
+  // 未読0件時のカード分岐（純ロジック）。「取得済みで未読なし」と「未取得」を区別する。
+  const bulletinEmpty = bulletinEmptyCard({
+    syncing: bulletinSyncing,
+    running,
+    collected: bulletinRefreshedAt > 0 || bulletin.length > 0,
+  })
 
   // 「今やること」に集約する当日の内部予定（休講/補講/教室変更/小テスト等）。純粋ロジックで抽出（TDD済み）。
   // 集約対象は内部データ（授業・補講・課題・掲示）のみ。天気などの外部データは通信先制約
@@ -440,20 +447,22 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           ) : (
-            <Pressable style={[ui.card, styles.bulletinCta]} onPress={() => startBulletinSync(true)}>
+            // 未読0件でも、取得済みなら「新着・未読なし」を明示しつつ一覧（フラグ付き/授業タブ）への
+            // 導線を残す。未取得の時だけタップで取得を促す。
+            <Pressable
+              style={[ui.card, styles.bulletinCta]}
+              onPress={bulletinEmpty.action === 'list' ? openBulletin : () => startBulletinSync(true)}
+            >
               <Ionicons name="megaphone-outline" size={20} color={ui.accent} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.bulletinCtaText, { color: ui.valueColor }]}>
-                  {bulletinSyncing
-                    ? '掲示を取得しています…'
-                    : running
-                      ? '授業中は取得を控えています。授業後に取得できます。'
-                      : 'まだ取得できていません。タップで取得します。'}
-                </Text>
+                <Text style={[styles.bulletinCtaText, { color: ui.valueColor }]}>{bulletinEmpty.text}</Text>
                 {__DEV__ && bulletinDiag ? (
                   <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 4 }}>診断: {bulletinDiag}</Text>
                 ) : null}
               </View>
+              {bulletinEmpty.showAllLink ? (
+                <Text style={[styles.bulletinEmptyLink, { color: ui.accentSoft }]}>すべて見る ↗</Text>
+              ) : null}
             </Pressable>
           )}
 
@@ -754,6 +763,7 @@ const styles = StyleSheet.create({
   bulletinMeta: { fontSize: 11, marginTop: 5 },
   bulletinMore: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 4 },
   bulletinCta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  bulletinEmptyLink: { fontSize: 13, fontWeight: '600' },
   bulletinCtaText: { flex: 1, fontSize: 15, fontWeight: '500' },
 
   entry: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
