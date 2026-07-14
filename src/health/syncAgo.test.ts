@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { combinedLastSync, formatSyncAgo } from './syncAgo'
+import { combinedLastSync, formatSyncAgo, formatSyncAgoShort } from './syncAgo'
 
 describe('combinedLastSync', () => {
   it('両方あれば古い方（全データの保証時刻）', () => {
@@ -35,5 +35,26 @@ describe('formatSyncAgo', () => {
   })
   it('日をまたぐ → M/D HH:mmに同期', () => {
     expect(formatSyncAgo(new Date(2026, 6, 13, 23, 5).getTime(), now)).toBe('7/13 23:05に同期')
+  })
+})
+
+describe('formatSyncAgoShort', () => {
+  const now = new Date(2026, 6, 14, 12, 0, 0)
+  it('null → 未同期', () => {
+    expect(formatSyncAgoShort(null, now)).toBe('未同期')
+  })
+  it('60秒未満 → たった今（suffixなし）', () => {
+    expect(formatSyncAgoShort(now.getTime() - 59_000, now)).toBe('たった今')
+    expect(formatSyncAgoShort(now.getTime() + 10_000, now)).toBe('たった今')
+  })
+  it('60秒〜59分 → ◯分前', () => {
+    expect(formatSyncAgoShort(now.getTime() - 60_000, now)).toBe('1分前')
+    expect(formatSyncAgoShort(now.getTime() - 59 * 60_000, now)).toBe('59分前')
+  })
+  it('60分以上・同日 → ◯時間前', () => {
+    expect(formatSyncAgoShort(new Date(2026, 6, 14, 0, 5).getTime(), now)).toBe('11時間前')
+  })
+  it('日をまたぐ → M/D（時刻を落とす）', () => {
+    expect(formatSyncAgoShort(new Date(2026, 6, 13, 23, 5).getTime(), now)).toBe('7/13')
   })
 })

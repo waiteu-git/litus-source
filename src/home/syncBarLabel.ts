@@ -8,7 +8,7 @@
  */
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import type { SyncSkipReason } from '../health/syncSkipNotice'
-import { formatSyncAgo } from '../health/syncAgo'
+import { formatSyncAgo, formatSyncAgoShort } from '../health/syncAgo'
 
 export type SyncBarInput = {
   bulletinBusy: boolean
@@ -55,4 +55,38 @@ export function syncBarView(input: SyncBarInput, now: Date): SyncBarView {
   if (healthWarn(input.bulletinHealth, input.letusHealth))
     return { kind: 'warn', text: '最新を取得できていない可能性・タップで再同期' }
   return { kind: 'fresh', text: formatSyncAgo(input.lastSyncAt, now) }
+}
+
+/** ヘッダーのスキップ理由（1〜5字の極短形。詳細文言は syncSkipMessage が正）。 */
+function syncHeaderSkipText(reason: SyncSkipReason): string {
+  switch (reason) {
+    case 'offline':
+      return 'オフライン'
+    case 'maintenance':
+      return 'メンテ中'
+    case 'attending':
+      return '授業中'
+    case 'stopped':
+      return '停止中'
+  }
+}
+
+/**
+ * ヘッダー右の同期チップ用ビュー。kind の優先順位は syncBarView に一任し（単一の真実）、
+ * text だけを狭いヘッダー幅に収まる短縮形へ差し替える。掲示/課題どちらの同期中も「同期中」に畳む
+ * （ヘッダーではフェーズ差を出さない）。詳細なスキップ理由は課題/時間割タブの syncSkipMessage が担う。
+ */
+export function syncHeaderView(input: SyncBarInput, now: Date): SyncBarView {
+  const kind = syncBarView(input, now).kind
+  switch (kind) {
+    case 'busySpinner':
+    case 'busyQuiet':
+      return { kind, text: '同期中' }
+    case 'skip':
+      return { kind, text: input.skip ? syncHeaderSkipText(input.skip.reason) : '同期' }
+    case 'warn':
+      return { kind, text: '要再同期' }
+    case 'fresh':
+      return { kind, text: formatSyncAgoShort(input.lastSyncAt, now) }
+  }
 }

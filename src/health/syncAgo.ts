@@ -31,3 +31,20 @@ export function formatSyncAgo(at: number | null, now: Date): string {
   const mm = String(d.getMinutes()).padStart(2, '0')
   return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}に同期`
 }
+
+/**
+ * ヘッダーの同期チップ向けの短縮鮮度（「に同期」suffix・時刻を落とす）。狭いヘッダー幅に収めるため
+ * formatSyncAgo とは別に持つ（未同期→'未同期'、直近→'たった今'、'N分前'/'N時間前'、別日→'M/D'）。
+ */
+export function formatSyncAgoShort(at: number | null, now: Date): string {
+  if (at == null || !(at > 0)) return '未同期'
+  const diff = now.getTime() - at
+  if (diff < MIN) return 'たった今'
+  const mins = Math.floor(diff / MIN)
+  if (mins < 60) return `${mins}分前`
+  const d = new Date(at)
+  const sameDay =
+    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  if (sameDay) return `${Math.floor(mins / 60)}時間前`
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}

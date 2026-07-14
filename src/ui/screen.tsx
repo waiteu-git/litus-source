@@ -533,7 +533,7 @@ const ui = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   hTitle: { fontSize: 20, fontWeight: '600' },
-  headerRight: { flexDirection: 'row', gap: 6 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   action: { backgroundColor: COLORS.emerald, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 11, alignItems: 'center' },
   actionText: { color: '#ffffff', fontSize: 14, fontWeight: '500' },

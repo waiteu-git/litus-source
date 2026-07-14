@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { healthWarn, syncBarSkipText, syncBarView, type SyncBarInput } from './syncBarLabel'
+import { healthWarn, syncBarSkipText, syncBarView, syncHeaderView, type SyncBarInput } from './syncBarLabel'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 
 const now = new Date(2026, 6, 14, 12, 0)
@@ -43,6 +43,30 @@ describe('syncBarView', () => {
   it('平常は鮮度表示（未同期含む）', () => {
     expect(syncBarView(base, now)).toEqual({ kind: 'fresh', text: '未同期' })
     expect(syncBarView({ ...base, lastSyncAt: now.getTime() - 5 * 60_000 }, now).text).toBe('5分前に同期')
+  })
+})
+
+describe('syncHeaderView', () => {
+  it('掲示・課題どちらの同期中も「同期中」に畳む', () => {
+    expect(syncHeaderView({ ...base, bulletinBusy: true }, now)).toEqual({ kind: 'busySpinner', text: '同期中' })
+    expect(syncHeaderView({ ...base, assignmentBusy: true }, now)).toEqual({ kind: 'busyQuiet', text: '同期中' })
+  })
+  it('スキップは極短形（詳細は syncSkipMessage が担う）', () => {
+    expect(syncHeaderView({ ...base, skip: { feature: 'class', reason: 'attending' } }, now).text).toBe('授業中')
+    expect(syncHeaderView({ ...base, skip: { feature: 'letus', reason: 'maintenance' } }, now).text).toBe('メンテ中')
+    expect(syncHeaderView({ ...base, skip: { feature: 'class', reason: 'offline' } }, now).text).toBe('オフライン')
+  })
+  it('ヘルス注意は「要再同期」', () => {
+    expect(syncHeaderView({ ...base, letusHealth: h('not_logged_in') }, now)).toEqual({ kind: 'warn', text: '要再同期' })
+  })
+  it('平常は短縮鮮度（suffixなし・未同期含む）', () => {
+    expect(syncHeaderView(base, now)).toEqual({ kind: 'fresh', text: '未同期' })
+    expect(syncHeaderView({ ...base, lastSyncAt: now.getTime() - 5 * 60_000 }, now).text).toBe('5分前')
+  })
+  it('優先順位は syncBarView と一致（スキップ＞課題同期中）', () => {
+    const v = syncHeaderView({ ...base, assignmentBusy: true, skip: { feature: 'class', reason: 'attending' } }, now)
+    expect(v.kind).toBe('skip')
+    expect(v.text).toBe('授業中')
   })
 })
 
