@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
+import { RADIUS } from '../ui/scale'
 import { COLORS } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
 import { loadBulletinDigest, loadBulletinDetailDiag, updateBulletinItem } from '../storage/bulletinDigestStore'
@@ -12,7 +13,6 @@ import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
 import { evaluateAccess } from '../health/accessGate'
 import { useConnectivity } from '../health/connectivity'
-import { Tag } from '../ui/Tag'
 
 /**
  * 掲示詳細（本文）をネイティブ描画する。初回表示時に body キャッシュが無ければ裏で openDetail を実行し、
@@ -23,6 +23,9 @@ export default function BulletinDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>()
   const ui = useUi()
   const clearance = useTabBarClearance()
+  // 読書面（不透明サーフェス）上の操作アクセント。ui.accent は翠テーマで白＝白地に沈むため使わない。
+  // 明地では emeraldDark（白地6.9:1でAA可）、暗地では emeraldLight。
+  const readAccent = ui.pick(COLORS.emeraldDark, COLORS.emeraldDark, COLORS.emeraldLight)
   const [item, setItem] = useState<BulletinItem | null>(null)
   const [fetching, setFetching] = useState(false)
   const [fetchFailed, setFetchFailed] = useState(false)
@@ -122,67 +125,102 @@ export default function BulletinDetailScreen() {
   return (
     <ScreenBg>
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
-        <View style={[ui.card, styles.panel]}>
-          <Tag label={item.category} size="md" />
-          <Text style={[styles.title, { color: ui.valueColor }]}>{item.title}</Text>
-
-          <View style={styles.actionsRow}>
-            <Pressable
-              onPress={toggleFlag}
-              disabled={flagBusy || fetching}
-              style={[styles.flagBtn, { borderColor: item.flagged ? ui.colors.flagAccent : ui.chevron, opacity: fetching ? 0.5 : 1 }]}
-            >
-              <Ionicons name={item.flagged ? 'flag' : 'flag-outline'} size={16} color={item.flagged ? ui.colors.flagAccent : ui.chevron} />
-              <Text style={[styles.flagText, { color: item.flagged ? ui.colors.flagAccent : ui.labelColor }]}>
-                {flagBusy ? '同期中…' : item.flagged ? 'フラグを外す' : 'フラグを付ける'}
-              </Text>
-            </Pressable>
-            {/* 添付ファイルの確認・DLはCLASS本物ページ側で完結させる。全掲示に常設。 */}
-            <Pressable
-              onPress={openInClass}
-              style={[styles.flagBtn, { borderColor: ui.accent }]}
-            >
-              <Ionicons name="open-outline" size={16} color={ui.accent} />
-              <Text style={[styles.flagText, { color: ui.accent }]}>CLASSで開く</Text>
+        {/* 読書面: 本文カードを不透明サーフェスへ昇格（ガラスに沈ませない・面の3階級②）。 */}
+        <View style={[styles.card, { backgroundColor: ui.colors.readingSurface, borderColor: ui.colors.readingBorder }]}>
+          <View style={styles.tagRow}>
+            {item.important ? (
+              <View style={[styles.important, { backgroundColor: ui.colors.dangerBg }]}>
+                <Ionicons name="flag" size={12} color={ui.colors.danger} />
+                <Text style={[styles.importantText, { color: ui.colors.danger }]}>重要</Text>
+              </View>
+            ) : null}
+            {item.category ? (
+              <View style={[styles.catPill, { backgroundColor: ui.colors.readingBorder }]}>
+                <Text style={[styles.catPillText, { color: ui.colors.readingHeading }]}>{item.category}</Text>
+              </View>
+            ) : null}
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={toggleFlag} disabled={flagBusy || fetching} hitSlop={8} style={{ opacity: fetching ? 0.4 : 1 }}>
+              {flagBusy ? (
+                <ActivityIndicator size="small" color={readAccent} />
+              ) : (
+                <Ionicons
+                  name={item.flagged ? 'bookmark' : 'bookmark-outline'}
+                  size={20}
+                  color={item.flagged ? readAccent : ui.colors.readingMuted}
+                />
+              )}
             </Pressable>
           </View>
 
+          <Text style={[styles.title, { color: ui.colors.readingHeading }]}>{item.title}</Text>
+
+          {b?.from || item.date || b?.period ? (
+            <View style={styles.meta}>
+              {b?.from ? (
+                <View style={styles.metaRow}>
+                  <Ionicons name="person-outline" size={12} color={ui.colors.readingMuted} />
+                  <Text style={[styles.metaText, { color: ui.colors.readingMuted }]} numberOfLines={2}>{b.from}</Text>
+                </View>
+              ) : null}
+              {item.date || b?.period ? (
+                <View style={styles.metaRow}>
+                  <Ionicons name="calendar-outline" size={12} color={ui.colors.readingMuted} />
+                  <Text style={[styles.metaText, { color: ui.colors.readingMuted }]} numberOfLines={2}>
+                    {[item.date ? `掲載日 ${item.date}` : '', b?.period ? `掲示期間 ${b.period}` : ''].filter(Boolean).join(' ・ ')}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={[styles.hr, { backgroundColor: ui.colors.readingBorder }]} />
+
           {b ? (
             <>
-              {b.from ? <Text style={[styles.meta, { color: ui.labelColor }]}>差出人: {b.from}</Text> : null}
-              {b.period ? <Text style={[styles.meta, { color: ui.labelColor }]}>掲示期間: {b.period}</Text> : null}
-              <Text style={[styles.text, { color: ui.valueColor }]}>{b.text}</Text>
+              <Text style={[styles.text, { color: ui.colors.readingInk }]}>{b.text}</Text>
               {b.hasAttachment ? (
-                <Text style={[styles.meta, { color: ui.labelColor, marginTop: 10 }]}>
-                  ※ 添付ファイルは上の「CLASSで開く」から確認・ダウンロードしてください。
+                <Text style={[styles.attachNote, { color: ui.colors.readingMuted }]}>
+                  ※ 添付ファイルは下の「元ページで開く」から確認・ダウンロードできます。
                 </Text>
               ) : null}
+              <View style={[styles.hr, { backgroundColor: ui.colors.readingBorder }]} />
+              <View style={styles.readNote}>
+                <Ionicons name="checkmark" size={12} color={ui.colors.readingMuted} />
+                <Text style={[styles.readNoteText, { color: ui.colors.readingMuted }]}>
+                  この掲示は開いた時点でCLASSに既読が送信されます（演出なし）
+                </Text>
+              </View>
             </>
           ) : fetchFailed ? (
             <View style={styles.loading}>
-              <Text style={{ color: ui.labelColor, fontSize: 13, textAlign: 'center' }}>
-                本文を取得できませんでした。
-              </Text>
+              <Text style={{ color: ui.colors.readingMuted, fontSize: 13, textAlign: 'center' }}>本文を取得できませんでした。</Text>
               {__DEV__ && detailDiag ? (
-                <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 6, textAlign: 'center' }}>
-                  診断: {detailDiag}
-                </Text>
+                <Text style={{ color: ui.colors.readingMuted, fontSize: 10, marginTop: 6, textAlign: 'center' }}>診断: {detailDiag}</Text>
               ) : null}
               <View style={styles.failRow}>
                 <Pressable onPress={retryFetch} style={styles.retryBtn}>
-                  <Ionicons name="refresh" size={15} color={ui.accent} />
-                  <Text style={{ color: ui.accent, fontWeight: '600', fontSize: 13 }}>再試行</Text>
+                  <Ionicons name="refresh" size={15} color={readAccent} />
+                  <Text style={{ color: readAccent, fontWeight: '600', fontSize: 13 }}>再試行</Text>
                 </Pressable>
-                {/* 本文取得が不調でも、上部の常設「CLASSで開く」で本物ページを開ける。 */}
               </View>
             </View>
           ) : (
             <View style={styles.loading}>
-              <ActivityIndicator color={ui.accent} />
-              <Text style={{ color: ui.labelColor, marginTop: 8, fontSize: 12 }}>本文を取得しています…</Text>
+              <ActivityIndicator color={readAccent} />
+              <Text style={{ color: ui.colors.readingMuted, marginTop: 8, fontSize: 12 }}>本文を取得しています…</Text>
             </View>
           )}
         </View>
+
+        {/* 副ボタン: 元ページで開く（添付DL/原本確認はCLASS本物ページで完結）。全幅・読書面の下。 */}
+        <Pressable
+          onPress={openInClass}
+          style={[styles.btnSecondary, { backgroundColor: ui.colors.readingSurface, borderColor: ui.colors.readingBorder }]}
+        >
+          <Ionicons name="open-outline" size={15} color={readAccent} />
+          <Text style={[styles.btnSecondaryText, { color: readAccent }]}>元ページで開く</Text>
+        </Pressable>
       </ScrollView>
 
       {fetching ? (
@@ -203,24 +241,25 @@ export default function BulletinDetailScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  body: { padding: 14, paddingTop: 12 },
-  panel: { gap: 4 },
-  title: { fontSize: 18, fontWeight: '700', marginTop: 10, lineHeight: 25 },
-  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  flagBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  flagText: { fontSize: 13, fontWeight: '600' },
+  body: { paddingTop: 12, paddingBottom: 24 },
+  card: { borderWidth: 1, borderRadius: RADIUS.card, padding: 16 },
+  tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  important: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 3 },
+  importantText: { fontSize: 12, fontWeight: '700' },
+  catPill: { borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 3 },
+  catPillText: { fontSize: 12, fontWeight: '500' },
+  title: { fontSize: 21, lineHeight: 29, fontWeight: '700', marginTop: 12 },
+  meta: { marginTop: 12, gap: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { fontSize: 11, lineHeight: 15, flex: 1 },
+  hr: { height: 1, marginVertical: 16 },
+  text: { fontSize: 16, lineHeight: 26 },
+  attachNote: { fontSize: 11, lineHeight: 16, marginTop: 12 },
+  readNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  readNoteText: { fontSize: 11, lineHeight: 15, flex: 1 },
   loading: { alignItems: 'center', paddingVertical: 30 },
   failRow: { flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: 12 },
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meta: { fontSize: 12, marginTop: 10 },
-  text: { fontSize: 14, lineHeight: 22, marginTop: 12 },
+  btnSecondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: RADIUS.md, paddingVertical: 12, marginTop: 16 },
+  btnSecondaryText: { fontSize: 14, fontWeight: '500' },
 })

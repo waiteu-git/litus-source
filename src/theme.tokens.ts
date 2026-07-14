@@ -72,6 +72,12 @@ export type UiColors = {
   favorite: string
   flagAccent: string
   updateDot: string
+  /** 読書面ロール（面の3階級②）。skin非依存＝翠/白skinは同じ明色・darkのみ暗色。掲示詳細/フォーム等の不透明読書サーフェスに使う（ガラスに沈ませない）。 */
+  readingSurface: string
+  readingHeading: string
+  readingInk: string
+  readingMuted: string
+  readingBorder: string
 }
 
 const GREEN: UiColors = {
@@ -119,6 +125,11 @@ const GREEN: UiColors = {
   favorite: '#f5a623',
   flagAccent: '#e0a100',
   updateDot: '#e8a400',
+  readingSurface: COLORS.white,
+  readingHeading: COLORS.emeraldDark,
+  readingInk: COLORS.ink,
+  readingMuted: COLORS.eventNeutral,
+  readingBorder: '#e3ece8',
 }
 
 const WHITE: UiColors = {
@@ -166,6 +177,11 @@ const WHITE: UiColors = {
   favorite: '#f5a623',
   flagAccent: '#e0a100',
   updateDot: '#e8a400',
+  readingSurface: COLORS.white,
+  readingHeading: COLORS.emeraldDark,
+  readingInk: COLORS.ink,
+  readingMuted: COLORS.eventNeutral,
+  readingBorder: '#e3ece8',
 }
 
 const DARK_TOKENS: UiColors = {
@@ -213,6 +229,11 @@ const DARK_TOKENS: UiColors = {
   favorite: DARK.favorite,
   flagAccent: DARK.flag,
   updateDot: DARK.updateDot,
+  readingSurface: DARK.card,
+  readingHeading: DARK.heading,
+  readingInk: DARK.value,
+  readingMuted: DARK.label,
+  readingBorder: DARK.divider,
 }
 
 export function resolveUiColors(variant: ResolvedVariant): UiColors {
