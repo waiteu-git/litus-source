@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react'
-import BulletinSyncEngine from './BulletinSyncEngine'
+import { useEffect } from 'react'
 import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
-import { evaluateAccess } from '../health/accessGate'
-import { isOnlineNow } from '../health/connectivity'
+import { useSync } from '../sync/SyncProvider'
 
 // 起動直後の描画やLETUS同期と競合しないよう、少し待ってから開始する。
 const START_DELAY_MS = 6000
@@ -12,52 +10,40 @@ const START_DELAY_MS = 6000
 const session = { done: false }
 
 /**
- * 起動時に一度だけCLASS掲示を収集する。タブは既定で時間割が前面＝出席WebViewは未マウントの隙に
- * 済ませる（bottom-tabsは遅延マウントのため、ユーザーが出席タブを開くまで出席WebViewは無い）。
- * 出席が前面のあいだは BulletinSyncEngine 側が即abortする。以降の最新化はインフォの手動更新のみ。
+ * 起動時に一度だけCLASS掲示の同期を発火する薄いトリガ。収集エンジンのマウント・完了処理は
+ * SyncProvider が単独所有し、ここはスケジューリング（起動遅延・鮮度TTL・once-per-boot）だけを担う。
+ * アクセス可否（オフライン/メンテ帯/授業中）は runner 側の planSync が判定する（背景source＝無音スキップ）。
+ * runner が開始できなかった場合は session.done を立てず、授業終了（running 下降）で再試行する。
  */
 export default function BackgroundBulletinSync() {
-  const [active, setActive] = useState(false)
-  const [finished, setFinished] = useState(false)
   // 授業時間帯(running=出席WebViewが稼働)はCLASSセッションを出席が専有するため、掲示収集を控える
   // （同一セッションの奪い合いで空ページ＝出席まで不安定化する）。running が下がれば再試行される。
   const { running } = useAttendanceEngine()
+  const { runBulletinSync } = useSync()
 
   useEffect(() => {
-    if (session.done || finished) return
+    if (session.done) return
     let cancelled = false
     const t = setTimeout(() => {
       if (cancelled || running) return
-      // CLASS定時メンテ帯 or オフラインは収集不能。ムダ打ちと失敗ヘルスの上書きを避けて
-      // スキップする（メンテ/オフライン表示はHealthBannerが接続/時間帯判定で出す。session.doneにはしない＝後で再試行可）。
-      if (!evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed) return
       loadBulletinRefreshedAt()
         .then((at) => {
-          if (cancelled) return
-          if (isBulletinStale(at)) setActive(true)
-          else {
+          if (cancelled || session.done) return
+          if (!isBulletinStale(at)) {
             session.done = true
-            setFinished(true)
+            return
           }
+          if (runBulletinSync({ source: 'boot' })) session.done = true
         })
         .catch(() => {
-          if (!cancelled) setActive(true)
+          if (!cancelled && !session.done && runBulletinSync({ source: 'boot' })) session.done = true
         })
     }, START_DELAY_MS)
     return () => {
       cancelled = true
       clearTimeout(t)
     }
-  }, [finished, running])
+  }, [running, runBulletinSync])
 
-  if (!active || finished || session.done) return null
-  return (
-    <BulletinSyncEngine
-      onFinished={() => {
-        session.done = true
-        setActive(false)
-        setFinished(true)
-      }}
-    />
-  )
+  return null
 }

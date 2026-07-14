@@ -18,6 +18,7 @@ import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion
 import { ClassEventsVersionProvider } from './src/timetableEvents/classEventsVersion'
 import { LoginGate } from './src/auth/LoginGate'
 import { KillSwitchGate, KillSwitchProvider } from './src/health/KillSwitchProvider'
+import { SyncProvider } from './src/sync/SyncProvider'
 import { ThemeProvider, useThemeVariant, COLORS, DARK } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
@@ -146,13 +147,17 @@ export default function App() {
                 <AuthProvider>
                   <ClassViewProvider>
                     <AttendanceEngineProvider>
-                      <RootTabs />
-                      <KillSwitchGate feature="letus">
-                        <BackgroundLetusSync />
-                      </KillSwitchGate>
-                      <KillSwitchGate feature="bulletin">
-                        <BackgroundBulletinSync />
-                      </KillSwitchGate>
+                      {/* SyncProviderが掲示/課題の収集エンジンを単独所有（マウント・完了処理・kill反映）。
+                          背景2件は runner を呼ぶだけの薄いトリガ（Gateで包む＝停止中はトリガ自体を眠らせる）。 */}
+                      <SyncProvider>
+                        <RootTabs />
+                        <KillSwitchGate feature="letus">
+                          <BackgroundLetusSync />
+                        </KillSwitchGate>
+                        <KillSwitchGate feature="bulletin">
+                          <BackgroundBulletinSync />
+                        </KillSwitchGate>
+                      </SyncProvider>
                     </AttendanceEngineProvider>
                   </ClassViewProvider>
                 </AuthProvider>
