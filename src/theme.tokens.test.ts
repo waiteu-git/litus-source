@@ -69,3 +69,27 @@ describe('resolveUiColors 意味色ロール（新設）', () => {
     expect(t.priorityBorder).toBe('rgba(55,201,155,0.45)')
   })
 })
+
+describe('resolveUiColors ドメイン色（時間割グリッド/実施パターン/マーカー）', () => {
+  it('green/white は現状値を踏襲し見た目を保つ', () => {
+    const g = resolveUiColors('green')
+    expect(g.gridCellNowBg).toBe('rgba(255,255,255,0.88)')
+    expect(g.gridCellText).toBe('#04322a')
+    expect(g.patternOffText).toBe('#a33417')
+    expect(g.favorite).toBe('#f5a623')
+    const w = resolveUiColors('white')
+    expect(w.gridCellFilledBg).toBe('#e8f4ee')
+    expect(w.gridCellText).toBe(COLORS.ink)
+    expect(w.flagAccent).toBe('#e0a100')
+    expect(w.updateDot).toBe('#e8a400')
+  })
+
+  it('dark は暗地で視認できる専用値を返す', () => {
+    const t = resolveUiColors('dark')
+    expect(t.gridCellNowBg).toBe(DARK.gridNow)
+    expect(t.gridCellText).toBe(DARK.value)
+    expect(t.patternOffBg).toBe(DARK.patternOffBg)
+    expect(t.favorite).toBe('#ffb84d')
+    expect(t.flagAccent).toBe(DARK.flag)
+  })
+})

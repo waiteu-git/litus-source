@@ -26,6 +26,13 @@ export const COLORS = {
   info: '#1c5fb2',
   infoBg: '#e8f1fb',
   warnBg: '#fdf3e1',
+  // イベント種別タグ（白文字の単色タグ・テーマ非依存＝分類色。異常系の意味色ロールではない）。
+  eventQuiz: '#3a7be0',
+  eventExam: '#7a5cff',
+  eventNeutral: '#8a968f',
+  // アクセント地（緑バナー）上に常時乗る白オーバーレイ（テーマ非依存の装飾値）。
+  whiteOverlay25: 'rgba(255,255,255,0.25)',
+  whiteSubtle90: 'rgba(255,255,255,0.9)',
 }
 
 /** ダークテーマの地色・前景・境界。翠アクセントは COLORS.emeraldLight を流用する。 */
@@ -57,4 +64,14 @@ export const DARK = {
   success: '#6fd598',
   successBg: 'rgba(111,213,152,0.14)',
   priorityBorder: 'rgba(55,201,155,0.45)',
+  // ドメイン色のダーク値（時間割グリッド階調/実施パターン休み/マーカー）。
+  gridEmpty: 'rgba(255,255,255,0.04)',
+  gridFilled: 'rgba(55,201,155,0.14)',
+  gridToday: 'rgba(55,201,155,0.24)',
+  gridNow: 'rgba(55,201,155,0.36)',
+  patternOffBg: '#4a2a1f',
+  patternOffText: '#ff9f73',
+  favorite: '#ffb84d',
+  flag: '#f2b93a',
+  updateDot: '#f0b840',
 }
