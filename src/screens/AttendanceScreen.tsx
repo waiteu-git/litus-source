@@ -12,6 +12,7 @@ import { todayKey } from '../attendance/attendedState'
 import { loadReactionDraft, saveReactionDraft } from '../storage/reactionDraftStore'
 import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
 import ScreenHint from '../tutorial/ScreenHint'
+import { PressableRow } from '../ui/Pressable'
 import { COLORS } from '../theme'
 
 /**
@@ -58,7 +59,9 @@ export default function AttendanceScreen() {
   const netTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const receptionAtCheckRef = useRef(reception)
   function recheckNetwork() {
-    if (netChecking) return
+    // エンジン停止中は再取得できない（偽の「確認中…」を出さない）。競合中は conflict カードの
+    // 「再確認」(retry) に委ねる（非出席ページへの検出注入で reception を壊さない）。
+    if (netChecking || !engine.running || conflict) return
     setNetChecking(true)
     refreshAttendance()
     if (netTimerRef.current) clearTimeout(netTimerRef.current)
@@ -176,8 +179,10 @@ export default function AttendanceScreen() {
 
         {/* 学外ネットワーク警告: 出席ページ自身の文言（学外ネットワークからのアクセス）を検知した時だけ出す。
             学内Wi-Fiへ切り替えてもWebView側の表示が自動では追随しないため「再確認」で再取得する。
-            進行表示はバー内テキストの差し替えのみ（取得系と同じ・大きなアニメは出さない方針）。 */}
-        {reception?.network === 'off' ? (
+            進行表示はバー内テキストの差し替えのみ（取得系と同じ・大きなアニメは出さない方針）。
+            出席済み（案内が無意味）と競合中（conflictカードの再確認と衝突・非出席ページへの検出注入を防ぐ）
+            では出さない。「再確認」はエンジン稼働中のみ提示する（停止中は取得できず偽の確認中になる）。 */}
+        {!conflict && !attendedNow && reception?.network === 'off' ? (
           <View style={[styles.netWarn, { backgroundColor: ui.colors.warnBg }]}>
             <Ionicons name="wifi-outline" size={16} color={ui.colors.warn} />
             <Text style={[styles.netWarnText, { color: ui.colors.warn }]}>
@@ -185,10 +190,10 @@ export default function AttendanceScreen() {
                 ? 'ネットワーク状態を確認中…'
                 : '学外ネットワークです。出席登録には学内Wi-Fiが必要な場合があります'}
             </Text>
-            {!netChecking ? (
-              <Pressable onPress={recheckNetwork} hitSlop={8} accessibilityRole="button">
+            {!netChecking && engine.running ? (
+              <PressableRow onPress={recheckNetwork} hitSlop={8} accessibilityRole="button">
                 <Text style={[styles.netWarnAction, { color: ui.colors.warn }]}>再確認</Text>
-              </Pressable>
+              </PressableRow>
             ) : null}
           </View>
         ) : null}

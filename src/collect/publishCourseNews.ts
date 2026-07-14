@@ -15,12 +15,15 @@ import { presentLetusNewsNotification } from '../notifications/notifier'
 
 export async function publishCourseNews(runDiffs: CourseRunDiff[]): Promise<void> {
   const diffs = runDiffs.filter((d) => d.added.length > 0)
-  if (diffs.length === 0) return
   try {
     const nowIso = new Date().toISOString()
     let appended: AppendedNews[] = []
+    // 剪定（TTL14日）は差分ゼロのrunでも必ず実行する。差分が出た時だけ剪定すると、
+    // 静かな期間（長期休暇等）に古い新着がホームカード/バッジへ居座り続ける。
     await mutateCourseNews((cur) => {
-      const r = applyRunDiffs(pruneCourseNews(cur, nowIso), diffs, nowIso)
+      const pruned = pruneCourseNews(cur, nowIso)
+      if (diffs.length === 0) return pruned
+      const r = applyRunDiffs(pruned, diffs, nowIso)
       appended = r.appended
       return r.next
     })
