@@ -124,30 +124,32 @@ const CardRow = memo(function CardRow({
 }) {
   const rel = relDue(a.deadline, now)
   return (
-    <Pressable
+    <PressableRow
       onPress={() => onOpen(a)}
       onLongPress={() => onHide(a)}
-      style={[rowUi.card, urgent && styles.urgent, styles.card, done && { opacity: 0.72 }]}
+      style={[rowUi.card, urgent && styles.urgent, styles.card]}
     >
-      <View style={styles.rowTop}>
-        <Text style={[styles.course, { color: rowUi.labelColor }]} numberOfLines={1}>
-          {a.courseName || '科目不明'}
+      <View style={done ? styles.doneDim : undefined}>
+        <View style={styles.rowTop}>
+          <Text style={[styles.course, { color: rowUi.labelColor }]} numberOfLines={1}>
+            {a.courseName || '科目不明'}
+          </Text>
+          <Pressable onPress={() => onHide(a)} hitSlop={8} style={styles.hideBtn}>
+            <Ionicons name="eye-off-outline" size={18} color={rowUi.labelColor} />
+          </Pressable>
+        </View>
+        <Text style={[styles.title, { color: rowUi.valueColor }]} numberOfLines={2}>
+          {a.title}
         </Text>
-        <Pressable onPress={() => onHide(a)} hitSlop={8} style={styles.hideBtn}>
-          <Ionicons name="eye-off-outline" size={18} color={rowUi.labelColor} />
-        </Pressable>
+        <View style={styles.meta}>
+          <Text style={[styles.due, { color: rowUi.labelColor }]} numberOfLines={1}>
+            {formatDeadline(a.deadline)}
+            {rel ? ` ・ ${rel}` : ''}
+          </Text>
+          <StatusChip status={a.submissionStatus} />
+        </View>
       </View>
-      <Text style={[styles.title, { color: rowUi.valueColor }]} numberOfLines={2}>
-        {a.title}
-      </Text>
-      <View style={styles.meta}>
-        <Text style={[styles.due, { color: rowUi.labelColor }]} numberOfLines={1}>
-          {formatDeadline(a.deadline)}
-          {rel ? ` ・ ${rel}` : ''}
-        </Text>
-        <StatusChip status={a.submissionStatus} />
-      </View>
-    </Pressable>
+    </PressableRow>
   )
 })
 
@@ -473,6 +475,7 @@ export default function AssignmentsScreen() {
 const styles = StyleSheet.create({
   list: { paddingTop: 4, paddingBottom: 24 },
   card: { marginBottom: 9 },
+  doneDim: { opacity: 0.72 },
   urgent: { borderLeftWidth: 4, borderLeftColor: '#ff7a5c' },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   course: { fontSize: 11 },
