@@ -107,25 +107,28 @@ function Slide({
   )
 }
 
+// 初回起動の固定緑ブランド面（テーマ選択前＝テーマ非追従）。緑グラデ地に常時乗る白オーバレイ/ミント文字の装飾値でアプリ配色トークンではない。
+const CHROME = { skip: 'rgba(255,255,255,0.85)', iconBox: 'rgba(255,255,255,0.16)', body: '#eafff7', dot: 'rgba(255,255,255,0.35)' } // design-allow
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   skip: { position: 'absolute', right: 18, zIndex: 2, padding: 6 },
-  skipText: { color: 'rgba(255,255,255,0.85)', fontSize: 14 },
+  skipText: { color: CHROME.skip, fontSize: 14 },
   slide: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
   iconBox: {
     width: 128,
     height: 128,
     borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: CHROME.iconBox,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 28,
   },
   title: { color: COLORS.white, fontSize: 24, fontWeight: '700', marginBottom: 12 },
-  body: { color: '#eafff7', fontSize: 15, lineHeight: 24, textAlign: 'center' },
+  body: { color: CHROME.body, fontSize: 15, lineHeight: 24, textAlign: 'center' },
   footer: { paddingHorizontal: 24 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 18 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.35)' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: CHROME.dot },
   dotOn: { backgroundColor: COLORS.white },
   cta: {
     height: 54,

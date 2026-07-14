@@ -179,7 +179,7 @@ export default function PdfViewerScreen() {
             </View>
           ) : (
             <View style={styles.loadingBox}>
-              <ActivityIndicator color="#ffffff" />
+              <ActivityIndicator color={COLORS.white} />
               <Text style={styles.loadingText}>
                 {phase === 'rendering' ? `表示しています…（${pages}ページ）` : '読み込んでいます…'}
               </Text>
@@ -191,26 +191,29 @@ export default function PdfViewerScreen() {
   )
 }
 
+// PDFビューアは慣習的にテーマ非追従の暗灰クローム（アプリ配色トークンではないビューア固有の装飾値）。
+const PDF = { chrome: '#525659', noticeBg: '#04322a', scrim: 'rgba(0,0,0,0.35)', ghostBorder: '#b9ddcd' } // design-allow
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#525659' },
-  web: { flex: 1, backgroundColor: '#525659' },
+  root: { flex: 1, backgroundColor: PDF.chrome },
+  web: { flex: 1, backgroundColor: PDF.chrome },
   openBtn: {
     position: 'absolute', right: 14, bottom: 20, backgroundColor: COLORS.cta,
     borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, elevation: 4,
   },
-  openBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '700' },
+  openBtnText: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
   notice: {
-    position: 'absolute', left: 16, right: 16, bottom: 74, backgroundColor: '#04322a',
+    position: 'absolute', left: 16, right: 16, bottom: 74, backgroundColor: PDF.noticeBg,
     borderRadius: 12, padding: 12, alignItems: 'center',
   },
-  noticeText: { color: '#ffffff', fontSize: 13 },
+  noticeText: { color: COLORS.white, fontSize: 13 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  loadingBox: { alignItems: 'center', gap: 12, backgroundColor: 'rgba(0,0,0,0.35)', padding: 20, borderRadius: 14 },
-  loadingText: { color: '#ffffff', fontSize: 13 },
-  errorBox: { backgroundColor: '#ffffff', padding: 20, borderRadius: 16, marginHorizontal: 24, alignItems: 'center', gap: 14 },
-  errorText: { color: '#12332a', fontSize: 15, fontWeight: '500' },
+  loadingBox: { alignItems: 'center', gap: 12, backgroundColor: PDF.scrim, padding: 20, borderRadius: 14 },
+  loadingText: { color: COLORS.white, fontSize: 13 },
+  errorBox: { backgroundColor: COLORS.white, padding: 20, borderRadius: 16, marginHorizontal: 24, alignItems: 'center', gap: 14 },
+  errorText: { color: COLORS.ink, fontSize: 15, fontWeight: '500' },
   btnRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' },
   btn: { minWidth: 96, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  btnGhost: { backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#b9ddcd' },
-  btnText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  btnGhost: { backgroundColor: COLORS.tint, borderWidth: 1, borderColor: PDF.ghostBorder },
+  btnText: { color: COLORS.white, fontSize: 14, fontWeight: '600' },
 })
