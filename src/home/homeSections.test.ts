@@ -4,6 +4,7 @@ import {
   HOME_SECTION_ORDER,
   normalizeHomeLayout,
   moveSection,
+  reorderHomeLayout,
   toggleSection,
   type HomeSectionPref,
 } from './homeSections'
@@ -116,6 +117,47 @@ describe('moveSection', () => {
   it('元配列を破壊しない', () => {
     const copy = base.map((s) => ({ ...s }))
     moveSection(base, 'todayChanges', -1)
+    expect(base).toEqual(copy)
+  })
+})
+
+describe('reorderHomeLayout', () => {
+  // 既定順: [nowClass, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
+  const base: HomeSectionPref[] = DEFAULT_HOME_LAYOUT
+  it('下へ移動（0→2）', () => {
+    const out = reorderHomeLayout(base, 0, 2)
+    expect(out.map((s) => s.key)).toEqual([
+      'todayChanges',
+      'letusNews',
+      'nowClass',
+      'bulletins',
+      'deadlines',
+      'laterClasses',
+      'entries',
+    ])
+  })
+  it('上へ移動（3→0）', () => {
+    const out = reorderHomeLayout(base, 3, 0)
+    expect(out.map((s) => s.key)).toEqual([
+      'bulletins',
+      'nowClass',
+      'todayChanges',
+      'letusNews',
+      'deadlines',
+      'laterClasses',
+      'entries',
+    ])
+  })
+  it('from==to は順序不変', () => {
+    expect(reorderHomeLayout(base, 2, 2).map((s) => s.key)).toEqual(base.map((s) => s.key))
+  })
+  it('範囲外はクランプ（末尾へ / 先頭へ）', () => {
+    expect(reorderHomeLayout(base, 0, 99).map((s) => s.key)[6]).toBe('nowClass')
+    expect(reorderHomeLayout(base, 6, -5).map((s) => s.key)[0]).toBe('entries')
+  })
+  it('元配列を破壊しない', () => {
+    const copy = base.map((s) => ({ ...s }))
+    reorderHomeLayout(base, 0, 3)
     expect(base).toEqual(copy)
   })
 })

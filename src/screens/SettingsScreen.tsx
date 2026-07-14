@@ -19,7 +19,7 @@ import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
 import { FONT_LICENSE_TEXT, FONT_LICENSE_TITLE } from '../legal/fontLicense'
 import { useDisplaySettings } from '../displaySettings'
-import { HOME_SECTION_META, moveSection, toggleSection } from '../home/homeSections'
+import HomeLayoutReorder from '../home/HomeLayoutReorder'
 import Constants from 'expo-constants'
 import { formatVersionLabel } from '../appVersion'
 import { CHANGELOG, getRecentChangelog } from '../changelog'
@@ -38,6 +38,8 @@ export default function SettingsScreen() {
   const [bulletinNotify, setBulletinNotify] = useState<BulletinNotifySettings>({ enabled: true, mode: 'all' })
   const [letusNewsNotify, setLetusNewsNotify] = useState<LetusNewsNotifySettings>({ enabled: true })
   const [changelogOpen, setChangelogOpen] = useState(false)
+  // ホームの並びをドラッグ中は親 ScrollView のスクロールを止める（縦ジェスチャ競合の回避）。
+  const [reordering, setReordering] = useState(false)
   const recentChangelog = getRecentChangelog(CHANGELOG, 3)
 
   useEffect(() => {
@@ -104,7 +106,7 @@ export default function SettingsScreen() {
   return (
     <ScreenBg>
       <ScreenHeader title="設定" icon="settings-outline" />
-      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} scrollEnabled={!reordering}>
         <Accordion title="テーマ" icon="color-palette-outline" defaultOpen>
           <Segmented
             options={[
@@ -143,51 +145,7 @@ export default function SettingsScreen() {
         </Accordion>
 
         <Accordion title="ホームの並び" icon="reorder-three-outline">
-          <Text style={[styles.note, { color: ui.labelColor, marginTop: 0, marginBottom: 6 }]}>
-            ホーム画面のカードの順番と表示/非表示を変更できます。
-          </Text>
-          {homeLayout.map((s, i) => {
-            const meta = HOME_SECTION_META[s.key]
-            const first = i === 0
-            const last = i === homeLayout.length - 1
-            return (
-              <View
-                key={s.key}
-                style={[styles.hlRow, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
-              >
-                <Text style={[styles.hlLabel, { color: s.enabled ? ui.valueColor : ui.subMuted }]} numberOfLines={1}>
-                  {meta.label}
-                </Text>
-                <View style={styles.hlBtns}>
-                  <Pressable
-                    onPress={() => setHomeLayout(moveSection(homeLayout, s.key, -1))}
-                    disabled={first}
-                    hitSlop={6}
-                    style={styles.hlBtn}
-                  >
-                    <Ionicons name="chevron-up" size={20} color={first ? ui.chevron : ui.accent} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setHomeLayout(moveSection(homeLayout, s.key, 1))}
-                    disabled={last}
-                    hitSlop={6}
-                    style={styles.hlBtn}
-                  >
-                    <Ionicons name="chevron-down" size={20} color={last ? ui.chevron : ui.accent} />
-                  </Pressable>
-                  {meta.fixedOn ? (
-                    <View style={styles.hlBtn}>
-                      <Ionicons name="lock-closed" size={15} color={ui.chevron} />
-                    </View>
-                  ) : (
-                    <Pressable onPress={() => setHomeLayout(toggleSection(homeLayout, s.key))} hitSlop={6} style={styles.hlBtn}>
-                      <Ionicons name={s.enabled ? 'eye-outline' : 'eye-off-outline'} size={20} color={s.enabled ? ui.accent : ui.subMuted} />
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            )
-          })}
+          <HomeLayoutReorder layout={homeLayout} onChange={setHomeLayout} onDragActive={setReordering} />
         </Accordion>
 
         <Accordion title="出席アラーム（科目別）" icon="notifications-outline">
@@ -338,10 +296,6 @@ const styles = StyleSheet.create({
   note: { fontSize: 12, marginTop: 8, marginLeft: 2 },
   licenseBody: { fontSize: 10, lineHeight: 15, marginTop: 10 },
   fieldLabel: { fontSize: 13, marginLeft: 2, marginBottom: 2 },
-  hlRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
-  hlLabel: { flex: 1, fontSize: 14, minWidth: 0 },
-  hlBtns: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  hlBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   changelogHeading: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
   changelogEntry: { marginBottom: 10 },
   changelogEntryTitle: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
