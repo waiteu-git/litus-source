@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pickFocusClass } from './focusClass'
+import { pickFocusClass, todayRemainingClasses } from './focusClass'
 import type { TimetableCollection } from '../collect/timetableMessage'
 
 // 2026-07-06 は月曜（2026-07-09=木曜を基準に逆算）。時限時刻は CLASS 標準に寄せた例。
@@ -81,5 +81,30 @@ describe('pickFocusClass', () => {
     const isOn = (code: string) => code !== '隔週ゼミ'
     const focus = pickFocusClass(cols, MON(8, 0), isOn)
     expect(focus!.name).toBe('統計学')
+  })
+})
+
+describe('todayRemainingClasses', () => {
+  const cols = collection([
+    { day: 'mon', period: 1, classes: [cls('線形代数')] },
+    { day: 'mon', period: 3, classes: [cls('情報理論')] },
+    { day: 'mon', period: 5, classes: [cls('量子力学')] },
+    { day: 'tue', period: 2, classes: [cls('別曜日')] },
+  ])
+  it('進行中を先頭に、以降を開始時刻昇順で返す（終了済みは除外）', () => {
+    // 13:30=3限進行中。1限は終了済み→除外。残り=[3(now),5]。
+    const list = todayRemainingClasses(cols, MON(13, 30))
+    expect(list.map((c) => c.period)).toEqual([3, 5])
+    expect(list[0].isNow).toBe(true)
+    expect(list[1].isNow).toBe(false)
+    expect(list[0].end).toBe('14:40')
+  })
+  it('全授業前は当日全コマを昇順で返す', () => {
+    const list = todayRemainingClasses(cols, MON(8, 0))
+    expect(list.map((c) => c.period)).toEqual([1, 3, 5])
+    expect(list.every((c) => !c.isNow)).toBe(true)
+  })
+  it('全授業後は空', () => {
+    expect(todayRemainingClasses(cols, MON(19, 0))).toEqual([])
   })
 })
