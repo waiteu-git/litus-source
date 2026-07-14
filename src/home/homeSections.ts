@@ -89,6 +89,25 @@ export function moveSection(layout: HomeSectionPref[], key: HomeSectionKey, dir:
   return next
 }
 
+/**
+ * item を fromIndex から toIndex へ移動した新配列を返す（ドラッグ並び替えの確定用）。
+ * from/to は [0, length-1] にクランプ。from を splice で抜いてから to へ挿入する。元配列は不変。
+ */
+export function reorderHomeLayout(
+  layout: HomeSectionPref[],
+  fromIndex: number,
+  toIndex: number,
+): HomeSectionPref[] {
+  const n = layout.length
+  if (n === 0) return layout.slice()
+  const from = Math.max(0, Math.min(n - 1, Math.trunc(fromIndex)))
+  const to = Math.max(0, Math.min(n - 1, Math.trunc(toIndex)))
+  const next = layout.slice()
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
+}
+
 /** 表示/非表示を反転（fixedOnキーは変更しない）。新配列を返す。 */
 export function toggleSection(layout: HomeSectionPref[], key: HomeSectionKey): HomeSectionPref[] {
   if (HOME_SECTION_META[key]?.fixedOn) return layout
