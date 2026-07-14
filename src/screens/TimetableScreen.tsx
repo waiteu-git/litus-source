@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { Animated, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { Ionicons } from '@expo/vector-icons'
@@ -45,7 +45,8 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
 import { shouldShowTodayPill } from '../timetableEvents/todayPill'
-import { weekDates, weekRangeLabel } from '../timetableEvents/weekDates'
+import { weekDates, dayHeadLabel } from '../timetableEvents/weekDates'
+import { RADIUS, SHADOW } from '../ui/scale'
 import { DUR, EASE, SHIFT } from '../ui/motion'
 import { Badge } from '../ui/Badge'
 
@@ -253,6 +254,7 @@ export default function TimetableScreen() {
   // 選択曜日に落ちる補講オカレンス（休講内包＋単独）。時間割の通常コマとは別に一回限りで表示。
   const dayMakeups = upcomingMakeups(events, now).filter((m) => WEEKDAY_KEY[new Date(m.date).getDay()] === selDay)
   const startTime = (period: number) => col?.periodTimes?.periods.find((p) => p.period === period)?.start ?? ''
+  const endTime = (period: number) => col?.periodTimes?.periods.find((p) => p.period === period)?.end ?? ''
 
   // グリッド表示用: 授業がある最大時限まで（最低6限は確保）。
   const periods = useMemo(() => {
@@ -292,9 +294,8 @@ export default function TimetableScreen() {
 
   // 「今日へ戻る」: リストで今日以外を見ているとき、今日へ一発で戻し自動追従も戻す。
   const showTodayPill = shouldShowTodayPill({ view: timetableView, selDay, todayKey, days })
-  // 今週の日付（曜日ヘッダの日付・週バーの範囲ラベル）。時間割はテンプレートだが today 基準で今週を出す。
+  // 今週の日付（曜日バーの日付・日ヘッダ）。時間割はテンプレートだが today 基準で今週を出す。
   const wd = weekDates(now)
-  const weekRange = weekRangeLabel(now, days)
   const campus = col?.periodTimes?.campus ?? ''
   const returnToToday = () => {
     selDayAutoRef.current = true
@@ -318,15 +319,10 @@ export default function TimetableScreen() {
         }
       />
 
-      {col ? (
-        <View style={[ui.card, styles.weekBar]}>
-          <Text style={[styles.weekCampus, { color: ui.labelColor }]} numberOfLines={1}>
-            {campus || '今週'}
-          </Text>
-          <Text style={[styles.weekRange, { color: ui.valueColor }]} numberOfLines={1}>
-            {weekRange}
-          </Text>
-        </View>
+      {col && campus ? (
+        <Text style={[styles.heroSub, { color: ui.labelColor }]} numberOfLines={1}>
+          {campus}
+        </Text>
       ) : null}
 
       {collections && collections.length > 1 ? (
@@ -338,29 +334,31 @@ export default function TimetableScreen() {
       ) : null}
 
       {timetableView === 'list' && col ? (
-        <Segmented
-          options={days.map((d) => ({ key: d, label: DAY_LABEL[d] }))}
-          value={selDay}
-          onChange={(d) => {
-            selDayAutoRef.current = false
-            setSelDay(d)
-          }}
-        />
-      ) : null}
-
-      {col && showTodayPill ? (
-        <View style={styles.todayPillRow}>
-          <Pressable
-            onPress={returnToToday}
-            style={({ pressed }) => [
-              styles.todayPill,
-              { backgroundColor: ui.pillBg, borderColor: ui.colors.chipBorder },
-              pressed && { opacity: 0.85 },
-            ]}
-          >
-            <Ionicons name="today-outline" size={14} color={ui.pillText} />
-            <Text style={[styles.todayPillText, { color: ui.pillText }]}>今日（{DAY_LABEL[todayKey]}）へ</Text>
-          </Pressable>
+        <View style={styles.dayBar}>
+          {days.map((d) => {
+            const on = d === selDay
+            const isToday = d === todayKey
+            return (
+              <Pressable
+                key={d}
+                onPress={() => {
+                  selDayAutoRef.current = false
+                  setSelDay(d)
+                }}
+                style={({ pressed }) => [
+                  styles.dtab,
+                  on && { backgroundColor: ui.pillBg },
+                  pressed && !on && { opacity: 0.6 },
+                ]}
+              >
+                <Text style={[styles.dtabDow, { color: on ? ui.pillText : ui.labelColor }]}>{DAY_LABEL[d]}</Text>
+                <Text style={[styles.dtabDate, { color: on ? ui.pillText : ui.valueColor }]}>{wd[d].getDate()}</Text>
+                {isToday ? (
+                  <View style={[styles.dtabDot, { backgroundColor: on ? ui.pillText : ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} />
+                ) : null}
+              </Pressable>
+            )
+          })}
         </View>
       ) : null}
 
@@ -458,101 +456,147 @@ export default function TimetableScreen() {
           </View>
         ) : (
           <Animated.View style={{ opacity: swipeOpacity, transform: [{ translateX: swipeShift }] }}>
-          {daySlots.length === 0 ? (
-          <Text style={{ color: ui.labelColor, marginLeft: 2, marginTop: 10 }}>この曜日の授業はありません</Text>
-        ) : (
-          daySlots.map((s) => {
-            const rowNow = selDay === todayKey && s.period === curPeriod
-            return (
-            <View key={`${s.day}-${s.period}`} style={styles.trow}>
-              <View style={styles.per}>
-                <Text style={[styles.pnum, { color: rowNow ? ui.pick(COLORS.white, COLORS.cta, COLORS.emeraldLight) : ui.heading }]}>{s.period}</Text>
-                <Text style={[styles.ptime, { color: rowNow ? ui.pick(COLORS.white, COLORS.cta, COLORS.emeraldLight) : ui.labelColor }]}>{startTime(s.period)}</Text>
-              </View>
-              <View style={styles.clsCol}>
-                {s.classes.map((cl) => {
-                  const ev = pickCellEvent(events, cl.name, s.period, now)
-                  const canceled = ev?.type === 'cancel'
-                  const off = !isClassOnDate(patterns[cl.courseCode], now)
-                  return (
-                  <Pressable key={cl.courseCode || cl.name} style={[ui.card, rowNow && styles.nowCard, canceled && styles.canceledCard, off && styles.offCell]} onPress={() => openSubject(cl, s.day, s.period)}>
-                    <View style={styles.clsHeadRow}>
-                      <Text style={[styles.clsname, { color: ui.valueColor, flex: 1 }, (canceled || off) && styles.canceledName]} numberOfLines={2}>
-                        {cl.name}
-                        {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
-                        {unreadCodes.has(cl.courseCode) ? '  ◍' : ''}
-                      </Text>
-                      {rowNow ? (
-                        <Badge variant="live" label="実施中" size="sm" />
-                      ) : off ? (
-                        <View style={[styles.offChip, { backgroundColor: ui.softBoxBg }]}>
-                          <Text style={[styles.offChipText, { color: ui.subMuted }]}>今週休み・隔週</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    {ev ? (
-                      <View style={[styles.evBadge, { backgroundColor: ui.colors.infoBg }]}>
-                        <Text style={[styles.evBadgeText, { color: ui.colors.info }]} numberOfLines={1}>
-                          {cellBadgeText(ev)}
+          {(() => {
+            const personal = personalEventsOfDay(personalEvents, selDay as PersonalDayKey)
+            const isEmpty = daySlots.length === 0 && personal.length === 0 && dayMakeups.length === 0
+            // 全行を1つのフラット面に集約（個別カード化しない・行間はヘアライン）。
+            const rows: { key: string; node: ReactElement }[] = []
+            for (const s of daySlots) {
+              const rowNow = selDay === todayKey && s.period === curPeriod
+              for (const cl of s.classes) {
+                const ev = pickCellEvent(events, cl.name, s.period, now)
+                const canceled = ev?.type === 'cancel'
+                const off = !isClassOnDate(patterns[cl.courseCode], now)
+                const strike = canceled || off
+                const mainColor = rowNow ? ui.pillText : ui.valueColor
+                rows.push({
+                  key: `c-${s.period}-${cl.courseCode || cl.name}`,
+                  node: (
+                    <Pressable
+                      onPress={() => openSubject(cl, s.day, s.period)}
+                      style={({ pressed }) => [
+                        styles.cls,
+                        rowNow && { backgroundColor: ui.pillBg, borderLeftWidth: 3, borderLeftColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <View style={styles.clsPeriod}>
+                        <Text style={[styles.cpNum, { color: mainColor }]}>{s.period}</Text>
+                        <Text style={[styles.cpTime, { color: ui.labelColor }]}>{startTime(s.period)}</Text>
+                        <Text style={[styles.cpTime, { color: ui.labelColor }]}>{endTime(s.period)}</Text>
+                      </View>
+                      <View style={styles.clsMain}>
+                        {rowNow ? (
+                          <Badge variant="live" label="実施中" size="sm" />
+                        ) : canceled ? (
+                          <View style={[styles.badge, { backgroundColor: ui.colors.dangerBg }]}><Text style={[styles.badgeText, { color: ui.colors.danger }]}>休講</Text></View>
+                        ) : ev ? (
+                          <View style={[styles.badge, { backgroundColor: ui.colors.infoBg }]}><Text style={[styles.badgeText, { color: ui.colors.info }]} numberOfLines={1}>{cellBadgeText(ev)}</Text></View>
+                        ) : off ? (
+                          <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>今週休み</Text></View>
+                        ) : null}
+                        <Text style={[styles.cName, { color: mainColor }, strike && styles.strike]} numberOfLines={2}>
+                          {cl.name}
+                          {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
+                          {unreadCodes.has(cl.courseCode) ? '  ◍' : ''}
+                        </Text>
+                        <Text style={[styles.cRoom, { color: rowNow ? ui.pillText : ui.labelColor }, strike && styles.strike]} numberOfLines={1}>
+                          {cl.room}
+                          {cl.isRemote ? ' ・ 遠隔' : ''}
+                          {cl.teachers[0] ? ` ・ ${cl.teachers[0]}` : ''}
                         </Text>
                       </View>
-                    ) : null}
-                    <Text style={[styles.clssub, { color: ui.labelColor }]} numberOfLines={1}>
-                      {cl.room}
-                      {cl.isRemote ? ' ・ 遠隔' : ''}
-                      {cl.teachers[0] ? ` ・ ${cl.teachers[0]}` : ''}
-                    </Text>
+                      {dangerCodes.has(cl.courseCode) ? <View style={styles.clsDanger} /> : null}
+                      <Ionicons name="chevron-forward" size={15} color={ui.chevron} />
+                    </Pressable>
+                  ),
+                })
+              }
+            }
+            for (const pe of personal) {
+              rows.push({
+                key: `p-${pe.id}`,
+                node: (
+                  <Pressable onPress={() => navigation.navigate('PersonalEventForm', { editId: pe.id })} style={({ pressed }) => [styles.cls, pressed && { opacity: 0.7 }]}>
+                    <View style={styles.clsPeriod}>
+                      <Text style={[styles.cpNum, { color: ui.valueColor }]}>{pe.periods.join('・')}</Text>
+                      <Text style={[styles.cpTime, { color: ui.labelColor }]}>限</Text>
+                    </View>
+                    <View style={styles.clsMain}>
+                      <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>個人</Text></View>
+                      <Text style={[styles.cName, { color: ui.valueColor }]} numberOfLines={2}>{pe.title}</Text>
+                      {pe.note || pe.place ? <Text style={[styles.cRoom, { color: ui.labelColor }]} numberOfLines={1}>{[pe.note, pe.place].filter(Boolean).join(' ・ ')}</Text> : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={15} color={ui.chevron} />
                   </Pressable>
-                  )
-                })}
-              </View>
-            </View>
-            )
-          })
-        )}
-
-          {personalEventsOfDay(personalEvents, selDay as PersonalDayKey).map((pe) => (
-              <Pressable
-                key={pe.id}
-                style={[ui.card, styles.personalRow]}
-                onPress={() => navigation.navigate('PersonalEventForm', { editId: pe.id })}
-              >
-                <Text style={[styles.pnum, { color: ui.heading }]}>{pe.periods.map((p) => `${p}限`).join('・')}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: ui.valueColor }}>{pe.title}</Text>
-                  {pe.note || pe.place ? (
-                    <Text style={{ fontSize: 12, color: ui.labelColor }}>{[pe.note, pe.place].filter(Boolean).join(' ・ ')}</Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            ))}
-
-          {dayMakeups.length > 0 ? (
-          <View style={{ marginTop: 6 }}>
-            {dayMakeups.map((m, i) => (
-              <View key={`mk-${i}`} style={styles.trow}>
-                <View style={styles.per}>
-                  <Text style={[styles.pnum, { color: ui.pick(COLORS.white, COLORS.cta, COLORS.emeraldLight) }]}>補</Text>
-                  <Text style={[styles.ptime, { color: ui.labelColor }]}>{shortDate(m.date)}</Text>
-                </View>
-                <View style={styles.clsCol}>
-                  <View style={[ui.card, styles.makeupCard]}>
-                    <Text style={[styles.clsname, { color: ui.valueColor }]} numberOfLines={2}>
-                      {m.courseName}　補講
-                    </Text>
-                    <Text style={[styles.clssub, { color: ui.labelColor }]} numberOfLines={1}>
-                      {m.periods.join('・')}限{m.room ? ` ・ ${m.room}` : ''}
-                    </Text>
+                ),
+              })
+            }
+            dayMakeups.forEach((m, i) => {
+              rows.push({
+                key: `m-${i}`,
+                node: (
+                  <View style={styles.cls}>
+                    <View style={styles.clsPeriod}>
+                      <Text style={[styles.cpNum, { color: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) }]}>補</Text>
+                      <Text style={[styles.cpTime, { color: ui.labelColor }]}>{shortDate(m.date)}</Text>
+                    </View>
+                    <View style={styles.clsMain}>
+                      <View style={[styles.badge, { backgroundColor: ui.pillBg }]}><Text style={[styles.badgeText, { color: ui.pillText }]}>補講</Text></View>
+                      <Text style={[styles.cName, { color: ui.valueColor }]} numberOfLines={2}>{m.courseName}</Text>
+                      <Text style={[styles.cRoom, { color: ui.labelColor }]} numberOfLines={1}>{m.periods.join('・')}限{m.room ? ` ・ ${m.room}` : ''}</Text>
+                    </View>
                   </View>
+                ),
+              })
+            })
+            return (
+              <>
+                <View style={styles.panelHead}>
+                  <Text style={[styles.phDate, { color: ui.valueColor }]}>{dayHeadLabel(wd[selDay], DAY_LABEL[selDay])}</Text>
+                  {selDay === todayKey ? (
+                    <View style={[styles.phTodayPill, { backgroundColor: ui.pillBg }]}>
+                      <Text style={[styles.phTodayText, { color: ui.pillText }]}>今日</Text>
+                    </View>
+                  ) : null}
+                  <Text style={[styles.phCount, { color: ui.labelColor }]}>{daySlots.length}コマ</Text>
                 </View>
-              </View>
-            ))}
-          </View>
-          ) : null}
+                {isEmpty ? (
+                  <View style={[styles.emptyDay, { borderColor: ui.dividerColor }]}>
+                    <Ionicons name="calendar-clear-outline" size={30} color={ui.chevron} />
+                    <Text style={[styles.emptyDayText, { color: ui.labelColor }]}>{DAY_LABEL[selDay]}曜日は授業がありません</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.dayList, { backgroundColor: ui.colors.cardBg, borderColor: selDay === todayKey ? ui.colors.priorityBorder : ui.colors.cardBorder }]}>
+                    {rows.map((r, i) => (
+                      <View key={r.key} style={i > 0 ? { borderTopWidth: 1, borderTopColor: ui.dividerColor } : undefined}>
+                        {r.node}
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <Text style={[styles.hint, { color: ui.labelColor }]}>左右にスワイプで曜日を移動</Text>
+              </>
+            )
+          })()}
           </Animated.View>
         )}
       </ScrollView>
       </View>
+
+      {col && showTodayPill ? (
+        <Pressable
+          onPress={returnToToday}
+          style={({ pressed }) => [
+            styles.fab,
+            { backgroundColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight), bottom: clearance + 16 },
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <Ionicons name="today-outline" size={16} color={ui.pick(COLORS.white, COLORS.white, COLORS.ink)} />
+          <Text style={[styles.fabText, { color: ui.pick(COLORS.white, COLORS.white, COLORS.ink) }]}>今日</Text>
+        </Pressable>
+      ) : null}
 
       {syncing ? (
         <TimetableSyncEngine
@@ -581,18 +625,42 @@ const styles = StyleSheet.create({
   swipeArea: { flex: 1 },
   list: { paddingTop: 12, paddingBottom: 12 },
   syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
-  trow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
-  per: { width: 44, alignItems: 'center', paddingTop: 8 },
-  pnum: { fontSize: 17, fontWeight: '600' },
-  ptime: { fontSize: 11, marginTop: 2 },
-  clsCol: { flex: 1, gap: 8 },
-  clsname: { fontSize: 14, fontWeight: '500' },
-  clssub: { fontSize: 12, marginTop: 3 },
+  heroSub: { fontSize: 11, fontWeight: '500', marginTop: 2, marginBottom: 2 },
+  // 曜日バー（曜日＋日付を1ブロックに）
+  dayBar: { flexDirection: 'row', gap: 4, marginTop: 8, marginBottom: 2 },
+  dtab: { flex: 1, minWidth: 0, alignItems: 'center', paddingTop: 7, paddingBottom: 10, borderRadius: RADIUS.md, position: 'relative' },
+  dtabDow: { fontSize: 11, lineHeight: 13, fontWeight: '600' },
+  dtabDate: { fontSize: 16, lineHeight: 20, fontWeight: '700', marginTop: 1 },
+  dtabDot: { position: 'absolute', bottom: 4, width: 4, height: 4, borderRadius: 2 },
+  // 日ヘッダ
+  panelHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, marginBottom: 10, paddingHorizontal: 2 },
+  phDate: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  phTodayPill: { borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 1 },
+  phTodayText: { fontSize: 11, fontWeight: '700' },
+  phCount: { fontSize: 11, marginLeft: 'auto' },
+  // 授業リスト（フラット面＋ヘアライン区切り）
+  dayList: { borderWidth: 1, borderRadius: RADIUS.md, overflow: 'hidden' },
+  cls: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14 },
+  clsPeriod: { width: 46, alignItems: 'center' },
+  cpNum: { fontSize: 12, lineHeight: 16, fontWeight: '700' },
+  cpTime: { fontSize: 11, lineHeight: 15 },
+  clsMain: { flex: 1, minWidth: 0, gap: 2 },
+  cName: { fontSize: 14, lineHeight: 18, fontWeight: '500' },
+  cRoom: { fontSize: 11, lineHeight: 15 },
+  strike: { textDecorationLine: 'line-through' },
+  clsDanger: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.danger },
+  badge: { alignSelf: 'flex-start', borderRadius: RADIUS.pill, paddingHorizontal: 6, paddingVertical: 1 },
+  badgeText: { fontSize: 11, fontWeight: '600' },
+  // 空状態
+  emptyDay: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 28, paddingHorizontal: 16, borderWidth: 1, borderStyle: 'dashed', borderRadius: RADIUS.md },
+  emptyDayText: { fontSize: 14, fontWeight: '500' },
+  hint: { fontSize: 11, textAlign: 'center', marginTop: 14 },
+  // 「今日」FAB
+  fab: { position: 'absolute', right: 16, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: RADIUS.pill, paddingHorizontal: 16, paddingVertical: 10, ...SHADOW.fab },
+  fabText: { fontSize: 13, fontWeight: '700' },
   canceledCard: { opacity: 0.6 },
   canceledName: { textDecorationLine: 'line-through' },
-  evBadge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 },
-  evBadgeText: { fontSize: 11, fontWeight: '700' },
-  makeupCard: { borderLeftWidth: 3, borderLeftColor: COLORS.cta },
+  // グリッド表示（設定送り・維持）
   gridCard: { padding: 8 },
   gridRow: { flexDirection: 'row', gap: 5, marginBottom: 5 },
   gridPerCol: { width: 22, alignItems: 'center', justifyContent: 'center' },
@@ -601,26 +669,15 @@ const styles = StyleSheet.create({
   gridCellToday: { borderWidth: 1.5, borderColor: COLORS.emerald },
   gridCellNow: { borderWidth: 2.5, borderColor: COLORS.cta },
   nowDot: { position: 'absolute', top: 6, left: 6 },
-  nowCard: { borderWidth: 2, borderColor: COLORS.cta },
-  clsHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  offCell: { opacity: 0.45 },
-  offChip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  offChipText: { fontSize: 10, fontWeight: '700' },
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },
   gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   gridDanger: { position: 'absolute', top: 3, left: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.danger },
   gridUnreadDot: { position: 'absolute', bottom: 6, left: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.emerald },
   gridEvDot: { position: 'absolute', bottom: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   gridHint: { fontSize: 11, textAlign: 'center', marginTop: 6 },
+  offCell: { opacity: 0.45 },
   personalCell: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.emerald },
   personalCellText: { color: COLORS.emeraldDark, fontStyle: 'italic' },
   personalDot: { position: 'absolute', bottom: 3, left: 3, width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.emerald },
-  personalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
-  todayPillRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
-  todayPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
-  todayPillText: { fontSize: 12, fontWeight: '700' },
-  weekBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 },
-  weekCampus: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  weekRange: { fontSize: 13, fontWeight: '700' },
   dhDate: { marginTop: 3, minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
 })
