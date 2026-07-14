@@ -7,7 +7,8 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Chip, ScreenBg, ScreenHeader, useUi, useTabBarClearance } from '../ui/screen'
 import { loadCourseMap } from '../storage/courseMapStore'
-import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
+import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
+import { markCourseSeen, unseenCounts } from '../updates/courseNews'
 import type { TimetableStackParamList } from '../navigation/types'
 import { Badge } from '../ui/Badge'
 
@@ -30,14 +31,15 @@ export default function LetusCoursesScreen() {
       let active = true
       ;(async () => {
         const map = await loadCourseMap()
-        const snaps = await loadCourseSnapshots()
+        // 新着バッジは累積ストア（LETUS新着）から。スナップショットの added は次の実巡回で消える
+        // 揮発値のため、「コースを開くまで残る」ライフサイクルはこちらが正（ホームの新着カードと同源）。
+        const counts = unseenCounts(await loadCourseNews())
         const seen = new Set<string>()
         const list: Row[] = []
         for (const [code, course] of Object.entries(map)) {
           if (seen.has(course.url)) continue
           seen.add(course.url)
-          const snap = snaps[course.url]
-          list.push({ code, name: course.name, url: course.url, newCount: snap ? snap.added.length : 0 })
+          list.push({ code, name: course.name, url: course.url, newCount: counts[course.url] ?? 0 })
         }
         list.sort((a, b) => a.name.localeCompare(b.name, 'ja'))
         if (active) setRows(list)
@@ -46,6 +48,18 @@ export default function LetusCoursesScreen() {
         active = false
       }
     }, []),
+  )
+
+  // コースを開いたらそのコースの新着を既読化する（バッジ・ホームカードから消える）。
+  const openCourse = useCallback(
+    (r: Row) => {
+      if (r.newCount > 0) {
+        mutateCourseNews((cur) => markCourseSeen(cur, r.url)).catch(() => undefined)
+        setRows((rows) => rows.map((x) => (x.url === r.url ? { ...x, newCount: 0 } : x)))
+      }
+      navigation.navigate('Web', { url: r.url, title: r.name })
+    },
+    [navigation],
   )
 
   const filtered = useMemo(() => {
@@ -82,7 +96,7 @@ export default function LetusCoursesScreen() {
               <PressableRow
                 key={r.url}
                 style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
-                onPress={() => navigation.navigate('Web', { url: r.url, title: r.name })}
+                onPress={() => openCourse(r)}
               >
                 <View style={[styles.icon, { backgroundColor: ui.softBoxBg }]}>
                   <Ionicons name="book-outline" size={18} color={ui.accent} />

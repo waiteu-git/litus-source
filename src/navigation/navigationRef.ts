@@ -10,6 +10,7 @@ export const navigationRef = createNavigationContainerRef()
 let pendingAttendance = false
 let pendingBulletin = false
 let pendingTimetable = false
+let pendingLetusCourses = false
 /** 保留中に開くべき課題URL（null=なし）。 */
 let pendingAssignmentUrl: string | null = null
 
@@ -46,6 +47,13 @@ function tryOpenAssignment() {
   }
 }
 
+function tryOpenLetusCourses() {
+  if (navigationRef.isReady()) {
+    pendingLetusCourses = false
+    nav('時間割', { screen: 'LetusCourses' })
+  }
+}
+
 /** 出席画面を即開く（未準備なら onReady まで保留）。 */
 export function requestOpenAttendance() {
   pendingAttendance = true
@@ -70,10 +78,17 @@ export function requestOpenAssignment(url: string) {
   tryOpenAssignment()
 }
 
+/** LETUSコース一覧を即開く（未準備なら onReady まで保留）。LETUS新着通知タップ用。 */
+export function requestOpenLetusCourses() {
+  pendingLetusCourses = true
+  tryOpenLetusCourses()
+}
+
 /** NavigationContainer の onReady から呼ぶ。保留中のオープンを消化する。 */
 export function flushPendingNavigation() {
   if (pendingAttendance) tryOpenAttendance()
   if (pendingBulletin) tryOpenBulletin()
   if (pendingTimetable) tryOpenTimetable()
+  if (pendingLetusCourses) tryOpenLetusCourses()
   if (pendingAssignmentUrl) tryOpenAssignment()
 }

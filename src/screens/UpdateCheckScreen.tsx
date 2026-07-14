@@ -8,6 +8,8 @@ import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from '../collect/injectedScripts'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
 import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { CourseSnapshotMap } from '../storage/courseSnapshotSerialize'
+import { publishCourseNews } from '../collect/publishCourseNews'
+import type { CourseRunDiff } from '../updates/courseNews'
 
 export default function UpdateCheckScreen() {
   const ui = useUi()
@@ -18,11 +20,17 @@ export default function UpdateCheckScreen() {
   const [loaded, setLoaded] = useState(false)
   const snapshotsRef = useRef<CourseSnapshotMap>({})
   const [summary, setSummary] = useState<{ url: string; added: number; removed: number }[]>([])
+  // このrunで実巡回したコースの増分（LETUS新着への転記用）とコース名の逆引き。
+  const runDiffsRef = useRef<CourseRunDiff[]>([])
+  const courseNamesRef = useRef<Map<string, string>>(new Map())
 
   useEffect(() => {
     ;(async () => {
       const map = await loadCourseMap()
       snapshotsRef.current = await loadCourseSnapshots()
+      for (const course of Object.values(map)) {
+        if (!courseNamesRef.current.has(course.url)) courseNamesRef.current.set(course.url, course.name)
+      }
       const unique = [...new Set(Object.values(map).map((c) => c.url))]
       setUrls(unique)
       setLoaded(true)
@@ -52,6 +60,13 @@ export default function UpdateCheckScreen() {
       added: diff.added,
       removed: diff.removed,
     }
+    if (diff.added.length > 0) {
+      runDiffsRef.current.push({
+        url: currentUrl,
+        name: courseNamesRef.current.get(currentUrl) ?? '',
+        added: diff.added,
+      })
+    }
     setSummary((s) => [...s, { url: currentUrl, added: diff.added.length, removed: diff.removed.length }])
     next()
   }
@@ -63,7 +78,12 @@ export default function UpdateCheckScreen() {
   useEffect(() => {
     if (loaded && index >= urls.length && !done) {
       setDone(true)
-      if (urls.length > 0) saveCourseSnapshots(snapshotsRef.current)
+      if (urls.length > 0) {
+        // 保存→LETUS新着へ転記（自動同期と同じ共通ヘルパ・冪等なので二重転記しても再追加されない）。
+        saveCourseSnapshots(snapshotsRef.current)
+          .then(() => publishCourseNews(runDiffsRef.current))
+          .catch(() => undefined)
+      }
     }
   }, [loaded, index, urls, done])
 

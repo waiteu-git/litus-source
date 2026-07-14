@@ -3,13 +3,22 @@
  * 端末非依存＝vitestで検証可能。設定タブでユーザーが順序と表示/非表示を変更し、HomeScreenがこの順で描画する。
  * 新セクションを後から追加しても normalizeHomeLayout が既存設定に自動マージするので破綻しない。
  */
-export type HomeSectionKey = 'nowClass' | 'laterClasses' | 'deadlines' | 'todayChanges' | 'bulletins' | 'entries'
+export type HomeSectionKey =
+  | 'nowClass'
+  | 'laterClasses'
+  | 'deadlines'
+  | 'todayChanges'
+  | 'letusNews'
+  | 'bulletins'
+  | 'entries'
 export type HomeSectionPref = { key: HomeSectionKey; enabled: boolean }
 
-/** 既定の並び順（ユーザー指定 2026-07-14: 今の授業→今日の変更→CLASS掲示→直近の課題→このあとの授業→その他）。 */
+/** 既定の並び順（ユーザー指定 2026-07-14: 今の授業→今日の変更→LETUS新着→CLASS掲示→直近の課題→このあとの授業→その他。
+ * LETUS新着は「初期ではCLASS掲示の上」の指定）。 */
 export const HOME_SECTION_ORDER: HomeSectionKey[] = [
   'nowClass',
   'todayChanges',
+  'letusNews',
   'bulletins',
   'deadlines',
   'laterClasses',
@@ -22,6 +31,7 @@ export const HOME_SECTION_META: Record<HomeSectionKey, { label: string; fixedOn:
   laterClasses: { label: 'このあとの授業', fixedOn: false },
   deadlines: { label: '直近の締切', fixedOn: false },
   todayChanges: { label: '今日の変更', fixedOn: false },
+  letusNews: { label: 'LETUS新着', fixedOn: false },
   bulletins: { label: 'CLASS掲示', fixedOn: false },
   entries: { label: 'その他（出席登録・インフォ）', fixedOn: true },
 }
@@ -32,7 +42,10 @@ export const DEFAULT_HOME_LAYOUT: HomeSectionPref[] = HOME_SECTION_ORDER.map((ke
 
 /**
  * 保存値（不明形式含む）を正規化する。既知キーを保存順で維持し、不明キー/重複は除去、
- * 欠けている既知キーは既定末尾へ追加（enabled=true）。fixedOnキーは常にenabled=true。
+ * 欠けている既知キーは**既定順上のアンカー位置**へ挿入する（enabled=true）。
+ * アンカー挿入＝既定順で自分より前にある最後の既存キーの直後（前に既存キーが無ければ先頭）。
+ * 末尾追加だと、後から増えたセクション（例: letusNews=既定でCLASS掲示の上）が保存済み
+ * レイアウトの全ユーザーで最下部に落ちてしまうため。fixedOnキーは常にenabled=true。
  */
 export function normalizeHomeLayout(raw: unknown): HomeSectionPref[] {
   const out: HomeSectionPref[] = []
@@ -48,9 +61,19 @@ export function normalizeHomeLayout(raw: unknown): HomeSectionPref[] {
       seen.add(k)
     }
   }
-  // 欠けている既知キーを既定順で末尾に補う。
+  // 欠けている既知キーをアンカー位置へ挿入する（既定順に処理＝連続して欠けても既定順が保たれる）。
+  // 挿入位置＝「既定順で自分より前にある全キー」のうち保存側に存在する最後尾の直後。
+  // これで既定順の前後関係（例: letusNews は todayChanges より後）を保存順を壊さずに満たす。
   for (const k of HOME_SECTION_ORDER) {
-    if (!seen.has(k)) out.push({ key: k, enabled: true })
+    if (seen.has(k)) continue
+    const orderIdx = HOME_SECTION_ORDER.indexOf(k)
+    let insertAt = 0
+    for (let i = 0; i < orderIdx; i++) {
+      const pos = out.findIndex((s) => s.key === HOME_SECTION_ORDER[i])
+      if (pos >= 0) insertAt = Math.max(insertAt, pos + 1)
+    }
+    out.splice(insertAt, 0, { key: k, enabled: true })
+    seen.add(k)
   }
   return out
 }

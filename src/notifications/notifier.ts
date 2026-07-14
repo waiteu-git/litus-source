@@ -23,10 +23,12 @@ const TAG = 'attendance-alarm'
 const ASSIGNMENT_TAG = 'assignment-reminder'
 export const BULLETIN_TAG = 'bulletin-new'
 export const ATTENDANCE_OPEN_TAG = 'attendance-open'
+export const LETUS_NEWS_TAG = 'letus-news'
 
 export const ATTENDANCE_CHANNEL_ID = 'attendance'
 export const ASSIGNMENT_CHANNEL_ID = 'assignments'
 export const BULLETIN_CHANNEL_ID = 'bulletins'
+export const LETUS_NEWS_CHANNEL_ID = 'letus-updates'
 
 /** Expo Go では expo-notifications を読み込めない（読むと落ちる）。 */
 const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
@@ -80,6 +82,10 @@ export async function configureNotifications(): Promise<void> {
     })
     await Notifications.setNotificationChannelAsync(BULLETIN_CHANNEL_ID, {
       name: '新着掲示',
+      importance: Notifications.AndroidImportance.HIGH,
+    })
+    await Notifications.setNotificationChannelAsync(LETUS_NEWS_CHANNEL_ID, {
+      name: 'LETUS更新',
       importance: Notifications.AndroidImportance.HIGH,
     })
   }
@@ -210,6 +216,32 @@ export async function clearDeliveredAttendanceOpenNotifications(): Promise<void>
   for (const n of presented) {
     const data = n.request.content.data as { tag?: string } | null
     if (data?.tag === ATTENDANCE_OPEN_TAG) {
+      await Notifications.dismissNotificationAsync(n.request.identifier)
+    }
+  }
+}
+
+/**
+ * LETUS新着（コース活動の増分）を即時ローカル通知する。新着掲示と同型
+ * （trigger に channelId のみ＝即時発火・予約枠から独立・Expo Go では no-op）。
+ */
+export async function presentLetusNewsNotification(content: { title: string; body: string }): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  await Notifications.scheduleNotificationAsync({
+    content: { title: content.title, body: content.body, data: { tag: LETUS_NEWS_TAG } },
+    trigger: { channelId: LETUS_NEWS_CHANNEL_ID },
+  })
+}
+
+/** 配信済みのLETUS新着通知を消す（起動時に呼び、通知欄への溜まりを防ぐ）。他タグは触らない。 */
+export async function clearDeliveredLetusNewsNotifications(): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  const presented = await Notifications.getPresentedNotificationsAsync()
+  for (const n of presented) {
+    const data = n.request.content.data as { tag?: string } | null
+    if (data?.tag === LETUS_NEWS_TAG) {
       await Notifications.dismissNotificationAsync(n.request.identifier)
     }
   }

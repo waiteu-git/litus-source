@@ -8,6 +8,11 @@ import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
 import { loadBulletinNotifySettings, saveBulletinNotifySettings } from '../storage/bulletinNotifySettingsStore'
 import type { BulletinNotifySettings } from '../notifications/bulletinNotify'
+import {
+  loadLetusNewsNotifySettings,
+  saveLetusNewsNotifySettings,
+} from '../storage/letusNewsNotifySettingsStore'
+import type { LetusNewsNotifySettings } from '../notifications/letusNewsNotify'
 import { ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
@@ -30,6 +35,7 @@ export default function SettingsScreen() {
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
   const [bulletinNotify, setBulletinNotify] = useState<BulletinNotifySettings>({ enabled: true, mode: 'all' })
+  const [letusNewsNotify, setLetusNewsNotify] = useState<LetusNewsNotifySettings>({ enabled: true })
   const [changelogOpen, setChangelogOpen] = useState(false)
   const recentChangelog = getRecentChangelog(CHANGELOG, 3)
 
@@ -47,6 +53,7 @@ export default function SettingsScreen() {
       setCourses([...seen].map(([courseCode, name]) => ({ courseCode, name })))
       setSettings(await loadAttendanceSettings())
       setBulletinNotify(await loadBulletinNotifySettings())
+      setLetusNewsNotify(await loadLetusNewsNotifySettings())
     })()
   }, [])
 
@@ -67,6 +74,15 @@ export default function SettingsScreen() {
       await saveBulletinNotifySettings(next)
     } catch (e) {
       console.warn('掲示通知設定の保存に失敗しました', e)
+    }
+  }
+
+  async function updateLetusNewsNotify(next: LetusNewsNotifySettings) {
+    setLetusNewsNotify(next)
+    try {
+      await saveLetusNewsNotifySettings(next)
+    } catch (e) {
+      console.warn('LETUS更新通知設定の保存に失敗しました', e)
     }
   }
 
@@ -222,6 +238,24 @@ export default function SettingsScreen() {
           )}
           <Text style={[styles.note, { color: ui.labelColor }]}>
             新着掲示の通知はアプリを開いたときに確認されます。バックグラウンド自動取得は今後対応予定です。
+          </Text>
+        </Accordion>
+
+        <Accordion title="LETUS更新の通知" icon="sparkles-outline">
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>コースの新着を通知</Text>
+            <Switch
+              value={letusNewsNotify.enabled}
+              onValueChange={(v) => updateLetusNewsNotify({ enabled: v })}
+              trackColor={{
+                true: COLORS.emerald,
+                false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
+              }}
+              thumbColor={COLORS.white}
+            />
+          </View>
+          <Text style={[styles.note, { color: ui.labelColor }]}>
+            LETUSのコースに新しい教材・課題などが追加されたときに通知します。同期のタイミングで確認されます。
           </Text>
         </Accordion>
 
