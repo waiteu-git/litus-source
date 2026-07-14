@@ -3,6 +3,9 @@ import { StyleSheet, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
+import { loadAllCourses } from '../storage/allCoursesStore'
+import { loadTrackedCourses } from '../storage/trackedCoursesStore'
+import { trackedCourseInfos } from '../updates/courseTracking'
 import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from './injectedScripts'
 import { filterAssignmentCandidates } from '../updates/assignmentCandidates'
 import { selectAssignmentsToVisit } from '../updates/assignmentWindow'
@@ -47,12 +50,21 @@ export default function AssignmentCollector({
     ;(async () => {
       const courseMap = await loadCourseMap()
       const snapshots = await loadCourseSnapshots()
-      // courseUrl → {name, code} を courseMap から逆引き（コードなしコースはスナップショット対象外）。
+      // courseUrl → {name, code} を courseMap から逆引き。
       const urlInfo = new Map<string, { name: string; code: string | null }>()
       for (const course of Object.values(courseMap)) {
         if (!urlInfo.has(course.url)) {
           urlInfo.set(course.url, { name: course.name, code: course.codes[0] ?? null })
         }
+      }
+      // 追跡中のLETUS専用コース（コード無し・courseMap対象外）の名前を補う: これが無いと
+      // 追跡コースの課題が courseName 空で保存される。code は無いので null（時間割突合なし）。
+      try {
+        for (const t of trackedCourseInfos(await loadAllCourses(), await loadTrackedCourses())) {
+          if (t.name && !urlInfo.has(t.url)) urlInfo.set(t.url, { name: t.name, code: null })
+        }
+      } catch {
+        // 追跡情報の読込失敗は無視（従来どおり）
       }
       const list: Candidate[] = []
       const seen = new Set<string>()

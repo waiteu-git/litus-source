@@ -5,6 +5,9 @@ import { COLLECT_COURSE_PAGE_JS, COLLECT_MYCOURSES_JS, DESKTOP_UA, MYCOURSES_URL
 import { parseMyCoursesMessage } from './myCoursesMessage'
 import { buildCourseCodeMap } from '../parsers/letusCourses'
 import { loadCourseMap, saveCourseMap } from '../storage/courseMapStore'
+import { loadAllCourses, saveAllCourses } from '../storage/allCoursesStore'
+import { loadTrackedCourses } from '../storage/trackedCoursesStore'
+import { trackedCourseInfos } from '../updates/courseTracking'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
 import { selectCoursesToSnapshot } from '../updates/courseSnapshotWindow'
 import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnapshotStore'
@@ -75,6 +78,8 @@ export default function LetusSyncEngine({
     if (!r.error && r.courses.length > 0) {
       try {
         await saveCourseMap(buildCourseCodeMap(r.courses))
+        // 全コース（コード無し含む）も保存: 追跡候補（LETUS専用コース）の提示に使う。
+        await saveAllCourses(r.courses)
       } catch {
         // 保存失敗でも既存mapで続行
       }
@@ -100,7 +105,19 @@ export default function LetusSyncEngine({
       for (const course of Object.values(map)) {
         if (!courseNamesRef.current.has(course.url)) courseNamesRef.current.set(course.url, course.name)
       }
-      const unique = [...new Set(Object.values(map).map((c) => c.url))]
+      // 追跡中のLETUS専用コース（コード無し等・courseMap対象外）を巡回対象へ合流させる。
+      // 名前も登録（LETUS新着の文言用）。取得失敗時は追跡なし扱いで従来どおり。
+      let trackedUrls: string[] = []
+      try {
+        const tracked = trackedCourseInfos(await loadAllCourses(), await loadTrackedCourses())
+        trackedUrls = tracked.map((t) => t.url)
+        for (const t of tracked) {
+          if (t.name && !courseNamesRef.current.has(t.url)) courseNamesRef.current.set(t.url, t.name)
+        }
+      } catch {
+        // 追跡情報の読込失敗は無視（従来どおり courseMap のみ巡回）
+      }
+      const unique = [...new Set([...Object.values(map).map((c) => c.url), ...trackedUrls])]
       // 鮮度TTL内に収集済みのコースは course/view.php 再巡回をスキップする（保持スナップショットを
       // そのまま使う）。未収集/TTL超過/収集時刻破損のコースだけ巡回＝どのコースも最大TTLごとに
       // 必ず再巡回されるので新着課題・更新コースを取りこぼさない（発見遅延 ≤ TTL）。全コースが

@@ -592,6 +592,8 @@ export default function AssignmentsScreen() {
         icon="checkbox-outline"
         right={
           <View style={{ flexDirection: 'row', gap: 8 }}>
+            {/* 時間割未連携のLETUS専用コースを課題追跡へ追加する導線（ユーザー確定: 課題画面から）。 */}
+            <Chip label="コース" icon="bookmark-outline" onPress={() => navigation.navigate('TrackedCourses')} />
             <Chip label="追加" icon="add" onPress={() => navigation.navigate('ManualAssignment')} />
             <Chip label="更新" icon="refresh" onPress={collecting ? undefined : startUpdate} />
           </View>

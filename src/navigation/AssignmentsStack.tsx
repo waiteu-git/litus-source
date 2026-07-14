@@ -1,5 +1,6 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import AssignmentsScreen from '../screens/AssignmentsScreen'
+import TrackedCoursesScreen from '../screens/TrackedCoursesScreen'
 import LetusAssignmentDetailScreen from '../screens/LetusAssignmentDetailScreen'
 import ManualAssignmentScreen from '../screens/ManualAssignmentScreen'
 import WebViewerScreen from '../screens/WebViewerScreen'
@@ -15,6 +16,7 @@ export default function AssignmentsStack() {
       screenOptions={stackHeaderOptions}
     >
       <Stack.Screen name="AssignmentsHome" component={AssignmentsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="TrackedCourses" component={TrackedCoursesScreen} options={{ title: '追跡コース' }} />
       {/* LETUS自前UI（Turn4で確定した4d）。 */}
       <Stack.Screen name="LetusAssignmentDetail" component={LetusAssignmentDetailScreen} options={{ title: '課題' }} />
       <Stack.Screen
