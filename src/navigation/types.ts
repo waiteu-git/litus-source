@@ -40,6 +40,8 @@ export type TimetableStackParamList = {
 
 export type AssignmentsStackParamList = {
   AssignmentsHome: undefined
+  /** LETUS専用コース（時間割未連携）の追跡管理。 */
+  TrackedCourses: undefined
   LetusAssignmentDetail: { url: string }
   // url なし=新規手動追加 / url あり=その手動課題を編集。preset* は科目詳細からの新規追加時の初期値。
   ManualAssignment: { url?: string; presetCourseName?: string; presetCourseCode?: string } | undefined

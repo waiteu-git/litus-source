@@ -10,6 +10,9 @@ import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnaps
 import type { CourseSnapshotMap } from '../storage/courseSnapshotSerialize'
 import { publishCourseNews } from '../collect/publishCourseNews'
 import type { CourseRunDiff } from '../updates/courseNews'
+import { loadAllCourses } from '../storage/allCoursesStore'
+import { loadTrackedCourses } from '../storage/trackedCoursesStore'
+import { trackedCourseInfos } from '../updates/courseTracking'
 
 export default function UpdateCheckScreen() {
   const ui = useUi()
@@ -31,7 +34,18 @@ export default function UpdateCheckScreen() {
       for (const course of Object.values(map)) {
         if (!courseNamesRef.current.has(course.url)) courseNamesRef.current.set(course.url, course.name)
       }
-      const unique = [...new Set(Object.values(map).map((c) => c.url))]
+      // 追跡中のLETUS専用コースも確認対象へ（自動同期と同じ巡回対象で一貫させる）。
+      let trackedUrls: string[] = []
+      try {
+        const tracked = trackedCourseInfos(await loadAllCourses(), await loadTrackedCourses())
+        trackedUrls = tracked.map((t) => t.url)
+        for (const t of tracked) {
+          if (t.name && !courseNamesRef.current.has(t.url)) courseNamesRef.current.set(t.url, t.name)
+        }
+      } catch {
+        // 追跡情報の読込失敗は無視
+      }
+      const unique = [...new Set([...Object.values(map).map((c) => c.url), ...trackedUrls])]
       setUrls(unique)
       setLoaded(true)
     })()
