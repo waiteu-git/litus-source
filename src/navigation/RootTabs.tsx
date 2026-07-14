@@ -31,7 +31,9 @@ export default function RootTabs() {
     bottom: 0,
     marginHorizontal: 12,
     marginBottom: bottomInset,
-    height: 62,
+    // IBM Plex Sans JP はラテン系標準フォントより行高が高く、62だと選択時のアクセント板から
+    // ラベルがはみ出す（実機報告 2026-07-14）。板＝タブ項目自体を大きめに取る。
+    height: 70,
     borderRadius: 20,
     backgroundColor: dark ? DARK.card : COLORS.white,
     borderTopWidth: dark ? 1 : 0,
@@ -60,7 +62,8 @@ export default function RootTabs() {
         tabBarInactiveTintColor: dark ? DARK.label : '#0b5c48',
         tabBarStyle,
         // タブラベルは共通Textラッパーを通らないため、fontFamily を直指定して本文と揃える。
-        tabBarLabelStyle: { fontFamily: FONT.regular },
+        // fontSize/lineHeight も明示: Plex JP の既定行高だとラベルがアクセント板の下端からはみ出す。
+        tabBarLabelStyle: { fontFamily: FONT.regular, fontSize: 11, lineHeight: 14 },
         tabBarActiveBackgroundColor: COLORS.emerald,
         // overflow:hidden が無いとアクティブ背景が角丸で切り抜かれず四角く見える。外枠(20)に合わせる。
         tabBarItemStyle: { borderRadius: 16, marginHorizontal: 6, overflow: 'hidden' },

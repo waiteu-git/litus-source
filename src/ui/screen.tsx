@@ -14,9 +14,9 @@ type IconName = keyof typeof Ionicons.glyphMap
 
 /**
  * 浮遊タブバー（position:absolute）の高さ＋下マージン分。スクロール内容の末尾がピルに隠れない退避量。
- * ピル実高62 + ピル上端との間に余裕（末尾要素がピルにギリギリ触れず、ひと呼吸置いてから止まる）を取る。
+ * ピル実高70 + ピル上端との間に余裕（末尾要素がピルにギリギリ触れず、ひと呼吸置いてから止まる）を取る。
  */
-export const TAB_BAR_CLEARANCE = 96
+export const TAB_BAR_CLEARANCE = 104
 
 /** タブバーのピルを避けるための下部退避量（セーフエリア込み）。スクロールの contentContainerStyle に足す。 */
 export function useTabBarClearance() {
