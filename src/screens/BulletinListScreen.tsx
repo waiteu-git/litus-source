@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { PressableRow } from '../ui/Pressable'
+import ScreenHint from '../tutorial/ScreenHint'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
@@ -83,6 +84,7 @@ export default function BulletinListScreen() {
         contentContainerStyle={[styles.list, { paddingBottom: clearance }]}
         showsVerticalScrollIndicator={false}
       >
+        <ScreenHint hintKey="bulletins" />
         <HealthBanner health={health?.health} source="class" />
         <FreshnessLabel at={refreshedAt} />
         {shown.length === 0 ? (

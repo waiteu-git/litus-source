@@ -12,6 +12,7 @@ import {
   loadLetusNewsNotifySettings,
   saveLetusNewsNotifySettings,
 } from '../storage/letusNewsNotifySettingsStore'
+import { clearDismissedHints } from '../storage/dismissedHintsStore'
 import type { LetusNewsNotifySettings } from '../notifications/letusNewsNotify'
 import { ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
@@ -89,6 +90,15 @@ export default function SettingsScreen() {
   async function onClear() {
     await clearTimetable()
     Alert.alert('消去しました', '保存した時間割データを消去しました。')
+  }
+
+  async function onResetHints() {
+    try {
+      await clearDismissedHints()
+      Alert.alert('再表示します', '各画面を開くとヒントカードが再び表示されます。')
+    } catch (e) {
+      console.warn('ヒント再表示の設定に失敗しました', e)
+    }
   }
 
   return (
@@ -263,6 +273,10 @@ export default function SettingsScreen() {
           <Pressable style={[ui.card, styles.rowBetween]} onPress={onClear}>
             <Text style={[styles.rowLabel, { color: ui.valueColor }]}>時間割データを消去</Text>
             <Text style={[styles.danger, { color: ui.colors.danger }]}>消去</Text>
+          </Pressable>
+          <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={onResetHints}>
+            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>ヒントを再表示</Text>
+            <Text style={[styles.link, { color: ui.labelColor }]}>再表示</Text>
           </Pressable>
         </Accordion>
 

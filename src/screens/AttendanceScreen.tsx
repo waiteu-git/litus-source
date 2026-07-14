@@ -11,6 +11,7 @@ import { REACTION_MAX_LEN, canSubmitReaction, reactionDraftApplies, reactionLeng
 import { todayKey } from '../attendance/attendedState'
 import { loadReactionDraft, saveReactionDraft } from '../storage/reactionDraftStore'
 import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
+import ScreenHint from '../tutorial/ScreenHint'
 import { COLORS } from '../theme'
 
 /**
@@ -171,6 +172,7 @@ export default function AttendanceScreen() {
         </View>
 
         <KillSwitchBanner feature="attendance" />
+        <ScreenHint hintKey="attendance" />
 
         {/* 学外ネットワーク警告: 出席ページ自身の文言（学外ネットワークからのアクセス）を検知した時だけ出す。
             学内Wi-Fiへ切り替えてもWebView側の表示が自動では追随しないため「再確認」で再取得する。
