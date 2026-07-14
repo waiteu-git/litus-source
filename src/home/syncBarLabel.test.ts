@@ -63,7 +63,8 @@ describe('syncBarSkipText', () => {
     expect(syncBarSkipText('class', 'maintenance')).toContain('CLASS')
     expect(syncBarSkipText('letus', 'maintenance')).toContain('LETUS')
   })
-  it('kill switch停止中は一時停止の文言', () => {
-    expect(syncBarSkipText('class', 'stopped')).toContain('一時停止')
+  it('kill switch停止中は一時停止の文言（feature単位で出し分け＝課題同期中の表示と矛盾させない）', () => {
+    expect(syncBarSkipText('class', 'stopped')).toContain('掲示の同期は一時停止')
+    expect(syncBarSkipText('letus', 'stopped')).toContain('課題の同期は一時停止')
   })
 })

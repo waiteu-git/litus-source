@@ -463,7 +463,12 @@ export default function SubjectDetailScreen() {
           subtitle={!snapshot ? '未チェック' : !hasDiff ? '更新なし' : `更新あり ${snapshot.added.length + snapshot.removed.length}件`}
         >
           {!snapshot ? (
-            <Text style={{ color: ui.labelColor }}>未チェック（「更新チェック」を実行してください）</Text>
+            // 更新チェック画面への唯一の導線（ルートは登録済みだが他に navigate が無い＝死に導線防止）。
+            <Pressable onPress={() => navigation.navigate('UpdateCheck')} accessibilityRole="button">
+              <Text style={{ color: ui.labelColor }}>
+                未チェック（タップして更新チェックを実行）
+              </Text>
+            </Pressable>
           ) : !hasDiff ? (
             <Text style={{ color: ui.labelColor }}>前回チェック以降の更新はありません。</Text>
           ) : (

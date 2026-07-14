@@ -182,11 +182,13 @@ export default function LetusSyncEngine({
     ;(async () => {
       try {
         await saveCourseSnapshots(snapshotsRef.current)
+        // LETUS新着への転記は**保存成功時のみ**（UpdateCheckScreenと同順序）。保存失敗時に転記すると
+        // 差分基準が前進しないまま新着だけ記録され、既読(markCourseSeen)後の再巡回で同じ活動が
+        // 再検出されてNEWが復活する。失敗時は次回runが同じ差分を再検出するので取りこぼしは無い。
+        await publishCourseNews(runDiffsRef.current)
       } catch {
         // 保存失敗でも課題収集へ（既存スナップショットが使われる）
       }
-      // LETUS新着（累積＋通知）への転記。失敗しても同期は続行（ヘルパ内で握りつぶし）。
-      await publishCourseNews(runDiffsRef.current)
       setStage('assignments')
     })()
   }, [stage, urls, index])

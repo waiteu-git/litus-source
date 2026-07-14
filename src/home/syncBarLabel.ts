@@ -35,7 +35,9 @@ export function syncBarSkipText(feature: 'class' | 'letus', reason: SyncSkipReas
     case 'attending':
       return '授業中・掲示は授業後に同期します'
     case 'stopped':
-      return '同期は一時停止中です'
+      // feature単位で表現する: 掲示だけ停止中でも課題フェーズは走り得る（「同期は停止中」と
+      // 言い切ると直後の「課題を同期中…」と矛盾する）。
+      return feature === 'letus' ? '課題の同期は一時停止中です' : '掲示の同期は一時停止中です'
   }
 }
 
