@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
+import { PressableRow } from '../ui/Pressable'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import { useUi } from '../ui/screen'
 import { dismissHint, visibleHint, type Hint, type HintKey } from './hints'
-import { loadDismissedHints, saveDismissedHints } from '../storage/dismissedHintsStore'
+import { loadDismissedHints, mutateDismissedHints } from '../storage/dismissedHintsStore'
 
 /**
  * 画面先頭に置く軽量ヒントカード。初回表示（未クローズ）のときだけ描画し、×で永続的に消える。
@@ -31,9 +32,7 @@ export default function ScreenHint({ hintKey }: { hintKey: HintKey }) {
 
   const onDismiss = useCallback(() => {
     setHint(null)
-    loadDismissedHints()
-      .then((d) => saveDismissedHints(dismissHint(d, hintKey)))
-      .catch(() => undefined)
+    mutateDismissedHints((d) => dismissHint(d, hintKey)).catch(() => undefined)
   }, [hintKey])
 
   if (!hint) return null
@@ -45,9 +44,9 @@ export default function ScreenHint({ hintKey }: { hintKey: HintKey }) {
         <Text style={[styles.title, { color: ui.valueColor }]}>{hint.title}</Text>
         <Text style={[styles.text, { color: ui.labelColor }]}>{hint.body}</Text>
       </View>
-      <Pressable onPress={onDismiss} hitSlop={10} accessibilityRole="button" accessibilityLabel="ヒントを閉じる">
+      <PressableRow onPress={onDismiss} hitSlop={10} accessibilityRole="button" accessibilityLabel="ヒントを閉じる">
         <Ionicons name="close" size={18} color={ui.chevron} />
-      </Pressable>
+      </PressableRow>
     </View>
   )
 }

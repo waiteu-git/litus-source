@@ -276,7 +276,7 @@ export default function SettingsScreen() {
           </Pressable>
           <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={onResetHints}>
             <Text style={[styles.rowLabel, { color: ui.valueColor }]}>ヒントを再表示</Text>
-            <Text style={[styles.link, { color: ui.labelColor }]}>再表示</Text>
+            <Text style={[styles.rowAction, { color: ui.labelColor }]}>再表示</Text>
           </Pressable>
         </Accordion>
 
@@ -332,6 +332,8 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowLabel: { fontSize: 14, flex: 1, paddingRight: 12 },
   danger: { fontSize: 14, fontWeight: '500' },
+  // 行右端の中立アクション（dangerと同メトリクス・下線なし。linkは外部リンク専用）。
+  rowAction: { fontSize: 14, fontWeight: '500' },
   link: { fontSize: 13, textDecorationLine: 'underline', marginTop: 8 },
   note: { fontSize: 12, marginTop: 8, marginLeft: 2 },
   licenseBody: { fontSize: 10, lineHeight: 15, marginTop: 10 },

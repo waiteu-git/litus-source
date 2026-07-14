@@ -17,7 +17,7 @@ export const HINTS: Record<HintKey, Hint> = {
   },
   timetable: {
     title: '時間割のヒント',
-    body: 'リスト表示では左右スワイプで曜日を移動できます。科目をタップすると出欠カウンタ・メモ・LETUSコースへの導線があります。',
+    body: 'リスト表示では左右スワイプで曜日を移動できます。科目をタップすると出欠カウンタ・各回の予定・LETUSコースへの導線があります。',
   },
   assignments: {
     title: '課題のヒント',

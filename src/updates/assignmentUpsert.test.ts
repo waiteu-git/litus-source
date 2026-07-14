@@ -63,6 +63,19 @@ describe('upsertAssignments', () => {
     upsertAssignments(existing, [collected({ title: '変更後' })], T1)
     expect(existing).toEqual(snapshot)
   })
+  it('空のコース名/コードで再収集しても保存済みのコース同一性を消さない（追跡解除・取りこぼし対策）', () => {
+    const existing: AssignmentMap = { [stored().url]: stored() }
+    const out = upsertAssignments(existing, [collected({ courseName: '', courseCode: null })], T1)
+    const a = out[stored().url]
+    expect(a.courseName).toBe('基礎情報工学A')
+    expect(a.courseCode).toBe('9973339')
+  })
+  it('新しいコース名/コードが来たら通常どおり更新する', () => {
+    const existing: AssignmentMap = { [stored().url]: stored() }
+    const out = upsertAssignments(existing, [collected({ courseName: '基礎情報工学A（改）', courseCode: '9973340' })], T1)
+    expect(out[stored().url].courseName).toBe('基礎情報工学A（改）')
+    expect(out[stored().url].courseCode).toBe('9973340')
+  })
 })
 
 describe('upsertAssignments ユーザー所有項目の保護', () => {

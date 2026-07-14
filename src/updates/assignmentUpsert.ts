@@ -31,6 +31,11 @@ export function upsertAssignments(
     }
     out[c.url] = {
       ...c,
+      // コース同一性は空の収集値で塗り潰さない: 追跡解除やコース一覧の取りこぼしで urlInfo が
+      // 引けなかった訪問（courseName ''）が、保存済みの実名/コードを消して「科目不明」に
+      // 落とすのを防ぐ（追跡解除ダイアログの「収集済みの課題は残ります」を守る）。
+      courseName: c.courseName || (prev?.courseName ?? ''),
+      courseCode: c.courseCode ?? prev?.courseCode ?? null,
       ignored: prev ? prev.ignored : false,
       firstSeenAt: prev ? prev.firstSeenAt : nowIso,
       lastSeenAt: nowIso,

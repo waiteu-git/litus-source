@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { ScreenBg, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { loadAllCourses } from '../storage/allCoursesStore'
 import { loadCourseMap } from '../storage/courseMapStore'
+import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnapshotStore'
 import { loadTrackedCourses, saveTrackedCourses } from '../storage/trackedCoursesStore'
 import { selectableCourses, toggleTracked, trackedCourseInfos, type TrackedCourseInfo } from '../updates/courseTracking'
 
@@ -60,7 +61,26 @@ export default function TrackedCoursesScreen() {
   function onRemove(c: TrackedCourseInfo) {
     Alert.alert('追跡を解除しますか？', `「${c.name || c.url}」の課題の自動収集を止めます。収集済みの課題は一覧に残ります。`, [
       { text: 'キャンセル', style: 'cancel' },
-      { text: '解除', style: 'destructive', onPress: () => apply(toggleTracked(tracked, c.url)) },
+      {
+        text: '解除',
+        style: 'destructive',
+        onPress: () => {
+          apply(toggleTracked(tracked, c.url))
+          // 孤児スナップショットを掃除する: 残すと候補列挙が止まらず、締切不明の課題ページが
+          // 解除後も毎同期訪問され続ける（ダイアログの「自動収集を止めます」に反する）。
+          // courseMap 対象のコース（コード付き）は通常収集の資産なので消さない。
+          loadCourseMap()
+            .then(async (map) => {
+              if (Object.values(map).some((m) => m.url === c.url)) return
+              const snaps = await loadCourseSnapshots()
+              if (!(c.url in snaps)) return
+              const next = { ...snaps }
+              delete next[c.url]
+              await saveCourseSnapshots(next)
+            })
+            .catch(() => undefined)
+        },
+      },
     ])
   }
 

@@ -544,6 +544,8 @@ export default function AssignmentsScreen() {
 
   const listHeader = (
     <View>
+      {/* 初回ヒント: 他画面と同じくスクロールで流れる位置（固定ヘッダに置くと×まで縦領域を占有し続ける）。 */}
+      <ScreenHint hintKey="assignments" />
       <View style={[rowUi.card, styles.statsRow]}>
         <View style={styles.statCol}>
           <Text style={[styles.statNum, { color: rowUi.valueColor }]}>{stats.notSubmitted}</Text>
@@ -602,7 +604,6 @@ export default function AssignmentsScreen() {
       />
 
       <KillSwitchBanner feature="letus" />
-      <ScreenHint hintKey="assignments" />
       <HealthBanner health={health?.health} source="letus" />
       <FreshnessLabel at={refreshedAt} />
       {syncNotice ? (
