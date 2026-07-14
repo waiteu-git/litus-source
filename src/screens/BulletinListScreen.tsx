@@ -14,7 +14,7 @@ import { loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import type { HomeStackParamList } from '../navigation/types'
-import { COLORS, DARK } from '../theme'
+import { COLORS } from '../theme'
 import { isScheduleCategory } from '../timetableEvents/bulletinEvents'
 import { Tag } from '../ui/Tag'
 
@@ -62,9 +62,9 @@ export default function BulletinListScreen() {
     return (
       <Pressable
         onPress={() => setTab(id)}
-        style={[styles.tabBtn, ui.dark && !on && { backgroundColor: DARK.softBox }, on && { backgroundColor: COLORS.emerald }]}
+        style={[styles.tabBtn, { backgroundColor: ui.softBoxBg }, on && { backgroundColor: COLORS.emerald }]}
       >
-        <Text style={[styles.tabText, { color: on ? '#fff' : ui.labelColor }]}>
+        <Text style={[styles.tabText, { color: on ? COLORS.white : ui.labelColor }]}>
           {label} {count}
         </Text>
       </Pressable>
@@ -120,7 +120,7 @@ export default function BulletinListScreen() {
 
 const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingTop: 12 },
-  tabBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.05)' },
+  tabBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
   tabText: { fontSize: 13, fontWeight: '700' },
   list: { padding: 14, paddingTop: 12, paddingBottom: 24 },
   item: { marginBottom: 10 },

@@ -22,7 +22,8 @@ import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { isCollectedAssignmentUrl } from '../assignments/assignmentOwnership'
 import { makeUserManagedActivity } from '../assignments/manualAssignment'
 import AddActivityDeadlineSheet from '../assignments/AddActivityDeadlineSheet'
-import { COLORS, DARK, useThemeVariant } from '../theme'
+import { COLORS, DARK } from '../theme'
+import { useUi } from '../ui/screen'
 
 type Params = { Web: { url: string; title?: string } }
 
@@ -37,7 +38,7 @@ export default function WebViewerScreen() {
   const route = useRoute<RouteProp<Params, 'Web'>>()
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const { url, title } = route.params
-  const dark = useThemeVariant().variant === 'dark'
+  const ui = useUi()
   const webviewRef = useRef<WebView>(null)
   const { bump } = useAssignmentsVersion()
   const [currentUrl, setCurrentUrl] = useState(url)
@@ -150,7 +151,7 @@ export default function WebViewerScreen() {
   }
 
   return (
-    <View style={[styles.root, dark && { backgroundColor: DARK.bg }]}>
+    <View style={[styles.root, { backgroundColor: ui.colors.screenSolid }]}>
       <WebView
         ref={webviewRef}
         source={{ uri: url }}
@@ -176,13 +177,13 @@ export default function WebViewerScreen() {
         style={styles.web}
       />
       {canAdd ? (
-        <Pressable style={styles.fab} onPress={requestAdd} disabled={adding}>
-          <Text style={styles.fabText}>{adding ? '追加中…' : '＋ この課題を追加'}</Text>
+        <Pressable style={[styles.fab, { shadowColor: COLORS.emeraldDark }]} onPress={requestAdd} disabled={adding}>
+          <Text style={[styles.fabText, { color: COLORS.white }]}>{adding ? '追加中…' : '＋ この課題を追加'}</Text>
         </Pressable>
       ) : null}
       {toast ? (
-        <View style={styles.toast}>
-          <Text style={styles.toastText}>{toast}</Text>
+        <View style={[styles.toast, { backgroundColor: ui.pick(COLORS.emeraldDeep, COLORS.inkOnGlass, DARK.card) }]}>
+          <Text style={[styles.toastText, { color: COLORS.white }]}>{toast}</Text>
         </View>
       ) : null}
       <AddActivityDeadlineSheet
@@ -197,7 +198,7 @@ export default function WebViewerScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#ffffff' },
+  root: { flex: 1 },
   web: { flex: 1 },
   fab: {
     position: 'absolute',
@@ -208,21 +209,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     elevation: 4,
-    shadowColor: '#0a6650',
     shadowOpacity: 0.3,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
   },
-  fabText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  fabText: { fontSize: 14, fontWeight: '700' },
   toast: {
     position: 'absolute',
     left: 16,
     right: 16,
     bottom: 76,
-    backgroundColor: '#04322a',
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
   },
-  toastText: { color: '#ffffff', fontSize: 14 },
+  toastText: { fontSize: 14 },
 })

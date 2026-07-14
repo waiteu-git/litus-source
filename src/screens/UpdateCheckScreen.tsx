@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { WebView } from 'react-native-webview'
-import { ActionButton } from '../ui/screen'
+import { ActionButton, useUi } from '../ui/screen'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from '../collect/injectedScripts'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
@@ -10,6 +10,7 @@ import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnaps
 import type { CourseSnapshotMap } from '../storage/courseSnapshotSerialize'
 
 export default function UpdateCheckScreen() {
+  const ui = useUi()
   const webviewRef = useRef<WebView>(null)
   const [urls, setUrls] = useState<string[]>([])
   const [index, setIndex] = useState(0)
@@ -87,9 +88,9 @@ export default function UpdateCheckScreen() {
           {done ? `完了（${urls.length}コース確認・${changed.length}コース更新あり）` : `確認中… ${Math.min(index + 1, urls.length)}/${urls.length}`}
         </Text>
         {done && urls.length === 0 ? (
-          <Text style={styles.info}>コースがありません。先に「コース収集」を実行してください。</Text>
+          <Text style={[styles.info, { color: ui.labelColor }]}>コースがありません。先に「コース収集」を実行してください。</Text>
         ) : done && changed.length === 0 ? (
-          <Text style={styles.info}>更新はありませんでした。</Text>
+          <Text style={[styles.info, { color: ui.labelColor }]}>更新はありませんでした。</Text>
         ) : null}
         {changed.map((c) => (
           <Text key={c.url} style={styles.row}>{`+${c.added} / -${c.removed}  ${c.url}`}</Text>
@@ -105,6 +106,6 @@ const styles = StyleSheet.create({
   hiddenWebview: { height: 1, opacity: 0 },
   body: { padding: 16 },
   heading: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  info: { color: '#666' },
+  info: {},
   row: { paddingVertical: 4 },
 })

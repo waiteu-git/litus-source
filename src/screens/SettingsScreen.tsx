@@ -131,8 +131,11 @@ export default function SettingsScreen() {
                   <Switch
                     value={settings[c.courseCode] !== false}
                     onValueChange={(v) => toggle(c.courseCode, v)}
-                    trackColor={{ true: COLORS.emerald, false: '#c9d6d0' }}
-                    thumbColor="#ffffff"
+                    trackColor={{
+                      true: COLORS.emerald,
+                      false: ui.colors.softBoxBg,
+                    }}
+                    thumbColor={COLORS.white}
                   />
                 </View>
               ))}
@@ -146,8 +149,11 @@ export default function SettingsScreen() {
             <Switch
               value={bulletinNotify.enabled}
               onValueChange={(v) => updateBulletinNotify({ ...bulletinNotify, enabled: v })}
-              trackColor={{ true: COLORS.emerald, false: '#c9d6d0' }}
-              thumbColor="#ffffff"
+              trackColor={{
+                true: COLORS.emerald,
+                false: ui.colors.softBoxBg,
+              }}
+              thumbColor={COLORS.white}
             />
           </View>
           {bulletinNotify.enabled && (
@@ -171,7 +177,7 @@ export default function SettingsScreen() {
         <Accordion title="データ" icon="server-outline">
           <Pressable style={[ui.card, styles.rowBetween]} onPress={onClear}>
             <Text style={[styles.rowLabel, { color: ui.valueColor }]}>時間割データを消去</Text>
-            <Text style={styles.danger}>消去</Text>
+            <Text style={[styles.danger, { color: ui.colors.danger }]}>消去</Text>
           </Pressable>
         </Accordion>
 
@@ -226,7 +232,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowLabel: { fontSize: 14, flex: 1, paddingRight: 12 },
-  danger: { color: '#b3261e', fontSize: 14, fontWeight: '500' },
+  danger: { fontSize: 14, fontWeight: '500' },
   link: { fontSize: 13, textDecorationLine: 'underline', marginTop: 8 },
   note: { fontSize: 12, marginTop: 8, marginLeft: 2 },
   licenseBody: { fontSize: 10, lineHeight: 15, marginTop: 10 },
