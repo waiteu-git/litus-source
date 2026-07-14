@@ -95,6 +95,9 @@ export type AttendanceEngineValue = {
   setCode: (s: string) => void
   submit: () => void
   retry: () => void
+  /** 出席ページを取り直して受付状態（学内/学外判定含む）を再抽出する。学外警告の「再確認」用。
+      WebView再作成の retry() より軽量（メニューから出席ページを再オープン→再検出）。 */
+  refreshAttendance: () => void
   /** アプリ内リアペ提出（reaction_pending時のみ有効）。②フォームへの流し込み→提出→出席確定まで進める。 */
   reactionSubmit: ReactionSubmitState
   submitReaction: (text: string) => void
@@ -681,6 +684,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       setCode,
       submit,
       retry,
+      refreshAttendance,
       reactionSubmit: reactionSubmitState,
       submitReaction,
       running,

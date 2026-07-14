@@ -37,6 +37,7 @@ export default function AttendanceScreen() {
     setCode,
     submit,
     retry,
+    refreshAttendance,
     reactionSubmit,
     submitReaction,
     failCount,
@@ -50,6 +51,36 @@ export default function AttendanceScreen() {
   // リアペ必須授業: 出席コードは受理済み・リアクションペーパー未提出（提出して初めて .attendSuc「出席」になる）
   const reactionPending = reception?.status === 'reaction_pending'
   const reactionCourse = reception?.courseName ?? null
+  // 学外ネットワーク警告の「再確認」進行状態。次の受付状態更新（reception差し替え）か
+  // タイムアウト保険（10秒）で解除する。表示はバー内テキストの差し替えのみ。
+  const [netChecking, setNetChecking] = useState(false)
+  const netTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const receptionAtCheckRef = useRef(reception)
+  function recheckNetwork() {
+    if (netChecking) return
+    setNetChecking(true)
+    refreshAttendance()
+    if (netTimerRef.current) clearTimeout(netTimerRef.current)
+    netTimerRef.current = setTimeout(() => setNetChecking(false), 10000)
+  }
+  useEffect(() => {
+    if (!netChecking) {
+      receptionAtCheckRef.current = reception
+      return
+    }
+    // 再確認中に reception が差し替わった＝再検出が届いた合図。確認中表示を解除する。
+    if (reception !== receptionAtCheckRef.current) {
+      setNetChecking(false)
+      if (netTimerRef.current) clearTimeout(netTimerRef.current)
+    }
+  }, [reception, netChecking])
+  useEffect(
+    () => () => {
+      if (netTimerRef.current) clearTimeout(netTimerRef.current)
+    },
+    [],
+  )
+
   // リアペ本文（アプリ内提出用）。提出確定（出席済み検知）までAsyncStorageに下書き保全し、
   // 失敗・アプリ再起動でも本文を失わない。復元条件（同日＋科目照合）は純粋関数側。
   const [reactionText, setReactionText] = useState('')
@@ -140,6 +171,25 @@ export default function AttendanceScreen() {
         </View>
 
         <KillSwitchBanner feature="attendance" />
+
+        {/* 学外ネットワーク警告: 出席ページ自身の文言（学外ネットワークからのアクセス）を検知した時だけ出す。
+            学内Wi-Fiへ切り替えてもWebView側の表示が自動では追随しないため「再確認」で再取得する。
+            進行表示はバー内テキストの差し替えのみ（取得系と同じ・大きなアニメは出さない方針）。 */}
+        {reception?.network === 'off' ? (
+          <View style={[styles.netWarn, { backgroundColor: ui.colors.warnBg }]}>
+            <Ionicons name="wifi-outline" size={16} color={ui.colors.warn} />
+            <Text style={[styles.netWarnText, { color: ui.colors.warn }]}>
+              {netChecking
+                ? 'ネットワーク状態を確認中…'
+                : '学外ネットワークです。出席登録には学内Wi-Fiが必要な場合があります'}
+            </Text>
+            {!netChecking ? (
+              <Pressable onPress={recheckNetwork} hitSlop={8} accessibilityRole="button">
+                <Text style={[styles.netWarnAction, { color: ui.colors.warn }]}>再確認</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {conflict ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
@@ -419,6 +469,17 @@ const styles = StyleSheet.create({
   hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   hTitle: { fontSize: 20, fontWeight: '600' },
   pill: { fontSize: 12, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
+  netWarn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  netWarnText: { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 17 },
+  netWarnAction: { fontSize: 12, fontWeight: '700', padding: 2 },
   card: { borderRadius: 18, padding: 16 },
   hero: { alignItems: 'center', paddingVertical: 20 },
   liveBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },

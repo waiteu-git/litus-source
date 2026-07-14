@@ -88,6 +88,24 @@ describe('リアペ出席の実DOM分類回帰（fixture→sensor→classify）'
   })
 })
 
+describe('学内/学外ネットワーク判定（fixture→sensor→classify）', () => {
+  it('実DOM（学内ラベルあり）→ network on', () => {
+    expect(classify('attendance-reaction-pending-real.html').network).toBe('on')
+    expect(classify('attendance-reaction-submitted-real.html').network).toBe('on')
+  })
+
+  it('ラベル無し（受付中fixture=カード切り出しで不在）→ unknown（警告は出さない安全側）', () => {
+    expect(classify('attendance-accepting-real.html').network).toBe('unknown')
+  })
+
+  it('学外（合成fixture・実DOM未採取＝文言は handover.md の観測メモ準拠）→ off', () => {
+    const r = classify('attendance-offcampus-synthetic.html')
+    expect(r.network).toBe('off')
+    // 状態分類はネットワーク判定の影響を受けない（reaction_pending のまま）。
+    expect(r.status).toBe('reaction_pending')
+  })
+})
+
 describe('リアペfixtureのセレクタ番人（sensorが依存するクラス・文言）', () => {
   it('①: .attendSuc 無し・.reactionMsg 2枚（未完了文言）・verification欄と出席登録するボタンが消える', () => {
     const root = load('attendance-reaction-pending-real.html')
