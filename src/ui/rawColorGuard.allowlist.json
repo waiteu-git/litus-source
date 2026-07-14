@@ -1,10 +1,5 @@
 [
-  "screens/BulletinDetailScreen.tsx",
-  "screens/HomeScreen.tsx",
-  "screens/InfoScreen.tsx",
   "screens/OnboardingSlides.tsx",
   "screens/PdfViewerScreen.tsx",
-  "screens/SubjectDetailScreen.tsx",
-  "screens/TermsConsentScreen.tsx",
-  "screens/TimetableScreen.tsx"
+  "screens/TermsConsentScreen.tsx"
 ]

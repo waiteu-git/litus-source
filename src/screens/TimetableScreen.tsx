@@ -281,11 +281,11 @@ export default function TimetableScreen() {
     <RefreshControl refreshing={syncing} onRefresh={() => startSync(true)} tintColor={COLORS.emerald} colors={[COLORS.emerald]} />
   )
 
-  const cellBg = ui.pick('rgba(255,255,255,0.16)', '#f3f7f5', 'rgba(255,255,255,0.04)')
-  const cellFilledBg = ui.pick('rgba(255,255,255,0.5)', '#e8f4ee', 'rgba(55,201,155,0.14)')
-  const cellTodayBg = ui.pick('rgba(255,255,255,0.62)', '#d6efe4', 'rgba(55,201,155,0.24)')
-  const cellNowBg = ui.pick('rgba(255,255,255,0.88)', '#c3ead7', 'rgba(55,201,155,0.36)')
-  const cellTextColor = ui.pick('#04322a', ui.valueColor, ui.valueColor)
+  const cellBg = ui.colors.gridCellEmptyBg
+  const cellFilledBg = ui.colors.gridCellFilledBg
+  const cellTodayBg = ui.colors.gridCellTodayBg
+  const cellNowBg = ui.colors.gridCellNowBg
+  const cellTextColor = ui.colors.gridCellText
 
   return (
     <ScreenBg>
@@ -381,7 +381,7 @@ export default function TimetableScreen() {
                         isNow ? styles.gridCellNow : today && cl ? styles.gridCellToday : null,
                         gCanceled ? styles.canceledCard : null,
                         gOff ? styles.offCell : null,
-                        !cl && pev ? styles.personalCell : null,
+                        !cl && pev ? [styles.personalCell, { backgroundColor: ui.colors.gridCellPersonalBg }] : null,
                       ]}
                     >
                       {cl ? (
@@ -389,10 +389,10 @@ export default function TimetableScreen() {
                           <Text numberOfLines={3} style={[styles.gridCellText, { color: cellTextColor }, (gCanceled || gOff) && styles.canceledName]}>
                             {cl.name}
                           </Text>
-                          {updatedCodes.has(cl.courseCode) ? <View style={styles.gridDot} /> : null}
+                          {updatedCodes.has(cl.courseCode) ? <View style={[styles.gridDot, { backgroundColor: ui.colors.updateDot }]} /> : null}
                           {cl && dangerCodes.has(cl.courseCode) ? <View style={styles.gridDanger} /> : null}
                           {unreadCodes.has(cl.courseCode) ? <View style={styles.gridUnreadDot} /> : null}
-                          {gev ? <View style={[styles.gridEvDot, gCanceled ? styles.gridEvDotCancel : styles.gridEvDotInfo]} /> : null}
+                          {gev ? <View style={[styles.gridEvDot, { backgroundColor: ui.colors.info }]} /> : null}
                           {isNow ? (
                             <View style={styles.nowDot}>
                               <NowPulse size={7} />
@@ -439,14 +439,14 @@ export default function TimetableScreen() {
                       {rowNow ? (
                         <Badge variant="live" label="実施中" size="sm" />
                       ) : off ? (
-                        <View style={styles.offChip}>
-                          <Text style={styles.offChipText}>今週休み・隔週</Text>
+                        <View style={[styles.offChip, { backgroundColor: ui.softBoxBg }]}>
+                          <Text style={[styles.offChipText, { color: ui.subMuted }]}>今週休み・隔週</Text>
                         </View>
                       ) : null}
                     </View>
                     {ev ? (
-                      <View style={[styles.evBadge, canceled ? styles.evBadgeCancel : styles.evBadgeInfo]}>
-                        <Text style={[styles.evBadgeText, canceled ? styles.evBadgeTextCancel : styles.evBadgeTextInfo]} numberOfLines={1}>
+                      <View style={[styles.evBadge, { backgroundColor: ui.colors.infoBg }]}>
+                        <Text style={[styles.evBadgeText, { color: ui.colors.info }]} numberOfLines={1}>
                           {cellBadgeText(ev)}
                         </Text>
                       </View>
@@ -545,11 +545,7 @@ const styles = StyleSheet.create({
   canceledCard: { opacity: 0.6 },
   canceledName: { textDecorationLine: 'line-through' },
   evBadge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 },
-  evBadgeCancel: { backgroundColor: '#ffe1d8' },
-  evBadgeInfo: { backgroundColor: '#e3f0ff' },
   evBadgeText: { fontSize: 11, fontWeight: '700' },
-  evBadgeTextCancel: { color: '#b23b1c' },
-  evBadgeTextInfo: { color: '#1c5fb2' },
   makeupCard: { borderLeftWidth: 3, borderLeftColor: COLORS.cta },
   gridCard: { padding: 8 },
   gridRow: { flexDirection: 'row', gap: 5, marginBottom: 5 },
@@ -562,17 +558,15 @@ const styles = StyleSheet.create({
   nowCard: { borderWidth: 2, borderColor: COLORS.cta },
   clsHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   offCell: { opacity: 0.45 },
-  offChip: { backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  offChipText: { fontSize: 10, fontWeight: '700', color: '#7a8a83' },
+  offChip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  offChipText: { fontSize: 10, fontWeight: '700' },
   gridCellText: { fontSize: 11, fontWeight: '600', lineHeight: 14 },
-  gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e8a400' },
+  gridDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   gridDanger: { position: 'absolute', top: 3, left: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.danger },
   gridUnreadDot: { position: 'absolute', bottom: 6, left: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.emerald },
   gridEvDot: { position: 'absolute', bottom: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
-  gridEvDotCancel: { backgroundColor: '#e0533a' },
-  gridEvDotInfo: { backgroundColor: '#3a7be0' },
   gridHint: { fontSize: 11, textAlign: 'center', marginTop: 6 },
-  personalCell: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.emerald, backgroundColor: 'rgba(46,160,120,0.10)' },
+  personalCell: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.emerald },
   personalCellText: { color: COLORS.emeraldDark, fontStyle: 'italic' },
   personalDot: { position: 'absolute', bottom: 3, left: 3, width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.emerald },
   personalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },

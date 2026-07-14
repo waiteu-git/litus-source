@@ -9,7 +9,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
 import { resolveNextSession, pickAttentionEvent, type NextSession } from '../timetableEvents/nextSession'
-import { COLORS, DARK } from '../theme'
+import { COLORS } from '../theme'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { buildSyllabusUrl } from '../links/syllabus'
@@ -323,11 +323,11 @@ export default function SubjectDetailScreen() {
             <View style={[styles.attStepper, { borderTopColor: ui.dividerColor }]}>
               <Text style={[styles.attSub, { color: ui.labelColor }]}>総回数（隔週などで手動調整）</Text>
               <View style={styles.attStepBtns}>
-                <Pressable style={[styles.attStepBtn, ui.dark && { backgroundColor: DARK.softBox }]} onPress={() => changeTotal(-1)}>
+                <Pressable style={[styles.attStepBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => changeTotal(-1)}>
                   <Ionicons name="remove" size={16} color={ui.accentSoft} />
                 </Pressable>
                 <Text style={[styles.attTotalNum, { color: ui.valueColor }]}>{attTotal ?? risk.scheduledTotal}</Text>
-                <Pressable style={[styles.attStepBtn, ui.dark && { backgroundColor: DARK.softBox }]} onPress={() => changeTotal(1)}>
+                <Pressable style={[styles.attStepBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => changeTotal(1)}>
                   <Ionicons name="add" size={16} color={ui.accentSoft} />
                 </Pressable>
               </View>
@@ -361,8 +361,8 @@ export default function SubjectDetailScreen() {
             <View key={`cand-${v.candidate.sourceBulletinId}`} style={[ui.card, styles.candRow]}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={styles.candHead}>
-                  <View style={styles.candTag}>
-                    <Text style={styles.candTagText}>掲示より</Text>
+                  <View style={[styles.candTag, { backgroundColor: ui.pillBg }]}>
+                    <Text style={[styles.candTagText, { color: ui.pillText }]}>掲示より</Text>
                   </View>
                   <Text style={[styles.eventText, { color: ui.valueColor }]} numberOfLines={1}>
                     {cellBadgeText(candidateToClassEvent(v.candidate, v.candidate.sourceBulletinId))}
@@ -424,11 +424,11 @@ export default function SubjectDetailScreen() {
             実施する週を選びます。既定は全週実施。隔週は「プリセット」で入れて、ずれた週だけタップで切り替えてください。
           </Text>
           <View style={styles.segRow}>
-            <Pressable style={[styles.presetBtn, ui.dark && { backgroundColor: DARK.softBox }]} onPress={() => updatePattern(applyBiweeklyPreset(mondayOf(new Date()), weeks))}>
+            <Pressable style={[styles.presetBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => updatePattern(applyBiweeklyPreset(mondayOf(new Date()), weeks))}>
               <Ionicons name="repeat-outline" size={15} color={ui.accentSoft} />
               <Text style={[styles.presetText, { color: ui.accentSoft }]}>隔週プリセット</Text>
             </Pressable>
-            <Pressable style={[styles.presetBtn, ui.dark && { backgroundColor: DARK.softBox }]} onPress={() => updatePattern(clearPattern())}>
+            <Pressable style={[styles.presetBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => updatePattern(clearPattern())}>
               <Ionicons name="checkmark-done-outline" size={15} color={ui.accentSoft} />
               <Text style={[styles.presetText, { color: ui.accentSoft }]}>全週実施に戻す</Text>
             </Pressable>
@@ -446,8 +446,8 @@ export default function SubjectDetailScreen() {
                   <Text style={[styles.weekLabel, { color: off ? ui.labelColor : ui.valueColor, fontWeight: isThis ? '800' : '500' }]}>
                     {w.getMonth() + 1}/{w.getDate()} の週{isThis ? ' ・ 今週' : ''}
                   </Text>
-                  <View style={[styles.weekPill, { backgroundColor: off ? '#f2ddd6' : ui.pillBg }]}>
-                    <Text style={{ color: off ? '#a33417' : ui.pillText, fontSize: 12, fontWeight: '700' }}>
+                  <View style={[styles.weekPill, { backgroundColor: off ? ui.colors.patternOffBg : ui.pillBg }]}>
+                    <Text style={{ color: off ? ui.colors.patternOffText : ui.pillText, fontSize: 12, fontWeight: '700' }}>
                       {off ? '休み' : '実施'}
                     </Text>
                   </View>
@@ -496,8 +496,6 @@ const styles = StyleSheet.create({
   code: { fontSize: 12, marginTop: 4 },
   chipRow: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  chipGlass: { backgroundColor: 'rgba(255,255,255,0.42)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
-  chipSolid: { backgroundColor: '#d6efe4' },
   chipText: { fontSize: 12 },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   linkIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
@@ -517,13 +515,13 @@ const styles = StyleSheet.create({
   eventSub: { fontSize: 12, marginTop: 2 },
   candRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: COLORS.emerald },
   candHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  candTag: { backgroundColor: '#e8f4ee', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  candTagText: { fontSize: 10, fontWeight: '800', color: COLORS.emeraldDark },
+  candTag: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  candTagText: { fontSize: 10, fontWeight: '800' },
   candDone: { fontSize: 12, fontWeight: '700' },
   candBtn: { backgroundColor: COLORS.emerald, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
-  candBtnText: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
+  candBtnText: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
   makeupPill: { backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  makeupPillText: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
+  makeupPillText: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
   segRow: { flexDirection: 'row', gap: 8 },
   presetBtn: {
     flex: 1,
@@ -533,7 +531,6 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingVertical: 9,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.04)',
   },
   presetText: { fontSize: 12.5, fontWeight: '700' },
   weekRow: {
@@ -545,9 +542,6 @@ const styles = StyleSheet.create({
   },
   weekLabel: { fontSize: 14 },
   weekPill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, minWidth: 52, alignItems: 'center' },
-  seg: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.05)' },
-  segActive: { backgroundColor: COLORS.emerald },
-  segText: { fontSize: 14, fontWeight: '700' },
   patRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
   reanchor: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   patHint: { fontSize: 12, lineHeight: 18, marginTop: 10 },
@@ -556,6 +550,6 @@ const styles = StyleSheet.create({
   attSub: { fontSize: 12.5 },
   attStepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   attStepBtns: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  attStepBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.05)' },
+  attStepBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   attTotalNum: { fontSize: 16, fontWeight: '700', minWidth: 28, textAlign: 'center' },
 })

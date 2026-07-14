@@ -68,15 +68,15 @@ export default function InfoScreen() {
     return (
       <View style={[ui.card, styles.row]}>
         <PressableRow style={styles.rowMain} onPress={() => openItem(i)} disabled={disabled}>
-          <Text style={[styles.rowName, { color: disabled ? '#9bb3ab' : ui.valueColor }]}>
+          <Text style={[styles.rowName, { color: disabled ? ui.colors.chevron : ui.valueColor }]}>
             {i.name}
             {disabled ? '（準備中）' : ''}
           </Text>
-          {!disabled ? <Ionicons name="open-outline" size={15} color="#9bb3ab" /> : null}
+          {!disabled ? <Ionicons name="open-outline" size={15} color={ui.colors.chevron} /> : null}
         </PressableRow>
         {!disabled ? (
           <Pressable onPress={() => onToggle(i.id)} hitSlop={10}>
-            <Ionicons name={on ? 'star' : 'star-outline'} size={22} color={on ? '#f5a623' : '#9bb3ab'} />
+            <Ionicons name={on ? 'star' : 'star-outline'} size={22} color={on ? ui.colors.favorite : ui.colors.chevron} />
           </Pressable>
         ) : null}
       </View>

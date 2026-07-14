@@ -62,6 +62,8 @@ export type UiColors = {
   gridCellFilledBg: string
   gridCellTodayBg: string
   gridCellNowBg: string
+  /** 個人予定のみ（授業なし）のセル背景。破線境界＋斜体文字と合わせて識別する淡い翠ウォッシュ。前景トークンを流用しないための専用背景。 */
+  gridCellPersonalBg: string
   gridCellText: string
   /** 科目「実施パターン」の休み週バッジ（背景/文字）。異常ではなく状態区別のドメイン色。 */
   patternOffBg: string
@@ -110,6 +112,7 @@ const GREEN: UiColors = {
   gridCellFilledBg: 'rgba(255,255,255,0.5)',
   gridCellTodayBg: 'rgba(255,255,255,0.62)',
   gridCellNowBg: 'rgba(255,255,255,0.88)',
+  gridCellPersonalBg: 'rgba(46,160,120,0.10)',
   gridCellText: '#04322a',
   patternOffBg: '#f2ddd6',
   patternOffText: '#a33417',
@@ -156,6 +159,7 @@ const WHITE: UiColors = {
   gridCellFilledBg: '#e8f4ee',
   gridCellTodayBg: '#d6efe4',
   gridCellNowBg: '#c3ead7',
+  gridCellPersonalBg: 'rgba(46,160,120,0.10)',
   gridCellText: COLORS.ink,
   patternOffBg: '#f2ddd6',
   patternOffText: '#a33417',
@@ -202,6 +206,7 @@ const DARK_TOKENS: UiColors = {
   gridCellFilledBg: DARK.gridFilled,
   gridCellTodayBg: DARK.gridToday,
   gridCellNowBg: DARK.gridNow,
+  gridCellPersonalBg: DARK.gridPersonal,
   gridCellText: DARK.value,
   patternOffBg: DARK.patternOffBg,
   patternOffText: DARK.patternOffText,
