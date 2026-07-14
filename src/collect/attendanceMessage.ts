@@ -11,6 +11,14 @@
 
 export type AttendanceStatus = 'none' | 'accepting' | 'attended' | 'closed' | 'reaction_pending' | 'unknown'
 
+/**
+ * 出席ページ自身が表示するアクセス元ネットワーク種別。実DOM（協力者採取fixture）の
+ * 「学内ネットワークからのアクセス」ラベル由来。id は j_idt 自動採番で不安定なため文言でのみ判定する。
+ * 学外側の文言は handover.md の観測メモ由来（実DOM未採取）＝一致しない場合は unknown に落ちるだけで
+ * 誤警告は出ない（安全側）。IPアドレスは抽出・保存しない（判定は文言のみ・3層基準）。
+ */
+export type AttendanceNetwork = 'on' | 'off' | 'unknown'
+
 export type AttendanceReception = {
   status: AttendanceStatus
   /** status==='accepting' の派生（既存consumer homeBanner等の互換用）。 */
@@ -19,6 +27,8 @@ export type AttendanceReception = {
   confirmWindow: string | null
   remaining: string | null
   error: string | null
+  /** 学内/学外ネットワーク判定（ページ文言由来。'off' のときだけ画面が警告を出す）。 */
+  network: AttendanceNetwork
 }
 
 const NONE_MARKER = '出席確認中の履修授業はありません'
@@ -40,11 +50,26 @@ type Payload = {
 }
 
 function base(status: AttendanceStatus): AttendanceReception {
-  return { status, accepting: status === 'accepting', courseName: null, confirmWindow: null, remaining: null, error: null }
+  return {
+    status,
+    accepting: status === 'accepting',
+    courseName: null,
+    confirmWindow: null,
+    remaining: null,
+    error: null,
+    network: 'unknown',
+  }
 }
 
 function fail(error: string): AttendanceReception {
   return { ...base('unknown'), error }
+}
+
+/** 本文テキストから学内/学外を判定する。どちらの文言も無ければ unknown（警告は出さない）。 */
+export function detectAttendanceNetwork(text: string): AttendanceNetwork {
+  if (text.includes('学外ネットワークからのアクセス')) return 'off'
+  if (text.includes('学内ネットワークからのアクセス')) return 'on'
+  return 'unknown'
 }
 
 function extractWindow(text: string): string | null {
@@ -86,19 +111,22 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
   const signSize = typeof p.signSize === 'string' ? p.signSize : ''
   // 受付時間は label.signSize（確実）を優先し、無ければ本文テキストから拾う。
   const windowOf = () => extractWindow(signSize) ?? extractWindow(text)
+  // 学内/学外はどの状態でも本文から拾える（表示されないページでは unknown）。
+  const network = detectAttendanceNetwork(text)
 
   // 1) 出席済み: attendSuc は本文が薄くても確定。空本文チェックより先に見る。
   if (p.attendSuc === true) {
     const r = base('attended')
     r.courseName = courseNameOf(p)
     r.confirmWindow = windowOf()
+    r.network = network
     return r
   }
 
   if (!text.trim()) return fail(READ_ERROR)
 
   // 2) 受付なし
-  if (text.includes(NONE_MARKER)) return base('none')
+  if (text.includes(NONE_MARKER)) return { ...base('none'), network }
 
   const cw = windowOf()
 
@@ -112,6 +140,7 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     r.courseName = courseNameOf(p)
     r.confirmWindow = cw
     r.remaining = extractRemaining(text) ?? remainingFromSec(p.timeSum)
+    r.network = network
     return r
   }
 
@@ -121,6 +150,7 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     r.courseName = courseNameOf(p)
     r.confirmWindow = cw
     r.remaining = extractRemaining(text) ?? remainingFromSec(p.timeSum)
+    r.network = network
     return r
   }
 
@@ -130,9 +160,10 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     const r = base('closed')
     r.courseName = courseNameOf(p)
     r.confirmWindow = cw
+    r.network = network
     return r
   }
 
   // 6) 遷移中/その他
-  return base('unknown')
+  return { ...base('unknown'), network }
 }

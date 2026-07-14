@@ -27,7 +27,15 @@ function col(day: 'mon' | 'tue', period: number, name = '線形代数', hasClass
 }
 
 function accepting(courseName: string | null): AttendanceReception {
-  return { status: 'accepting', accepting: true, courseName, confirmWindow: '9:00〜9:15', remaining: 'あと5分', error: null }
+  return {
+    status: 'accepting',
+    accepting: true,
+    courseName,
+    confirmWindow: '9:00〜9:15',
+    remaining: 'あと5分',
+    error: null,
+    network: 'unknown',
+  }
 }
 const notAccepting: AttendanceReception = {
   status: 'none',
@@ -36,6 +44,7 @@ const notAccepting: AttendanceReception = {
   confirmWindow: null,
   remaining: null,
   error: null,
+  network: 'unknown',
 }
 
 // 2026-07-06 は月曜。1限=9:00-10:30。
