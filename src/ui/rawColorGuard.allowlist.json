@@ -1,19 +1,10 @@
 [
-  "screens/AttendanceScreen.tsx",
   "screens/BulletinDetailScreen.tsx",
-  "screens/BulletinListScreen.tsx",
-  "screens/BulletinWebScreen.tsx",
   "screens/HomeScreen.tsx",
   "screens/InfoScreen.tsx",
-  "screens/LetusCoursesScreen.tsx",
-  "screens/LinkViewerScreen.tsx",
   "screens/OnboardingSlides.tsx",
   "screens/PdfViewerScreen.tsx",
-  "screens/SettingsScreen.tsx",
   "screens/SubjectDetailScreen.tsx",
-  "screens/SyllabusScreen.tsx",
   "screens/TermsConsentScreen.tsx",
-  "screens/TimetableScreen.tsx",
-  "screens/UpdateCheckScreen.tsx",
-  "screens/WebViewerScreen.tsx"
+  "screens/TimetableScreen.tsx"
 ]

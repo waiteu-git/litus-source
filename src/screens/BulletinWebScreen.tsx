@@ -153,7 +153,7 @@ export default function BulletinWebScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#ffffff' },
+  root: { flex: 1, backgroundColor: COLORS.white },
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
   web: { flex: 1 },
   refresh: {
@@ -166,5 +166,5 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     elevation: 4,
   },
-  refreshText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  refreshText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
 })

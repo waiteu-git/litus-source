@@ -104,5 +104,5 @@ const styles = StyleSheet.create({
   value: { fontSize: 14, lineHeight: 21 },
   section: { fontSize: 15, fontWeight: '700', marginTop: 12, marginBottom: 4 },
   linkBtn: { backgroundColor: COLORS.cta, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11 },
-  linkBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  linkBtnText: { color: COLORS.white, fontSize: 14, fontWeight: '600' },
 })

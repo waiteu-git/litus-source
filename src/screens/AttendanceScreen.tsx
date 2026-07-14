@@ -11,7 +11,7 @@ import { REACTION_MAX_LEN, canSubmitReaction, reactionDraftApplies, reactionLeng
 import { todayKey } from '../attendance/attendedState'
 import { loadReactionDraft, saveReactionDraft } from '../storage/reactionDraftStore'
 import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
-import { COLORS, DARK } from '../theme'
+import { COLORS } from '../theme'
 
 /**
  * 出席画面。CLASS WebView・受付判定エンジンは AttendanceEngineProvider（アプリ根で常時保持）に
@@ -21,7 +21,6 @@ import { COLORS, DARK } from '../theme'
 export default function AttendanceScreen() {
   const inputRef = useRef<RNTextInput>(null)
   const ui = useUi()
-  const glass = ui.green
   const dark = ui.dark
   const clearance = useTabBarClearance()
   const isFocused = useIsFocused()
@@ -144,7 +143,7 @@ export default function AttendanceScreen() {
 
         {conflict ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
-            <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+            <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
               <Ionicons name="desktop-outline" size={30} color={ui.accent} />
             </View>
             <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
@@ -188,7 +187,7 @@ export default function AttendanceScreen() {
           // （actuatorスタブ環境・DOM変化時の逃げ道）。
           <>
             <View style={[styles.card, cardStyle, styles.hero]}>
-              <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+              <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
                 <Ionicons name="create-outline" size={30} color={ui.accent} />
               </View>
               <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
@@ -233,7 +232,7 @@ export default function AttendanceScreen() {
             >
               {reactionSending ? (
                 <View style={styles.ctaBusyRow}>
-                  <ActivityIndicator size="small" color="#ffffff" />
+                  <ActivityIndicator size="small" color={c.white} />
                   <Text style={styles.ctaText}>提出中…</Text>
                 </View>
               ) : (
@@ -249,7 +248,7 @@ export default function AttendanceScreen() {
                 </View>
                 <IndeterminateBar
                   color={ui.accent}
-                  trackColor={dark ? DARK.softBox : glass ? 'rgba(255,255,255,0.28)' : '#e3ebe7'}
+                  trackColor={ui.colors.softBoxBg}
                 />
               </View>
             ) : reactionSubmit.status === 'failed' ? (
@@ -259,7 +258,7 @@ export default function AttendanceScreen() {
             ) : null}
 
             <Pressable
-              style={[styles.reactionGhost, dark && { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder }]}
+              style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
               disabled={reactionSending}
               onPress={() => setRevealClass(true)}
             >
@@ -270,7 +269,7 @@ export default function AttendanceScreen() {
           </>
         ) : closed ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
-            <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+            <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
               <Ionicons name="time-outline" size={30} color={ui.accent} />
             </View>
             <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>この授業の受付は終了しました</Text>
@@ -308,7 +307,7 @@ export default function AttendanceScreen() {
                 </>
               ) : (
                 <>
-                  <View style={[styles.preIconWrap, { backgroundColor: glass ? 'rgba(255,255,255,0.2)' : dark ? DARK.softBox : '#eef5f2' }]}>
+                  <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
                     {phase === 'booting' ? (
                       // 受付状況の確認・更新中。静止アイコンだけだと「フリーズ？」と誤解されるため、
                       // スピナー＋下のスイープバーで処理中を明示する（送信中〜確認中の表示と同系）。
@@ -322,7 +321,7 @@ export default function AttendanceScreen() {
                     <View style={styles.statusBarWrap}>
                       <IndeterminateBar
                         color={ui.accent}
-                        trackColor={dark ? DARK.softBox : glass ? 'rgba(255,255,255,0.28)' : '#e3ebe7'}
+                        trackColor={ui.colors.softBoxBg}
                       />
                     </View>
                   ) : null}
@@ -340,7 +339,14 @@ export default function AttendanceScreen() {
                     <Text style={styles.failBtnText}>更新</Text>
                   </Pressable>
                   {failCount >= 2 ? (
-                    <Pressable style={[styles.failBtn, styles.failBtnGhost, dark && { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder }]} onPress={() => setRevealClass(true)}>
+                    <Pressable
+                      style={[
+                        styles.failBtn,
+                        styles.failBtnGhost,
+                        { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder },
+                      ]}
+                      onPress={() => setRevealClass(true)}
+                    >
                       <Text style={[styles.failBtnText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>CLASSの画面を表示</Text>
                     </Pressable>
                   ) : null}
@@ -379,7 +385,7 @@ export default function AttendanceScreen() {
             >
               {phase === 'submitting' ? (
                 <View style={styles.ctaBusyRow}>
-                  <ActivityIndicator size="small" color="#ffffff" />
+                  <ActivityIndicator size="small" color={c.white} />
                   <Text style={styles.ctaText}>送信中…</Text>
                 </View>
               ) : (
@@ -390,7 +396,7 @@ export default function AttendanceScreen() {
             {result?.ok ? (
               <View style={[styles.card, cardStyle, styles.doneCard]}>
                 <View style={styles.doneCheck}>
-                  <Ionicons name="checkmark" size={38} color="#ffffff" />
+                  <Ionicons name="checkmark" size={38} color={c.white} />
                 </View>
                 <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
               </View>
@@ -410,7 +416,7 @@ export default function AttendanceScreen() {
                 </View>
                 <IndeterminateBar
                   color={ui.accent}
-                  trackColor={dark ? DARK.softBox : glass ? 'rgba(255,255,255,0.28)' : '#e3ebe7'}
+                  trackColor={ui.colors.softBoxBg}
                 />
               </View>
             ) : null}
@@ -428,8 +434,6 @@ const styles = StyleSheet.create({
   hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   hTitle: { fontSize: 20, fontWeight: '600' },
   pill: { fontSize: 12, paddingHorizontal: 11, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
-  pillGlass: { backgroundColor: 'rgba(255,255,255,0.42)', color: '#04322a' },
-  pillSolid: { backgroundColor: '#d6efe4', color: '#0a6650' },
   card: { borderRadius: 18, padding: 16 },
   hero: { alignItems: 'center', paddingVertical: 20 },
   liveBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
@@ -438,8 +442,7 @@ const styles = StyleSheet.create({
   heroCourse: { fontSize: 17, fontWeight: '700', textAlign: 'center', paddingHorizontal: 8 },
   ringWrap: { marginTop: 14 },
   heroWindow: { fontSize: 12, marginTop: 14, textAlign: 'center' },
-  preIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#eef5f2', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  preIconWrapGlass: { backgroundColor: 'rgba(255,255,255,0.2)' },
+  preIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.tint, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   status: { fontSize: 16, fontWeight: '600' },
   statusCenter: { textAlign: 'center' },
   conflictSub: { fontSize: 13, textAlign: 'center', marginTop: 8, paddingHorizontal: 8, lineHeight: 19 },
@@ -447,14 +450,13 @@ const styles = StyleSheet.create({
   conflictBtn: { alignSelf: 'stretch' },
   inputLabel: { fontSize: 13, marginBottom: 10 },
   segRow: { flexDirection: 'row', gap: 9 },
-  seg: { flex: 1, height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: '#b9ddcd', backgroundColor: '#f1f8f5', alignItems: 'center', justifyContent: 'center' },
-  segGlass: { backgroundColor: 'rgba(255,255,255,0.42)', borderColor: 'rgba(255,255,255,0.7)' },
+  seg: { flex: 1, height: 54, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   segText: { fontSize: 24, fontWeight: '600' },
   hiddenInput: { position: 'absolute', opacity: 0, height: 54, left: 16, right: 16, top: 40 },
   cta: { marginTop: 16, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   ctaBusy: { opacity: 0.85 },
   ctaBusyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  ctaText: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
+  ctaText: { color: COLORS.white, fontSize: 17, fontWeight: '600' },
   result: { marginTop: 12, borderRadius: 14, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
   verifyCard: { marginTop: 12, gap: 12 },
@@ -471,10 +473,10 @@ const styles = StyleSheet.create({
   doneSub: { fontSize: 13, marginTop: 6, textAlign: 'center' },
   reactionInput: { minHeight: 120, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, lineHeight: 22 },
   reactionCount: { fontSize: 12, textAlign: 'right', marginTop: 6 },
-  reactionGhost: { marginTop: 12, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: '#b9ddcd' },
+  reactionGhost: { marginTop: 12, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   reactionGhostText: { fontSize: 14, fontWeight: '600' },
   failRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   failBtn: { flex: 1, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  failBtnGhost: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: '#b9ddcd' },
-  failBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  failBtnGhost: { borderWidth: 1 },
+  failBtnText: { color: COLORS.white, fontSize: 14, fontWeight: '600' },
 })

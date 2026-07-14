@@ -5,7 +5,8 @@ import { WebView } from 'react-native-webview'
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import { useClassView } from '../collect/classViewArbiter'
 import { isPdfLikeUrl } from '../collect/injectedScripts'
-import { COLORS, DARK, useThemeVariant } from '../theme'
+import { COLORS } from '../theme'
+import { useUi } from '../ui/screen'
 
 type Params = { Link: { url: string; title?: string; isClass?: boolean } }
 
@@ -22,7 +23,7 @@ export default function LinkViewerScreen() {
   const webviewRef = useRef<WebView>(null)
   const { setCollectActive } = useClassView()
   const [nonce, setNonce] = useState(0)
-  const dark = useThemeVariant().variant === 'dark'
+  const ui = useUi()
 
   // 掲示表示中はCLASS使用権を取り、離れたら返す。フォーカスの度にリロードして最新化。
   useFocusEffect(
@@ -36,7 +37,7 @@ export default function LinkViewerScreen() {
   )
 
   return (
-    <View style={[styles.root, dark && { backgroundColor: DARK.bg }]}>
+    <View style={[styles.root, { backgroundColor: ui.colors.screenSolid }]}>
       <WebView
         key={nonce}
         ref={webviewRef}
@@ -61,11 +62,11 @@ export default function LinkViewerScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#ffffff' },
+  root: { flex: 1 },
   web: { flex: 1 },
   refresh: {
     position: 'absolute', right: 14, bottom: 20, backgroundColor: COLORS.cta,
     borderRadius: 999, paddingHorizontal: 18, paddingVertical: 11, elevation: 4,
   },
-  refreshText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  refreshText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
 })
