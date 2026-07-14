@@ -5,7 +5,6 @@ import { PressableRow } from '../ui/Pressable'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import AssignmentCollector from '../collect/AssignmentCollector'
 import { loadAssignments, mutateAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
@@ -22,18 +21,13 @@ import { useDisplaySettings } from '../displaySettings'
 import { formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone, formatDeadlineRich, deadlineMagnitude } from '../assignments/deadline'
 import { assignmentsEmptyState } from '../assignments/emptyState'
 import { RADIUS } from '../ui/scale'
-import { loadCollectionHealth } from '../storage/collectionHealthStore'
-import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
 import KillSwitchBanner from '../ui/KillSwitchBanner'
-import { evaluateAccess } from '../health/accessGate'
-import { isOnlineNow } from '../health/connectivity'
-import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
-import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
+import { syncSkipMessage } from '../health/syncSkipNotice'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
-import { loadAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
 import FreshnessLabel from '../ui/FreshnessLabel'
+import { useSync } from '../sync/SyncProvider'
 import { COLORS } from '../theme'
 
 type RowUi = {
@@ -323,7 +317,6 @@ export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const ui = useUi()
   const clearance = useTabBarClearance()
-  const { message: syncNotice, show: showSyncNotice, clear: clearSyncNotice } = useSyncSkipNotice()
   const { assignmentsView } = useDisplaySettings()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [now, setNow] = useState(() => new Date())
@@ -331,30 +324,20 @@ export default function AssignmentsScreen() {
   // 期限切れ・非表示はデフォルト折りたたみ（主役はこれから迫る締切）。
   const [showOverdue, setShowOverdue] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
-  // 課題更新（LETUS再スキャン）を「別画面へ遷移」ではなく、この一覧を保ったまま裏で走らせる。
-  // 収集は headless の AssignmentCollector に委譲し、進捗はインジケータで示す。完了時に version が
-  // 上がって一覧が差分反映される（既存の scanned 一覧に変更を加えていく形）。
-  const [collecting, setCollecting] = useState(false)
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
-  // LETUS課題収集の最終ヘルス（層1の正直表示バナー用）。
-  const [health, setHealth] = useState<StoredHealth | null>(null)
-  // 課題一覧の鮮度（最終保存成功時刻）。
-  const [refreshedAt, setRefreshedAt] = useState(0)
+  // 課題更新（LETUSフル同期）は SyncProvider が単独所有。この画面は runner を呼び、
+  // 進捗（assignmentBusy/assignmentProgress）を購読してバーを完了まで表示する。ホーム発の
+  // 統合同期（掲示→課題）の課題フェーズも同じ状態に載るので、画面を跨いでも進捗が途切れない。
+  const sync = useSync()
+  const collecting = sync.assignmentBusy
+  // LETUS収集のヘルス（層1の正直表示バナー用）・鮮度・スキップ理由は Provider が完了ごとに反映する。
+  const health = sync.letusHealth
+  const refreshedAt = sync.lastAssignmentsAt
+  // この画面では LETUS 起因のスキップだけ表示する（CLASS掲示のスキップはホームの同期バーが持つ）。
+  const syncNotice = sync.skip?.feature === 'letus' ? syncSkipMessage('letus', sync.skip.reason) : ''
 
   const startUpdate = useCallback(() => {
-    // LETUS定時メンテナンス帯(4:00–5:30)/オフラインは収集不能。押しても無反応にせず理由を短時間表示する。
-    // LETUSは出席セッションと無関係なので running(授業中)は渡さない＝attending は発生しない。
-    const access = evaluateAccess('letus', { now: new Date(), isOnline: isOnlineNow() })
-    const skip = syncSkipReason({ access })
-    if (skip) {
-      showSyncNotice(syncSkipMessage('letus', skip))
-      return
-    }
-    // 収集開始時は残っているスキップ通知（と自動消去タイマー）を確実に片付ける（HomeScreenと同契約）。
-    clearSyncNotice()
-    setProgress(null)
-    setCollecting(true)
-  }, [showSyncNotice, clearSyncNotice])
+    sync.runAssignmentsSync({ source: 'user' })
+  }, [sync])
 
   const reload = useCallback(async () => {
     const map = await loadAssignments()
@@ -367,10 +350,6 @@ export default function AssignmentsScreen() {
       loadAssignments().then((map) => {
         if (active) setAssignments(Object.values(map))
       })
-      loadCollectionHealth()
-        .then((m) => active && setHealth(m.letusAssignments ?? null))
-        .catch(() => undefined)
-      loadAssignmentsRefreshedAt().then((at) => active && setRefreshedAt(at)).catch(() => undefined)
       return () => {
         active = false
       }
@@ -615,27 +594,15 @@ export default function AssignmentsScreen() {
         <Text style={[styles.syncNotice, { color: ui.labelColor }]}>{syncNotice}</Text>
       ) : null}
 
-      {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。 */}
+      {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。収集本体は SyncProvider が
+          マウントし、ステージ文言（コース取込/内容確認/課題取込 n/m）をそのまま表示する。 */}
       {collecting ? (
         <View style={[rowUi.card, styles.updatingBar]}>
           <ActivityIndicator size="small" color={rowUi.accent} />
           <Text style={[styles.updatingText, { color: rowUi.valueColor }]} numberOfLines={1}>
-            課題を更新中…{progress ? ` ${progress.done}/${progress.total} 件` : ''}
+            {sync.assignmentProgress ?? '課題を更新中…'}
           </Text>
         </View>
-      ) : null}
-
-      {/* headless 収集本体（画面外1px）。完了で version が上がり一覧が差分反映される。 */}
-      {collecting ? (
-        <AssignmentCollector
-          onProgress={(done, total) => setProgress({ done, total })}
-          onFinished={() => {
-            setCollecting(false)
-            setProgress(null)
-            loadCollectionHealth().then((m) => setHealth(m.letusAssignments ?? null)).catch(() => undefined)
-            loadAssignmentsRefreshedAt().then(setRefreshedAt).catch(() => undefined)
-          }}
-        />
       ) : null}
 
       {showEmpty && emptyState ? (

@@ -27,16 +27,8 @@ import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
-import { isBulletinStale, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
-import { loadCollectionHealth } from '../storage/collectionHealthStore'
-import type { StoredHealth } from '../storage/collectionHealthSerialize'
-import HealthBanner from '../ui/HealthBanner'
-import FreshnessLabel from '../ui/FreshnessLabel'
-import { evaluateAccess } from '../health/accessGate'
-import { isOnlineNow } from '../health/connectivity'
-import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
-import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
-import BulletinSyncEngine from '../collect/BulletinSyncEngine'
+import { useSync } from '../sync/SyncProvider'
+import HomeSyncBar from '../home/HomeSyncBar'
 import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 import { PressableCard, PressableRow } from '../ui/Pressable'
@@ -94,17 +86,10 @@ export default function HomeScreen() {
   const { version: classEventsVersion } = useClassEventsVersion()
 
   const [weeklyPatterns, setWeeklyPatterns] = useState<WeeklyPatternMap>({})
-  // CLASS掲示の裏取得中フラグ。true の間だけ headless エンジンをマウントする。
-  const [bulletinSyncing, setBulletinSyncing] = useState(false)
-  const bulletinSyncingRef = useRef(false)
+  // 同期の状態・実行は SyncProvider が単独所有（掲示アニメ・鮮度・スキップ理由は上部同期バーに集約）。
+  const sync = useSync()
   // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用。開発ビルドでのみ読み書き・表示する。
   const [bulletinDiag, setBulletinDiag] = useState('')
-  // 掲示収集の最終ヘルス（層1の正直表示バナー用）。
-  const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
-  // 掲示の最終更新時刻（層1の鮮度常設表示用）。
-  const [bulletinRefreshedAt, setBulletinRefreshedAt] = useState(0)
-  // 手動更新をガードでスキップした理由の一時表示（リリースでも出す。診断bulletinDiagは__DEV__限定）。
-  const { message: syncNotice, show: showSyncNotice, clear: clearSyncNotice } = useSyncSkipNotice()
 
   useFocusEffect(
     useCallback(() => {
@@ -120,12 +105,6 @@ export default function HomeScreen() {
           .then((d) => active && setBulletinDiag(d))
           .catch(() => undefined)
       }
-      loadCollectionHealth()
-        .then((m) => active && setBulletinHealth(m.bulletin ?? null))
-        .catch(() => undefined)
-      loadBulletinRefreshedAt()
-        .then((at) => active && setBulletinRefreshedAt(at))
-        .catch(() => undefined)
       loadWeeklyPatterns()
         .then((m) => active && setWeeklyPatterns(m))
         .catch(() => undefined)
@@ -142,41 +121,15 @@ export default function HomeScreen() {
     loadClassEvents().then(setClassEvents).catch(() => undefined)
   }, [classEventsVersion])
 
-  // 掲示の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
-  // 授業時間帯(running=出席WebViewが前面/稼働)はCLASSセッションを出席が専有しており、掲示収集を
-  // 走らせると同一セッションを奪い合って「別の画面で操作された」＝空ページになり、出席まで不安定化する。
-  // そのため授業中は掲示収集を控える（出席絶対優先。掲示は授業後に取得）。
-  const startBulletinSync = useCallback(
-    (force: boolean) => {
-      if (bulletinSyncingRef.current) return
-      // CLASS定時メンテナンス帯（2:00–4:00）/オフライン/授業中（出席WebViewがCLASSセッション専有中）は収集しない。
-      // 手動タップ(force)時はスキップ理由を短時間表示する（自動起動のスキップでは出さない）。
-      const access = evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() })
-      const skip = syncSkipReason({ running, access })
-      if (skip) {
-        const message = syncSkipMessage('class', skip)
-        if (skip === 'attending') setBulletinDiag(message)
-        if (force) showSyncNotice(message)
-        return
-      }
-      const begin = () => {
-        bulletinSyncingRef.current = true
-        setBulletinSyncing(true)
-        // 収集開始時は残っているスキップ通知（と自動消去タイマー）を確実に片付ける。
-        clearSyncNotice()
-      }
-      if (force) {
-        begin()
-        return
-      }
-      loadBulletinRefreshedAt()
-        .then((at) => {
-          if (!bulletinSyncingRef.current && isBulletinStale(at)) begin()
-        })
-        .catch(() => undefined)
-    },
-    [running, showSyncNotice, clearSyncNotice],
-  )
+  // 掲示同期の完了（bulletinBusy の下降）で、開きっぱなしのホームにも収集結果を反映する。
+  const prevBulletinBusy = useRef(false)
+  useEffect(() => {
+    if (prevBulletinBusy.current && !sync.bulletinBusy) {
+      loadBulletinDigest().then(setBulletin).catch(() => undefined)
+      if (__DEV__) loadBulletinDiag().then(setBulletinDiag).catch(() => undefined)
+    }
+    prevBulletinBusy.current = sync.bulletinBusy
+  }, [sync.bulletinBusy])
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
   // 出席済みのときは「出席登録受付中/出席を確認」バナーは出さない（案内が不要・紛らわしい）。
@@ -200,9 +153,9 @@ export default function HomeScreen() {
   const unreadBulletin = bulletin.filter((b) => b.unread)
   // 未読0件時のカード分岐（純ロジック）。「取得済みで未読なし」と「未取得」を区別する。
   const bulletinEmpty = bulletinEmptyCard({
-    syncing: bulletinSyncing,
+    syncing: sync.bulletinBusy,
     running,
-    collected: bulletinRefreshedAt > 0 || bulletin.length > 0,
+    collected: sync.lastBulletinAt > 0 || bulletin.length > 0,
   })
 
   // 「今やること」に集約する当日の内部予定（休講/補講/教室変更/小テスト等）。純粋ロジックで抽出（TDD済み）。
@@ -331,6 +284,8 @@ export default function HomeScreen() {
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: clearance }]}>
           {/* 開発ビルドの識別タグ（versionCode 由来＝APK名 litus-...-vNN と一致）。公開前に撤去する。 */}
           <Text style={[styles.devTag, { color: ui.labelColor }]}>{formatBuildTag(Constants.nativeBuildVersion)}</Text>
+          {/* 統合同期バー: タップで掲示→課題の順次同期。鮮度・スキップ理由・ヘルス注意もここに集約。 */}
+          <HomeSyncBar />
           {banner.active && bannerMounted ? (
             // 絶対配置で本文の上に重ねる＝展開/格納で下の内容をreflowさせない（配置固定）。
             <View style={styles.overlayAnchor}>
@@ -364,8 +319,9 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。 */}
-          <BulletinSyncStatus syncing={bulletinSyncing} />
+          {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。
+              統合同期では掲示フェーズだけこの演出を出し、続く課題フェーズはホームでは無演出（方針）。 */}
+          <BulletinSyncStatus syncing={sync.bulletinBusy} />
 
           {(() => {
             const sectionNodes: Record<HomeSectionKey, ReactNode> = {
@@ -507,25 +463,11 @@ export default function HomeScreen() {
               </View>
             </View>
           ) : null,
-              // CLASS掲示（インフォから移設）。未読ダイジェストが埋まっていればスライド、空ならCTA。
+              // CLASS掲示（インフォから移設）。カード外の見出し・更新ボタン・鮮度/ヘルス表示は撤去し
+              // 上部の統合同期バーへ集約（カード内の文字だけにする方針・2026-07-14）。
               bulletins: (
                 <Fragment>
-                  <View style={styles.bulletinSectionRow}>
-            <SectionLabel>CLASS掲示</SectionLabel>
-            <Pressable onPress={() => startBulletinSync(true)} hitSlop={10} disabled={bulletinSyncing} style={styles.refreshBtn}>
-              {bulletinSyncing ? (
-                <ActivityIndicator size="small" color={ui.accentSoft} />
-              ) : (
-                <Ionicons name="refresh" size={16} color={ui.accentSoft} />
-              )}
-            </Pressable>
-          </View>
-          <HealthBanner health={bulletinHealth?.health} source="class" />
-          <FreshnessLabel at={bulletinRefreshedAt} />
-          {syncNotice ? (
-            <Text style={[styles.syncNotice, { color: ui.labelColor }]}>{syncNotice}</Text>
-          ) : null}
-          {unreadBulletin.length > 0 ? (
+                  {unreadBulletin.length > 0 ? (
             <View style={[ui.card, styles.bulletinCard]}>
               <View style={styles.bulletinHead}>
                 <Ionicons name="megaphone-outline" size={18} color={ui.accent} />
@@ -555,7 +497,7 @@ export default function HomeScreen() {
             // 導線を残す。未取得の時だけタップで取得を促す。
             <PressableCard
               style={[ui.card, styles.bulletinCta]}
-              onPress={bulletinEmpty.action === 'list' ? openBulletin : () => startBulletinSync(true)}
+              onPress={bulletinEmpty.action === 'list' ? openBulletin : () => sync.runFullSync({ source: 'user' })}
             >
               <Ionicons name="megaphone-outline" size={20} color={ui.accent} />
               <View style={{ flex: 1 }}>
@@ -651,18 +593,6 @@ export default function HomeScreen() {
         </>
       ) : null}
 
-      {bulletinSyncing ? (
-        <BulletinSyncEngine
-          onFinished={() => {
-            bulletinSyncingRef.current = false
-            setBulletinSyncing(false)
-            loadBulletinDigest().then(setBulletin).catch(() => undefined)
-            if (__DEV__) loadBulletinDiag().then(setBulletinDiag).catch(() => undefined)
-            loadCollectionHealth().then((m) => setBulletinHealth(m.bulletin ?? null)).catch(() => undefined)
-            loadBulletinRefreshedAt().then(setBulletinRefreshedAt).catch(() => undefined)
-          }}
-        />
-      ) : null}
     </View>
   )
 }
@@ -841,9 +771,6 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   chipText: { fontSize: 11, fontWeight: '700' },
 
-  bulletinSectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  refreshBtn: { padding: 6, marginTop: 8 },
-  syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
   bulletinCard: { paddingBottom: 12 },
   bulletinHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   bulletinHeadText: { fontSize: 15, fontWeight: '600', flex: 1 },
