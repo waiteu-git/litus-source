@@ -117,6 +117,7 @@ describe('buildAssignmentListItems (bucket)', () => {
     const items = buildAssignmentListItems(
       base({
         view: 'bucket',
+        filter: 'all',
         assignments: [
           mk({ url: 'soon', deadline: iso('2026-07-13T18:00:00+09:00') }),
           mk({ url: 'done', submissionStatus: 'submitted' }),

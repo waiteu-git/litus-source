@@ -30,29 +30,29 @@ function keyOf(list: Assignment[], out: Record<BucketKey, Assignment[]>): Bucket
 }
 
 describe('bucketAssignments', () => {
-  it('締切帯で振り分ける', () => {
-    const within = a({ url: 'w', deadline: localIso(2026, 7, 6, 20, 0) }) // 今日夜=24h以内
-    const tomorrow = a({ url: 't', deadline: localIso(2026, 7, 7, 23, 59) }) // 明日夜=>24h先
+  it('締切帯で振り分ける（今日はカレンダー同日）', () => {
+    const today = a({ url: 'w', deadline: localIso(2026, 7, 6, 20, 0) }) // 今日夜
+    const tomorrow = a({ url: 't', deadline: localIso(2026, 7, 7, 23, 59) }) // 明日
     const week = a({ url: 'k', deadline: localIso(2026, 7, 10, 23, 59) }) // 今週
     const later = a({ url: 'l', deadline: localIso(2026, 7, 30, 23, 59) }) // それ以降
-    const out = bucketAssignments([within, tomorrow, week, later], now)
-    expect(out.within24h.map((x) => x.url)).toEqual(['w'])
+    const out = bucketAssignments([today, tomorrow, week, later], now)
+    expect(out.today.map((x) => x.url)).toEqual(['w'])
     expect(out.tomorrow.map((x) => x.url)).toEqual(['t'])
     expect(out.thisWeek.map((x) => x.url)).toEqual(['k'])
     expect(out.later.map((x) => x.url)).toEqual(['l'])
   })
-  it('24h以内は明日カレンダーでも優先する', () => {
-    const soon = a({ url: 's', deadline: localIso(2026, 7, 7, 9, 0) }) // 明日9:00=23h先
+  it('翌日カレンダー(9:00・24h以内)は今日でなく明日', () => {
+    const soon = a({ url: 's', deadline: localIso(2026, 7, 7, 9, 0) }) // 明日9:00=23h先だが翌日
     const out = bucketAssignments([soon], now)
-    expect(out.within24h.map((x) => x.url)).toEqual(['s'])
-    expect(out.tomorrow).toEqual([])
+    expect(out.today).toEqual([])
+    expect(out.tomorrow.map((x) => x.url)).toEqual(['s'])
   })
   it('提出済み・完了は締切に関わらず submitted', () => {
     const sub = a({ url: 's', deadline: localIso(2026, 7, 6, 20, 0), submissionStatus: 'submitted' })
     const comp = a({ url: 'c', deadline: localIso(2026, 7, 6, 20, 0), submissionStatus: 'completed' })
     const out = bucketAssignments([sub, comp], now)
     expect(out.submitted.map((x) => x.url)).toEqual(['s', 'c'])
-    expect(out.within24h).toEqual([])
+    expect(out.today).toEqual([])
   })
   it('開始前は beforeStart、期限切れ未提出は overdue', () => {
     const before = a({ url: 'b', lifecycleStatus: 'before_start', deadline: null })

@@ -1,28 +1,28 @@
 /**
  * 課題一覧の締切帯セクション分け（純粋関数）。
  * 設計: docs/2026-07-06-assignments-tab-design.md 3.6/4。ignored は既定で全バケットから除外。
- * 判定優先: 提出済み → 開始前 → 期限切れ → 24h以内 → 明日 → 今週 → それ以降。
+ * 判定優先: 提出済み → 開始前 → 期限切れ → 今日(カレンダー同日) → 明日 → 今週 → それ以降。
  * バケット内は締切昇順（締切なしは末尾）。
  */
 import type { Assignment } from '../storage/assignmentsSerialize'
 
 export type BucketKey =
-  | 'within24h'
+  | 'overdue'
+  | 'today'
   | 'tomorrow'
   | 'thisWeek'
   | 'later'
   | 'beforeStart'
   | 'submitted'
-  | 'overdue'
 
-/** 表示順（UIはこの順でセクションを描画し、空バケットは省く）。 */
+/** 表示順（UIはこの順でセクションを描画し、空バケットは省く）。期限切れを最上部に固定。 */
 export const BUCKET_ORDER: BucketKey[] = [
-  'within24h',
+  'overdue',
+  'today',
   'tomorrow',
   'thisWeek',
   'later',
   'beforeStart',
-  'overdue',
   'submitted',
 ]
 
@@ -50,10 +50,11 @@ function classify(assignment: Assignment, now: Date): BucketKey {
 
   const nowMs = now.getTime()
   if (deadlineMs < nowMs) return 'overdue'
-  if (deadlineMs <= nowMs + DAY_MS) return 'within24h'
 
-  const tomorrow = new Date(nowMs + DAY_MS)
-  if (isSameLocalDate(new Date(deadlineMs), tomorrow)) return 'tomorrow'
+  const deadlineDate = new Date(deadlineMs)
+  if (isSameLocalDate(deadlineDate, now)) return 'today'
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  if (isSameLocalDate(deadlineDate, tomorrow)) return 'tomorrow'
   if (deadlineMs <= nowMs + 7 * DAY_MS) return 'thisWeek'
   return 'later'
 }
@@ -71,12 +72,12 @@ export function bucketAssignments(
   now: Date,
 ): Record<BucketKey, Assignment[]> {
   const out: Record<BucketKey, Assignment[]> = {
-    within24h: [],
+    overdue: [],
+    today: [],
     tomorrow: [],
     thisWeek: [],
     later: [],
     beforeStart: [],
-    overdue: [],
     submitted: [],
   }
   for (const assignment of assignments) {

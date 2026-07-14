@@ -17,6 +17,45 @@ export function isSubmitted(a: Assignment): boolean {
   return a.submissionStatus === 'submitted' || a.submissionStatus === 'completed'
 }
 
+const JP_DOW = ['日', '月', '火', '水', '木', '金', '土']
+
+function isSameLocalDate(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+/** 課題一覧の締切表示。近い順に「今日 HH:MM」「明日 HH:MM」「M/D(曜) HH:MM」。締切なし・不正は「締切未設定」。 */
+export function formatDeadlineRich(iso: string | null, now: Date): string {
+  if (!iso) return '締切未設定'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '締切未設定'
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  if (isSameLocalDate(d, now)) return `今日 ${time}`
+  if (isSameLocalDate(d, tomorrow)) return `明日 ${time}`
+  return `${d.getMonth() + 1}/${d.getDate()}(${JP_DOW[d.getDay()]}) ${time}`
+}
+
+/** 締切までの量。将来は「あとN日/時間/分」、超過は「N日/時間/分 超過」。締切なしは空文字。 */
+export function deadlineMagnitude(iso: string | null, now: Date): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const sec = Math.floor((d.getTime() - now.getTime()) / 1000)
+  if (sec <= 0) {
+    const over = -sec
+    const day = Math.floor(over / 86400)
+    if (day >= 1) return `${day}日超過`
+    const h = Math.floor(over / 3600)
+    if (h >= 1) return `${h}時間超過`
+    return `${Math.max(1, Math.floor(over / 60))}分超過`
+  }
+  const day = Math.floor(sec / 86400)
+  if (day >= 1) return `あと${day}日`
+  const h = Math.floor(sec / 3600)
+  if (h >= 1) return `あと${h}時間`
+  return `あと${Math.max(1, Math.floor(sec / 60))}分`
+}
+
 /** 'M/D HH:MM' 形式。締切なし・不正は「締切未設定」。 */
 export function formatDeadline(iso: string | null): string {
   if (!iso) return '締切未設定'

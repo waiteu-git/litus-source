@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pickUrgentAssignment, relDue, urgencyTone } from './deadline'
+import { pickUrgentAssignment, relDue, urgencyTone, formatDeadlineRich, deadlineMagnitude } from './deadline'
 import type { Assignment } from '../storage/assignmentsSerialize'
 
 const NOW = new Date(2026, 6, 9, 12, 0) // 2026-07-09 12:00
@@ -61,6 +61,39 @@ describe('relDue', () => {
   })
   it('締切超過は「締切超過」', () => {
     expect(relDue(iso(8), NOW)).toBe('締切超過')
+  })
+})
+
+describe('formatDeadlineRich', () => {
+  it('今日はカレンダー同日で「今日 HH:MM」', () => {
+    expect(formatDeadlineRich(iso(15), NOW)).toBe('今日 15:00')
+  })
+  it('翌日は「明日 HH:MM」', () => {
+    expect(formatDeadlineRich(iso(9, 1), NOW)).toBe('明日 09:00')
+  })
+  it('それ以外は「M/D(曜) HH:MM」', () => {
+    expect(formatDeadlineRich(iso(13, 3), NOW)).toMatch(/^7\/12\(.\) 13:00$/)
+  })
+  it('締切なしは「締切未設定」', () => {
+    expect(formatDeadlineRich(null, NOW)).toBe('締切未設定')
+  })
+})
+
+describe('deadlineMagnitude', () => {
+  it('将来は「あとN時間」', () => {
+    expect(deadlineMagnitude(iso(15), NOW)).toBe('あと3時間')
+  })
+  it('将来N日は「あとN日」', () => {
+    expect(deadlineMagnitude(iso(12, 2), NOW)).toBe('あと2日')
+  })
+  it('超過は「N時間超過」', () => {
+    expect(deadlineMagnitude(iso(9), NOW)).toBe('3時間超過')
+  })
+  it('超過N日は「N日超過」', () => {
+    expect(deadlineMagnitude(iso(12, -1), NOW)).toBe('1日超過')
+  })
+  it('締切なしは空文字', () => {
+    expect(deadlineMagnitude(null, NOW)).toBe('')
   })
 })
 
