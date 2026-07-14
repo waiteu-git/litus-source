@@ -1,6 +1,8 @@
 /**
  * ホーム上部の同期バーの表示内容を決める純粋関数。優先度は
- * 掲示同期中 > 課題同期中 > スキップ理由 > ヘルス注意 > 鮮度。
+ * 掲示同期中 > スキップ理由 > 課題同期中 > ヘルス注意 > 鮮度。
+ * スキップを課題同期中より上に置くのは、統合同期で掲示フェーズだけスキップされた場合
+ * （授業中/CLASSメンテ）に理由が「課題を同期中…」の裏で消えて見えなくなるのを防ぐため。
  * 課題フェーズはホームでは演出しない方針のため busy でも文言のみ（スピナーは掲示フェーズ限定を
  * kind で区別する）。スキップ文言はバー幅に収まる短縮形（詳細文言は syncSkipMessage が正）。
  */
@@ -32,6 +34,8 @@ export function syncBarSkipText(feature: 'class' | 'letus', reason: SyncSkipReas
       return feature === 'letus' ? 'LETUSメンテナンス中・終了後に同期' : 'CLASSメンテナンス中・終了後に同期'
     case 'attending':
       return '授業中・掲示は授業後に同期します'
+    case 'stopped':
+      return '同期は一時停止中です'
   }
 }
 
@@ -44,8 +48,8 @@ export function healthWarn(bulletinHealth: StoredHealth | null, letusHealth: Sto
 
 export function syncBarView(input: SyncBarInput, now: Date): SyncBarView {
   if (input.bulletinBusy) return { kind: 'busySpinner', text: '同期中…' }
-  if (input.assignmentBusy) return { kind: 'busyQuiet', text: '課題を同期中…' }
   if (input.skip) return { kind: 'skip', text: syncBarSkipText(input.skip.feature, input.skip.reason) }
+  if (input.assignmentBusy) return { kind: 'busyQuiet', text: '課題を同期中…' }
   if (healthWarn(input.bulletinHealth, input.letusHealth))
     return { kind: 'warn', text: '最新を取得できていない可能性・タップで再同期' }
   return { kind: 'fresh', text: formatSyncAgo(input.lastSyncAt, now) }

@@ -40,7 +40,10 @@ export default function HomeSyncBar() {
   return (
     <PressableRow
       style={[ui.card, styles.bar]}
-      onPress={busy ? undefined : () => sync.runFullSync({ source: 'user' })}
+      onPress={() => sync.runFullSync({ source: 'user' })}
+      // disabled で押下演出ごと止める（onPress=undefined だと縮む演出だけ残り、
+      // スクリーンリーダーにも有効なボタンとして読まれる）。
+      disabled={busy}
       accessibilityRole="button"
       accessibilityLabel="同期"
     >

@@ -20,10 +20,10 @@ type RunOpts = { source?: SyncSource }
 export type SyncValue = {
   /** 掲示エンジン稼働中（手動・背景を問わない）。 */
   bulletinBusy: boolean
+  /** 稼働中の掲示同期がユーザー起点か（ホームの同期アニメはユーザー起点のみ演出＝背景bootで勝手に動かない）。 */
+  bulletinUserRun: boolean
   /** LETUS課題フル同期エンジン稼働中（手動・背景を問わない）。 */
   assignmentBusy: boolean
-  /** 課題同期の進捗ラベル（エンジンのステージ文言。件数入り）。 */
-  assignmentProgress: string | null
   /** 掲示/課題の最終成功時刻（保存値の反映。0=未収集）。 */
   lastBulletinAt: number
   lastAssignmentsAt: number
@@ -44,8 +44,8 @@ export type SyncValue = {
 // Provider外（テスト等）は不活性: 何もせず・何も走らせない。
 const Ctx = createContext<SyncValue>({
   bulletinBusy: false,
+  bulletinUserRun: false,
   assignmentBusy: false,
-  assignmentProgress: null,
   lastBulletinAt: 0,
   lastAssignmentsAt: 0,
   lastSyncAt: null,
@@ -57,8 +57,17 @@ const Ctx = createContext<SyncValue>({
   runAssignmentsSync: () => false,
 })
 
+// 課題同期の進捗ラベル（1ページ巡回ごとに更新される高頻度値）。本体contextから分離し、
+// 表示する消費者（課題画面の更新バー）だけが毎ページ再レンダーされるようにする（NowCtxと同型）。
+const ProgressCtx = createContext<string | null>(null)
+
 export function useSync(): SyncValue {
   return useContext(Ctx)
+}
+
+/** 課題同期の進捗ラベル（エンジンのステージ文言・件数入り）。表示する部品だけが購読する。 */
+export function useSyncProgress(): string | null {
+  return useContext(ProgressCtx)
 }
 
 const SKIP_NOTICE_MS = 5000
@@ -87,20 +96,30 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const chainRef = useRef<SyncSource | null>(null)
 
   const [assignmentProgress, setAssignmentProgress] = useState<string | null>(null)
+  const [bulletinUserRun, setBulletinUserRun] = useState(false)
   const [lastBulletinAt, setLastBulletinAt] = useState(0)
   const [lastAssignmentsAt, setLastAssignmentsAt] = useState(0)
   const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
   const [letusHealth, setLetusHealth] = useState<StoredHealth | null>(null)
 
   const [skip, setSkip] = useState<SyncSkip | null>(null)
+  const skipRef = useRef<SyncSkip | null>(null)
   const skipTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const showSkip = useCallback((next: SyncSkip) => {
+    skipRef.current = next
     setSkip(next)
     if (skipTimer.current) clearTimeout(skipTimer.current)
-    skipTimer.current = setTimeout(() => setSkip(null), SKIP_NOTICE_MS)
+    skipTimer.current = setTimeout(() => {
+      skipRef.current = null
+      setSkip(null)
+    }, SKIP_NOTICE_MS)
   }, [])
-  const clearSkip = useCallback(() => {
+  // feature単位で消す: runFullSync が掲示スキップ（授業中/CLASSメンテ）→課題フェーズへ落ちたとき、
+  // 課題側の開始が直前に出した掲示側の理由表示を同一tickで握りつぶさないため。
+  const clearSkip = useCallback((feature: 'class' | 'letus') => {
+    if (skipRef.current == null || skipRef.current.feature !== feature) return
     if (skipTimer.current) clearTimeout(skipTimer.current)
+    skipRef.current = null
     setSkip(null)
   }, [])
   useEffect(
@@ -126,14 +145,19 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     (opts?: RunOpts): boolean => {
       const source = opts?.source ?? 'user'
       if (bulletinBusyRef.current) return false
-      if (isKilledRef.current('bulletin')) return false
+      if (isKilledRef.current('bulletin')) {
+        // 停止中の無反応化を防ぐ（ユーザー起点のみ理由を提示。背景は無音）。
+        if (source === 'user') showSkip({ feature: 'class', reason: 'stopped' })
+        return false
+      }
       const plan = planSync({ now: new Date(), isOnline: isOnlineNow(), running: runningRef.current })
       if (plan.bulletin !== 'run') {
         if (source === 'user') showSkip({ feature: 'class', reason: plan.bulletin })
         return false
       }
-      clearSkip()
+      clearSkip('class')
       bulletinBusyRef.current = true
+      setBulletinUserRun(source === 'user')
       setBulletinBusy(true)
       return true
     },
@@ -144,13 +168,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     (opts?: RunOpts): boolean => {
       const source = opts?.source ?? 'user'
       if (assignmentBusyRef.current) return false
-      if (isKilledRef.current('letus')) return false
+      if (isKilledRef.current('letus')) {
+        if (source === 'user') showSkip({ feature: 'letus', reason: 'stopped' })
+        return false
+      }
       const plan = planSync({ now: new Date(), isOnline: isOnlineNow(), running: runningRef.current })
       if (plan.letus !== 'run') {
         if (source === 'user') showSkip({ feature: 'letus', reason: plan.letus })
         return false
       }
-      clearSkip()
+      clearSkip('letus')
       assignmentBusyRef.current = true
       setAssignmentProgress(null)
       setAssignmentBusy(true)
@@ -162,8 +189,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const runFullSync = useCallback(
     (opts?: RunOpts): boolean => {
       const source = opts?.source ?? 'user'
-      // どちらかが稼働中なら二重開始しない（上部ボタンは busy 中無効だが、背景と競った場合の保険）。
-      if (bulletinBusyRef.current || assignmentBusyRef.current) return false
+      // 掲示稼働中のみ二重開始を拒否する。課題（背景フル同期）稼働中でも掲示フェーズは開始できる
+      // （CLASS/LETUSは別セッションで独立。課題フェーズの二重開始は runAssignmentsSync 側の
+      //  in-flight ガードが弾き、完了時の連鎖も同ガードで無害に no-op する）。
+      if (bulletinBusyRef.current) return false
       if (runBulletinSync({ source })) {
         chainRef.current = source
         return true
@@ -177,6 +206,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const onBulletinFinished = useCallback(() => {
     bulletinBusyRef.current = false
     setBulletinBusy(false)
+    setBulletinUserRun(false)
+    // once-per-boot の掲示同期は**完走**で確定する（開始時に立てると途中破棄で空費する）。
+    syncSession.bulletinSyncedThisBoot = true
     loadBulletinRefreshedAt().then(setLastBulletinAt).catch(() => undefined)
     loadCollectionHealth().then((m) => setBulletinHealth(m.bulletin ?? null)).catch(() => undefined)
     const chained = chainRef.current
@@ -205,6 +237,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       chainRef.current = null
       bulletinBusyRef.current = false
       setBulletinBusy(false)
+      setBulletinUserRun(false)
     }
     if (isKilled('letus') && assignmentBusyRef.current) {
       assignmentBusyRef.current = false
@@ -218,8 +251,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const value = useMemo<SyncValue>(
     () => ({
       bulletinBusy,
+      bulletinUserRun,
       assignmentBusy,
-      assignmentProgress,
       lastBulletinAt,
       lastAssignmentsAt,
       lastSyncAt,
@@ -232,8 +265,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }),
     [
       bulletinBusy,
+      bulletinUserRun,
       assignmentBusy,
-      assignmentProgress,
       lastBulletinAt,
       lastAssignmentsAt,
       lastSyncAt,
@@ -248,14 +281,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={value}>
-      {children}
-      {/* エンジンは Provider が唯一のマウント元（画面・背景コンポーネントは runner を呼ぶだけ）。
-          kill switch は runner の事前チェック＋上の即時降ろし effect で反映する（Gateで包むと
-          稼働中の停止で onFinished が来ず busy が固着するため使わない）。 */}
-      {bulletinBusy ? <BulletinSyncEngine onFinished={onBulletinFinished} /> : null}
-      {assignmentBusy ? (
-        <LetusSyncEngine onProgress={(label) => setAssignmentProgress(label)} onFinished={onAssignmentsFinished} />
-      ) : null}
+      {/* 進捗ラベルは高頻度更新（1ページ巡回ごと）のため本体contextから分離（NowCtxと同型）。 */}
+      <ProgressCtx.Provider value={assignmentProgress}>
+        {children}
+        {/* エンジンは Provider が唯一のマウント元（画面・背景コンポーネントは runner を呼ぶだけ）。
+            kill switch は runner の事前チェック＋上の即時降ろし effect で反映する（Gateで包むと
+            稼働中の停止で onFinished が来ず busy が固着するため使わない）。 */}
+        {bulletinBusy ? <BulletinSyncEngine onFinished={onBulletinFinished} /> : null}
+        {assignmentBusy ? (
+          <LetusSyncEngine onProgress={(label) => setAssignmentProgress(label)} onFinished={onAssignmentsFinished} />
+        ) : null}
+      </ProgressCtx.Provider>
     </Ctx.Provider>
   )
 }

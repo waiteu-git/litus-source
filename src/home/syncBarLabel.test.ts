@@ -24,6 +24,11 @@ describe('syncBarView', () => {
       text: '課題を同期中…',
     })
   })
+  it('スキップ理由は課題同期中より優先（掲示スキップ→課題連鎖でも理由が見える）', () => {
+    const v = syncBarView({ ...base, assignmentBusy: true, skip: { feature: 'class', reason: 'attending' } }, now)
+    expect(v.kind).toBe('skip')
+    expect(v.text).toContain('授業中')
+  })
   it('スキップ理由はヘルス注意より優先', () => {
     const v = syncBarView(
       { ...base, skip: { feature: 'class', reason: 'attending' }, bulletinHealth: h('structure_drift') },
@@ -57,5 +62,8 @@ describe('syncBarSkipText', () => {
   it('メンテはシステム名を出し分ける', () => {
     expect(syncBarSkipText('class', 'maintenance')).toContain('CLASS')
     expect(syncBarSkipText('letus', 'maintenance')).toContain('LETUS')
+  })
+  it('kill switch停止中は一時停止の文言', () => {
+    expect(syncBarSkipText('class', 'stopped')).toContain('一時停止')
   })
 })

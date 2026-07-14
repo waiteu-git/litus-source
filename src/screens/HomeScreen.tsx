@@ -12,6 +12,7 @@ import { homeDeadlines, type HomeDeadlineBand } from '../home/homeDeadlines'
 import { formatDeadlineRich, deadlineMagnitude, urgencyTone } from '../assignments/deadline'
 import { loadAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
+import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { loadClassEvents } from '../storage/classEventsStore'
 import { todaySchedule, type TodayScheduleItem } from '../timetableEvents/eventSelectors'
 import type { ClassEvent } from '../timetableEvents/classEvent'
@@ -127,6 +128,15 @@ export default function HomeScreen() {
   useEffect(() => {
     loadClassEvents().then(setClassEvents).catch(() => undefined)
   }, [classEventsVersion])
+
+  // 課題の保存完了シグナル（背景収集・統合同期の課題フェーズ・手動編集）で「直近の締切」を追随させる
+  // （課題画面と同じ契約。フォーカス中の再読込だけだと同期完了がホームに反映されない）。
+  const { version: assignmentsVersion } = useAssignmentsVersion()
+  useEffect(() => {
+    loadAssignments()
+      .then((map) => setAssignments(Object.values(map)))
+      .catch(() => undefined)
+  }, [assignmentsVersion])
 
   // 掲示同期の完了（bulletinBusy の下降）で、開きっぱなしのホームにも収集結果を反映する。
   const prevBulletinBusy = useRef(false)
@@ -359,8 +369,9 @@ export default function HomeScreen() {
           ) : null}
 
           {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。
-              統合同期では掲示フェーズだけこの演出を出し、続く課題フェーズはホームでは無演出（方針）。 */}
-          <BulletinSyncStatus syncing={sync.bulletinBusy} />
+              統合同期では掲示フェーズだけこの演出を出し、続く課題フェーズはホームでは無演出（方針）。
+              背景boot同期では演出しない（勝手に動かない。バーの「同期中…」表示だけで伝える）。 */}
+          <BulletinSyncStatus syncing={sync.bulletinBusy && sync.bulletinUserRun} />
 
           {(() => {
             const sectionNodes: Record<HomeSectionKey, ReactNode> = {
@@ -744,7 +755,8 @@ function BulletinSyncStatus({ syncing }: { syncing: boolean }) {
           </View>
           <View style={styles.bannerBody}>
             <Text style={styles.bannerTitle}>同期中…</Text>
-            <Text style={styles.bannerSub}>課題と掲示を更新しています</Text>
+            {/* このバナーは掲示フェーズ（bulletinBusy）だけ表示される。課題フェーズは課題画面のバーが担う。 */}
+            <Text style={styles.bannerSub}>CLASS掲示を更新しています</Text>
           </View>
         </View>
       </Animated.View>
