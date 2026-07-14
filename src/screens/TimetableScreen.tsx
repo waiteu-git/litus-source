@@ -420,8 +420,8 @@ export default function TimetableScreen() {
             return (
             <View key={`${s.day}-${s.period}`} style={styles.trow}>
               <View style={styles.per}>
-                <Text style={[styles.pnum, { color: rowNow ? COLORS.cta : ui.heading }]}>{s.period}</Text>
-                <Text style={[styles.ptime, { color: rowNow ? COLORS.cta : ui.labelColor }]}>{startTime(s.period)}</Text>
+                <Text style={[styles.pnum, { color: rowNow ? ui.pick(COLORS.white, COLORS.cta, COLORS.emeraldLight) : ui.heading }]}>{s.period}</Text>
+                <Text style={[styles.ptime, { color: rowNow ? ui.pick(COLORS.white, COLORS.cta, COLORS.emeraldLight) : ui.labelColor }]}>{startTime(s.period)}</Text>
               </View>
               <View style={styles.clsCol}>
                 {s.classes.map((cl) => {
@@ -486,7 +486,7 @@ export default function TimetableScreen() {
             {dayMakeups.map((m, i) => (
               <View key={`mk-${i}`} style={styles.trow}>
                 <View style={styles.per}>
-                  <Text style={[styles.pnum, { color: COLORS.cta }]}>補</Text>
+                  <Text style={[styles.pnum, { color: ui.pick(COLORS.white, COLORS.cta, COLORS.emeraldLight) }]}>補</Text>
                   <Text style={[styles.ptime, { color: ui.labelColor }]}>{shortDate(m.date)}</Text>
                 </View>
                 <View style={styles.clsCol}>
