@@ -42,19 +42,19 @@ const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
   unknown: '未提出',
 }
 
-const OVERDUE_COLOR = '#e0533a'
 
-type RowUi = { card: ViewStyle; labelColor: string; valueColor: string }
+type RowUi = { card: ViewStyle; labelColor: string; valueColor: string; danger: string; chipBg: string }
 
 function isSameLocalDate(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
 function StatusChip({ status }: { status: AssignmentSubmissionStatus }) {
+  const ui = useUi()
   const submitted = status === 'submitted' || status === 'completed'
   return (
-    <View style={[styles.chip, submitted ? styles.chipOk : styles.chipNg]}>
-      <Text style={[styles.chipText, submitted ? styles.chipTextOk : styles.chipTextNg]}>
+    <View style={[styles.chip, { backgroundColor: submitted ? ui.colors.successBg : ui.softBoxBg }]}>
+      <Text style={[styles.chipText, { color: submitted ? ui.colors.success : ui.labelColor }]}>
         {STATUS_LABEL[status]}
       </Text>
     </View>
@@ -85,7 +85,7 @@ const FlatRow = memo(function FlatRow({
             {a.courseName || '科目不明'}
           </Text>
           {isManualUrl(a.url) ? (
-            <View style={styles.manualBadge}>
+            <View style={[styles.manualBadge, { backgroundColor: rowUi.chipBg }]}>
               <Text style={styles.manualBadgeText}>手動</Text>
             </View>
           ) : null}
@@ -127,7 +127,7 @@ const CardRow = memo(function CardRow({
     <PressableRow
       onPress={() => onOpen(a)}
       onLongPress={() => onHide(a)}
-      style={[rowUi.card, urgent && styles.urgent, styles.card]}
+      style={[rowUi.card, urgent && styles.urgent, urgent && { borderLeftColor: rowUi.danger }, styles.card]}
     >
       <View style={done ? styles.doneDim : undefined}>
         <View style={styles.rowTop}>
@@ -172,7 +172,7 @@ const HiddenRow = memo(function HiddenRow({
           {a.title}
         </Text>
       </View>
-      <Pressable onPress={() => onUnhide(a)} style={styles.restoreBtn}>
+      <Pressable onPress={() => onUnhide(a)} style={[styles.restoreBtn, { borderColor: rowUi.card.borderColor }]}>
         <Text style={styles.restoreText}>戻す</Text>
       </Pressable>
     </View>
@@ -192,7 +192,7 @@ const CollapseHeaderRow = memo(function CollapseHeaderRow({
   rowUi: RowUi
   onToggle: (group: 'overdue' | 'hidden') => void
 }) {
-  const color = group === 'overdue' ? OVERDUE_COLOR : rowUi.labelColor
+  const color = group === 'overdue' ? rowUi.danger : rowUi.labelColor
   return (
     <Pressable onPress={() => onToggle(group)} style={[styles.collapseHead, styles.collapseSpacing]}>
       <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={16} color={color} />
@@ -322,8 +322,10 @@ export default function AssignmentsScreen() {
       },
       labelColor: ui.labelColor,
       valueColor: ui.valueColor,
+      danger: ui.colors.danger,
+      chipBg: ui.colors.chipBg,
     }),
-    [ui.card.backgroundColor, ui.card.borderColor, ui.labelColor, ui.valueColor],
+    [ui.card.backgroundColor, ui.card.borderColor, ui.labelColor, ui.valueColor, ui.colors.danger, ui.colors.chipBg],
   )
 
   const listItems = useMemo(
@@ -378,7 +380,7 @@ export default function AssignmentsScreen() {
       <View>
         <View style={[rowUi.card, styles.statsRow]}>
           <View style={styles.statCol}>
-            <Text style={[styles.statNum, { color: OVERDUE_COLOR }]}>{stats.dueToday}</Text>
+            <Text style={[styles.statNum, { color: ui.colors.danger }]}>{stats.dueToday}</Text>
             <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>今日締切</Text>
           </View>
           <View style={styles.statCol}>
@@ -476,18 +478,14 @@ const styles = StyleSheet.create({
   list: { paddingTop: 4, paddingBottom: 24 },
   card: { marginBottom: 9 },
   doneDim: { opacity: 0.72 },
-  urgent: { borderLeftWidth: 4, borderLeftColor: '#ff7a5c' },
+  urgent: { borderLeftWidth: 4 },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   course: { fontSize: 11 },
   title: { fontSize: 14, fontWeight: '500', marginTop: 2 },
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   due: { fontSize: 12, flex: 1, paddingRight: 8 },
   chip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  chipNg: { backgroundColor: '#ffdcd4' },
-  chipOk: { backgroundColor: 'rgba(255,255,255,0.6)' },
   chipText: { fontSize: 11 },
-  chipTextNg: { color: '#a33417' },
-  chipTextOk: { color: '#0a5c48' },
   updatingBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, paddingVertical: 12 },
   updatingText: { fontSize: 13, fontWeight: '600', flex: 1 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
@@ -496,7 +494,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, marginTop: 2 },
   flatRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 9 },
   courseRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  manualBadge: { backgroundColor: '#e5f3ec', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
+  manualBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
   manualBadgeText: { fontSize: 10, color: COLORS.emeraldDark, fontWeight: '700' },
   dot: { width: 9, height: 9, borderRadius: 5 },
   flatRight: { alignItems: 'flex-end' },
@@ -507,7 +505,7 @@ const styles = StyleSheet.create({
   collapseSpacing: { marginTop: 14 },
   collapseText: { fontSize: 13, fontWeight: '600' },
   note: { marginLeft: 2 },
-  restoreBtn: { backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#b9ddcd', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  restoreBtn: { backgroundColor: COLORS.tint, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
   restoreText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
   syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
 })

@@ -127,7 +127,7 @@ export default function ClassEventFormScreen() {
   }
 
   const inputStyle = { backgroundColor: ui.inputBg, borderColor: ui.colors.inputBorder }
-  const phColor = ui.dark ? DARK.label : '#9aa8a2'
+  const phColor = ui.subMuted
   const darkChip = ui.dark ? { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder } : null
   const darkChipText = ui.dark ? { color: COLORS.emeraldLight } : null
   const label = (s: string) => <Text style={[styles.label, { color: ui.labelColor }]}>{s}</Text>
@@ -138,7 +138,11 @@ export default function ClassEventFormScreen() {
       {PERIOD_CANDIDATES.map((p) => {
         const on = sel.includes(p)
         return (
-          <Pressable key={p} onPress={() => onToggle(p)} style={[styles.pchip, !on && darkChip, on && styles.pchipOn]}>
+          <Pressable
+            key={p}
+            onPress={() => onToggle(p)}
+            style={[styles.pchip, { borderColor: ui.colors.segBorder }, !on && darkChip, on && styles.pchipOn]}
+          >
             <Text style={[styles.pchipText, !on && darkChipText, on && styles.pchipTextOn]}>{p}限</Text>
           </Pressable>
         )
@@ -159,7 +163,11 @@ export default function ClassEventFormScreen() {
             {TYPES.map((t) => {
               const on = type === t
               return (
-                <Pressable key={t} onPress={() => setType(t)} style={[styles.tchip, !on && darkChip, on && styles.tchipOn]}>
+                <Pressable
+                  key={t}
+                  onPress={() => setType(t)}
+                  style={[styles.tchip, { borderColor: ui.colors.segBorder }, !on && darkChip, on && styles.tchipOn]}
+                >
                   <Text style={[styles.tchipText, !on && darkChipText, on && styles.tchipTextOn]}>{eventTypeLabel(t)}</Text>
                 </Pressable>
               )
@@ -208,7 +216,11 @@ export default function ClassEventFormScreen() {
                 const on = makeupStatus === s
                 const t = s === 'has' ? '補講あり' : s === 'none' ? '補講なし' : '未定'
                 return (
-                  <Pressable key={s} onPress={() => setMakeupStatus(s)} style={[styles.tchip, !on && darkChip, on && styles.tchipOn]}>
+                  <Pressable
+                    key={s}
+                    onPress={() => setMakeupStatus(s)}
+                    style={[styles.tchip, { borderColor: ui.colors.segBorder }, !on && darkChip, on && styles.tchipOn]}
+                  >
                     <Text style={[styles.tchipText, !on && darkChipText, on && styles.tchipTextOn]}>{t}</Text>
                   </Pressable>
                 )
@@ -251,14 +263,17 @@ export default function ClassEventFormScreen() {
           />
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={[styles.error, { color: ui.colors.danger }]}>{error}</Text> : null}
 
         <Pressable style={styles.saveBtn} onPress={onSave}>
           <Text style={styles.saveText}>{editId ? '保存' : '追加'}</Text>
         </Pressable>
         {editId ? (
-          <Pressable style={styles.deleteBtn} onPress={onDelete}>
-            <Text style={styles.deleteText}>削除</Text>
+          <Pressable
+            style={[styles.deleteBtn, { borderColor: ui.colors.danger, backgroundColor: ui.colors.dangerBg }]}
+            onPress={onDelete}
+          >
+            <Text style={[styles.deleteText, { color: ui.colors.danger }]}>削除</Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -271,20 +286,20 @@ const styles = StyleSheet.create({
   card: { gap: 8 },
   course: { fontSize: 17, fontWeight: '700' },
   label: { fontSize: 13, fontWeight: '600' },
-  input: { backgroundColor: '#f1f8f5', borderWidth: 1, borderColor: '#cfe0d9', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15 },
+  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tchip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999, backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#cfe0d9' },
+  tchip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999, backgroundColor: COLORS.tint, borderWidth: 1 },
   tchipOn: { backgroundColor: COLORS.cta, borderColor: COLORS.cta },
   tchipText: { fontSize: 13, color: COLORS.emeraldDark, fontWeight: '600' },
-  tchipTextOn: { color: '#ffffff' },
-  pchip: { width: 46, paddingVertical: 8, borderRadius: 12, backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#cfe0d9', alignItems: 'center' },
+  tchipTextOn: { color: COLORS.white },
+  pchip: { width: 46, paddingVertical: 8, borderRadius: 12, backgroundColor: COLORS.tint, borderWidth: 1, alignItems: 'center' },
   pchipOn: { backgroundColor: COLORS.cta, borderColor: COLORS.cta },
   pchipText: { fontSize: 13, color: COLORS.emeraldDark, fontWeight: '600' },
-  pchipTextOn: { color: '#ffffff' },
+  pchipTextOn: { color: COLORS.white },
   hint: { fontSize: 12 },
-  error: { color: '#c0392b', fontSize: 13, marginHorizontal: 4 },
+  error: { fontSize: 13, marginHorizontal: 4 },
   saveBtn: { backgroundColor: COLORS.cta, borderRadius: 14, height: 52, alignItems: 'center', justifyContent: 'center' },
-  saveText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  deleteBtn: { borderRadius: 14, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e3b0a6', backgroundColor: '#fdf0ed' },
-  deleteText: { color: '#c0392b', fontSize: 15, fontWeight: '600' },
+  saveText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
+  deleteBtn: { borderRadius: 14, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  deleteText: { fontSize: 15, fontWeight: '600' },
 })
