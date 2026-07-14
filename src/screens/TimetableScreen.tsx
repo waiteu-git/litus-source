@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
+import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadTimetable } from '../storage/timetableStore'
@@ -43,6 +44,7 @@ import { personalEventAt, daysWithPersonal, hasZeroPeriod, personalEventsOfDay }
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
+import { shouldShowTodayPill } from '../timetableEvents/todayPill'
 import { DUR, EASE, SHIFT } from '../ui/motion'
 import { Badge } from '../ui/Badge'
 
@@ -287,6 +289,13 @@ export default function TimetableScreen() {
   const cellNowBg = ui.colors.gridCellNowBg
   const cellTextColor = ui.colors.gridCellText
 
+  // 「今日へ戻る」: リストで今日以外を見ているとき、今日へ一発で戻し自動追従も戻す。
+  const showTodayPill = shouldShowTodayPill({ view: timetableView, selDay, todayKey, days })
+  const returnToToday = () => {
+    selDayAutoRef.current = true
+    setSelDay(todayKey)
+  }
+
   return (
     <ScreenBg>
       <ScreenHeader
@@ -321,6 +330,22 @@ export default function TimetableScreen() {
             setSelDay(d)
           }}
         />
+      ) : null}
+
+      {col && showTodayPill ? (
+        <View style={styles.todayPillRow}>
+          <Pressable
+            onPress={returnToToday}
+            style={({ pressed }) => [
+              styles.todayPill,
+              { backgroundColor: ui.pillBg, borderColor: ui.colors.chipBorder },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Ionicons name="today-outline" size={14} color={ui.pillText} />
+            <Text style={[styles.todayPillText, { color: ui.pillText }]}>今日（{DAY_LABEL[todayKey]}）へ</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       <View style={styles.swipeArea} {...swipePan.panHandlers}>
@@ -570,4 +595,7 @@ const styles = StyleSheet.create({
   personalCellText: { color: COLORS.emeraldDark, fontStyle: 'italic' },
   personalDot: { position: 'absolute', bottom: 3, left: 3, width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.emerald },
   personalRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
+  todayPillRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
+  todayPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
+  todayPillText: { fontSize: 12, fontWeight: '700' },
 })
