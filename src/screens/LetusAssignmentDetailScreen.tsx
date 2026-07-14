@@ -196,9 +196,9 @@ export default function LetusAssignmentDetailScreen() {
           <Text style={[styles.title, { color: ui.valueColor }]}>{assignment.title}</Text>
 
           <View style={styles.statsRow}>
-            <View style={[styles.statBox, { backgroundColor: urgent ? '#fff2ef' : ui.softBoxBg }]}>
-              <Text style={[styles.statLabel, { color: urgent ? '#a33417' : ui.labelColor }]}>締切まで</Text>
-              <Text style={[styles.statValue, { color: urgent ? '#e0533a' : ui.valueColor }]}>{rel || '—'}</Text>
+            <View style={[styles.statBox, { backgroundColor: urgent ? ui.colors.dangerBg : ui.softBoxBg }]}>
+              <Text style={[styles.statLabel, { color: urgent ? ui.colors.danger : ui.labelColor }]}>締切まで</Text>
+              <Text style={[styles.statValue, { color: urgent ? ui.colors.danger : ui.valueColor }]}>{rel || '—'}</Text>
             </View>
             {userManaged ? (
               <Pressable
@@ -240,8 +240,11 @@ export default function LetusAssignmentDetailScreen() {
               label={isPdfLikeUrl(assignment.url) ? 'PDFをプレビュー ↗' : 'LETUSで開く ↗'}
               onPress={() => navigation.navigate('Web', { url: assignment.url, title: assignment.title })}
             />
-            <Pressable onPress={confirmDelete} style={styles.deleteBtn}>
-              <Text style={styles.deleteText}>削除</Text>
+            <Pressable
+              onPress={confirmDelete}
+              style={[styles.deleteBtn, { borderColor: ui.colors.danger, backgroundColor: ui.colors.dangerBg }]}
+            >
+              <Text style={[styles.deleteText, { color: ui.colors.danger }]}>削除</Text>
             </Pressable>
           </View>
         ) : (
@@ -258,7 +261,7 @@ export default function LetusAssignmentDetailScreen() {
                       <Pressable
                         key={att.url}
                         onPress={() => navigation.navigate('Web', { url: att.url, title: att.name })}
-                        style={[styles.attachRow, ui.dark && { backgroundColor: DARK.softBox }]}
+                        style={[styles.attachRow, { backgroundColor: ui.softBoxBg }]}
                       >
                         <Ionicons name="document-attach-outline" size={18} color={ui.accent} />
                         <Text style={{ color: ui.accent, fontSize: 13, flex: 1 }} numberOfLines={1}>
@@ -298,12 +301,12 @@ export default function LetusAssignmentDetailScreen() {
         <Modal visible={editingDeadline} transparent animationType="slide" onRequestClose={() => setEditingDeadline(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setEditingDeadline(false)} />
           <View style={[styles.modalSheet, ui.dark && { backgroundColor: DARK.card }]}>
-            <Text style={[styles.modalTitle, ui.dark && { color: DARK.heading }]}>締切を編集</Text>
+            <Text style={[styles.modalTitle, { color: ui.heading }]}>締切を編集</Text>
             <DeadlineFields
               value={dlValue}
               onChange={setDlValue}
-              valueColor={ui.dark ? DARK.value : '#123'}
-              labelColor={ui.dark ? DARK.label : '#5a6b64'}
+              valueColor={ui.valueColor}
+              labelColor={ui.labelColor}
             />
             <Pressable style={styles.editSaveBtn} onPress={saveDeadline}>
               <Text style={styles.editSaveText}>保存</Text>
@@ -326,7 +329,7 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 16, fontWeight: '700', marginTop: 3 },
   deadlineRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 14 },
   deadlineText: { fontSize: 12 },
-  editLinkBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: '#eef5f2' },
+  editLinkBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: COLORS.tint },
   editLinkText: { fontSize: 12, fontWeight: '600', color: COLORS.emeraldDark },
   attachRow: {
     flexDirection: 'row',
@@ -335,7 +338,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
-    backgroundColor: '#f1f8f5',
   },
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   deleteBtn: {
@@ -344,13 +346,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e3b0a6',
-    backgroundColor: '#fdf0ed',
   },
-  deleteText: { color: '#c0392b', fontSize: 15, fontWeight: '600' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 30, gap: 12 },
-  modalTitle: { fontSize: 16, fontWeight: '700', color: '#123' },
+  deleteText: { fontSize: 15, fontWeight: '600' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }, // design-allow
+  modalSheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 30, gap: 12 },
+  modalTitle: { fontSize: 16, fontWeight: '700' },
   editSaveBtn: { backgroundColor: COLORS.cta, borderRadius: 14, height: 50, alignItems: 'center', justifyContent: 'center' },
-  editSaveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  editSaveText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
 })

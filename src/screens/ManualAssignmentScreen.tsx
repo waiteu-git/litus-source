@@ -112,7 +112,7 @@ export default function ManualAssignmentScreen() {
   }
 
   const inputStyle = { backgroundColor: ui.inputBg, borderColor: ui.colors.inputBorder }
-  const phColor = ui.dark ? DARK.label : '#9aa8a2'
+  const phColor = ui.dark ? DARK.label : ui.subMuted
   const label = (s: string) => <Text style={[styles.label, { color: ui.labelColor }]}>{s}</Text>
 
   return (
@@ -149,15 +149,18 @@ export default function ManualAssignmentScreen() {
           />
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={[styles.error, { color: ui.colors.danger }]}>{error}</Text> : null}
 
         <Pressable style={styles.saveBtn} onPress={onSave}>
           <Text style={styles.saveText}>{existing ? '保存' : '追加'}</Text>
         </Pressable>
 
         {existing ? (
-          <Pressable style={styles.deleteBtn} onPress={onDelete}>
-            <Text style={styles.deleteText}>削除</Text>
+          <Pressable
+            style={[styles.deleteBtn, { borderColor: ui.colors.danger, backgroundColor: ui.colors.dangerBg }]}
+            onPress={onDelete}
+          >
+            <Text style={[styles.deleteText, { color: ui.colors.danger }]}>削除</Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -170,17 +173,15 @@ const styles = StyleSheet.create({
   card: { gap: 8 },
   label: { fontSize: 13, fontWeight: '600' },
   input: {
-    backgroundColor: '#f1f8f5',
     borderWidth: 1,
-    borderColor: '#cfe0d9',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 11,
     fontSize: 15,
   },
-  error: { color: '#c0392b', fontSize: 13, marginHorizontal: 4 },
+  error: { fontSize: 13, marginHorizontal: 4 },
   saveBtn: { backgroundColor: COLORS.cta, borderRadius: 14, height: 52, alignItems: 'center', justifyContent: 'center' },
-  saveText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  deleteBtn: { borderRadius: 14, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e3b0a6', backgroundColor: '#fdf0ed' },
-  deleteText: { color: '#c0392b', fontSize: 15, fontWeight: '600' },
+  saveText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
+  deleteBtn: { borderRadius: 14, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  deleteText: { fontSize: 15, fontWeight: '600' },
 })
