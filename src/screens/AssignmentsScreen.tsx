@@ -28,6 +28,7 @@ import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { useSync, useSyncProgress } from '../sync/SyncProvider'
+import ScreenHint from '../tutorial/ScreenHint'
 import { COLORS } from '../theme'
 
 type RowUi = {
@@ -601,6 +602,7 @@ export default function AssignmentsScreen() {
       />
 
       <KillSwitchBanner feature="letus" />
+      <ScreenHint hintKey="assignments" />
       <HealthBanner health={health?.health} source="letus" />
       <FreshnessLabel at={refreshedAt} />
       {syncNotice ? (

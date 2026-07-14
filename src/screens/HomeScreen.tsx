@@ -32,6 +32,7 @@ import { useSync } from '../sync/SyncProvider'
 import HomeSyncBar from '../home/HomeSyncBar'
 import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
 import { markCourseSeen, type CourseNewsMap } from '../updates/courseNews'
+import ScreenHint from '../tutorial/ScreenHint'
 import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 import { PressableCard, PressableRow } from '../ui/Pressable'
@@ -335,6 +336,8 @@ export default function HomeScreen() {
           <Text style={[styles.devTag, { color: ui.labelColor }]}>{formatBuildTag(Constants.nativeBuildVersion)}</Text>
           {/* 統合同期バー: タップで掲示→課題の順次同期。鮮度・スキップ理由・ヘルス注意もここに集約。 */}
           <HomeSyncBar />
+          {/* 初回ヒント（×で永続的に消える・設定から再表示可）。 */}
+          <ScreenHint hintKey="home" />
           {banner.active && bannerMounted ? (
             // 絶対配置で本文の上に重ねる＝展開/格納で下の内容をreflowさせない（配置固定）。
             <View style={styles.overlayAnchor}>

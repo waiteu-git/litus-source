@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { Animated, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { Ionicons } from '@expo/vector-icons'
+import ScreenHint from '../tutorial/ScreenHint'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { loadTimetable } from '../storage/timetableStore'
@@ -364,6 +365,7 @@ export default function TimetableScreen() {
 
       <View style={styles.swipeArea} {...swipePan.panHandlers}>
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} refreshControl={refresh}>
+        <ScreenHint hintKey="timetable" />
         <HealthBanner health={health?.health} source="class" />
         <FreshnessLabel at={refreshedAt} />
         {syncNotice ? (
