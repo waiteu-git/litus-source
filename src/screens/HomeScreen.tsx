@@ -29,11 +29,12 @@ import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { useSync } from '../sync/SyncProvider'
-import HomeSyncBar from '../home/HomeSyncBar'
+import HomeSyncButton from '../home/HomeSyncButton'
 import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
 import { markCourseSeen, type CourseNewsMap } from '../updates/courseNews'
 import ScreenHint from '../tutorial/ScreenHint'
 import { COLORS } from '../theme'
+import { SPACE } from '../ui/scale'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 import { PressableCard, PressableRow } from '../ui/Pressable'
 import { useDisplaySettings } from '../displaySettings'
@@ -320,22 +321,25 @@ export default function HomeScreen() {
           title="ホーム"
           icon="home-outline"
           right={
-            <Pressable
-              onPress={() => navigation.navigate('Settings')}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="設定"
-              style={styles.gearBtn}
-            >
-              <Ionicons name="settings-outline" size={22} color={ui.heading} />
-            </Pressable>
+            <>
+              {/* 統合同期の状況＋操作をヘッダーに集約（タップで掲示→課題の順次同期）。 */}
+              <HomeSyncButton />
+              <Pressable
+                onPress={() => navigation.navigate('Settings')}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="設定"
+                style={styles.gearBtn}
+              >
+                <Ionicons name="settings-outline" size={22} color={ui.heading} />
+              </Pressable>
+            </>
           }
         />
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: clearance }]}>
           {/* 開発ビルドの識別タグ（versionCode 由来＝APK名 litus-...-vNN と一致）。公開前に撤去する。 */}
           <Text style={[styles.devTag, { color: ui.labelColor }]}>{formatBuildTag(Constants.nativeBuildVersion)}</Text>
-          {/* 統合同期バー: タップで掲示→課題の順次同期。鮮度・スキップ理由・ヘルス注意もここに集約。 */}
-          <HomeSyncBar />
+          {/* 同期の状況＋操作はヘッダー右の HomeSyncButton へ集約（鮮度・スキップ理由・ヘルス注意）。 */}
           {/* 初回ヒント（×で永続的に消える・設定から再表示可）。 */}
           <ScreenHint hintKey="home" />
           {banner.active && bannerMounted ? (
@@ -629,7 +633,17 @@ export default function HomeScreen() {
             }
             return homeLayout
               .filter((s) => s.enabled)
-              .map((s) => <Fragment key={s.key}>{sectionNodes[s.key]}</Fragment>)
+              .map((s) => {
+                const node = sectionNodes[s.key]
+                // 各セクションを marginBottom で区切る（カード＝ui.card は余白ゼロで、
+                // hero/listCard/bulletinCard も margin 無し＝隣接して詰まって見えるため）。
+                // 該当データ無しの null セクションは余白も出さない（空きの間延び防止）。
+                return node ? (
+                  <View key={s.key} style={styles.sectionGap}>
+                    {node}
+                  </View>
+                ) : null
+              })
           })()}
         </ScrollView>
       </ScreenBg>
@@ -778,6 +792,8 @@ function BulletinSyncStatus({ syncing }: { syncing: boolean }) {
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
   scroll: { paddingBottom: 24 },
+  // ホーム各セクション間の余白（カード同士が詰まらないよう区切る）。
+  sectionGap: { marginBottom: SPACE.s3 },
   devTag: { alignSelf: 'flex-end', fontSize: 11, fontWeight: '700', opacity: 0.7, marginBottom: 2 },
   gearBtn: { padding: 2 },
   banner: {
