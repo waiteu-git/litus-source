@@ -31,3 +31,8 @@ export function weekRangeLabel(today: Date, days: readonly DayKey[]): string {
   const fmt = (d: Date) => `${d.getMonth() + 1}月${d.getDate()}日`
   return days.length === 1 ? fmt(first) : `${fmt(first)}〜${fmt(last)}`
 }
+
+/** 日ビューの日ヘッダ「M月D日（曜）」を作る。dow は曜日1文字（月/火/…）。 */
+export function dayHeadLabel(date: Date, dow: string): string {
+  return `${date.getMonth() + 1}月${date.getDate()}日（${dow}）`
+}
