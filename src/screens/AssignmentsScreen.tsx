@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View, type ViewStyle } from 'react-native'
 import { Text } from '../ui/Text'
+import { PressableRow } from '../ui/Pressable'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -76,7 +77,7 @@ const FlatRow = memo(function FlatRow({
   const tone = urgencyTone(a, now)
   const rel = relDue(a.deadline, now)
   return (
-    <Pressable onPress={() => onOpen(a)} onLongPress={() => onHide(a)} style={[rowUi.card, styles.flatRow]}>
+    <PressableRow onPress={() => onOpen(a)} onLongPress={() => onHide(a)} style={[rowUi.card, styles.flatRow]}>
       <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.courseRow}>
@@ -100,7 +101,7 @@ const FlatRow = memo(function FlatRow({
       <Pressable onPress={() => onHide(a)} hitSlop={8} style={styles.hideBtn}>
         <Ionicons name="eye-off-outline" size={18} color={rowUi.labelColor} />
       </Pressable>
-    </Pressable>
+    </PressableRow>
   )
 })
 
