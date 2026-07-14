@@ -28,7 +28,7 @@ export default function DeadlineFields({
       <View style={styles.rowBetween}>
         <Text style={[styles.label, { color: labelColor }]}>締切</Text>
         <Pressable onPress={() => onChange({ ...value, noDeadline: !value.noDeadline })} style={[styles.toggle, chipStyle]}>
-          <Text style={[styles.toggleText, value.noDeadline && { color: chipText }]}>締切なし</Text>
+          <Text style={[styles.toggleText, { color: value.noDeadline ? chipText : ui.subMuted }]}>締切なし</Text>
         </Pressable>
       </View>
       {!value.noDeadline ? (
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: '600' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   toggle: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: '#eef5f2' },
-  toggleText: { fontSize: 12, color: '#7c8b85', fontWeight: '600' },
+  toggleText: { fontSize: 12, fontWeight: '600' },
   toggleOn: { color: COLORS.emeraldDark },
   presetRow: { flexDirection: 'row', gap: 8 },
   preset: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#cfe0d9' },

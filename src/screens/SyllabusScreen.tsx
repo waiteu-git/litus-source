@@ -50,7 +50,7 @@ export default function SyllabusScreen() {
     return (
       <ScreenBg>
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.emerald} />
+          <ActivityIndicator color={ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)} />
           <Text style={[styles.muted, { color: ui.labelColor }]}>シラバスを読み込んでいます…</Text>
         </View>
       </ScreenBg>

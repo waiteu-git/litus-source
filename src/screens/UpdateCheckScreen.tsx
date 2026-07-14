@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { WebView } from 'react-native-webview'
-import { ActionButton, useUi } from '../ui/screen'
+import { ActionButton, ScreenBg, useUi } from '../ui/screen'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from '../collect/injectedScripts'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
@@ -70,7 +70,7 @@ export default function UpdateCheckScreen() {
   const changed = useMemo(() => summary.filter((s) => s.added + s.removed > 0), [summary])
 
   return (
-    <View style={styles.root}>
+    <ScreenBg>
       {!done && currentUrl ? (
         <WebView
           ref={webviewRef}
@@ -84,7 +84,7 @@ export default function UpdateCheckScreen() {
         />
       ) : null}
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.heading}>
+        <Text style={[styles.heading, { color: ui.heading }]}>
           {done ? `完了（${urls.length}コース確認・${changed.length}コース更新あり）` : `確認中… ${Math.min(index + 1, urls.length)}/${urls.length}`}
         </Text>
         {done && urls.length === 0 ? (
@@ -93,18 +93,17 @@ export default function UpdateCheckScreen() {
           <Text style={[styles.info, { color: ui.labelColor }]}>更新はありませんでした。</Text>
         ) : null}
         {changed.map((c) => (
-          <Text key={c.url} style={styles.row}>{`+${c.added} / -${c.removed}  ${c.url}`}</Text>
+          <Text key={c.url} style={[styles.row, { color: ui.valueColor }]}>{`+${c.added} / -${c.removed}  ${c.url}`}</Text>
         ))}
       </ScrollView>
       {done ? null : <ActionButton label="中断" onPress={() => setDone(true)} />}
-    </View>
+    </ScreenBg>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
   hiddenWebview: { height: 1, opacity: 0 },
-  body: { padding: 16 },
+  body: { paddingBottom: 24 },
   heading: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
   info: {},
   row: { paddingVertical: 4 },

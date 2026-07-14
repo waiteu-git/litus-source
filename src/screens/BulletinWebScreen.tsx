@@ -130,7 +130,7 @@ export default function BulletinWebScreen() {
     <View style={[styles.root, dark && { backgroundColor: DARK.bg }]}>
       {target === null ? (
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.emerald} />
+          <ActivityIndicator color={dark ? COLORS.emeraldLight : COLORS.emerald} />
         </View>
       ) : null}
       <WebView

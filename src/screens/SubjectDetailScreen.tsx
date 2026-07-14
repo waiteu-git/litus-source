@@ -84,7 +84,7 @@ function SubjectSummaryCard({
   return (
     <View style={[ui.card, { marginBottom: 10, gap: 8 }]}>
       {rows.map((r) => {
-        const color = r.attention ? COLORS.danger : ui.valueColor
+        const color = r.attention ? ui.colors.danger : ui.valueColor
         const body = (
           <View style={styles.summaryRow}>
             <Ionicons name={r.icon} size={16} color={color} />
@@ -470,13 +470,13 @@ export default function SubjectDetailScreen() {
             <View style={{ gap: 6 }}>
               {snapshot.added.map((a) => (
                 <View key={`a-${a.url}`} style={styles.diffRow}>
-                  <Text style={styles.diffPlus}>＋</Text>
+                  <Text style={[styles.diffPlus, { color: ui.colors.success }]}>＋</Text>
                   <Text style={[styles.diffText, { color: ui.valueColor }]}>{a.title}</Text>
                 </View>
               ))}
               {snapshot.removed.map((r) => (
                 <View key={`r-${r.url}`} style={styles.diffRow}>
-                  <Text style={styles.diffMinus}>－</Text>
+                  <Text style={[styles.diffMinus, { color: ui.colors.danger }]}>－</Text>
                   <Text style={[styles.diffText, { color: ui.labelColor }]}>{r.title}</Text>
                 </View>
               ))}

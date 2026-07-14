@@ -495,7 +495,7 @@ export default function HomeScreen() {
                 {todayItems.map((it, i) => (
                   <View key={`te-${i}`} style={styles.todayEvRow}>
                     <View style={[styles.todayEvTag, { backgroundColor: (it.kind === 'cancel' || it.kind === 'roomChange') ? ui.colors.info : (EVENT_TONE[it.kind] ?? COLORS.eventNeutral) }]}>
-                      <Text style={styles.todayEvTagText}>{eventTypeLabel(it.kind)}</Text>
+                      <Text style={[styles.todayEvTagText, { color: (it.kind === 'cancel' || it.kind === 'roomChange') ? ui.pick(COLORS.white, COLORS.white, COLORS.ink) : COLORS.white }]}>{eventTypeLabel(it.kind)}</Text>
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={[styles.todayEvTitle, { color: ui.valueColor }]} numberOfLines={1}>{it.courseName}</Text>

@@ -133,7 +133,7 @@ export default function SettingsScreen() {
                     onValueChange={(v) => toggle(c.courseCode, v)}
                     trackColor={{
                       true: COLORS.emerald,
-                      false: ui.colors.softBoxBg,
+                      false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
                     }}
                     thumbColor={COLORS.white}
                   />
@@ -151,7 +151,7 @@ export default function SettingsScreen() {
               onValueChange={(v) => updateBulletinNotify({ ...bulletinNotify, enabled: v })}
               trackColor={{
                 true: COLORS.emerald,
-                false: ui.colors.softBoxBg,
+                false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
               }}
               thumbColor={COLORS.white}
             />
