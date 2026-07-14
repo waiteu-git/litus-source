@@ -57,6 +57,19 @@ export type UiColors = {
   successBg: string
   /** 最優先の縁（「いまの授業」専用）。翠地=明るい白縁／白=緑縁／夜の翠=翠縁。 */
   priorityBorder: string
+  /** 時間割グリッドの状態別セル背景（空/授業あり/今日/現在コマ）とセル文字。単一意味色ロールに収まらないドメイン色ランプ。 */
+  gridCellEmptyBg: string
+  gridCellFilledBg: string
+  gridCellTodayBg: string
+  gridCellNowBg: string
+  gridCellText: string
+  /** 科目「実施パターン」の休み週バッジ（背景/文字）。異常ではなく状態区別のドメイン色。 */
+  patternOffBg: string
+  patternOffText: string
+  /** ポジティブ/中立マーカー（異常でない注目色）。favorite=お気に入り星塗り・flagAccent=掲示フラグ・updateDot=更新ありドット。 */
+  favorite: string
+  flagAccent: string
+  updateDot: string
 }
 
 const GREEN: UiColors = {
@@ -93,6 +106,16 @@ const GREEN: UiColors = {
   success: COLORS.success,
   successBg: COLORS.successBg,
   priorityBorder: 'rgba(255,255,255,0.72)',
+  gridCellEmptyBg: 'rgba(255,255,255,0.16)',
+  gridCellFilledBg: 'rgba(255,255,255,0.5)',
+  gridCellTodayBg: 'rgba(255,255,255,0.62)',
+  gridCellNowBg: 'rgba(255,255,255,0.88)',
+  gridCellText: '#04322a',
+  patternOffBg: '#f2ddd6',
+  patternOffText: '#a33417',
+  favorite: '#f5a623',
+  flagAccent: '#e0a100',
+  updateDot: '#e8a400',
 }
 
 const WHITE: UiColors = {
@@ -129,6 +152,16 @@ const WHITE: UiColors = {
   success: COLORS.success,
   successBg: COLORS.successBg,
   priorityBorder: '#a3d4bf',
+  gridCellEmptyBg: '#f3f7f5',
+  gridCellFilledBg: '#e8f4ee',
+  gridCellTodayBg: '#d6efe4',
+  gridCellNowBg: '#c3ead7',
+  gridCellText: COLORS.ink,
+  patternOffBg: '#f2ddd6',
+  patternOffText: '#a33417',
+  favorite: '#f5a623',
+  flagAccent: '#e0a100',
+  updateDot: '#e8a400',
 }
 
 const DARK_TOKENS: UiColors = {
@@ -165,6 +198,16 @@ const DARK_TOKENS: UiColors = {
   success: DARK.success,
   successBg: DARK.successBg,
   priorityBorder: DARK.priorityBorder,
+  gridCellEmptyBg: DARK.gridEmpty,
+  gridCellFilledBg: DARK.gridFilled,
+  gridCellTodayBg: DARK.gridToday,
+  gridCellNowBg: DARK.gridNow,
+  gridCellText: DARK.value,
+  patternOffBg: DARK.patternOffBg,
+  patternOffText: DARK.patternOffText,
+  favorite: DARK.favorite,
+  flagAccent: DARK.flag,
+  updateDot: DARK.updateDot,
 }
 
 export function resolveUiColors(variant: ResolvedVariant): UiColors {
