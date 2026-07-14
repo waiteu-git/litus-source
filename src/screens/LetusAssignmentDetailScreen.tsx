@@ -6,6 +6,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Ionicons } from '@expo/vector-icons'
 import { ActionButton, useUi, useTabBarClearance } from '../ui/screen'
+import { useKeyboardHeight } from '../ui/useKeyboardHeight'
 import { COLORS, DARK } from '../theme'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments, mutateAssignments, removeAssignment } from '../storage/assignmentsStore'
@@ -65,6 +66,7 @@ export default function LetusAssignmentDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const ui = useUi()
   const clearance = useTabBarClearance()
+  const kbHeight = useKeyboardHeight()
   const [assignment, setAssignment] = useState<Assignment | null>(null)
   const [now, setNow] = useState(() => new Date())
   const [body, setBody] = useState<LetusBody | null>(null)
@@ -300,7 +302,7 @@ export default function LetusAssignmentDetailScreen() {
       {userManaged ? (
         <Modal visible={editingDeadline} transparent animationType="slide" onRequestClose={() => setEditingDeadline(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setEditingDeadline(false)} />
-          <View style={[styles.modalSheet, ui.dark && { backgroundColor: DARK.card }]}>
+          <View style={[styles.modalSheet, ui.dark && { backgroundColor: DARK.card }, { marginBottom: kbHeight }]}>
             <Text style={[styles.modalTitle, { color: ui.heading }]}>締切を編集</Text>
             <DeadlineFields
               value={dlValue}

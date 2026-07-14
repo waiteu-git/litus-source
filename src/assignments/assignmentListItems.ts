@@ -13,7 +13,7 @@ export type AssignmentFilter = 'not_submitted' | 'submitted' | 'all'
 
 export type ListItem =
   | { type: 'assignment'; key: string; variant: 'flat' | 'card'; a: Assignment; urgent: boolean; done: boolean; firstInGroup: boolean }
-  | { type: 'sectionHeader'; key: string; label: string; group: BucketKey; count: number }
+  | { type: 'sectionHeader'; key: string; label: string; group: BucketKey; count: number; collapsible?: boolean; open?: boolean }
   | { type: 'collapseHeader'; key: string; group: 'overdue' | 'hidden'; label: string; count: number; open: boolean }
   | { type: 'hiddenRow'; key: string; a: Assignment }
   | { type: 'note'; key: string; label: string }
@@ -105,7 +105,13 @@ export function buildAssignmentListItems(input: BuildAssignmentListInput): ListI
       const list = buckets[k]
       if (list.length === 0) continue
       anySection = true
-      items.push({ type: 'sectionHeader', key: `sec:${k}`, label: SECTION_LABEL[k], group: k, count: list.length })
+      // 期限切れは既定で折りたたむ（目立たせない）。見出しは件数を出しつつタップで展開。
+      if (k === 'overdue') {
+        items.push({ type: 'sectionHeader', key: `sec:${k}`, label: SECTION_LABEL[k], group: k, count: list.length, collapsible: true, open: showOverdue })
+        if (!showOverdue) continue
+      } else {
+        items.push({ type: 'sectionHeader', key: `sec:${k}`, label: SECTION_LABEL[k], group: k, count: list.length })
+      }
       const urgent = URGENT_BUCKETS.has(k)
       const done = k === 'submitted'
       list.forEach((a, i) => {

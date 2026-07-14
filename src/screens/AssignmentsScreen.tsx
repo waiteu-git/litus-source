@@ -17,6 +17,7 @@ import {
 } from '../assignments/assignmentListItems'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
+import { SwipeToHide } from '../ui/SwipeToHide'
 import { useDisplaySettings } from '../displaySettings'
 import { formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone, formatDeadlineRich, deadlineMagnitude } from '../assignments/deadline'
 import { assignmentsEmptyState } from '../assignments/emptyState'
@@ -77,7 +78,8 @@ const FlatRow = memo(function FlatRow({
   const tone = urgencyTone(a, now)
   const rel = relDue(a.deadline, now)
   return (
-    <PressableRow onPress={() => onOpen(a)} onLongPress={() => onHide(a)} style={[rowUi.card, styles.flatRow]}>
+    <SwipeToHide onHide={() => onHide(a)} radius={18} style={styles.flatRowGap}>
+    <PressableRow onPress={() => onOpen(a)} onLongPress={() => onHide(a)} style={[rowUi.card, styles.flatRow, styles.noMb]}>
       <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.courseRow}>
@@ -102,6 +104,7 @@ const FlatRow = memo(function FlatRow({
         <Ionicons name="eye-off-outline" size={18} color={rowUi.labelColor} />
       </Pressable>
     </PressableRow>
+    </SwipeToHide>
   )
 })
 
@@ -129,6 +132,7 @@ const AssignRow = memo(function AssignRow({
   const dWeight: '400' | '500' | '700' = tone === 'red' ? '700' : tone === 'amber' ? '500' : '400'
   const mag = submitted ? '' : deadlineMagnitude(a.deadline, now)
   return (
+    <SwipeToHide onHide={() => onHide(a)}>
     <PressableRow
       onPress={() => onOpen(a)}
       onLongPress={() => onHide(a)}
@@ -166,6 +170,7 @@ const AssignRow = memo(function AssignRow({
       </View>
       {submitted ? <ChipDone rowUi={rowUi} /> : <Ionicons name="chevron-forward" size={16} color={rowUi.chevron} />}
     </PressableRow>
+    </SwipeToHide>
   )
 })
 
@@ -174,18 +179,32 @@ const GroupHeader = memo(function GroupHeader({
   label,
   count,
   overdue,
+  collapsible,
+  open,
   rowUi,
   onBulkHide,
+  onToggle,
 }: {
   label: string
   count: number
   overdue: boolean
+  collapsible: boolean
+  open: boolean
   rowUi: RowUi
   onBulkHide: () => void
+  onToggle: (group: 'overdue' | 'hidden') => void
 }) {
+  const labelColor = overdue ? rowUi.danger : rowUi.labelColor
   return (
     <View style={[styles.ghead, { backgroundColor: rowUi.softBg, borderBottomColor: rowUi.divider }]}>
-      <Text style={[styles.glabel, { color: overdue ? rowUi.danger : rowUi.labelColor }]}>{label}</Text>
+      {collapsible ? (
+        <Pressable onPress={() => onToggle('overdue')} hitSlop={6} style={styles.gheadToggle}>
+          <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={15} color={labelColor} />
+          <Text style={[styles.glabel, { color: labelColor }]}>{label}</Text>
+        </Pressable>
+      ) : (
+        <Text style={[styles.glabel, { color: labelColor }]}>{label}</Text>
+      )}
       {overdue ? (
         <View style={[styles.gcountDanger, { backgroundColor: rowUi.dangerBg }]}>
           <Text style={[styles.gcountDangerText, { color: rowUi.danger }]}>{count}</Text>
@@ -512,8 +531,11 @@ export default function AssignmentsScreen() {
               label={item.label}
               count={item.count}
               overdue={item.group === 'overdue'}
+              collapsible={!!item.collapsible}
+              open={!!item.open}
               rowUi={rowUi}
               onBulkHide={bulkHideOverdue}
+              onToggle={onToggle}
             />
           )
         case 'collapseHeader':
@@ -647,7 +669,7 @@ const styles = StyleSheet.create({
   statNum: { fontSize: 24, fontWeight: '700' },
   statLabel: { fontSize: 11, marginTop: 2 },
   // バケット行（フラット＋ヘアライン）
-  assignRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  assignRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14 },
   rowTitle: { fontSize: 14, lineHeight: 18 },
   rowMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 3 },
   subject: { fontSize: 11, maxWidth: 160 },
@@ -657,7 +679,8 @@ const styles = StyleSheet.create({
   chipDone: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 3 },
   chipDoneText: { fontSize: 11, fontWeight: '700' },
   // グループ見出し
-  ghead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, paddingHorizontal: 4, borderBottomWidth: 1, marginTop: 10 },
+  ghead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, paddingHorizontal: 14, borderBottomWidth: 1, marginTop: 10 },
+  gheadToggle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   glabel: { fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
   gcount: { fontSize: 11 },
   gcountDanger: { borderRadius: RADIUS.pill, paddingHorizontal: 7, paddingVertical: 1 },
@@ -678,6 +701,9 @@ const styles = StyleSheet.create({
   course: { fontSize: 11 },
   title: { fontSize: 14, fontWeight: '500', marginTop: 2 },
   flatRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 9 },
+  // FlatRow は SwipeToHide でラップするため行間マージンを外側ラッパーへ移す（背後層の高さを前景カードに一致させる）。HiddenRow は flatRow のまま。
+  flatRowGap: { marginBottom: 9 },
+  noMb: { marginBottom: 0 },
   courseRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   manualBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
   manualBadgeText: { fontSize: 10, color: COLORS.emeraldDark, fontWeight: '700' },

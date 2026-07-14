@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { COLORS, DARK } from '../theme'
 import { useUi } from '../ui/screen'
+import { useKeyboardHeight } from '../ui/useKeyboardHeight'
 import { parseDeadlineInput } from './manualAssignment'
 import DeadlineFields, { type DeadlineValue } from './DeadlineFields'
 
@@ -22,6 +23,7 @@ export default function AddActivityDeadlineSheet({
 }) {
   const ui = useUi()
   const dark = ui.dark
+  const kbHeight = useKeyboardHeight()
   const [value, setValue] = useState<DeadlineValue>({ noDeadline: false, date: '', time: '23:59' })
   const [error, setError] = useState<string | null>(null)
 
@@ -40,7 +42,7 @@ export default function AddActivityDeadlineSheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onSkip}>
       <Pressable style={styles.backdrop} onPress={onSkip} />
-      <View style={[styles.sheet, dark && { backgroundColor: DARK.card }]}>
+      <View style={[styles.sheet, dark && { backgroundColor: DARK.card }, { marginBottom: kbHeight }]}>
         <Text style={[styles.course, dark && { color: COLORS.emeraldLight }]}>{presetCourseName || '追加'}</Text>
         <Text style={[styles.title, dark && { color: DARK.heading }]} numberOfLines={2}>{presetTitle || '（無題）'}</Text>
         <Text style={[styles.hint, dark && { color: DARK.label }]}>締切を設定できます（自動収集の対象外アクティビティです）。</Text>
