@@ -45,6 +45,7 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
 import { shouldShowTodayPill } from '../timetableEvents/todayPill'
+import { weekDates, weekRangeLabel } from '../timetableEvents/weekDates'
 import { DUR, EASE, SHIFT } from '../ui/motion'
 import { Badge } from '../ui/Badge'
 
@@ -291,6 +292,10 @@ export default function TimetableScreen() {
 
   // 「今日へ戻る」: リストで今日以外を見ているとき、今日へ一発で戻し自動追従も戻す。
   const showTodayPill = shouldShowTodayPill({ view: timetableView, selDay, todayKey, days })
+  // 今週の日付（曜日ヘッダの日付・週バーの範囲ラベル）。時間割はテンプレートだが today 基準で今週を出す。
+  const wd = weekDates(now)
+  const weekRange = weekRangeLabel(now, days)
+  const campus = col?.periodTimes?.campus ?? ''
   const returnToToday = () => {
     selDayAutoRef.current = true
     setSelDay(todayKey)
@@ -312,6 +317,17 @@ export default function TimetableScreen() {
           )
         }
       />
+
+      {col ? (
+        <View style={[ui.card, styles.weekBar]}>
+          <Text style={[styles.weekCampus, { color: ui.labelColor }]} numberOfLines={1}>
+            {campus || '今週'}
+          </Text>
+          <Text style={[styles.weekRange, { color: ui.valueColor }]} numberOfLines={1}>
+            {weekRange}
+          </Text>
+        </View>
+      ) : null}
 
       {collections && collections.length > 1 ? (
         <Segmented
@@ -365,16 +381,21 @@ export default function TimetableScreen() {
           <View style={[ui.card, styles.gridCard]}>
             <View style={styles.gridRow}>
               <View style={styles.gridPerCol} />
-              {days.map((d) => (
-                <View
-                  key={d}
-                  style={[styles.gridDayHead, { backgroundColor: d === todayKey ? cellTodayBg : 'transparent' }]}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: d === todayKey ? '700' : '400', color: d === todayKey ? cellTextColor : ui.labelColor }}>
-                    {DAY_LABEL[d]}
-                  </Text>
-                </View>
-              ))}
+              {days.map((d) => {
+                const isToday = d === todayKey
+                return (
+                  <View key={d} style={styles.gridDayHead}>
+                    <Text style={{ fontSize: 11, fontWeight: isToday ? '700' : '500', color: isToday ? cellTextColor : ui.labelColor }}>
+                      {DAY_LABEL[d]}
+                    </Text>
+                    <View style={[styles.dhDate, isToday && { backgroundColor: ui.pick(COLORS.emeraldDark, COLORS.emeraldDark, COLORS.emeraldLight) }]}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: isToday ? ui.pick(COLORS.white, COLORS.white, COLORS.ink) : cellTextColor }}>
+                        {wd[d].getDate()}
+                      </Text>
+                    </View>
+                  </View>
+                )
+              })}
             </View>
             {periods.map((p) => (
               <View key={p} style={styles.gridRow}>
@@ -598,4 +619,8 @@ const styles = StyleSheet.create({
   todayPillRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
   todayPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
   todayPillText: { fontSize: 12, fontWeight: '700' },
+  weekBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 },
+  weekCampus: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  weekRange: { fontSize: 13, fontWeight: '700' },
+  dhDate: { marginTop: 3, minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
 })
