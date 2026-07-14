@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text, TextInput } from '../ui/Text'
+import { PressableRow } from '../ui/Pressable'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -78,7 +79,7 @@ export default function LetusCoursesScreen() {
         <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
           <View style={ui.card}>
             {filtered.map((r, i) => (
-              <Pressable
+              <PressableRow
                 key={r.url}
                 style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
                 onPress={() => navigation.navigate('Web', { url: r.url, title: r.name })}
@@ -91,7 +92,7 @@ export default function LetusCoursesScreen() {
                 </Text>
                 {r.newCount > 0 ? <Badge variant="count" label="新着" count={r.newCount} /> : null}
                 <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
-              </Pressable>
+              </PressableRow>
             ))}
             {filtered.length === 0 ? <Text style={{ color: ui.labelColor, padding: 12 }}>該当するコースがありません</Text> : null}
           </View>

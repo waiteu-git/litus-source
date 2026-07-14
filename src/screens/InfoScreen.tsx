@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
+import { PressableRow } from '../ui/Pressable'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect } from '@react-navigation/native'
 import { ScreenBg, ScreenHeader, SectionLabel, Segmented, useUi, useTabBarClearance } from '../ui/screen'
@@ -66,13 +67,13 @@ export default function InfoScreen() {
     const disabled = !i.url
     return (
       <View style={[ui.card, styles.row]}>
-        <Pressable style={styles.rowMain} onPress={() => openItem(i)} disabled={disabled}>
+        <PressableRow style={styles.rowMain} onPress={() => openItem(i)} disabled={disabled}>
           <Text style={[styles.rowName, { color: disabled ? '#9bb3ab' : ui.valueColor }]}>
             {i.name}
             {disabled ? '（準備中）' : ''}
           </Text>
           {!disabled ? <Ionicons name="open-outline" size={15} color="#9bb3ab" /> : null}
-        </Pressable>
+        </PressableRow>
         {!disabled ? (
           <Pressable onPress={() => onToggle(i.id)} hitSlop={10}>
             <Ionicons name={on ? 'star' : 'star-outline'} size={22} color={on ? '#f5a623' : '#9bb3ab'} />

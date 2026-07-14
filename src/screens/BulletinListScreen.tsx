@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
+import { PressableRow } from '../ui/Pressable'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
@@ -96,7 +97,7 @@ export default function BulletinListScreen() {
           </View>
         ) : (
           shown.map((b) => (
-            <Pressable
+            <PressableRow
               key={b.id}
               onPress={() => navigation.navigate('BulletinDetail', { id: b.id })}
               style={[ui.card, styles.item]}
@@ -109,7 +110,7 @@ export default function BulletinListScreen() {
               </View>
               <Text style={[styles.title, { color: ui.valueColor }]}>{b.title}</Text>
               <Text style={[styles.meta, { color: ui.labelColor }]}>{b.meta}</Text>
-            </Pressable>
+            </PressableRow>
           ))
         )}
       </ScrollView>
