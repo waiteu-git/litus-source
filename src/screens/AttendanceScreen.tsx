@@ -161,8 +161,8 @@ export default function AttendanceScreen() {
         ) : attendedNow ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
             <View style={styles.liveBadgeRow}>
-              <Ionicons name="checkmark-circle" size={16} color={c.success} />
-              <Text style={[styles.liveBadgeText, { color: c.success }]}>出席済み</Text>
+              <Ionicons name="checkmark-circle" size={16} color={ui.colors.success} />
+              <Text style={[styles.liveBadgeText, { color: ui.colors.success }]}>出席済み</Text>
             </View>
             <Text style={[styles.heroCourse, { color: valueColor }]} numberOfLines={2}>
               {attended?.courseName || reception?.courseName || '（科目名不明）'}
@@ -216,7 +216,7 @@ export default function AttendanceScreen() {
                 placeholder="ここに本文を入力（自動で下書き保存されます）"
                 placeholderTextColor={labelColor}
               />
-              <Text style={[styles.reactionCount, { color: reactionOver ? c.danger : labelColor }]}>
+              <Text style={[styles.reactionCount, { color: reactionOver ? ui.colors.danger : labelColor }]}>
                 {reactionLen}/{REACTION_MAX_LEN}
               </Text>
             </View>
@@ -251,8 +251,8 @@ export default function AttendanceScreen() {
                 />
               </View>
             ) : reactionSubmit.status === 'failed' ? (
-              <View style={[styles.result, { backgroundColor: c.dangerBg }]}>
-                <Text style={[styles.resultText, { color: c.danger }]}>{reactionSubmit.message}</Text>
+              <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
+                <Text style={[styles.resultText, { color: ui.colors.danger }]}>{reactionSubmit.message}</Text>
               </View>
             ) : null}
 
@@ -285,8 +285,8 @@ export default function AttendanceScreen() {
               {accepting ? (
                 <>
                   <View style={styles.liveBadgeRow}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.liveBadgeText}>受付中</Text>
+                    <View style={[styles.liveDot, { backgroundColor: ui.pick(COLORS.cta, COLORS.cta, COLORS.emeraldLight) }]} />
+                    <Text style={[styles.liveBadgeText, { color: ui.pick(COLORS.cta, COLORS.cta, COLORS.emeraldLight) }]}>受付中</Text>
                   </View>
                   <Text style={[styles.heroCourse, { color: valueColor }]} numberOfLines={2}>
                     {reception?.courseName ?? '（科目名不明）'}
@@ -394,8 +394,8 @@ export default function AttendanceScreen() {
                 <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
               </View>
             ) : submitFailed ? (
-              <View style={[styles.result, { backgroundColor: c.dangerBg }]}>
-                <Text style={[styles.resultText, { color: c.danger }]}>{result?.result}</Text>
+              <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
+                <Text style={[styles.resultText, { color: ui.colors.danger }]}>{result?.result}</Text>
               </View>
             ) : phase === 'submitting' || verifying ? (
               // 送信タップ〜出席確定までの待機窓。スイープする不定進捗バーで「処理中」を明示する。

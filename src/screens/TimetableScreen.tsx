@@ -283,7 +283,7 @@ export default function TimetableScreen() {
   }
 
   const refresh = (
-    <RefreshControl refreshing={syncing} onRefresh={() => startSync(true)} tintColor={COLORS.emerald} colors={[COLORS.emerald]} />
+    <RefreshControl refreshing={syncing} onRefresh={() => startSync(true)} tintColor={ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)} colors={[ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)]} />
   )
 
   const cellBg = ui.colors.gridCellEmptyBg
@@ -434,15 +434,15 @@ export default function TimetableScreen() {
                             {cl.name}
                           </Text>
                           {updatedCodes.has(cl.courseCode) ? <View style={[styles.gridDot, { backgroundColor: ui.colors.updateDot }]} /> : null}
-                          {cl && dangerCodes.has(cl.courseCode) ? <View style={styles.gridDanger} /> : null}
-                          {unreadCodes.has(cl.courseCode) ? <View style={styles.gridUnreadDot} /> : null}
+                          {cl && dangerCodes.has(cl.courseCode) ? <View style={[styles.gridDanger, { backgroundColor: ui.colors.danger }]} /> : null}
+                          {unreadCodes.has(cl.courseCode) ? <View style={[styles.gridUnreadDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
                           {gev ? <View style={[styles.gridEvDot, { backgroundColor: ui.colors.info }]} /> : null}
                           {isNow ? (
                             <View style={styles.nowDot}>
                               <NowPulse size={7} />
                             </View>
                           ) : null}
-                          {pev ? <View style={styles.personalDot} /> : null}
+                          {pev ? <View style={[styles.personalDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
                         </>
                       ) : pev ? (
                         <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText, ui.dark && { color: COLORS.emeraldLight }]}>{pev.title}</Text>
@@ -506,7 +506,7 @@ export default function TimetableScreen() {
                           {cl.teachers[0] ? ` ・ ${cl.teachers[0]}` : ''}
                         </Text>
                       </View>
-                      {dangerCodes.has(cl.courseCode) ? <View style={styles.clsDanger} /> : null}
+                      {dangerCodes.has(cl.courseCode) ? <View style={[styles.clsDanger, { backgroundColor: ui.colors.danger }]} /> : null}
                       <Ionicons name="chevron-forward" size={15} color={ui.chevron} />
                     </Pressable>
                   ),

@@ -48,6 +48,8 @@ type RowUi = {
   divider: string
   dangerBg: string
   softBg: string
+  chipText: string
+  accent: string
 }
 
 function ChipDone({ rowUi }: { rowUi: RowUi }) {
@@ -84,7 +86,7 @@ const FlatRow = memo(function FlatRow({
           </Text>
           {isManualUrl(a.url) ? (
             <View style={[styles.manualBadge, { backgroundColor: rowUi.chipBg }]}>
-              <Text style={styles.manualBadgeText}>手動</Text>
+              <Text style={[styles.manualBadgeText, { color: rowUi.chipText }]}>手動</Text>
             </View>
           ) : null}
         </View>
@@ -149,7 +151,7 @@ const AssignRow = memo(function AssignRow({
           </Text>
           {isManualUrl(a.url) ? (
             <View style={[styles.manualBadge, { backgroundColor: rowUi.chipBg }]}>
-              <Text style={styles.manualBadgeText}>手動</Text>
+              <Text style={[styles.manualBadgeText, { color: rowUi.chipText }]}>手動</Text>
             </View>
           ) : null}
           <Text style={[styles.metaDot, { color: rowUi.chevron }]}>·</Text>
@@ -220,8 +222,8 @@ const HiddenRow = memo(function HiddenRow({
           {a.title}
         </Text>
       </View>
-      <Pressable onPress={() => onUnhide(a)} style={[styles.restoreBtn, { borderColor: rowUi.card.borderColor }]}>
-        <Text style={styles.restoreText}>戻す</Text>
+      <Pressable onPress={() => onUnhide(a)} style={[styles.restoreBtn, { backgroundColor: rowUi.softBg, borderColor: rowUi.card.borderColor }]}>
+        <Text style={[styles.restoreText, { color: rowUi.chipText }]}>戻す</Text>
       </Pressable>
     </View>
   )
@@ -450,6 +452,8 @@ export default function AssignmentsScreen() {
       divider: ui.dividerColor,
       dangerBg: ui.colors.dangerBg,
       softBg: ui.softBoxBg,
+      chipText: ui.colors.chipText,
+      accent: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight),
     }),
     [
       ui.card.backgroundColor,
@@ -465,6 +469,8 @@ export default function AssignmentsScreen() {
       ui.dividerColor,
       ui.colors.dangerBg,
       ui.softBoxBg,
+      ui.colors.chipText,
+      ui.variant,
     ],
   )
 
@@ -590,7 +596,7 @@ export default function AssignmentsScreen() {
       {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。 */}
       {collecting ? (
         <View style={[rowUi.card, styles.updatingBar]}>
-          <ActivityIndicator size="small" color={COLORS.emerald} />
+          <ActivityIndicator size="small" color={rowUi.accent} />
           <Text style={[styles.updatingText, { color: rowUi.valueColor }]} numberOfLines={1}>
             課題を更新中…{progress ? ` ${progress.done}/${progress.total} 件` : ''}
           </Text>
