@@ -243,7 +243,6 @@ export default function AttendanceScreen() {
             {reactionSending ? (
               <View style={[styles.card, cardStyle, styles.verifyCard]}>
                 <View style={styles.verifyRow}>
-                  <ActivityIndicator size="small" color={ui.accent} />
                   <Text style={[styles.verifyText, { color: valueColor }]}>提出しています。出席への反映を確認中…</Text>
                 </View>
                 <IndeterminateBar
@@ -308,13 +307,7 @@ export default function AttendanceScreen() {
               ) : (
                 <>
                   <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
-                    {phase === 'booting' ? (
-                      // 受付状況の確認・更新中。静止アイコンだけだと「フリーズ？」と誤解されるため、
-                      // スピナー＋下のスイープバーで処理中を明示する（送信中〜確認中の表示と同系）。
-                      <ActivityIndicator size="large" color={ui.accent} />
-                    ) : (
-                      <Ionicons name="time-outline" size={30} color={ui.accent} />
-                    )}
+                    <Ionicons name="time-outline" size={30} color={ui.accent} />
                   </View>
                   <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>{statusLine}</Text>
                   {phase === 'booting' ? (
@@ -405,11 +398,9 @@ export default function AttendanceScreen() {
                 <Text style={[styles.resultText, { color: c.danger }]}>{result?.result}</Text>
               </View>
             ) : phase === 'submitting' || verifying ? (
-              // 送信タップ〜出席確定までの待機窓。無モーションだと「フリーズ？」と誤解されるため、
-              // スイープする不定進捗バー＋スピナーで「処理中」を通しで明示する。
+              // 送信タップ〜出席確定までの待機窓。スイープする不定進捗バーで「処理中」を明示する。
               <View style={[styles.card, cardStyle, styles.verifyCard]}>
                 <View style={styles.verifyRow}>
-                  <ActivityIndicator size="small" color={ui.accent} />
                   <Text style={[styles.verifyText, { color: valueColor }]}>
                     {phase === 'submitting' ? '出席を送信しています…' : '送信しました。出席を確認しています…'}
                   </Text>
