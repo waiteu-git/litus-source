@@ -36,7 +36,7 @@ import { isOnlineNow } from '../health/connectivity'
 import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
 import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
-import { COLORS, DARK } from '../theme'
+import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 import { PressableCard, PressableRow } from '../ui/Pressable'
 
@@ -45,7 +45,7 @@ const COLLAPSE_AFTER_MS = 5000
 
 // 今日の予定タグの色（タイプ別）。
 const EVENT_TONE: Record<string, string> = {
-  cancel: '#e0533a', makeup: COLORS.cta, roomChange: '#e8a400', quiz: '#3a7be0', midterm: '#7a5cff', final: '#7a5cff', other: '#8a968f',
+  makeup: COLORS.cta, quiz: COLORS.eventQuiz, midterm: COLORS.eventExam, final: COLORS.eventExam, other: COLORS.eventNeutral,
 }
 
 /** 今日の予定1件のサブ行（時限＋教室/補足）。教室変更は「→ 教室」、それ以外は「・ 教室」で付す。 */
@@ -329,7 +329,7 @@ export default function HomeScreen() {
                   accessibilityRole="button"
                 >
                   <View style={styles.bannerDot}>
-                    <Ionicons name="flash" size={18} color="#ffffff" />
+                    <Ionicons name="flash" size={18} color={COLORS.white} />
                   </View>
                   <View style={styles.bannerBody}>
                     <Text style={styles.bannerTitle} numberOfLines={2}>
@@ -337,7 +337,7 @@ export default function HomeScreen() {
                     </Text>
                     <Text style={styles.bannerSub}>タップで出席へ</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+                  <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
                 </Pressable>
               </Animated.View>
             </View>
@@ -372,7 +372,7 @@ export default function HomeScreen() {
                       </Text>
                     </View>
                     <View style={styles.focusRight}>
-                      <Text style={[styles.focusRel, { color: ui.green ? '#ffffff' : toneColor }]}>
+                      <Text style={[styles.focusRel, { color: ui.green ? COLORS.white : toneColor }]}>
                         {relDue(urgent.deadline, tick)}
                       </Text>
                       <Text style={[styles.focusDue, { color: ui.subMuted }]}>
@@ -388,7 +388,7 @@ export default function HomeScreen() {
                   <View style={styles.todayGroup}>
                     {todayItems.map((it, i) => (
                       <View key={`te-${i}`} style={styles.todayEvRow}>
-                        <View style={[styles.todayEvTag, { backgroundColor: EVENT_TONE[it.kind] ?? '#8a968f' }]}>
+                        <View style={[styles.todayEvTag, { backgroundColor: (it.kind === 'cancel' || it.kind === 'roomChange') ? ui.colors.info : (EVENT_TONE[it.kind] ?? COLORS.eventNeutral) }]}>
                           <Text style={styles.todayEvTagText}>{eventTypeLabel(it.kind)}</Text>
                         </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
@@ -528,7 +528,7 @@ export default function HomeScreen() {
             ]}
           >
             <Pressable onPress={openAttendance} accessibilityLabel={banner.text} style={styles.miniPillHit}>
-              <Ionicons name="flash" size={16} color="#ffffff" />
+              <Ionicons name="flash" size={16} color={COLORS.white} />
             </Pressable>
           </Animated.View>
         </>
@@ -569,8 +569,8 @@ function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<
           {focus.isNow ? (
             <Badge variant="live" label="今の授業" size="md" />
           ) : (
-            <View style={[styles.nextBadge, { backgroundColor: ui.pick('rgba(255,255,255,0.6)', '#e3f5ee', DARK.pillBg) }]}>
-              <Text style={[styles.nextBadgeText, { color: ui.pick('#053a2c', COLORS.cta, COLORS.emeraldLight) }]}>次の授業</Text>
+            <View style={[styles.nextBadge, { backgroundColor: ui.pillBg }]}>
+              <Text style={[styles.nextBadgeText, { color: ui.pick(COLORS.inkOnGlass, COLORS.cta, COLORS.emeraldLight) }]}>次の授業</Text>
             </View>
           )}
         </View>
@@ -656,7 +656,7 @@ function BulletinSyncStatus({ syncing }: { syncing: boolean }) {
       >
         <View style={[styles.banner, { backgroundColor: COLORS.cta }]}>
           <View style={styles.bannerDot}>
-            <ActivityIndicator size="small" color="#ffffff" />
+            <ActivityIndicator size="small" color={COLORS.white} />
           </View>
           <View style={styles.bannerBody}>
             <Text style={styles.bannerTitle}>同期中…</Text>
@@ -669,7 +669,7 @@ function BulletinSyncStatus({ syncing }: { syncing: boolean }) {
         pointerEvents="none"
         style={[styles.syncPill, { opacity: pillOpacity, transform: [{ scale: pillScale }] }]}
       >
-        <Ionicons name="checkmark" size={14} color="#ffffff" />
+        <Ionicons name="checkmark" size={14} color={COLORS.white} />
         <Text style={styles.syncPillText}>最新</Text>
       </Animated.View>
     </View>
@@ -689,16 +689,16 @@ const styles = StyleSheet.create({
     padding: 14,
     marginTop: 6,
     marginBottom: 10,
-    shadowColor: '#0a6650',
+    shadowColor: COLORS.emeraldDark,
     shadowOpacity: 0.2,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  bannerDot: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' },
+  bannerDot: { width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.whiteOverlay25, alignItems: 'center', justifyContent: 'center' },
   bannerBody: { flex: 1 },
-  bannerTitle: { color: '#ffffff', fontSize: 15, fontWeight: '700', lineHeight: 20 },
-  bannerSub: { color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 2 },
+  bannerTitle: { color: COLORS.white, fontSize: 15, fontWeight: '700', lineHeight: 20 },
+  bannerSub: { color: COLORS.whiteSubtle90, fontSize: 12, marginTop: 2 },
 
   // 高さ0のアンカー。バナー/ピルは絶対配置でこの上に重ね、本文をreflowさせない（配置の上下ズレ防止）。
   // 出席バナー・同期バナーで共用。
@@ -715,13 +715,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    shadowColor: '#0a6650',
+    shadowColor: COLORS.emeraldDark,
     shadowOpacity: 0.3,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 5,
   },
-  syncPillText: { color: '#ffffff', fontSize: 13, fontWeight: '700' },
+  syncPillText: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
 
   focusCard: { paddingVertical: 4, paddingHorizontal: 16 },
   focusRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
   todayGroup: { gap: 8, paddingVertical: 12 },
   todayEvRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   todayEvTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, minWidth: 52, alignItems: 'center' },
-  todayEvTagText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
+  todayEvTagText: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
   todayEvTitle: { fontSize: 14, fontWeight: '600' },
   todayEvSub: { fontSize: 12, marginTop: 1 },
   edgeLine: { position: 'absolute', right: 4, width: 4, height: 26, borderRadius: 2 },
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0a6650',
+    shadowColor: COLORS.emeraldDark,
     shadowOpacity: 0.3,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },

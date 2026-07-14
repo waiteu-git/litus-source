@@ -69,6 +69,7 @@ export const DARK = {
   gridFilled: 'rgba(55,201,155,0.14)',
   gridToday: 'rgba(55,201,155,0.24)',
   gridNow: 'rgba(55,201,155,0.36)',
+  gridPersonal: 'rgba(55,201,155,0.16)',
   patternOffBg: '#4a2a1f',
   patternOffText: '#ff9f73',
   favorite: '#ffb84d',

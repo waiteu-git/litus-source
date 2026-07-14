@@ -130,10 +130,10 @@ export default function BulletinDetailScreen() {
             <Pressable
               onPress={toggleFlag}
               disabled={flagBusy || fetching}
-              style={[styles.flagBtn, { borderColor: item.flagged ? '#e0a100' : '#9bb3ab', opacity: fetching ? 0.5 : 1 }]}
+              style={[styles.flagBtn, { borderColor: item.flagged ? ui.colors.flagAccent : ui.chevron, opacity: fetching ? 0.5 : 1 }]}
             >
-              <Ionicons name={item.flagged ? 'flag' : 'flag-outline'} size={16} color={item.flagged ? '#e0a100' : '#9bb3ab'} />
-              <Text style={[styles.flagText, { color: item.flagged ? '#e0a100' : ui.labelColor }]}>
+              <Ionicons name={item.flagged ? 'flag' : 'flag-outline'} size={16} color={item.flagged ? ui.colors.flagAccent : ui.chevron} />
+              <Text style={[styles.flagText, { color: item.flagged ? ui.colors.flagAccent : ui.labelColor }]}>
                 {flagBusy ? '同期中…' : item.flagged ? 'フラグを外す' : 'フラグを付ける'}
               </Text>
             </Pressable>
