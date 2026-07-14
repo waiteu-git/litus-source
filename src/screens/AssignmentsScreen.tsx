@@ -8,7 +8,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import AssignmentCollector from '../collect/AssignmentCollector'
 import { loadAssignments, mutateAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
-import type { AssignmentSubmissionStatus } from '../parsers/letus'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { isManualUrl } from '../assignments/manualAssignment'
 import {
@@ -17,9 +16,11 @@ import {
   type ListItem,
 } from '../assignments/assignmentListItems'
 import type { AssignmentsStackParamList } from '../navigation/types'
-import { Chip, ScreenBg, ScreenHeader, Segmented, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
+import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { useDisplaySettings } from '../displaySettings'
-import { formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone } from '../assignments/deadline'
+import { formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone, formatDeadlineRich, deadlineMagnitude } from '../assignments/deadline'
+import { assignmentsEmptyState } from '../assignments/emptyState'
+import { RADIUS } from '../ui/scale'
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
@@ -34,29 +35,26 @@ import { loadAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { COLORS } from '../theme'
 
-const STATUS_LABEL: Record<AssignmentSubmissionStatus, string> = {
-  not_submitted: '未提出',
-  submitted: '提出済み',
-  completed: '受験済み',
-  // 解析できなかった場合も、締切のある課題としては未提出扱いで表示（ユーザー要望）。
-  unknown: '未提出',
+type RowUi = {
+  card: ViewStyle
+  labelColor: string
+  valueColor: string
+  danger: string
+  warn: string
+  chipBg: string
+  successBg: string
+  success: string
+  chevron: string
+  divider: string
+  dangerBg: string
+  softBg: string
 }
 
-
-type RowUi = { card: ViewStyle; labelColor: string; valueColor: string; danger: string; chipBg: string }
-
-function isSameLocalDate(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-}
-
-function StatusChip({ status }: { status: AssignmentSubmissionStatus }) {
-  const ui = useUi()
-  const submitted = status === 'submitted' || status === 'completed'
+function ChipDone({ rowUi }: { rowUi: RowUi }) {
   return (
-    <View style={[styles.chip, { backgroundColor: submitted ? ui.colors.successBg : ui.softBoxBg }]}>
-      <Text style={[styles.chipText, { color: submitted ? ui.colors.success : ui.labelColor }]}>
-        {STATUS_LABEL[status]}
-      </Text>
+    <View style={[styles.chipDone, { backgroundColor: rowUi.successBg }]}>
+      <Ionicons name="checkmark" size={11} color={rowUi.success} />
+      <Text style={[styles.chipDoneText, { color: rowUi.success }]}>提出済み</Text>
     </View>
   )
 }
@@ -105,51 +103,101 @@ const FlatRow = memo(function FlatRow({
   )
 })
 
-const CardRow = memo(function CardRow({
+// 期限グルーピング（バケット）表示の行＝フラット面＋ヘアライン区切り（個別カード化しない）。
+const AssignRow = memo(function AssignRow({
   a,
   now,
-  urgent,
   done,
+  firstInGroup,
   rowUi,
   onOpen,
   onHide,
 }: {
   a: Assignment
   now: Date
-  urgent: boolean
   done: boolean
+  firstInGroup: boolean
   rowUi: RowUi
   onOpen: (a: Assignment) => void
   onHide: (a: Assignment) => void
 }) {
-  const rel = relDue(a.deadline, now)
+  const submitted = done || isSubmitted(a)
+  const tone = submitted ? 'gray' : urgencyTone(a, now)
+  const dColor = tone === 'red' ? rowUi.danger : tone === 'amber' ? rowUi.warn : rowUi.labelColor
+  const dWeight: '400' | '500' | '700' = tone === 'red' ? '700' : tone === 'amber' ? '500' : '400'
+  const mag = submitted ? '' : deadlineMagnitude(a.deadline, now)
   return (
     <PressableRow
       onPress={() => onOpen(a)}
       onLongPress={() => onHide(a)}
-      style={[rowUi.card, urgent && styles.urgent, urgent && { borderLeftColor: rowUi.danger }, styles.card]}
+      style={[
+        styles.assignRow,
+        { backgroundColor: rowUi.card.backgroundColor },
+        !firstInGroup && { borderTopWidth: 1, borderTopColor: rowUi.divider },
+      ]}
     >
-      <View style={done ? styles.doneDim : undefined}>
-        <View style={styles.rowTop}>
-          <Text style={[styles.course, { color: rowUi.labelColor }]} numberOfLines={1}>
-            {a.courseName || '科目不明'}
-          </Text>
-          <Pressable onPress={() => onHide(a)} hitSlop={8} style={styles.hideBtn}>
-            <Ionicons name="eye-off-outline" size={18} color={rowUi.labelColor} />
-          </Pressable>
-        </View>
-        <Text style={[styles.title, { color: rowUi.valueColor }]} numberOfLines={2}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          style={[styles.rowTitle, { color: submitted ? rowUi.labelColor : rowUi.valueColor, fontWeight: submitted ? '400' : '500' }]}
+          numberOfLines={2}
+        >
           {a.title}
         </Text>
-        <View style={styles.meta}>
-          <Text style={[styles.due, { color: rowUi.labelColor }]} numberOfLines={1}>
-            {formatDeadline(a.deadline)}
-            {rel ? ` ・ ${rel}` : ''}
+        <View style={styles.rowMeta}>
+          <Text style={[styles.subject, { color: rowUi.labelColor }]} numberOfLines={1}>
+            {a.courseName || '科目不明'}
           </Text>
-          <StatusChip status={a.submissionStatus} />
+          {isManualUrl(a.url) ? (
+            <View style={[styles.manualBadge, { backgroundColor: rowUi.chipBg }]}>
+              <Text style={styles.manualBadgeText}>手動</Text>
+            </View>
+          ) : null}
+          <Text style={[styles.metaDot, { color: rowUi.chevron }]}>·</Text>
+          <View style={styles.deadline}>
+            <Ionicons name="time-outline" size={12} color={dColor} />
+            <Text style={[styles.deadlineText, { color: dColor, fontWeight: dWeight }]} numberOfLines={1}>
+              {formatDeadlineRich(a.deadline, now)}
+              {mag ? ` · ${mag}` : ''}
+            </Text>
+          </View>
         </View>
       </View>
+      {submitted ? <ChipDone rowUi={rowUi} /> : <Ionicons name="chevron-forward" size={16} color={rowUi.chevron} />}
     </PressableRow>
+  )
+})
+
+// 期限グループの見出し（読書面のヘアライン帯）。期限切れは意味色danger＋一括非表示。
+const GroupHeader = memo(function GroupHeader({
+  label,
+  count,
+  overdue,
+  rowUi,
+  onBulkHide,
+}: {
+  label: string
+  count: number
+  overdue: boolean
+  rowUi: RowUi
+  onBulkHide: () => void
+}) {
+  return (
+    <View style={[styles.ghead, { backgroundColor: rowUi.softBg, borderBottomColor: rowUi.divider }]}>
+      <Text style={[styles.glabel, { color: overdue ? rowUi.danger : rowUi.labelColor }]}>{label}</Text>
+      {overdue ? (
+        <View style={[styles.gcountDanger, { backgroundColor: rowUi.dangerBg }]}>
+          <Text style={[styles.gcountDangerText, { color: rowUi.danger }]}>{count}</Text>
+        </View>
+      ) : (
+        <Text style={[styles.gcount, { color: rowUi.labelColor }]}>{count}</Text>
+      )}
+      {overdue ? (
+        <Pressable onPress={onBulkHide} hitSlop={6} style={[styles.bulk, { borderColor: rowUi.divider }]}>
+          <Ionicons name="eye-off-outline" size={12} color={rowUi.labelColor} />
+          <Text style={[styles.bulkText, { color: rowUi.valueColor }]}>まとめて非表示</Text>
+        </Pressable>
+      ) : null}
+    </View>
   )
 })
 
@@ -200,6 +248,55 @@ const CollapseHeaderRow = memo(function CollapseHeaderRow({
     </Pressable>
   )
 })
+
+// 空状態3類型（祝福 / 未同期CTA / 取得エラー説明）。「取得失敗かゼロか不明」を排除する。
+function EmptyView({ state, refreshedAt, onSync }: { state: 'done' | 'unsynced' | 'error'; refreshedAt: number; onSync: () => void }) {
+  const ui = useUi()
+  if (state === 'done') {
+    return (
+      <View style={styles.empty}>
+        <View style={[styles.emptyBadge, { backgroundColor: ui.colors.successBg }]}>
+          <Ionicons name="checkmark-circle" size={40} color={ui.colors.success} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: ui.heading }]}>すべて提出済み</Text>
+        <Text style={[styles.emptyBody, { color: ui.valueColor }]}>今学期の未提出課題はありません。おつかれさまでした。</Text>
+        <Text style={[styles.emptySub, { color: ui.labelColor }]}>提出済みの課題はフィルタ「提出済み」から確認できます</Text>
+      </View>
+    )
+  }
+  if (state === 'unsynced') {
+    return (
+      <View style={styles.empty}>
+        <View style={[styles.emptyBadge, { backgroundColor: ui.softBoxBg }]}>
+          <Ionicons name="cloud-offline-outline" size={40} color={ui.pick(COLORS.emeraldDark, COLORS.emeraldDark, COLORS.emeraldLight)} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: ui.heading }]}>まだ同期していません</Text>
+        <Text style={[styles.emptyBody, { color: ui.valueColor }]}>LETUSと同期すると、履修中の科目の課題と締切がここに表示されます。</Text>
+        <Pressable onPress={onSync} style={[styles.cta, { backgroundColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) }]}>
+          <Ionicons name="refresh" size={16} color={ui.pick(COLORS.white, COLORS.white, COLORS.ink)} />
+          <Text style={[styles.ctaText, { color: ui.pick(COLORS.white, COLORS.white, COLORS.ink) }]}>LETUSと同期する</Text>
+        </Pressable>
+        <Text style={[styles.emptySub, { color: ui.labelColor }]}>同期には学内アカウントでのログインが必要です</Text>
+      </View>
+    )
+  }
+  return (
+    <View style={styles.empty}>
+      <View style={[styles.emptyBadge, { backgroundColor: ui.colors.dangerBg }]}>
+        <Ionicons name="warning-outline" size={40} color={ui.colors.danger} />
+      </View>
+      <Text style={[styles.emptyTitle, { color: ui.heading }]}>課題を取得できませんでした</Text>
+      <Text style={[styles.emptyBody, { color: ui.valueColor }]}>
+        LETUSに接続できませんでした。学内ネットワークの状態と、LETUSのメンテナンス時間（毎日 4:00〜5:00）をご確認ください。
+      </Text>
+      <Pressable onPress={onSync} style={[styles.btnGhost, { backgroundColor: ui.softBoxBg, borderColor: ui.dividerColor }]}>
+        <Ionicons name="refresh" size={14} color={ui.labelColor} />
+        <Text style={[styles.btnGhostText, { color: ui.valueColor }]}>再試行</Text>
+      </Pressable>
+      {refreshedAt > 0 ? <Text style={[styles.emptySub, { color: ui.labelColor }]}>最終同期の内容を保持しています</Text> : null}
+    </View>
+  )
+}
 
 export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
@@ -301,14 +398,36 @@ export default function AssignmentsScreen() {
   const live = useMemo(() => assignments.filter((a) => !a.ignored), [assignments])
   const hidden = useMemo(() => assignments.filter((a) => a.ignored), [assignments])
 
+  const overdueLive = useMemo(
+    () =>
+      live.filter(
+        (a) =>
+          !isSubmitted(a) &&
+          a.lifecycleStatus !== 'submitted' &&
+          a.lifecycleStatus !== 'before_start' &&
+          a.deadline !== null &&
+          new Date(a.deadline).getTime() < now.getTime(),
+      ),
+    [live, now],
+  )
   const stats = useMemo(() => {
-    const dueToday = live.filter(
-      (a) => !isSubmitted(a) && a.deadline && isSameLocalDate(new Date(a.deadline), now),
-    ).length
     const notSubmitted = live.filter((a) => !isSubmitted(a)).length
     const submitted = live.filter(isSubmitted).length
-    return { dueToday, notSubmitted, submitted }
-  }, [live, now])
+    return { notSubmitted, submitted, overdue: overdueLive.length }
+  }, [live, overdueLive])
+
+  const bulkHideOverdue = useCallback(async () => {
+    if (overdueLive.length === 0) return
+    const urls = new Set(overdueLive.map((a) => a.url))
+    await mutateAssignments((map) => {
+      const next = { ...map }
+      for (const u of urls) if (next[u]) next[u] = { ...next[u], ignored: true }
+      return next
+    })
+    await reload()
+    refreshAllNotifications().catch(() => undefined)
+    notifyWidgetDataChanged()
+  }, [overdueLive, reload])
 
   // useUi() は毎レンダー新オブジェクトを返す。行の memo を効かせるため、テーマ由来の値だけで安定化する。
   const rowUi = useMemo<RowUi>(
@@ -323,9 +442,30 @@ export default function AssignmentsScreen() {
       labelColor: ui.labelColor,
       valueColor: ui.valueColor,
       danger: ui.colors.danger,
+      warn: ui.colors.warn,
       chipBg: ui.colors.chipBg,
+      successBg: ui.colors.successBg,
+      success: ui.colors.success,
+      chevron: ui.chevron,
+      divider: ui.dividerColor,
+      dangerBg: ui.colors.dangerBg,
+      softBg: ui.softBoxBg,
     }),
-    [ui.card.backgroundColor, ui.card.borderColor, ui.labelColor, ui.valueColor, ui.colors.danger, ui.colors.chipBg],
+    [
+      ui.card.backgroundColor,
+      ui.card.borderColor,
+      ui.labelColor,
+      ui.valueColor,
+      ui.colors.danger,
+      ui.colors.warn,
+      ui.colors.chipBg,
+      ui.colors.successBg,
+      ui.colors.success,
+      ui.chevron,
+      ui.dividerColor,
+      ui.colors.dangerBg,
+      ui.softBoxBg,
+    ],
   )
 
   const listItems = useMemo(
@@ -350,18 +490,26 @@ export default function AssignmentsScreen() {
           return item.variant === 'flat' ? (
             <FlatRow a={item.a} now={now} rowUi={rowUi} onOpen={openDetail} onHide={hide} />
           ) : (
-            <CardRow
+            <AssignRow
               a={item.a}
               now={now}
-              urgent={item.urgent}
               done={item.done}
+              firstInGroup={item.firstInGroup}
               rowUi={rowUi}
               onOpen={openDetail}
               onHide={hide}
             />
           )
         case 'sectionHeader':
-          return <SectionLabel>{item.label}</SectionLabel>
+          return (
+            <GroupHeader
+              label={item.label}
+              count={item.count}
+              overdue={item.group === 'overdue'}
+              rowUi={rowUi}
+              onBulkHide={bulkHideOverdue}
+            />
+          )
         case 'collapseHeader':
           return (
             <CollapseHeaderRow group={item.group} label={item.label} open={item.open} rowUi={rowUi} onToggle={onToggle} />
@@ -372,40 +520,52 @@ export default function AssignmentsScreen() {
           return <Text style={[styles.note, { color: rowUi.labelColor }]}>{item.label}</Text>
       }
     },
-    [now, rowUi, openDetail, hide, unhide, onToggle],
+    [now, rowUi, openDetail, hide, unhide, onToggle, bulkHideOverdue],
   )
 
-  const listHeader =
-    assignmentsView === 'flat' ? (
-      <View>
-        <View style={[rowUi.card, styles.statsRow]}>
-          <View style={styles.statCol}>
-            <Text style={[styles.statNum, { color: ui.colors.danger }]}>{stats.dueToday}</Text>
-            <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>今日締切</Text>
-          </View>
-          <View style={styles.statCol}>
-            <Text style={[styles.statNum, { color: rowUi.valueColor }]}>{stats.notSubmitted}</Text>
-            <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>未提出</Text>
-          </View>
-          <View style={styles.statCol}>
-            <Text style={[styles.statNum, { color: rowUi.valueColor }]}>{stats.submitted}</Text>
-            <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>提出済み</Text>
-          </View>
+  const listHeader = (
+    <View>
+      <View style={[rowUi.card, styles.statsRow]}>
+        <View style={styles.statCol}>
+          <Text style={[styles.statNum, { color: rowUi.valueColor }]}>{stats.notSubmitted}</Text>
+          <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>未提出</Text>
         </View>
-        <Segmented
-          options={[
-            { key: 'not_submitted', label: '未提出' },
-            { key: 'submitted', label: '提出済み' },
-            { key: 'all', label: 'すべて' },
-          ]}
-          value={filter}
-          onChange={setFilter}
-        />
-        <View style={{ height: 12 }} />
+        <View style={[styles.statDivider, { backgroundColor: rowUi.divider }]} />
+        <View style={styles.statCol}>
+          <Text style={[styles.statNum, { color: stats.overdue > 0 ? ui.colors.danger : rowUi.valueColor }]}>{stats.overdue}</Text>
+          <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>期限切れ</Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: rowUi.divider }]} />
+        <View style={styles.statCol}>
+          <Text style={[styles.statNum, { color: rowUi.valueColor }]}>{stats.submitted}</Text>
+          <Text style={[styles.statLabel, { color: rowUi.labelColor }]}>提出済み</Text>
+        </View>
       </View>
-    ) : null
+      <Segmented
+        options={[
+          { key: 'all', label: `すべて ${live.length}` },
+          { key: 'not_submitted', label: `未提出 ${stats.notSubmitted}` },
+          { key: 'submitted', label: `提出済み ${stats.submitted}` },
+        ]}
+        value={filter}
+        onChange={setFilter}
+      />
+      <View style={{ height: 8 }} />
+    </View>
+  )
 
-  const isEmpty = live.length === 0 && hidden.length === 0
+  const healthStatus = health?.health?.status
+  const healthOk = !healthStatus || (healthStatus !== 'not_logged_in' && healthStatus !== 'maintenance' && healthStatus !== 'blocked')
+  const emptyState = assignmentsEmptyState({
+    liveCount: live.length,
+    notSubmittedCount: stats.notSubmitted,
+    submittedCount: stats.submitted,
+    refreshedAt,
+    healthOk,
+    filter,
+  })
+  // 全部非表示(live=0だが hidden>0)のときは空状態でなく一覧（非表示の折りたたみ）を見せる。
+  const showEmpty = emptyState !== null && !(live.length === 0 && hidden.length > 0)
 
   return (
     <ScreenBg>
@@ -450,12 +610,8 @@ export default function AssignmentsScreen() {
         />
       ) : null}
 
-      {isEmpty ? (
-        <View style={[rowUi.card, { marginTop: 16 }]}>
-          <Text style={{ color: rowUi.valueColor }}>
-            表示できる課題がありません。「更新」でLETUSから取得、「追加」で手動でも登録できます。
-          </Text>
-        </View>
+      {showEmpty && emptyState ? (
+        <EmptyView state={emptyState} refreshedAt={refreshedAt} onSync={startUpdate} />
       ) : (
         <FlatList
           style={{ flex: 1 }}
@@ -476,22 +632,45 @@ export default function AssignmentsScreen() {
 
 const styles = StyleSheet.create({
   list: { paddingTop: 4, paddingBottom: 24 },
-  card: { marginBottom: 9 },
-  doneDim: { opacity: 0.72 },
-  urgent: { borderLeftWidth: 4 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  course: { fontSize: 11 },
-  title: { fontSize: 14, fontWeight: '500', marginTop: 2 },
-  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  due: { fontSize: 12, flex: 1, paddingRight: 8 },
-  chip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  chipText: { fontSize: 11 },
   updatingBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, paddingVertical: 12 },
   updatingText: { fontSize: 13, fontWeight: '600', flex: 1 },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  statCol: { flex: 1, alignItems: 'flex-start' },
+  // 統計（ガラスカード・中央寄せ＋区切り）
+  statsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  statCol: { flex: 1, alignItems: 'center' },
+  statDivider: { width: 1, alignSelf: 'stretch', marginVertical: 2 },
   statNum: { fontSize: 24, fontWeight: '700' },
   statLabel: { fontSize: 11, marginTop: 2 },
+  // バケット行（フラット＋ヘアライン）
+  assignRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  rowTitle: { fontSize: 14, lineHeight: 18 },
+  rowMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 3 },
+  subject: { fontSize: 11, maxWidth: 160 },
+  metaDot: { fontSize: 11 },
+  deadline: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  deadlineText: { fontSize: 11 },
+  chipDone: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  chipDoneText: { fontSize: 11, fontWeight: '700' },
+  // グループ見出し
+  ghead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, paddingHorizontal: 4, borderBottomWidth: 1, marginTop: 10 },
+  glabel: { fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
+  gcount: { fontSize: 11 },
+  gcountDanger: { borderRadius: RADIUS.pill, paddingHorizontal: 7, paddingVertical: 1 },
+  gcountDangerText: { fontSize: 11, fontWeight: '700' },
+  bulk: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  bulkText: { fontSize: 11, fontWeight: '500' },
+  // 空状態3類型
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 12 },
+  emptyBadge: { width: 88, height: 88, borderRadius: RADIUS.pill, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { fontSize: 17, fontWeight: '700', marginTop: 8 },
+  emptyBody: { fontSize: 16, lineHeight: 25, textAlign: 'center', maxWidth: 300 },
+  emptySub: { fontSize: 11, textAlign: 'center' },
+  cta: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: RADIUS.pill, paddingHorizontal: 24, paddingVertical: 12, marginTop: 4 },
+  ctaText: { fontSize: 15, fontWeight: '700' },
+  btnGhost: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: RADIUS.pill, paddingHorizontal: 16, paddingVertical: 8, marginTop: 4 },
+  btnGhostText: { fontSize: 14, fontWeight: '500' },
+  // flat表示（設定送り）・非表示・折りたたみ（維持）
+  course: { fontSize: 11 },
+  title: { fontSize: 14, fontWeight: '500', marginTop: 2 },
   flatRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 9 },
   courseRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   manualBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },

@@ -12,8 +12,8 @@ import { byDeadlineAsc, isSubmitted } from './deadline'
 export type AssignmentFilter = 'not_submitted' | 'submitted' | 'all'
 
 export type ListItem =
-  | { type: 'assignment'; key: string; variant: 'flat' | 'card'; a: Assignment; urgent: boolean; done: boolean }
-  | { type: 'sectionHeader'; key: string; label: string }
+  | { type: 'assignment'; key: string; variant: 'flat' | 'card'; a: Assignment; urgent: boolean; done: boolean; firstInGroup: boolean }
+  | { type: 'sectionHeader'; key: string; label: string; group: BucketKey; count: number }
   | { type: 'collapseHeader'; key: string; group: 'overdue' | 'hidden'; label: string; count: number; open: boolean }
   | { type: 'hiddenRow'; key: string; a: Assignment }
   | { type: 'note'; key: string; label: string }
@@ -28,16 +28,16 @@ export type BuildAssignmentListInput = {
 }
 
 const SECTION_LABEL: Record<BucketKey, string> = {
-  within24h: '24時間以内',
+  overdue: '期限切れ',
+  today: '今日',
   tomorrow: '明日',
   thisWeek: '今週',
   later: 'それ以降',
   beforeStart: '開始前',
-  overdue: '期限切れ',
   submitted: '提出済み',
 }
 
-const URGENT_BUCKETS: ReadonlySet<BucketKey> = new Set<BucketKey>(['within24h', 'overdue'])
+const URGENT_BUCKETS: ReadonlySet<BucketKey> = new Set<BucketKey>(['today', 'overdue'])
 
 export function buildAssignmentListItems(input: BuildAssignmentListInput): ListItem[] {
   const { assignments, now, filter, view, showOverdue, showHidden } = input
@@ -71,9 +71,9 @@ export function buildAssignmentListItems(input: BuildAssignmentListInput): ListI
     if (flatMain.length === 0) {
       items.push({ type: 'note', key: 'note:main', label: '該当する課題はありません' })
     } else {
-      for (const a of flatMain) {
-        items.push({ type: 'assignment', key: a.url, variant: 'flat', a, urgent: false, done: false })
-      }
+      flatMain.forEach((a, i) => {
+        items.push({ type: 'assignment', key: a.url, variant: 'flat', a, urgent: false, done: false, firstInGroup: i === 0 })
+      })
     }
 
     if (flatOverdue.length > 0) {
@@ -86,23 +86,34 @@ export function buildAssignmentListItems(input: BuildAssignmentListInput): ListI
         open: showOverdue,
       })
       if (showOverdue) {
-        for (const a of flatOverdue) {
-          items.push({ type: 'assignment', key: a.url, variant: 'flat', a, urgent: false, done: false })
-        }
+        flatOverdue.forEach((a, i) => {
+          items.push({ type: 'assignment', key: a.url, variant: 'flat', a, urgent: false, done: false, firstInGroup: i === 0 })
+        })
       }
     }
   } else {
-    const buckets = bucketAssignments(live, now)
+    // 期限グルーピング（バケット）表示でもフィルタを適用する。
+    const filtered =
+      filter === 'submitted'
+        ? live.filter(isSubmitted)
+        : filter === 'not_submitted'
+          ? live.filter((a) => !isSubmitted(a))
+          : live
+    const buckets = bucketAssignments(filtered, now)
+    let anySection = false
     for (const k of BUCKET_ORDER) {
       const list = buckets[k]
       if (list.length === 0) continue
-      items.push({ type: 'sectionHeader', key: `sec:${k}`, label: SECTION_LABEL[k] })
+      anySection = true
+      items.push({ type: 'sectionHeader', key: `sec:${k}`, label: SECTION_LABEL[k], group: k, count: list.length })
       const urgent = URGENT_BUCKETS.has(k)
       const done = k === 'submitted'
-      for (const a of list) {
-        items.push({ type: 'assignment', key: a.url, variant: 'card', a, urgent, done })
-      }
+      list.forEach((a, i) => {
+        items.push({ type: 'assignment', key: a.url, variant: 'card', a, urgent, done, firstInGroup: i === 0 })
+      })
     }
+    // フィルタ結果が空（例: 提出済み0件で「提出済み」フィルタ）のときは空白でなく明示する。
+    if (!anySection) items.push({ type: 'note', key: 'note:bucket', label: '該当する課題はありません' })
   }
 
   if (hidden.length > 0) {
