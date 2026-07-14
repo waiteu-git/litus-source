@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Keyboard, Pressable, StyleSheet, View, type TextInput as RNTextInput } from 'react-native'
+import { Alert, Keyboard, Pressable, StyleSheet, View, type TextInput as RNTextInput } from 'react-native'
 import { Text, TextInput } from '../ui/Text'
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
@@ -231,10 +231,7 @@ export default function AttendanceScreen() {
               onPress={confirmReactionSubmit}
             >
               {reactionSending ? (
-                <View style={styles.ctaBusyRow}>
-                  <ActivityIndicator size="small" color={c.white} />
-                  <Text style={styles.ctaText}>提出中…</Text>
-                </View>
+                <Text style={styles.ctaText}>提出中…</Text>
               ) : (
                 <Text style={styles.ctaText}>リアクションペーパーを提出</Text>
               )}
@@ -377,10 +374,7 @@ export default function AttendanceScreen() {
               }}
             >
               {phase === 'submitting' ? (
-                <View style={styles.ctaBusyRow}>
-                  <ActivityIndicator size="small" color={c.white} />
-                  <Text style={styles.ctaText}>送信中…</Text>
-                </View>
+                <Text style={styles.ctaText}>送信中…</Text>
               ) : (
                 <Text style={styles.ctaText}>出席する</Text>
               )}

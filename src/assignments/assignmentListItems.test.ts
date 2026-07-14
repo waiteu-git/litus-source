@@ -132,6 +132,28 @@ describe('buildAssignmentListItems (bucket)', () => {
     expect(done && done.type === 'assignment' && done.done).toBe(true)
   })
 
+  it('期限切れは既定で折りたたみ（showOverdue=false で配下行を出さず、見出しは collapsible・件数表示）', () => {
+    const input = base({
+      view: 'bucket',
+      filter: 'all',
+      assignments: [
+        mk({ url: 'o', deadline: iso('2026-07-01T12:00:00+09:00') }),
+        mk({ url: 'soon', deadline: iso('2026-07-13T18:00:00+09:00') }),
+      ],
+      showOverdue: false,
+    })
+    const closed = buildAssignmentListItems(input)
+    const oh = closed.find((i) => i.type === 'sectionHeader' && i.group === 'overdue')
+    expect(oh && oh.type === 'sectionHeader' && oh.collapsible).toBe(true)
+    expect(oh && oh.type === 'sectionHeader' && oh.count).toBe(1)
+    // 折りたたみ中は期限切れ行を出さない（他バケットの行は出る）。
+    expect(closed.some((i) => i.type === 'assignment' && i.a.url === 'o')).toBe(false)
+    expect(closed.some((i) => i.type === 'assignment' && i.a.url === 'soon')).toBe(true)
+
+    const opened = buildAssignmentListItems({ ...input, showOverdue: true })
+    expect(opened.some((i) => i.type === 'assignment' && i.a.url === 'o')).toBe(true)
+  })
+
   it('ignoredはbucketセクションに出さない', () => {
     const items = buildAssignmentListItems(
       base({

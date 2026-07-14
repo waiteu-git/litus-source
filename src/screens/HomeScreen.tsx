@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
@@ -40,6 +40,8 @@ import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 import { PressableCard, PressableRow } from '../ui/Pressable'
+import { useDisplaySettings } from '../displaySettings'
+import type { HomeSectionKey } from '../home/homeSections'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
@@ -74,6 +76,7 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>()
   const ui = useUi()
   const clearance = useTabBarClearance()
+  const { homeLayout } = useDisplaySettings()
   const { reception, timetable, running, attendedNow } = useAttendanceEngine()
 
   // 「今やること」・出席バナー用の現在時刻。分単位で更新して次の授業/締切を追随させる
@@ -364,10 +367,11 @@ export default function HomeScreen() {
           {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。 */}
           <BulletinSyncStatus syncing={bulletinSyncing} />
 
-          {/* 今やること: 次の授業＋直近の未提出課題＋当日の内部予定（休講/補講/教室変更/小テスト等）を1枚に集約。
-              すべて無ければセクションごと隠す。天気は通信先制約により集約対象外（不採用）。 */}
-          {/* いまの授業ヒーロー（進行中/次の授業）。今の授業は最優先縁＋残り時間＋進捗。 */}
-          {hero ? (
+          {(() => {
+            const sectionNodes: Record<HomeSectionKey, ReactNode> = {
+              // 並び順・表示はユーザーが設定タブで変更可能（homeLayout）。以下は各セクションのJSX。
+              // いまの授業ヒーロー（進行中/次の授業）。今の授業は最優先縁＋残り時間＋進捗。
+              nowClass: hero ? (
             <PressableCard
               style={[ui.card, styles.hero, hero.isNow && { borderColor: ui.colors.priorityBorder }]}
               onPress={() => openSubject(hero)}
@@ -406,10 +410,9 @@ export default function HomeScreen() {
                 </View>
               ) : null}
             </PressableCard>
-          ) : null}
-
-          {/* このあとの授業（フラット行＋区切り線）。 */}
-          {laterClasses.length > 0 ? (
+          ) : null,
+              // このあとの授業（フラット行＋区切り線）。
+              laterClasses: laterClasses.length > 0 ? (
             <View style={[ui.card, styles.listCard]}>
               <View style={styles.cardHead}>
                 <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>このあとの授業</Text>
@@ -437,10 +440,9 @@ export default function HomeScreen() {
                 </PressableRow>
               ))}
             </View>
-          ) : null}
-
-          {/* 直近の締切（This Evening型・時間帯バンド＋意味色チップ）。 */}
-          {deadlineGroups.length > 0 ? (
+          ) : null,
+              // 直近の締切（This Evening型・時間帯バンド＋意味色チップ）。
+              deadlines: deadlineGroups.length > 0 ? (
             <View style={[ui.card, styles.listCard]}>
               <View style={styles.cardHead}>
                 <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>直近の締切</Text>
@@ -483,10 +485,9 @@ export default function HomeScreen() {
                 </View>
               ))}
             </View>
-          ) : null}
-
-          {/* 今日の変更（休講/補講/教室変更/小テスト等・アプリ固有）。 */}
-          {todayItems.length > 0 ? (
+          ) : null,
+              // 今日の変更（休講/補講/教室変更/小テスト等・アプリ固有）。
+              todayChanges: todayItems.length > 0 ? (
             <View style={[ui.card, styles.listCard]}>
               <View style={styles.cardHead}>
                 <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>今日の変更</Text>
@@ -505,10 +506,11 @@ export default function HomeScreen() {
                 ))}
               </View>
             </View>
-          ) : null}
-
-          {/* CLASS掲示（インフォから移設）。未読ダイジェストが埋まっていればスライド、空ならCTA。 */}
-          <View style={styles.bulletinSectionRow}>
+          ) : null,
+              // CLASS掲示（インフォから移設）。未読ダイジェストが埋まっていればスライド、空ならCTA。
+              bulletins: (
+                <Fragment>
+                  <View style={styles.bulletinSectionRow}>
             <SectionLabel>CLASS掲示</SectionLabel>
             <Pressable onPress={() => startBulletinSync(true)} hitSlop={10} disabled={bulletinSyncing} style={styles.refreshBtn}>
               {bulletinSyncing ? (
@@ -567,8 +569,12 @@ export default function HomeScreen() {
               ) : null}
             </PressableCard>
           )}
-
-          <SectionLabel>その他</SectionLabel>
+                </Fragment>
+              ),
+              // その他（出席登録・インフォ）＝常時表示。
+              entries: (
+                <Fragment>
+                  <SectionLabel>その他</SectionLabel>
           <Pressable style={[ui.card, styles.entry]} onPress={openAttendance}>
             <View style={[styles.entryIcon, { backgroundColor: ui.pillBg }]}>
               <Ionicons name="flash-outline" size={20} color={ui.accent} />
@@ -591,6 +597,13 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
           </PressableCard>
+                </Fragment>
+              ),
+            }
+            return homeLayout
+              .filter((s) => s.enabled)
+              .map((s) => <Fragment key={s.key}>{sectionNodes[s.key]}</Fragment>)
+          })()}
         </ScrollView>
       </ScreenBg>
 
