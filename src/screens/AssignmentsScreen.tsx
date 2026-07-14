@@ -27,7 +27,7 @@ import { syncSkipMessage } from '../health/syncSkipNotice'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import FreshnessLabel from '../ui/FreshnessLabel'
-import { useSync } from '../sync/SyncProvider'
+import { useSync, useSyncProgress } from '../sync/SyncProvider'
 import { COLORS } from '../theme'
 
 type RowUi = {
@@ -313,6 +313,16 @@ function EmptyView({ state, refreshedAt, onSync }: { state: 'done' | 'unsynced' 
   )
 }
 
+/** 更新バーの進捗文言。高頻度の進捗contextはこの部品だけが購読する（親画面の再レンダー抑制）。 */
+function UpdatingBarText({ color }: { color: string }) {
+  const progress = useSyncProgress()
+  return (
+    <Text style={[styles.updatingText, { color }]} numberOfLines={1}>
+      {progress ?? '課題を更新中…'}
+    </Text>
+  )
+}
+
 export default function AssignmentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const ui = useUi()
@@ -335,9 +345,10 @@ export default function AssignmentsScreen() {
   // この画面では LETUS 起因のスキップだけ表示する（CLASS掲示のスキップはホームの同期バーが持つ）。
   const syncNotice = sync.skip?.feature === 'letus' ? syncSkipMessage('letus', sync.skip.reason) : ''
 
+  const { runAssignmentsSync } = sync
   const startUpdate = useCallback(() => {
-    sync.runAssignmentsSync({ source: 'user' })
-  }, [sync])
+    runAssignmentsSync({ source: 'user' })
+  }, [runAssignmentsSync])
 
   const reload = useCallback(async () => {
     const map = await loadAssignments()
@@ -595,13 +606,12 @@ export default function AssignmentsScreen() {
       ) : null}
 
       {/* 更新中インジケータ（一覧はそのまま下に表示し続ける）。収集本体は SyncProvider が
-          マウントし、ステージ文言（コース取込/内容確認/課題取込 n/m）をそのまま表示する。 */}
+          マウントし、ステージ文言（コース取込/内容確認/課題取込 n/m）をそのまま表示する。
+          進捗ラベルは高頻度更新のため専用子コンポーネントだけが購読する（画面全体を毎ページ再レンダーしない）。 */}
       {collecting ? (
         <View style={[rowUi.card, styles.updatingBar]}>
           <ActivityIndicator size="small" color={rowUi.accent} />
-          <Text style={[styles.updatingText, { color: rowUi.valueColor }]} numberOfLines={1}>
-            {sync.assignmentProgress ?? '課題を更新中…'}
-          </Text>
+          <UpdatingBarText color={rowUi.valueColor} />
         </View>
       ) : null}
 

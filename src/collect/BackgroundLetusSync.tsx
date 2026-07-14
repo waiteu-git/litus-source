@@ -32,6 +32,9 @@ export default function BackgroundLetusSync() {
     // auth 変化・フォアグラウンド復帰（wakeTick）のたびに再評価される。
     const delay = auth.letus === 'authenticated' ? START_DELAY_MS : AUTH_WAIT_MS
     const t = setTimeout(() => {
+      // 待機中に手動同期（課題画面/ホーム統合同期）が完走していれば不要（発火直前に再確認。
+      // 30分再同期パスは subscribeForeground が didFullSync を先に落としてから wakeTick を上げる）。
+      if (syncSession.didFullSync) return
       runAssignmentsSync({ source: wakeTick > 0 ? 'foreground' : 'boot' })
     }, delay)
     return () => clearTimeout(t)

@@ -6,7 +6,8 @@
 import type { AccessDecision } from './accessGate'
 import { maintenanceWindowLabel, systemDisplayName, type MaintenanceSystem } from './maintenanceWindow'
 
-export type SyncSkipReason = 'offline' | 'maintenance' | 'attending'
+/** 'stopped' はリモートkill switch（機能停止中）。syncSkipReason は返さず SyncProvider だけが設定する。 */
+export type SyncSkipReason = 'offline' | 'maintenance' | 'attending' | 'stopped'
 
 /**
  * 手動更新をスキップすべき理由。null なら収集を開始してよい。
@@ -39,5 +40,7 @@ export function syncSkipMessage(source: MaintenanceSystem, reason: SyncSkipReaso
       return `${systemDisplayName(source)}はメンテナンス中です（毎日${maintenanceWindowLabel(source)}）。終了後に取得できます。`
     case 'attending':
       return '授業中のため取得を控えています。授業後に取得できます。'
+    case 'stopped':
+      return '同期は現在一時停止中です。再開までしばらくお待ちください。'
   }
 }
