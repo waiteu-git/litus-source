@@ -15,7 +15,7 @@ describe('normalizeHomeLayout', () => {
     expect(normalizeHomeLayout({})).toEqual(DEFAULT_HOME_LAYOUT)
   })
 
-  it('保存順を維持し、欠けた既知キーを末尾に補い、不明キー/重複を除去', () => {
+  it('保存順を維持し、欠けた既知キーをアンカー位置へ挿入、不明キー/重複を除去', () => {
     const raw = [
       { key: 'deadlines', enabled: true },
       { key: 'nowClass', enabled: false },
@@ -23,16 +23,63 @@ describe('normalizeHomeLayout', () => {
       { key: 'deadlines', enabled: true }, // 重複
     ]
     const out = normalizeHomeLayout(raw)
+    // 欠けキーは「既定順で自分より前にある全キーの最後尾の直後」へ。deadlines(0)/nowClass(1)を
+    // アンカーに todayChanges→letusNews→bulletins が連なり、laterClasses/entries は末尾に落ちる。
     expect(out.map((s) => s.key)).toEqual([
       'deadlines',
       'nowClass',
-      // 欠けていた既知キーが既定順(HOME_SECTION_ORDER)で末尾補完
       'todayChanges',
+      'letusNews',
       'bulletins',
       'laterClasses',
       'entries',
     ])
     expect(out.find((s) => s.key === 'nowClass')!.enabled).toBe(false)
+  })
+
+  it('旧既定順（letusNews登場前）の保存値では letusNews がCLASS掲示の直前に入る', () => {
+    // v76時点の既定順で保存されたレイアウト＝letusNews だけが欠けている状態。
+    const saved: HomeSectionPref[] = [
+      { key: 'nowClass', enabled: true },
+      { key: 'todayChanges', enabled: true },
+      { key: 'bulletins', enabled: true },
+      { key: 'deadlines', enabled: true },
+      { key: 'laterClasses', enabled: true },
+      { key: 'entries', enabled: true },
+    ]
+    const out = normalizeHomeLayout(saved)
+    expect(out.map((s) => s.key)).toEqual([
+      'nowClass',
+      'todayChanges',
+      'letusNews',
+      'bulletins',
+      'deadlines',
+      'laterClasses',
+      'entries',
+    ])
+  })
+
+  it('ユーザーが並び替えた保存値でも、欠けキーは既定順の前後関係を尊重して挿入される', () => {
+    // bulletins を先頭へ移動済みのユーザー。letusNews は todayChanges の直後（bulletinsの上ではない
+    // ＝ユーザーの並び替えを尊重しつつ既定順の「todayChangesより後」だけ満たす）。
+    const saved = [
+      { key: 'bulletins', enabled: true },
+      { key: 'nowClass', enabled: true },
+      { key: 'todayChanges', enabled: true },
+      { key: 'deadlines', enabled: true },
+      { key: 'laterClasses', enabled: true },
+      { key: 'entries', enabled: true },
+    ]
+    const out = normalizeHomeLayout(saved)
+    expect(out.map((s) => s.key)).toEqual([
+      'bulletins',
+      'nowClass',
+      'todayChanges',
+      'letusNews',
+      'deadlines',
+      'laterClasses',
+      'entries',
+    ])
   })
 
   it('fixedOnキー(entries)はenabled=falseで保存されていても強制true', () => {
@@ -44,10 +91,15 @@ describe('normalizeHomeLayout', () => {
     expect(DEFAULT_HOME_LAYOUT.map((s) => s.key)).toEqual(HOME_SECTION_ORDER)
     expect(DEFAULT_HOME_LAYOUT.every((s) => s.enabled)).toBe(true)
   })
+
+  it('既定順で letusNews は bulletins の直前（ユーザー指定: CLASS掲示の上）', () => {
+    const i = HOME_SECTION_ORDER.indexOf('letusNews')
+    expect(HOME_SECTION_ORDER[i + 1]).toBe('bulletins')
+  })
 })
 
 describe('moveSection', () => {
-  // 既定順: [nowClass, todayChanges, bulletins, deadlines, laterClasses, entries]
+  // 既定順: [nowClass, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
   const base: HomeSectionPref[] = DEFAULT_HOME_LAYOUT
   it('上へ移動（隣と入替）', () => {
     const out = moveSection(base, 'todayChanges', -1)

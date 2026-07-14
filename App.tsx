@@ -25,14 +25,22 @@ import {
   addNotificationResponseListener,
   ATTENDANCE_OPEN_TAG,
   BULLETIN_TAG,
+  LETUS_NEWS_TAG,
   clearDeliveredBulletinNotifications,
+  clearDeliveredLetusNewsNotifications,
   configureNotifications,
   getInitialNotificationTag,
   requestNotificationPermission,
 } from './src/notifications/notifier'
 import { refreshAllNotifications } from './src/notifications/notificationRefresh'
 import { subscribeForeground } from './src/app/foregroundOrchestrator'
-import { navigationRef, flushPendingNavigation, requestOpenAttendance, requestOpenBulletins } from './src/navigation/navigationRef'
+import {
+  navigationRef,
+  flushPendingNavigation,
+  requestOpenAttendance,
+  requestOpenBulletins,
+  requestOpenLetusCourses,
+} from './src/navigation/navigationRef'
 import { subscribeWidgetLinks } from './src/widget/widgetLinking'
 
 // 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
@@ -93,6 +101,7 @@ export default function App() {
       try {
         await configureNotifications()
         await clearDeliveredBulletinNotifications()
+        await clearDeliveredLetusNewsNotifications()
         await requestNotificationPermission()
         await refreshAllNotifications()
       } catch (e) {
@@ -112,9 +121,11 @@ export default function App() {
         const initialTag = await getInitialNotificationTag()
         if (initialTag === ATTENDANCE_TAG || initialTag === ATTENDANCE_OPEN_TAG) requestOpenAttendance()
         else if (initialTag === BULLETIN_TAG) requestOpenBulletins()
+        else if (initialTag === LETUS_NEWS_TAG) requestOpenLetusCourses()
         sub = await addNotificationResponseListener((tag) => {
           if (tag === ATTENDANCE_TAG || tag === ATTENDANCE_OPEN_TAG) requestOpenAttendance()
           else if (tag === BULLETIN_TAG) requestOpenBulletins()
+          else if (tag === LETUS_NEWS_TAG) requestOpenLetusCourses()
         })
       } catch (e) {
         console.warn('通知応答の購読に失敗しました', e)

@@ -10,6 +10,8 @@ import { selectCoursesToSnapshot } from '../updates/courseSnapshotWindow'
 import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { CourseSnapshotMap } from '../storage/courseSnapshotSerialize'
 import AssignmentCollector from './AssignmentCollector'
+import { publishCourseNews } from './publishCourseNews'
+import type { CourseRunDiff } from '../updates/courseNews'
 
 // 各ステージ/ページの読込がハングした場合の保険。
 const COURSES_TIMEOUT_MS = 25000
@@ -46,6 +48,10 @@ export default function LetusSyncEngine({
   const snapshotsRef = useRef<CourseSnapshotMap>({})
   const snapshotsSavedRef = useRef(false)
   const finishedRef = useRef(false)
+  // このrunで実巡回したコースの増分（LETUS新着への転記用。未巡回コースの保持中addedは含めない）。
+  const runDiffsRef = useRef<CourseRunDiff[]>([])
+  // コースURL→表示名（新着の文言用）。courseMap から逆引き。
+  const courseNamesRef = useRef<Map<string, string>>(new Map())
 
   function finish() {
     if (finishedRef.current) return
@@ -91,6 +97,9 @@ export default function LetusSyncEngine({
     ;(async () => {
       const map = await loadCourseMap()
       snapshotsRef.current = await loadCourseSnapshots()
+      for (const course of Object.values(map)) {
+        if (!courseNamesRef.current.has(course.url)) courseNamesRef.current.set(course.url, course.name)
+      }
       const unique = [...new Set(Object.values(map).map((c) => c.url))]
       // 鮮度TTL内に収集済みのコースは course/view.php 再巡回をスキップする（保持スナップショットを
       // そのまま使う）。未収集/TTL超過/収集時刻破損のコースだけ巡回＝どのコースも最大TTLごとに
@@ -138,6 +147,13 @@ export default function LetusSyncEngine({
         added: diff.added,
         removed: diff.removed,
       }
+      if (diff.added.length > 0) {
+        runDiffsRef.current.push({
+          url: currentUrl,
+          name: courseNamesRef.current.get(currentUrl) ?? '',
+          added: diff.added,
+        })
+      }
     }
     setIndex((i) => i + 1)
   }
@@ -152,6 +168,8 @@ export default function LetusSyncEngine({
       } catch {
         // 保存失敗でも課題収集へ（既存スナップショットが使われる）
       }
+      // LETUS新着（累積＋通知）への転記。失敗しても同期は続行（ヘルパ内で握りつぶし）。
+      await publishCourseNews(runDiffsRef.current)
       setStage('assignments')
     })()
   }, [stage, urls, index])

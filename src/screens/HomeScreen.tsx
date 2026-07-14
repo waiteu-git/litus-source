@@ -29,6 +29,8 @@ import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { useSync } from '../sync/SyncProvider'
 import HomeSyncBar from '../home/HomeSyncBar'
+import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
+import { markCourseSeen, type CourseNewsMap } from '../updates/courseNews'
 import { COLORS } from '../theme'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 import { PressableCard, PressableRow } from '../ui/Pressable'
@@ -90,6 +92,8 @@ export default function HomeScreen() {
   const sync = useSync()
   // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用。開発ビルドでのみ読み書き・表示する。
   const [bulletinDiag, setBulletinDiag] = useState('')
+  // LETUS新着（コース活動の増分・見るまで残る累積）。ホームカード用。
+  const [courseNews, setCourseNews] = useState<CourseNewsMap>({})
 
   useFocusEffect(
     useCallback(() => {
@@ -111,6 +115,9 @@ export default function HomeScreen() {
       loadClassEvents()
         .then((e) => active && setClassEvents(e))
         .catch(() => undefined)
+      loadCourseNews()
+        .then((m) => active && setCourseNews(m))
+        .catch(() => undefined)
       return () => {
         active = false
       }
@@ -130,6 +137,38 @@ export default function HomeScreen() {
     }
     prevBulletinBusy.current = sync.bulletinBusy
   }, [sync.bulletinBusy])
+
+  // 課題同期の完了（assignmentBusy の下降）で、LETUS新着カードへ増分を反映する。
+  const prevAssignmentBusy = useRef(false)
+  useEffect(() => {
+    if (prevAssignmentBusy.current && !sync.assignmentBusy) {
+      loadCourseNews().then(setCourseNews).catch(() => undefined)
+    }
+    prevAssignmentBusy.current = sync.assignmentBusy
+  }, [sync.assignmentBusy])
+
+  // LETUS新着カードの行（新しい検知が上）。行タップでコースを開き、そのコースの新着を既読化する。
+  const newsRows = Object.entries(courseNews)
+    .map(([url, e]) => ({
+      url,
+      name: e.name,
+      count: e.items.length,
+      latestTitle: e.items[e.items.length - 1]?.title ?? '',
+      latestAt: e.items.reduce((m, i) => Math.max(m, new Date(i.detectedAt).getTime() || 0), 0),
+    }))
+    .filter((r) => r.count > 0)
+    .sort((a, b) => b.latestAt - a.latestAt)
+  const newsTotal = newsRows.reduce((n, r) => n + r.count, 0)
+  function openCourseNews(r: { url: string; name: string }) {
+    mutateCourseNews((cur) => markCourseSeen(cur, r.url)).catch(() => undefined)
+    setCourseNews((cur) => markCourseSeen(cur, r.url))
+    navigation.navigate('時間割', {
+      screen: 'Web',
+      params: { url: r.url, title: r.name || 'LETUSコース' },
+      // initial:false で時間割タブ未訪問時も一覧を下に敷き、コースから戻れるようにする。
+      initial: false,
+    })
+  }
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
   // 出席済みのときは「出席登録受付中/出席を確認」バナーは出さない（案内が不要・紛らわしい）。
@@ -463,6 +502,38 @@ export default function HomeScreen() {
               </View>
             </View>
           ) : null,
+              // LETUS新着（コース活動の増分・見るまで残る）。どのコースに何件かを列挙し、
+              // 行タップでそのコースを開いて既読化する。未読ゼロならセクションごと消える。
+              letusNews: newsRows.length > 0 ? (
+                <View style={[ui.card, styles.listCard]}>
+                  <View style={styles.cardHead}>
+                    <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>LETUS新着</Text>
+                    <View style={[styles.countPill, { backgroundColor: ui.pillBg }]}>
+                      <Text style={[styles.countPillText, { color: ui.pillText }]}>{newsTotal}件</Text>
+                    </View>
+                  </View>
+                  {newsRows.map((r, i) => (
+                    <PressableRow
+                      key={r.url}
+                      onPress={() => openCourseNews(r)}
+                      style={[styles.hrow, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.hrowTitle, { color: ui.valueColor }]} numberOfLines={1}>
+                          {r.name || 'LETUSコース'}
+                        </Text>
+                        <Text style={[styles.hrowSub, { color: ui.labelColor }]} numberOfLines={1}>
+                          {r.latestTitle}
+                        </Text>
+                      </View>
+                      <View style={[styles.chip, { backgroundColor: ui.pillBg }]}>
+                        <Text style={[styles.chipText, { color: ui.pillText }]}>{r.count}件</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={ui.chevron} />
+                    </PressableRow>
+                  ))}
+                </View>
+              ) : null,
               // CLASS掲示（インフォから移設）。カード外の見出し・更新ボタン・鮮度/ヘルス表示は撤去し
               // 上部の統合同期バーへ集約（カード内の文字だけにする方針・2026-07-14）。
               bulletins: (
