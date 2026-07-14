@@ -6,9 +6,10 @@ import { Ionicons } from '@expo/vector-icons'
 import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { computeHomeBanner } from '../attendance/homeBanner'
-import { pickFocusClass, type FocusClass } from '../home/focusClass'
+import { todayRemainingClasses, type FocusClass } from '../home/focusClass'
 import { bulletinEmptyCard } from '../home/bulletinEmptyCard'
-import { formatDeadline, pickUrgentAssignment, relDue, TONE_COLOR, urgencyTone } from '../assignments/deadline'
+import { homeDeadlines, type HomeDeadlineBand } from '../home/homeDeadlines'
+import { formatDeadlineRich, deadlineMagnitude, urgencyTone } from '../assignments/deadline'
 import { loadAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import { loadClassEvents } from '../storage/classEventsStore'
@@ -46,6 +47,14 @@ const COLLAPSE_AFTER_MS = 5000
 // 今日の予定タグの色（タイプ別）。
 const EVENT_TONE: Record<string, string> = {
   makeup: COLORS.cta, quiz: COLORS.eventQuiz, midterm: COLORS.eventExam, final: COLORS.eventExam, other: COLORS.eventNeutral,
+}
+
+// 直近の締切の時間帯バンド見出し（This Evening型）。
+const BAND_LABEL: Record<HomeDeadlineBand, string> = { evening: '夕方 — 18:00まで', tonight: '今夜 — 23:59まで', thisWeek: '今週', later: 'それ以降' }
+
+function hhmmToMin(s: string): number | null {
+  const m = s.match(/^(\d{1,2}):(\d{2})$/)
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
 }
 
 /** 今日の予定1件のサブ行（時限＋教室/補足）。教室変更は「→ 教室」、それ以外は「・ 教室」で付す。 */
@@ -171,8 +180,19 @@ export default function HomeScreen() {
   const rawBanner = computeHomeBanner(timetable, running ? reception : null, tick)
   const banner = attendedNow ? { ...rawBanner, active: false } : rawBanner
 
-  const focus = pickFocusClass(timetable, tick, (code) => isClassOnDate(weeklyPatterns[code], tick))
-  const urgent = pickUrgentAssignment(assignments, tick)
+  const classes = todayRemainingClasses(timetable, tick, (code) => isClassOnDate(weeklyPatterns[code], tick))
+  const hero = classes[0] ?? null
+  const laterClasses = classes.slice(1)
+  const deadlineGroups = homeDeadlines(assignments, tick)
+  // いまの授業（進行中）の残り時間と進捗率（開始→終了の経過）。
+  const nowMin = tick.getHours() * 60 + tick.getMinutes()
+  const heroStart = hero ? hhmmToMin(hero.start) : null
+  const heroEnd = hero ? hhmmToMin(hero.end) : null
+  const heroRemain = hero?.isNow && heroEnd != null ? Math.max(0, heroEnd - nowMin) : null
+  const heroPct =
+    hero?.isNow && heroStart != null && heroEnd != null && heroEnd > heroStart
+      ? Math.min(100, Math.max(0, ((nowMin - heroStart) / (heroEnd - heroStart)) * 100))
+      : null
   // ストアは全件（既読・フラグ付き含む）を持つため、ホームの「未読」スライドは未読のみに絞る。
   const unreadBulletin = bulletin.filter((b) => b.unread)
   // 未読0件時のカード分岐（純ロジック）。「取得済みで未読なし」と「未取得」を区別する。
@@ -284,8 +304,6 @@ export default function HomeScreen() {
   }
 
   const accent = banner.kind === 'accepting' ? COLORS.cta : COLORS.emerald
-  const tone = urgent ? urgencyTone(urgent, tick) : 'green'
-  const toneColor = TONE_COLOR[tone]
   // ピルが右上から右下へ「右端を伝って」降りてくる移動距離。
   const pillTravel = Math.min(Dimensions.get('window').height * 0.55, 460)
 
@@ -348,59 +366,145 @@ export default function HomeScreen() {
 
           {/* 今やること: 次の授業＋直近の未提出課題＋当日の内部予定（休講/補講/教室変更/小テスト等）を1枚に集約。
               すべて無ければセクションごと隠す。天気は通信先制約により集約対象外（不採用）。 */}
-          {focus || urgent || todayItems.length > 0 ? (
-            <>
-              <SectionLabel>今やること</SectionLabel>
-              <View style={[ui.card, styles.focusCard]}>
-                {focus ? (
-                  <PressableRow onPress={() => openSubject(focus)}>
-                    <FocusClassRow focus={focus} ui={ui} last={!urgent && todayItems.length === 0} />
-                  </PressableRow>
-                ) : null}
-                {focus && urgent ? <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} /> : null}
-                {urgent ? (
-                  <PressableRow style={styles.focusRow} onPress={() => openAssignment(urgent.url)}>
-                    <View style={styles.focusLead}>
-                      <View style={[styles.focusDot, { backgroundColor: toneColor }]} />
-                    </View>
-                    <View style={styles.focusMain}>
-                      <Text style={[styles.focusTitle, { color: ui.valueColor }]} numberOfLines={1}>
-                        {urgent.title}
-                      </Text>
-                      <Text style={[styles.focusSub, { color: ui.labelColor }]} numberOfLines={1}>
-                        {urgent.courseName || '科目不明'} ・ 迫る締切
-                      </Text>
-                    </View>
-                    <View style={styles.focusRight}>
-                      <Text style={[styles.focusRel, { color: ui.green ? COLORS.white : toneColor }]}>
-                        {relDue(urgent.deadline, tick)}
-                      </Text>
-                      <Text style={[styles.focusDue, { color: ui.subMuted }]}>
-                        {formatDeadline(urgent.deadline)}
-                      </Text>
-                    </View>
-                  </PressableRow>
-                ) : null}
-                {(focus || urgent) && todayItems.length > 0 ? (
-                  <View style={[styles.focusDivider, { backgroundColor: ui.dividerColor }]} />
-                ) : null}
-                {todayItems.length > 0 ? (
-                  <View style={styles.todayGroup}>
-                    {todayItems.map((it, i) => (
-                      <View key={`te-${i}`} style={styles.todayEvRow}>
-                        <View style={[styles.todayEvTag, { backgroundColor: (it.kind === 'cancel' || it.kind === 'roomChange') ? ui.colors.info : (EVENT_TONE[it.kind] ?? COLORS.eventNeutral) }]}>
-                          <Text style={styles.todayEvTagText}>{eventTypeLabel(it.kind)}</Text>
-                        </View>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={[styles.todayEvTitle, { color: ui.valueColor }]} numberOfLines={1}>{it.courseName}</Text>
-                          <Text style={[styles.todayEvSub, { color: ui.labelColor }]} numberOfLines={1}>{eventSubText(it)}</Text>
-                        </View>
-                      </View>
-                    ))}
+          {/* いまの授業ヒーロー（進行中/次の授業）。今の授業は最優先縁＋残り時間＋進捗。 */}
+          {hero ? (
+            <PressableCard
+              style={[ui.card, styles.hero, hero.isNow && { borderColor: ui.colors.priorityBorder }]}
+              onPress={() => openSubject(hero)}
+            >
+              <View style={styles.heroTop}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.heroLabel, { color: ui.labelColor }]}>
+                    {hero.isNow ? `いまの授業・${hero.period}限` : `次の授業・${hero.period}限`}
+                  </Text>
+                  <Text style={[styles.heroTitle, { color: ui.valueColor }]} numberOfLines={1}>{hero.name}</Text>
+                  <Text style={[styles.heroMeta, { color: ui.labelColor }]} numberOfLines={1}>
+                    {hero.room}{hero.room ? ' ・ ' : ''}{hero.start}–{hero.end}{hero.isRemote ? ' ・ 遠隔' : ''}
+                  </Text>
+                </View>
+                {banner.active && banner.kind === 'accepting' ? (
+                  <View style={[styles.attendPill, { backgroundColor: ui.pillBg }]}>
+                    <View style={[styles.attendDot, { backgroundColor: ui.pillText }]} />
+                    <Text style={[styles.attendPillText, { color: ui.pillText }]}>出席受付中</Text>
                   </View>
                 ) : null}
               </View>
-            </>
+              {hero.isNow && heroRemain != null ? (
+                <View style={[styles.heroSoftbox, { backgroundColor: ui.softBoxBg }]}>
+                  <View style={styles.remainRow}>
+                    <View style={styles.remainLeft}>
+                      <Text style={[styles.remainLabel, { color: ui.labelColor }]}>残り</Text>
+                      <Text style={[styles.remainStat, { color: ui.valueColor }]}>{heroRemain}分</Text>
+                    </View>
+                    <Text style={[styles.remainEnd, { color: ui.labelColor }]}>{hero.end} 終了</Text>
+                  </View>
+                  {heroPct != null ? (
+                    <View style={[styles.progressTrack, { backgroundColor: ui.dividerColor }]}>
+                      <View style={[styles.progressFill, { width: `${heroPct}%`, backgroundColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) }]} />
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </PressableCard>
+          ) : null}
+
+          {/* このあとの授業（フラット行＋区切り線）。 */}
+          {laterClasses.length > 0 ? (
+            <View style={[ui.card, styles.listCard]}>
+              <View style={styles.cardHead}>
+                <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>このあとの授業</Text>
+                <View style={[styles.countPill, { backgroundColor: ui.pillBg }]}>
+                  <Text style={[styles.countPillText, { color: ui.pillText }]}>{laterClasses.length}件</Text>
+                </View>
+              </View>
+              {laterClasses.map((c, i) => (
+                <PressableRow
+                  key={`lc-${c.courseCode || c.name}-${c.period}`}
+                  onPress={() => openSubject(c)}
+                  style={[styles.hrow, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
+                >
+                  <View style={styles.slot}>
+                    <Text style={[styles.slotPer, { color: ui.valueColor }]}>{c.period}限</Text>
+                    <Text style={[styles.slotTime, { color: ui.labelColor }]}>{c.start}</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.hrowTitle, { color: ui.valueColor }]} numberOfLines={1}>{c.name}</Text>
+                    <Text style={[styles.hrowSub, { color: ui.labelColor }]} numberOfLines={1}>
+                      {c.room}{c.room ? ' ・ ' : ''}〜{c.end}{c.isRemote ? ' ・ 遠隔' : ''}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={ui.chevron} />
+                </PressableRow>
+              ))}
+            </View>
+          ) : null}
+
+          {/* 直近の締切（This Evening型・時間帯バンド＋意味色チップ）。 */}
+          {deadlineGroups.length > 0 ? (
+            <View style={[ui.card, styles.listCard]}>
+              <View style={styles.cardHead}>
+                <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>直近の締切</Text>
+                <View style={[styles.countPill, { backgroundColor: ui.pillBg }]}>
+                  <Text style={[styles.countPillText, { color: ui.pillText }]}>{deadlineGroups.reduce((n, g) => n + g.items.length, 0)}件</Text>
+                </View>
+              </View>
+              {deadlineGroups.map((g) => (
+                <View key={g.band}>
+                  <View style={styles.band}>
+                    <Text style={[styles.bandText, { color: ui.labelColor }]}>{BAND_LABEL[g.band]}</Text>
+                    <View style={[styles.bandLine, { backgroundColor: ui.dividerColor }]} />
+                  </View>
+                  {g.items.map(({ a, done }) => {
+                    const t = done ? null : urgencyTone(a, tick)
+                    return (
+                      <PressableRow key={a.url} onPress={() => openAssignment(a.url)} style={styles.hrow}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={[styles.hrowTitle, { color: ui.valueColor }]} numberOfLines={1}>{a.title}</Text>
+                          <Text style={[styles.hrowSub, { color: ui.labelColor }]} numberOfLines={1}>
+                            {a.courseName || '科目'} ・ {formatDeadlineRich(a.deadline, tick)}
+                          </Text>
+                        </View>
+                        {done ? (
+                          <View style={[styles.chip, { backgroundColor: ui.colors.successBg }]}>
+                            <Ionicons name="checkmark" size={11} color={ui.colors.success} />
+                            <Text style={[styles.chipText, { color: ui.colors.success }]}>提出済み</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.chip, { backgroundColor: t === 'red' ? ui.colors.dangerBg : t === 'amber' ? ui.colors.warnBg : ui.softBoxBg }]}>
+                            <Text style={[styles.chipText, { color: t === 'red' ? ui.colors.danger : t === 'amber' ? ui.colors.warn : ui.labelColor }]}>
+                              {deadlineMagnitude(a.deadline, tick)}
+                            </Text>
+                          </View>
+                        )}
+                        <Ionicons name="chevron-forward" size={16} color={ui.chevron} />
+                      </PressableRow>
+                    )
+                  })}
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {/* 今日の変更（休講/補講/教室変更/小テスト等・アプリ固有）。 */}
+          {todayItems.length > 0 ? (
+            <View style={[ui.card, styles.listCard]}>
+              <View style={styles.cardHead}>
+                <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>今日の変更</Text>
+              </View>
+              <View style={styles.todayGroup}>
+                {todayItems.map((it, i) => (
+                  <View key={`te-${i}`} style={styles.todayEvRow}>
+                    <View style={[styles.todayEvTag, { backgroundColor: (it.kind === 'cancel' || it.kind === 'roomChange') ? ui.colors.info : (EVENT_TONE[it.kind] ?? COLORS.eventNeutral) }]}>
+                      <Text style={styles.todayEvTagText}>{eventTypeLabel(it.kind)}</Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[styles.todayEvTitle, { color: ui.valueColor }]} numberOfLines={1}>{it.courseName}</Text>
+                      <Text style={[styles.todayEvSub, { color: ui.labelColor }]} numberOfLines={1}>{eventSubText(it)}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
           ) : null}
 
           {/* CLASS掲示（インフォから移設）。未読ダイジェストが埋まっていればスライド、空ならCTA。 */}
@@ -550,40 +654,6 @@ export default function HomeScreen() {
   )
 }
 
-/** 「今やること」の授業行（時限・時刻＋科目＋今の授業/次の授業バッジ）。 */
-function FocusClassRow({ focus, ui, last }: { focus: FocusClass; ui: ReturnType<typeof useUi>; last: boolean }) {
-  return (
-    <View style={[styles.focusRow, last && { paddingBottom: 14 }]}>
-      <View style={styles.focusLead}>
-        <Text style={[styles.focusPer, { color: ui.labelColor }]} numberOfLines={1}>{focus.period}限</Text>
-        <Text style={[styles.focusTime, { color: ui.valueColor }]} numberOfLines={1} adjustsFontSizeToFit>
-          {focus.start}
-        </Text>
-      </View>
-      <View style={[styles.focusTimeDivider, { backgroundColor: ui.dividerColor }]} />
-      <View style={styles.focusMain}>
-        <View style={styles.focusTitleRow}>
-          <Text style={[styles.focusTitle, { color: ui.valueColor }]} numberOfLines={1}>
-            {focus.name}
-          </Text>
-          {focus.isNow ? (
-            <Badge variant="live" label="今の授業" size="md" />
-          ) : (
-            <View style={[styles.nextBadge, { backgroundColor: ui.pillBg }]}>
-              <Text style={[styles.nextBadgeText, { color: ui.pick(COLORS.inkOnGlass, COLORS.cta, COLORS.emeraldLight) }]}>次の授業</Text>
-            </View>
-          )}
-        </View>
-        <Text style={[styles.focusSub, { color: ui.labelColor }]} numberOfLines={1}>
-          {focus.room}
-          {focus.isRemote ? ' ・ 遠隔' : ''}
-          {focus.teachers[0] ? ` ・ ${focus.teachers[0]}` : ''}
-        </Text>
-      </View>
-    </View>
-  )
-}
-
 /**
  * 掲示同期のヒーロー表示。`syncing` が true の間は「同期中…」バナーを上部へ出し、false へ落ちた瞬間に
  * バナーを上へ格納→「✓ 最新」ピルを控えめな hero バネ(0.9→1.03→1)で立ち上げ→数秒保持してフェード。
@@ -723,23 +793,40 @@ const styles = StyleSheet.create({
   },
   syncPillText: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
 
-  focusCard: { paddingVertical: 4, paddingHorizontal: 16 },
-  focusRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
-  focusLead: { width: 58, alignItems: 'center', justifyContent: 'center' },
-  focusPer: { fontSize: 11 },
-  focusTime: { fontSize: 18, fontWeight: '700', lineHeight: 20, marginTop: 1 },
-  focusTimeDivider: { width: 1, alignSelf: 'stretch' },
-  focusDivider: { height: 1 },
-  focusMain: { flex: 1, minWidth: 0 },
-  focusTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  focusTitle: { fontSize: 15, fontWeight: '600', flexShrink: 1 },
-  focusSub: { fontSize: 12, marginTop: 3 },
-  nextBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
-  nextBadgeText: { fontSize: 10, fontWeight: '700' },
-  focusDot: { width: 10, height: 10, borderRadius: 5 },
-  focusRight: { alignItems: 'flex-end' },
-  focusRel: { fontSize: 15, fontWeight: '700' },
-  focusDue: { fontSize: 11, marginTop: 1 },
+  // いまの授業ヒーロー
+  hero: {},
+  heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  heroLabel: { fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
+  heroTitle: { fontSize: 21, lineHeight: 27, fontWeight: '700', marginTop: 2 },
+  heroMeta: { fontSize: 13, marginTop: 6 },
+  attendPill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  attendDot: { width: 7, height: 7, borderRadius: 4 },
+  attendPillText: { fontSize: 11, fontWeight: '700' },
+  heroSoftbox: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginTop: 12 },
+  remainRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  remainLeft: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
+  remainLabel: { fontSize: 12, fontWeight: '500' },
+  remainStat: { fontSize: 22, fontWeight: '700' },
+  remainEnd: { fontSize: 11 },
+  progressTrack: { height: 4, borderRadius: 999, marginTop: 8, overflow: 'hidden' },
+  progressFill: { height: 4, borderRadius: 999 },
+  // このあと/締切カード共通
+  listCard: {},
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  cardHeadLabel: { fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
+  countPill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 },
+  countPillText: { fontSize: 11, fontWeight: '700' },
+  hrow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  slot: { width: 46 },
+  slotPer: { fontSize: 12, fontWeight: '700' },
+  slotTime: { fontSize: 11, marginTop: 1 },
+  hrowTitle: { fontSize: 14, lineHeight: 18 },
+  hrowSub: { fontSize: 11, lineHeight: 15, marginTop: 2 },
+  band: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 10, paddingBottom: 2 },
+  bandText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4 },
+  bandLine: { flex: 1, height: 1 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  chipText: { fontSize: 11, fontWeight: '700' },
 
   bulletinSectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   refreshBtn: { padding: 6, marginTop: 8 },

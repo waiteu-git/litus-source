@@ -75,3 +75,54 @@ export function pickFocusClass(
 
   return (ongoing ?? upcoming)?.focus ?? null
 }
+
+export type HomeClass = FocusClass & { end: string }
+
+/**
+ * 本日の残り授業（進行中＋後続）を返す。先頭は pickFocusClass と一致（＝ヒーロー）、
+ * 以降は開始時刻昇順（＝「このあとの授業」）。終了済みのコマは含めない。
+ */
+export function todayRemainingClasses(
+  collections: TimetableCollection[],
+  now: Date,
+  isOn?: (courseCode: string) => boolean,
+): HomeClass[] {
+  const weekday = now.getDay()
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const rows: { startMin: number; ongoing: boolean; cls: HomeClass }[] = []
+  for (const col of collections) {
+    const periods = col.periodTimes?.periods ?? []
+    for (const slot of col.slots) {
+      if (slot.classes.length === 0) continue
+      if (WEEKDAY[slot.day] !== weekday) continue
+      const pt = periods.find((p) => p.period === slot.period)
+      if (!pt) continue
+      const start = hhmmToMin(pt.start)
+      const end = hhmmToMin(pt.end)
+      if (start === null || end === null) continue
+      const c = slot.classes[0]
+      if (isOn && !isOn(c.courseCode)) continue
+      const ongoing = nowMin >= start && nowMin <= end
+      const upcoming = nowMin < start
+      if (!ongoing && !upcoming) continue // 終了済みは除外
+      rows.push({
+        startMin: start,
+        ongoing,
+        cls: {
+          period: slot.period,
+          start: pt.start,
+          end: pt.end,
+          name: c.name,
+          room: c.room,
+          teachers: c.teachers,
+          isRemote: c.isRemote,
+          courseCode: c.courseCode,
+          isNow: ongoing,
+        },
+      })
+    }
+  }
+  // 進行中を先頭、その後は開始時刻昇順。
+  rows.sort((a, b) => (a.ongoing !== b.ongoing ? (a.ongoing ? -1 : 1) : a.startMin - b.startMin))
+  return rows.map((r) => r.cls)
+}
