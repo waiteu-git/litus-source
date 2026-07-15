@@ -48,7 +48,7 @@ export const INFO_ITEMS: InfoItem[] = [
   { id: 'katsushika-station-kanamachi', campusId: 'katsushika', category: 'station', name: '金町駅', url: 'https://transit.yahoo.co.jp/timetable/22598' },
   { id: 'katsushika-station-keisei-kanamachi', campusId: 'katsushika', category: 'station', name: '京成金町駅', url: 'https://transit.yahoo.co.jp/timetable/22662' },
   { id: 'kagurazaka-station', campusId: 'kagurazaka', category: 'station', name: '飯田橋駅', url: 'https://transit.yahoo.co.jp/timetable/22507' },
-  { id: 'noda-station', campusId: 'noda', category: 'station', name: '運河駅', url: 'https://transit.yahoo.co.jp/timetable/22207/2771' },
+  { id: 'noda-station', campusId: 'noda', category: 'station', name: '運河駅', url: 'https://transit.yahoo.co.jp/timetable/22207' },
   { id: 'oshamambe-station', campusId: 'oshamambe', category: 'station', name: '長万部駅', url: 'https://transit.yahoo.co.jp/timetable/20089' },
 ]
 
