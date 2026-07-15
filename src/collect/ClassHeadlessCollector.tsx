@@ -4,11 +4,18 @@ import { WebView } from 'react-native-webview'
 import { DESKTOP_UA, DETECT_PAGE_JS, ENTER_CLASS_PC_JS } from './injectedScripts'
 import { collectEarlyAction, type CollectSignal } from './collectFlow'
 import { useClassView } from './classViewArbiter'
+import { acquireClassLease, releaseClassLease } from './classCollectLease'
 
 const CLASS_URL = 'https://class.admin.tus.ac.jp/'
 const CLASS_ON_LOAD_JS = `${ENTER_CLASS_PC_JS}\n${DETECT_PAGE_JS}`
 // 非表示WebViewでの収集全体のハング保険。
 const OVERALL_TIMEOUT_MS = 25000
+// CLASS排他リースの取得後、実際にCLASSへ入場するまでの settle（引き継ぎ時のみ）。
+// 前の収集WebViewが消えてもCLASSサーバ側の旧ウィンドウ状態が一瞬残り、即入場すると
+// "別の画面で操作されました"(multi)/ViewExpired(syserr) に弾かれるため、短く待って解放させる。
+const LEASE_SETTLE_MS = 1200
+// リースが取れないまま待ち続ける上限（前の収集が詰まっても永久待ちしない保険）。
+const LEASE_MAX_WAIT_MS = 40000
 // ページ読込後にメニュー発火→抽出を試みるまでの待ち。
 const OPEN_DELAY_MS = 1200
 const COLLECT_DELAY_MS = 2600
@@ -75,6 +82,13 @@ export default function ClassHeadlessCollector({
   const menuFiredRef = useRef(false)
   const doneRef = useRef(false)
   const [nonce, setNonce] = useState(0)
+  // CLASS排他リース: 取得できるまで WebView を描画せず（＝CLASSへ入場させず）、収集どうしの並走を断つ。
+  const leaseToken = useRef({})
+  const [leaseReady, setLeaseReady] = useState(false)
+  const leaseReadyRef = useRef(false)
+  leaseReadyRef.current = leaseReady
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const overallTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function finish() {
     if (doneRef.current) return
@@ -89,10 +103,36 @@ export default function ClassHeadlessCollector({
       finish()
       return
     }
-    setCollectActive(true) // CLASS使用権を取り出席に譲らせる
-    const t = setTimeout(finish, OVERALL_TIMEOUT_MS)
+    setCollectActive(true) // CLASS使用権を取り出席に譲らせる（アービタ調停はマウントから）
+    let cancelled = false
+    // CLASS排他リースを取得してから入場する（掲示/時間割/出欠/掲示アクションの並走＝多重画面競合を断つ）。
+    // 取得が長引いた場合の保険（前の収集が詰まっても永久待ちしない）。
+    const waitGuard = setTimeout(() => {
+      if (!leaseReadyRef.current && !doneRef.current) finish()
+    }, LEASE_MAX_WAIT_MS)
+    acquireClassLease(leaseToken.current).then(({ settle }) => {
+      if (cancelled || doneRef.current) {
+        releaseClassLease(leaseToken.current)
+        return
+      }
+      const enter = () => {
+        if (cancelled || doneRef.current) return
+        setLeaseReady(true) // ここで初めて WebView がマウントされ CLASS へ入場する
+        overallTimer.current = setTimeout(finish, OVERALL_TIMEOUT_MS) // 全体ハング保険は入場からカウント
+      }
+      // 引き継ぎ（直前に別収集がCLASSを使っていた）時だけ settle を挟み、旧ウィンドウの解放を待つ。
+      // 先頭取得（settle=false）は待ちなしで即入場。時間割→出欠の受け渡しは、時間割のアンマウント返却が
+      // 先に走り出欠は即時取得になるため、この「直前返却あり=settle」でも確実に間を空ける。
+      if (settle) settleTimer.current = setTimeout(enter, LEASE_SETTLE_MS)
+      else enter()
+    })
     return () => {
-      clearTimeout(t)
+      cancelled = true
+      clearTimeout(waitGuard)
+      if (settleTimer.current) clearTimeout(settleTimer.current)
+      if (overallTimer.current) clearTimeout(overallTimer.current)
+      // WebView が消えるこのタイミングでリースを返す＝次の収集はここまで入場を待つ（重なりゼロ）。
+      releaseClassLease(leaseToken.current)
       setCollectActive(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -180,6 +220,7 @@ export default function ClassHeadlessCollector({
 
   return (
     <View style={styles.box} pointerEvents="none">
+      {leaseReady ? (
       <WebView
         key={nonce}
         ref={webviewRef}
@@ -199,6 +240,7 @@ export default function ClassHeadlessCollector({
         onRenderProcessGone={() => reboot()}
         style={styles.web}
       />
+      ) : null}
     </View>
   )
 }
