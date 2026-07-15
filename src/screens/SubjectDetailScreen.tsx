@@ -341,14 +341,22 @@ export default function SubjectDetailScreen() {
             </View>
           </Accordion>
         ) : !attCollected ? (
-          // 未収集: 収集前は科目ごとの trackable 判定ができないため、非表示ではなく取得方法を案内する
-          //（収集済みで出席管理対象外の科目は従来どおり非表示）。
+          // 未収集: まだ一度も収集していない → 取得方法を案内する。
           <Accordion title="出欠" icon="checkmark-done-outline" subtitle="未取得">
             <Text style={[styles.attSub, { color: ui.labelColor }]}>
               出欠データはまだ取得できていません。時間割タブで下に引いて同期すると、CLASSの「学生出欠状況確認」から自動で取得します。
             </Text>
           </Accordion>
-        ) : null}
+        ) : (
+          // 収集済みだが当該科目に出欠データが無い（未記録／出席管理対象外／集中講義等でCLASS出欠に載らない）。
+          // 0マーク科目に「あと◯回休める」を出すと誤情報になるため数値UIは出さず、中立の「記録なし」案内にする。
+          // これで学期序盤の全科目未記録でも機能が消えて見えず、収集失敗（=未取得）とも区別できる。
+          <Accordion title="出欠" icon="checkmark-done-outline" subtitle="記録なし">
+            <Text style={[styles.attSub, { color: ui.labelColor }]}>
+              この科目はまだCLASS出欠の記録がありません。担当教員がCLASSで出欠を取らない科目や、学期序盤で記録がない場合は数字が表示されません。
+            </Text>
+          </Accordion>
+        )}
 
         <Accordion
           title="各回の予定"
