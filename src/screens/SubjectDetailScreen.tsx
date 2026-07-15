@@ -120,6 +120,9 @@ export default function SubjectDetailScreen() {
   const [pattern, setPattern] = useState<WeeklyPattern>({})
   const [attStats, setAttStats] = useState<AttendanceCourseStats | null>(null)
   const [attTotal, setAttTotal] = useState<number | null>(null)
+  // 出欠データを一度でも収集済みか。未収集だと trackable 判定すらできず従来はセクション自体が消えて
+  // 「機能が存在しないように見える」ため、未収集時は案内を出す（初期値trueで案内のチラつきを防ぐ）。
+  const [attCollected, setAttCollected] = useState(true)
   const [unread, setUnread] = useState(0)
   // カレンダー用の週リスト（今週の2週前〜16週後）。画面表示中は固定。
   const weeks = useMemo(() => weekList(new Date(), 2, 16), [])
@@ -141,6 +144,7 @@ export default function SubjectDetailScreen() {
   useEffect(() => {
     ;(async () => {
       const data = await loadAttendanceStats()
+      setAttCollected(data !== null)
       const found = data?.courses.find((c) => c.courseCode === courseCode) ?? null
       setAttStats(found)
       const ov = await loadAttendanceOverrides()
@@ -332,6 +336,14 @@ export default function SubjectDetailScreen() {
                 </Pressable>
               </View>
             </View>
+          </Accordion>
+        ) : !attCollected ? (
+          // 未収集: 収集前は科目ごとの trackable 判定ができないため、非表示ではなく取得方法を案内する
+          //（収集済みで出席管理対象外の科目は従来どおり非表示）。
+          <Accordion title="出欠" icon="checkmark-done-outline" subtitle="未取得">
+            <Text style={[styles.attSub, { color: ui.labelColor }]}>
+              出欠データはまだ取得できていません。時間割タブで下に引いて同期すると、CLASSの「学生出欠状況確認」から自動で取得します。
+            </Text>
           </Accordion>
         ) : null}
 
