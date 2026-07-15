@@ -108,7 +108,7 @@ export default function SettingsScreen() {
   function onResetAll() {
     Alert.alert(
       'すべてのデータをリセット',
-      '時間割・課題・掲示・設定・ログイン情報（Cookie）をすべて消去します。この操作は取り消せません。',
+      '時間割・課題・掲示・設定・保存済みデータをすべて消去します。この操作は取り消せません。',
       [
         { text: 'キャンセル', style: 'cancel' },
         { text: '次へ', style: 'destructive', onPress: confirmResetAll },
@@ -273,7 +273,7 @@ export default function SettingsScreen() {
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={[styles.rowLabel, { color: ui.valueColor }]}>すべてのデータをリセット</Text>
               <Text style={[styles.note, { color: ui.labelColor, marginTop: 4, marginLeft: 0 }]}>
-                時間割・課題・掲示・設定・ログイン情報（Cookie）をすべて消去します。
+                時間割・課題・掲示・設定・保存済みデータをすべて消去します。
               </Text>
             </View>
             <Text style={[styles.danger, { color: ui.colors.danger }]}>リセット</Text>
