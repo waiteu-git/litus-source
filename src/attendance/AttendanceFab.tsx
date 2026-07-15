@@ -8,8 +8,9 @@ import { computeHomeBanner } from './homeBanner'
 import { navigationRef, requestOpenAttendance } from '../navigation/navigationRef'
 import { COLORS } from '../theme'
 
-// FABを出さない画面: ホーム(HomeHome)=独自の出席バナーを持つ、出席(Attendance)=遷移先自身。
-const HIDDEN_ROUTES: ReadonlySet<string> = new Set(['HomeHome', 'Attendance'])
+// FABを出さない画面: ホーム(HomeHome)=独自の出席バナーを持つ、出席(Attendance)=遷移先自身、
+// 全画面ビューア(Web/PdfViewer/Link)=下部にボタンがありピルが被る（RootTabs の hideOn と同じ集合）。
+const HIDDEN_ROUTES: ReadonlySet<string> = new Set(['HomeHome', 'Attendance', 'Web', 'PdfViewer', 'Link'])
 
 /**
  * 全画面共通の出席フローティングボタン。受付中／授業時間帯にタブバー上へ小さなピルを出し、
