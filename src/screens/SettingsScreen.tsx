@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
+import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Text } from '../ui/Text'
 import { clearTimetable, loadTimetable } from '../storage/timetableStore'
@@ -13,6 +13,7 @@ import {
   saveLetusNewsNotifySettings,
 } from '../storage/letusNewsNotifySettingsStore'
 import { clearDismissedHints } from '../storage/dismissedHintsStore'
+import { resetAllData } from '../storage/resetAll'
 import type { LetusNewsNotifySettings } from '../notifications/letusNewsNotify'
 import { ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
@@ -103,11 +104,46 @@ export default function SettingsScreen() {
     }
   }
 
+  // すべてのデータ（Cookie含む）をリセット。破壊的なので二段階で確認する。
+  function onResetAll() {
+    Alert.alert(
+      'すべてのデータをリセット',
+      '時間割・課題・掲示・設定・ログイン情報（Cookie）をすべて消去します。この操作は取り消せません。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '次へ', style: 'destructive', onPress: confirmResetAll },
+      ],
+    )
+  }
+  function confirmResetAll() {
+    Alert.alert('本当にリセットしますか？', '消去後はアプリを終了します。次回起動時はログインからやり直しになります。', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: 'リセットして終了', style: 'destructive', onPress: doResetAll },
+    ])
+  }
+  async function doResetAll() {
+    try {
+      await resetAllData()
+    } catch (e) {
+      console.warn('データのリセットに失敗しました', e)
+      Alert.alert('失敗しました', 'データのリセットに失敗しました。もう一度お試しください。')
+      return
+    }
+    if (Platform.OS === 'android') {
+      Alert.alert('リセットしました', 'アプリを終了します。もう一度起動してください。', [
+        { text: 'OK', onPress: () => BackHandler.exitApp() },
+      ])
+    } else {
+      Alert.alert('リセットしました', 'アプリを一度終了してから、もう一度起動してください。')
+    }
+  }
+
   return (
     <ScreenBg>
       <ScreenHeader title="設定" icon="settings-outline" />
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} scrollEnabled={!reordering}>
-        <Accordion title="テーマ" icon="color-palette-outline" defaultOpen>
+        <Accordion title="表示" icon="grid-outline" defaultOpen>
+          <Text style={[styles.subHead, { color: ui.valueColor }]}>テーマ</Text>
           <Segmented
             options={[
               { key: 'green', label: '翠' },
@@ -121,10 +157,8 @@ export default function SettingsScreen() {
           <Text style={[styles.note, { color: ui.labelColor }]}>
             UIと起動アニメーションが選んだテーマに合わせて切り替わります。「自動」は端末のダークモード設定に追従します。
           </Text>
-        </Accordion>
 
-        <Accordion title="表示" icon="grid-outline" defaultOpen>
-          <Text style={[styles.fieldLabel, { color: ui.labelColor }]}>時間割の表示</Text>
+          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>時間割の表示</Text>
           <Segmented
             options={[
               { key: 'list', label: 'リスト' },
@@ -133,7 +167,8 @@ export default function SettingsScreen() {
             value={timetableView}
             onChange={setTimetableView}
           />
-          <Text style={[styles.fieldLabel, { color: ui.labelColor, marginTop: 14 }]}>課題の並び</Text>
+
+          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>課題の並び</Text>
           <Segmented
             options={[
               { key: 'bucket', label: 'バケット別' },
@@ -142,13 +177,60 @@ export default function SettingsScreen() {
             value={assignmentsView}
             onChange={setAssignmentsView}
           />
-        </Accordion>
 
-        <Accordion title="ホームの並び" icon="reorder-three-outline">
+          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>ホームの並び</Text>
           <HomeLayoutReorder layout={homeLayout} onChange={setHomeLayout} onDragActive={setReordering} />
         </Accordion>
 
-        <Accordion title="出席アラーム（科目別）" icon="notifications-outline">
+        <Accordion title="通知" icon="notifications-outline">
+          <Text style={[styles.subHead, { color: ui.valueColor }]}>新着掲示</Text>
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>新着掲示を通知</Text>
+            <Switch
+              value={bulletinNotify.enabled}
+              onValueChange={(v) => updateBulletinNotify({ ...bulletinNotify, enabled: v })}
+              trackColor={{
+                true: COLORS.emerald,
+                false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
+              }}
+              thumbColor={COLORS.white}
+            />
+          </View>
+          {bulletinNotify.enabled && (
+            <>
+              <Text style={[styles.fieldLabel, { color: ui.labelColor, marginTop: 10 }]}>通知する掲示</Text>
+              <Segmented
+                options={[
+                  { key: 'all', label: 'すべて' },
+                  { key: 'importantOnly', label: '重要のみ' },
+                ]}
+                value={bulletinNotify.mode}
+                onChange={(k) => updateBulletinNotify({ ...bulletinNotify, mode: k as BulletinNotifySettings['mode'] })}
+              />
+            </>
+          )}
+          <Text style={[styles.note, { color: ui.labelColor }]}>
+            新着掲示の通知はアプリを開いたときに確認されます。バックグラウンド自動取得は今後対応予定です。
+          </Text>
+
+          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>LETUS更新</Text>
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>コースの新着を通知</Text>
+            <Switch
+              value={letusNewsNotify.enabled}
+              onValueChange={(v) => updateLetusNewsNotify({ enabled: v })}
+              trackColor={{
+                true: COLORS.emerald,
+                false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
+              }}
+              thumbColor={COLORS.white}
+            />
+          </View>
+          <Text style={[styles.note, { color: ui.labelColor }]}>
+            LETUSのコースに新しい教材・課題などが追加されたときに通知します。同期のタイミングで確認されます。
+          </Text>
+
+          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>出席アラーム（科目別）</Text>
           {courses.length === 0 ? (
             <View style={ui.card}>
               <Text style={{ color: ui.valueColor }}>時間割を収集すると科目が表示されます。</Text>
@@ -178,55 +260,6 @@ export default function SettingsScreen() {
           )}
         </Accordion>
 
-        <Accordion title="新着掲示の通知" icon="notifications-outline">
-          <View style={styles.row}>
-            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>新着掲示を通知</Text>
-            <Switch
-              value={bulletinNotify.enabled}
-              onValueChange={(v) => updateBulletinNotify({ ...bulletinNotify, enabled: v })}
-              trackColor={{
-                true: COLORS.emerald,
-                false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
-              }}
-              thumbColor={COLORS.white}
-            />
-          </View>
-          {bulletinNotify.enabled && (
-            <>
-              <Text style={[styles.fieldLabel, { color: ui.labelColor, marginTop: 10 }]}>通知する掲示</Text>
-              <Segmented
-                options={[
-                  { key: 'all', label: 'すべて' },
-                  { key: 'importantOnly', label: '重要のみ' },
-                ]}
-                value={bulletinNotify.mode}
-                onChange={(k) => updateBulletinNotify({ ...bulletinNotify, mode: k as BulletinNotifySettings['mode'] })}
-              />
-            </>
-          )}
-          <Text style={[styles.note, { color: ui.labelColor }]}>
-            新着掲示の通知はアプリを開いたときに確認されます。バックグラウンド自動取得は今後対応予定です。
-          </Text>
-        </Accordion>
-
-        <Accordion title="LETUS更新の通知" icon="sparkles-outline">
-          <View style={styles.row}>
-            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>コースの新着を通知</Text>
-            <Switch
-              value={letusNewsNotify.enabled}
-              onValueChange={(v) => updateLetusNewsNotify({ enabled: v })}
-              trackColor={{
-                true: COLORS.emerald,
-                false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
-              }}
-              thumbColor={COLORS.white}
-            />
-          </View>
-          <Text style={[styles.note, { color: ui.labelColor }]}>
-            LETUSのコースに新しい教材・課題などが追加されたときに通知します。同期のタイミングで確認されます。
-          </Text>
-        </Accordion>
-
         <Accordion title="データ" icon="server-outline">
           <Pressable style={[ui.card, styles.rowBetween]} onPress={onClear}>
             <Text style={[styles.rowLabel, { color: ui.valueColor }]}>時間割データを消去</Text>
@@ -235,6 +268,15 @@ export default function SettingsScreen() {
           <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={onResetHints}>
             <Text style={[styles.rowLabel, { color: ui.valueColor }]}>ヒントを再表示</Text>
             <Text style={[styles.rowAction, { color: ui.labelColor }]}>再表示</Text>
+          </Pressable>
+          <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={onResetAll}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={[styles.rowLabel, { color: ui.valueColor }]}>すべてのデータをリセット</Text>
+              <Text style={[styles.note, { color: ui.labelColor, marginTop: 4, marginLeft: 0 }]}>
+                時間割・課題・掲示・設定・ログイン情報（Cookie）をすべて消去します。
+              </Text>
+            </View>
+            <Text style={[styles.danger, { color: ui.colors.danger }]}>リセット</Text>
           </Pressable>
         </Accordion>
 
@@ -296,6 +338,8 @@ const styles = StyleSheet.create({
   note: { fontSize: 12, marginTop: 8, marginLeft: 2 },
   licenseBody: { fontSize: 10, lineHeight: 15, marginTop: 10 },
   fieldLabel: { fontSize: 13, marginLeft: 2, marginBottom: 2 },
+  // 集約アコーディオン内の小見出し（表示=テーマ/時間割/課題/ホーム、通知=掲示/LETUS/出席）。
+  subHead: { fontSize: 13, fontWeight: '700', marginLeft: 2, marginBottom: 6 },
   changelogHeading: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
   changelogEntry: { marginBottom: 10 },
   changelogEntryTitle: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
