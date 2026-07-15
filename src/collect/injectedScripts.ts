@@ -848,8 +848,11 @@ export const COLLECT_ATTENDANCE_STATS_JS = `(function(){
 })();`
 
 /**
- * メニュー『出欠管理』→『学生出欠状況確認』へ遷移する。a要素のみを対象に onclick を直接実行する
- * （OPEN_TIMETABLE_JS と同型）。着地ガード: 既に出欠テーブルに居るならメニューを叩かない。
+ * メニュー『出欠管理』→『学生出欠状況確認』へ遷移する。着地ガード: 既に出欠テーブルに居るなら
+ * メニューを叩かない。発火は OPEN_BULLETIN_JS の fireIn と同則で **data-pfconfirmcommand を最優先**
+ * （実DOM 2026-07-15: メニュー<a>の onclick は confirmIfModified のみで、本当の遷移コマンドは
+ * data-pfconfirmcommand（menuid 4_0_0_0 の menuForm submit）にある。confirmIfModified は「変更あり」時に
+ * 確認ダイアログで headless を止める危険があるため経由しない）→ onclick → click の順。
  */
 export const OPEN_ATTENDANCE_STATS_JS = `(function(){
   function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
@@ -860,8 +863,10 @@ export const OPEN_ATTENDANCE_STATS_JS = `(function(){
     return (menu.length ? menu : hits)[0] || null;
   }
   function fire(el){
-    var oc = el.getAttribute('onclick');
     try {
+      var dpc = el.getAttribute('data-pfconfirmcommand');
+      if (dpc) { new Function(dpc).call(el); return 'pfconfirm'; }
+      var oc = el.getAttribute('onclick');
       if (oc) { new Function('event', oc).call(el, new MouseEvent('click', { bubbles: true })); return 'onclick'; }
       el.click(); return 'click';
     } catch (e) {

@@ -45,6 +45,7 @@ export default function ClassHeadlessCollector({
   actionJs,
   onSignal,
   navOnce,
+  maxTries = MAX_TRIES,
 }: {
   openJs: string
   collectJs: string
@@ -60,6 +61,10 @@ export default function ClassHeadlessCollector({
   /** 目的メニューを一度だけ発火する（掲示: CLASSの遷移ページ Xut12401 では onLoadEnd 毎に再クリックすると
    *  遷移をやり直して永久に着地しない。着地は collectJs ポーリング＋直リンク fallback に任せる）。 */
   navOnce?: boolean
+  /** 0件再抽出の上限（既定 MAX_TRIES=4）。再試行は「最初のparse-0から約1.2秒間隔の時限チェーン」であり
+   *  着地駆動ではないため、着地前の文書への早撃ちCOLLECTが上限を食い潰すと目的ページ到達前に静かに
+   *  終了する（遅い実機で顕在化）。ページ遷移が重い面（出欠統計等）は大きめを渡して着地まで生かす。 */
+  maxTries?: number
 }) {
   const webviewRef = useRef<WebView>(null)
   const { setCollectActive, attendanceFocused } = useClassView()
@@ -161,7 +166,7 @@ export default function ClassHeadlessCollector({
     }
     // 未到達/未描画 → 再ナビ（メニュー再クリック）はせず**再抽出のみ**（二重POSTでViewStateを壊さない。
     // ページ遷移は各読込の onLoadEnd 側 OPEN が担う）。既定回数を尽くしたら直リンクへ最終フォールバック。
-    if (triesRef.current < MAX_TRIES) {
+    if (triesRef.current < maxTries) {
       triesRef.current += 1
       setTimeout(() => webviewRef.current?.injectJavaScript(collectJs), COLLECT_RETRY_MS)
     } else if (fallbackJs && !fallbackUsedRef.current) {
