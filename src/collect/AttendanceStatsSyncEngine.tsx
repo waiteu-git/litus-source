@@ -12,9 +12,12 @@ import ClassHeadlessCollector from './ClassHeadlessCollector'
  * 着地ガード（td.colSizeFixed）が偽のため、onLoadEnd毎のOPEN再注入だとメニュー再クリック→
  * 遷移やり直しループに落ちる（掲示が Xut12401 で踏んだ穴と同型）。メニューは一度だけ発火し、
  * 着地・描画は collectJs の再抽出ポーリングに任せる。
- * maxTries=12: 再抽出は約1.2秒間隔の時限チェーンで、既定4回だと遅い実機では着地前に尽きて
- * 静かに終了する（v79実機で出欠が一度も取れなかった直接原因の候補）。直リンクfallbackは
- * セッションがあっても保証人ページへ弾かれるため使えず（実測2026-07-15）、回数で着地まで生かす。
+ * maxTries=Infinity（=25秒の全体タイムアウトを唯一のバックストップにする着地駆動ポーリング）:
+ * 既定4回だと遅い実機では着地前に尽きて静かに終了する（v79実機で出欠が一度も取れなかった直接原因）。
+ * さらに COLLECT はページ未描画でも空HTMLを必ず post するため、SSO入場中の各 onLoadEnd が撃つ
+ * 早撃ちCOLLECTの空結果が共有 triesRef を食い、有限上限だと着地前に枯渇し得る（並走チェーン問題）。
+ * 上限を撤廃し「着地して表が描画された瞬間の抽出成功」か「25秒経過」でのみ終える。fallbackは
+ * セッションがあっても保証人ページへ弾かれ使えないため未指定（実測2026-07-15）。
  */
 export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: () => void }) {
   return (
@@ -23,7 +26,7 @@ export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: 
       collectJs={COLLECT_ATTENDANCE_STATS_JS}
       resultType="attendanceStats"
       navOnce
-      maxTries={12}
+      maxTries={Number.POSITIVE_INFINITY}
       onData={async (raw) => {
         const result = parseAttendanceStatsMessage(raw)
         if (result.error || result.courses.length === 0) return false
