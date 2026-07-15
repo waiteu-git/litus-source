@@ -68,8 +68,12 @@ import {
 import { subscribeForeground } from '../app/foregroundOrchestrator'
 
 const CLASS_URL = CLASS_PC_LOGIN_URL
-// 出席状況の取得（メニュー遷移→受付判定）は約7秒・2トライで打ち切る（ユーザー指定）。
-const NAV_TIMEOUT_MS = 7000
+// 出席状況の取得（メニュー遷移→受付判定）のタイムアウト。初回起動はSSOチェーンで時間がかかり、
+// 従来の7秒・非リトライだと正常でも単発で navFailed（「受付状況を取得できませんでした」）に落ちていた。
+// タイムアウトを緩め、さらに NAV_TIMEOUT_RETRIES 回だけ作り直して再試行してから navFailed にする。
+const NAV_TIMEOUT_MS = 10000
+// navTimeout 時に navFailed へ落とす前にWebViewを作り直して再試行する回数（errorPage の自動復帰と同型）。
+const NAV_TIMEOUT_RETRIES = 1
 const ATTENDANCE_POLL_MS = 30000
 
 /**
@@ -138,6 +142,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const webviewRef = useRef<WebView>(null)
   const portalTriesRef = useRef(0)
   const errorRetryRef = useRef(0)
+  // navTimeout の再試行回数（出席ページ到達 or 手動リブートで0に戻す）。
+  const navTimeoutRetryRef = useRef(0)
   const phaseRef = useRef<EnginePhase>('booting')
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loginGate = useLoginGate()
@@ -198,6 +204,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   function rebootWebview() {
     portalTriesRef.current = 0
     errorRetryRef.current = 0
+    navTimeoutRetryRef.current = 0
     lastConflictAttemptAtRef.current = Date.now()
     dispatch({ kind: 'reboot' })
     setWebviewKey((k) => k + 1)
@@ -376,7 +383,22 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   function armNavTimeout() {
     if (navTimerRef.current) clearTimeout(navTimerRef.current)
-    navTimerRef.current = setTimeout(() => dispatch({ kind: 'navTimeout' }), NAV_TIMEOUT_MS)
+    navTimerRef.current = setTimeout(onNavTimeout, NAV_TIMEOUT_MS)
+  }
+
+  // ナビ（SSO→出席ページ）が時間内に着かなかったとき、いきなり navFailed にせず、数回だけ
+  // WebViewを作り直して再試行する（errorPage の autoRestart と同型）。初回起動はSSOチェーンで
+  // 時間がかかることがあり、単発タイムアウトで「取得できませんでした」を出すと、実際は出席登録が
+  // 済んでCLASSも正常なのに失敗表示になってしまう。競合中・非表示中は再試行しない（別経路が担う）。
+  function onNavTimeout() {
+    if (navTimeoutRetryRef.current < NAV_TIMEOUT_RETRIES && shouldRenderRef.current && !conflictRef.current) {
+      navTimeoutRetryRef.current += 1
+      portalTriesRef.current = 0
+      dispatch({ kind: 'reboot' })
+      setWebviewKey((k) => k + 1)
+    } else {
+      dispatch({ kind: 'navTimeout' })
+    }
   }
 
   function autoRestart() {
@@ -484,6 +506,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         setConflictExhausted(false)
         portalTriesRef.current = 0
         errorRetryRef.current = 0
+        navTimeoutRetryRef.current = 0
         inject(DETECT_ATTENDANCE_JS)
       } else if (kind === 'splash') {
         inject(ENTER_CLASS_PC_JS)
