@@ -35,6 +35,7 @@ import type { ClassEvent } from '../timetableEvents/classEvent'
 import { pickCellEvent, upcomingMakeups } from '../timetableEvents/eventSelectors'
 import { cellBadgeText, shortDate } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+import { useAttendanceVersion } from '../attendance/attendanceVersion'
 import AttendanceStatsSyncEngine from '../collect/AttendanceStatsSyncEngine'
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadAttendanceOverrides } from '../storage/attendanceOverridesStore'
@@ -74,6 +75,8 @@ export default function TimetableScreen() {
   const [personalEvents, setPersonalEvents] = useState<PersonalEvent[]>([])
   const [patterns, setPatterns] = useState<WeeklyPatternMap>({})
   const { version: eventsVersion } = useClassEventsVersion()
+  // 出欠収集の完了を、開きっぱなしの科目詳細へ伝播させる（同期中に開いて滞在するケースの取りこぼし防止）。
+  const { bump: bumpAttendance } = useAttendanceVersion()
   const [selCol, setSelCol] = useState(0)
   // 現在時刻（当該コマ強調用）。分単位で十分なので30秒ごとに更新。
   const [now, setNow] = useState(() => new Date())
@@ -661,6 +664,8 @@ export default function TimetableScreen() {
           onFinished={() => {
             setAttendanceSyncing(false)
             reloadAttendance()
+            // マウント済みの科目詳細にも保存結果を反映（版数bump→出欠読込effectが再走）。
+            bumpAttendance()
           }}
         />
       ) : null}

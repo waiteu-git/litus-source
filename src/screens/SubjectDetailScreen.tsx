@@ -36,6 +36,7 @@ import {
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadAttendanceOverrides, saveAttendanceOverride } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk, type AttendanceRisk } from '../attendance/attendanceRisk'
+import { useAttendanceVersion } from '../attendance/attendanceVersion'
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
@@ -123,6 +124,8 @@ export default function SubjectDetailScreen() {
   // 出欠データを一度でも収集済みか。未収集だと trackable 判定すらできず従来はセクション自体が消えて
   // 「機能が存在しないように見える」ため、未収集時は案内を出す（初期値trueで案内のチラつきを防ぐ）。
   const [attCollected, setAttCollected] = useState(true)
+  // 出欠収集の完了通知（この画面を開いたまま同期が完走したら再読込するため版数を購読）。
+  const { version: attVersion } = useAttendanceVersion()
   const [unread, setUnread] = useState(0)
   // カレンダー用の週リスト（今週の2週前〜16週後）。画面表示中は固定。
   const weeks = useMemo(() => weekList(new Date(), 2, 16), [])
@@ -150,7 +153,7 @@ export default function SubjectDetailScreen() {
       const ov = await loadAttendanceOverrides()
       setAttTotal(ov[courseCode]?.total ?? null)
     })().catch(() => undefined)
-  }, [courseCode])
+  }, [courseCode, attVersion])
 
   const risk: AttendanceRisk | null = useMemo(
     () => (attStats ? computeAttendanceRisk(attStats, attTotal != null ? { totalOverride: attTotal } : undefined) : null),

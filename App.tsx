@@ -17,6 +17,7 @@ import AttendanceFab from './src/attendance/AttendanceFab'
 import { AuthProvider } from './src/auth/AuthProvider'
 import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion'
 import { ClassEventsVersionProvider } from './src/timetableEvents/classEventsVersion'
+import { AttendanceVersionProvider } from './src/attendance/attendanceVersion'
 import { LoginGate } from './src/auth/LoginGate'
 import { KillSwitchGate, KillSwitchProvider } from './src/health/KillSwitchProvider'
 import { SyncProvider } from './src/sync/SyncProvider'
@@ -146,6 +147,7 @@ export default function App() {
         <DisplaySettingsProvider>
         <AssignmentsVersionProvider>
         <ClassEventsVersionProvider>
+        <AttendanceVersionProvider>
           <ThemedContainer>
             {/* KillSwitchProviderはLoginGateの外側: all停止時はログインprobe用WebViewすら
                 マウントさせない（リモート停止指示の設計: docs/2026-07-12-remote-kill-switch-design.md）。 */}
@@ -174,6 +176,7 @@ export default function App() {
             </KillSwitchProvider>
           </ThemedContainer>
           <ThemedStatusBar />
+        </AttendanceVersionProvider>
         </ClassEventsVersionProvider>
         </AssignmentsVersionProvider>
         </DisplaySettingsProvider>
