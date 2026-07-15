@@ -388,6 +388,9 @@ export default function HomeScreen() {
             <PressableCard
               style={[ui.card, styles.hero, hero.isNow && { borderColor: ui.colors.priorityBorder }]}
               onPress={() => openSubject(hero)}
+              // 内側に別導線（残り時間タップ＝出席）を持つため、カードを単一のa11y要素に潰さない。
+              // これで内側の出席ボタンがスクリーンリーダーから個別にフォーカスできる（授業情報のテキストも各々読まれる）。
+              accessible={false}
             >
               <View style={styles.heroTop}>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -409,7 +412,12 @@ export default function HomeScreen() {
               {hero.isNow && heroRemain != null ? (
                 // 残り時間の面はタップで出席登録へ（授業中の最有力アクション）。カード本体の科目詳細遷移とは
                 // 別導線。内側Pressableがタップを取るのでカードのonPress（openSubject）とは競合しない。
-                <PressableRow style={[styles.heroSoftbox, { backgroundColor: ui.softBoxBg }]} onPress={openAttendance}>
+                <PressableRow
+                  style={[styles.heroSoftbox, { backgroundColor: ui.softBoxBg }]}
+                  onPress={openAttendance}
+                  accessibilityRole="button"
+                  accessibilityLabel={`残り${heroRemain}分・タップで出席登録へ`}
+                >
                   <View style={styles.remainRow}>
                     <View style={styles.remainLeft}>
                       <Text style={[styles.remainLabel, { color: ui.labelColor }]}>残り</Text>
