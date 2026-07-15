@@ -42,6 +42,7 @@ import { computeAttendanceRisk } from '../attendance/attendanceRisk'
 import { loadPersonalEvents } from '../storage/personalEventsStore'
 import type { PersonalEvent, PersonalDayKey } from '../timetableEvents/personalEvent'
 import { personalEventAt, daysWithPersonal, hasZeroPeriod, personalEventsOfDay } from '../timetableEvents/personalEventSelectors'
+import { buildTimetableListRows } from '../timetableEvents/timetableListRows'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
@@ -461,78 +462,113 @@ export default function TimetableScreen() {
           {(() => {
             const personal = personalEventsOfDay(personalEvents, selDay as PersonalDayKey)
             const isEmpty = daySlots.length === 0 && personal.length === 0 && dayMakeups.length === 0
+            // 授業と個人予定を時限順に統合（0限は1限の上・重なりは授業行に内包）。純ロジックはtimetableListRows。
+            const listRows = buildTimetableListRows(daySlots, personal)
             // 全行を1つのフラット面に集約（個別カード化しない・行間はヘアライン）。
             const rows: { key: string; node: ReactElement }[] = []
-            for (const s of daySlots) {
-              const rowNow = selDay === todayKey && s.period === curPeriod
-              for (const cl of s.classes) {
-                const ev = pickCellEvent(events, cl.name, s.period, now)
-                const canceled = ev?.type === 'cancel'
-                const off = !isClassOnDate(patterns[cl.courseCode], now)
-                const strike = canceled || off
-                const mainColor = rowNow ? ui.pillText : ui.valueColor
+            for (const lr of listRows) {
+              if (lr.kind === 'class') {
+                const rowNow = selDay === todayKey && lr.period === curPeriod
                 rows.push({
-                  key: `c-${s.period}-${cl.courseCode || cl.name}`,
+                  key: `c-${lr.period}`,
                   node: (
-                    <Pressable
-                      onPress={() => openSubject(cl, s.day, s.period)}
-                      style={({ pressed }) => [
-                        styles.cls,
-                        rowNow && { backgroundColor: ui.pillBg, borderLeftWidth: 3, borderLeftColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) },
-                        pressed && { opacity: 0.7 },
-                      ]}
-                    >
-                      <View style={styles.clsPeriod}>
-                        <Text style={[styles.cpNum, { color: mainColor }]}>{s.period}</Text>
-                        <Text style={[styles.cpTime, { color: ui.labelColor }]}>{startTime(s.period)}</Text>
-                        <Text style={[styles.cpTime, { color: ui.labelColor }]}>{endTime(s.period)}</Text>
-                      </View>
-                      <View style={styles.clsMain}>
-                        {rowNow ? (
-                          <Badge variant="live" label="実施中" size="sm" />
-                        ) : canceled ? (
-                          <View style={[styles.badge, { backgroundColor: ui.colors.dangerBg }]}><Text style={[styles.badgeText, { color: ui.colors.danger }]}>休講</Text></View>
-                        ) : ev ? (
-                          <View style={[styles.badge, { backgroundColor: ui.colors.infoBg }]}><Text style={[styles.badgeText, { color: ui.colors.info }]} numberOfLines={1}>{cellBadgeText(ev)}</Text></View>
-                        ) : off ? (
-                          <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>今週休み</Text></View>
-                        ) : null}
-                        <Text style={[styles.cName, { color: mainColor }, strike && styles.strike]} numberOfLines={2}>
-                          {cl.name}
-                          {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
-                          {unreadCodes.has(cl.courseCode) ? '  ◍' : ''}
-                        </Text>
-                        <Text style={[styles.cRoom, { color: rowNow ? ui.pillText : ui.labelColor }, strike && styles.strike]} numberOfLines={1}>
-                          {cl.room}
-                          {cl.isRemote ? ' ・ 遠隔' : ''}
-                          {cl.teachers[0] ? ` ・ ${cl.teachers[0]}` : ''}
-                        </Text>
-                      </View>
-                      {dangerCodes.has(cl.courseCode) ? <View style={[styles.clsDanger, { backgroundColor: ui.colors.danger }]} /> : null}
-                      <Ionicons name="chevron-forward" size={15} color={ui.chevron} />
-                    </Pressable>
+                    <>
+                      {lr.slots.flatMap((s) =>
+                        s.classes.map((cl) => {
+                          const ev = pickCellEvent(events, cl.name, s.period, now)
+                          const canceled = ev?.type === 'cancel'
+                          const off = !isClassOnDate(patterns[cl.courseCode], now)
+                          const strike = canceled || off
+                          const mainColor = rowNow ? ui.pillText : ui.valueColor
+                          return (
+                            <Pressable
+                              key={`${s.period}-${cl.courseCode || cl.name}`}
+                              onPress={() => openSubject(cl, s.day, s.period)}
+                              style={({ pressed }) => [
+                                styles.cls,
+                                rowNow && { backgroundColor: ui.pillBg, borderLeftWidth: 3, borderLeftColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) },
+                                pressed && { opacity: 0.7 },
+                              ]}
+                            >
+                              <View style={styles.clsPeriod}>
+                                <Text style={[styles.cpNum, { color: mainColor }]}>{s.period}</Text>
+                                <Text style={[styles.cpTime, { color: ui.labelColor }]}>{startTime(s.period)}</Text>
+                                <Text style={[styles.cpTime, { color: ui.labelColor }]}>{endTime(s.period)}</Text>
+                              </View>
+                              <View style={styles.clsMain}>
+                                {rowNow ? (
+                                  <Badge variant="live" label="実施中" size="sm" />
+                                ) : canceled ? (
+                                  <View style={[styles.badge, { backgroundColor: ui.colors.dangerBg }]}><Text style={[styles.badgeText, { color: ui.colors.danger }]}>休講</Text></View>
+                                ) : ev ? (
+                                  <View style={[styles.badge, { backgroundColor: ui.colors.infoBg }]}><Text style={[styles.badgeText, { color: ui.colors.info }]} numberOfLines={1}>{cellBadgeText(ev)}</Text></View>
+                                ) : off ? (
+                                  <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>今週休み</Text></View>
+                                ) : null}
+                                <Text style={[styles.cName, { color: mainColor }, strike && styles.strike]} numberOfLines={2}>
+                                  {cl.name}
+                                  {updatedCodes.has(cl.courseCode) ? '  ●' : ''}
+                                  {unreadCodes.has(cl.courseCode) ? '  ◍' : ''}
+                                </Text>
+                                <Text style={[styles.cRoom, { color: rowNow ? ui.pillText : ui.labelColor }, strike && styles.strike]} numberOfLines={1}>
+                                  {cl.room}
+                                  {cl.isRemote ? ' ・ 遠隔' : ''}
+                                  {cl.teachers[0] ? ` ・ ${cl.teachers[0]}` : ''}
+                                </Text>
+                              </View>
+                              {dangerCodes.has(cl.courseCode) ? <View style={[styles.clsDanger, { backgroundColor: ui.colors.danger }]} /> : null}
+                              <Ionicons name="chevron-forward" size={15} color={ui.chevron} />
+                            </Pressable>
+                          )
+                        }),
+                      )}
+                      {lr.personal.length > 0 ? (
+                        // 授業と重なる個人予定は授業行の枠を拡張して内側に表示（区切り線なし＝1つのコマとして読ませる）。
+                        <View style={[styles.personalNest, { backgroundColor: ui.softBoxBg }]}>
+                          {lr.personal.map((pe) => (
+                            <Pressable
+                              key={pe.id}
+                              onPress={() => navigation.navigate('PersonalEventForm', { editId: pe.id })}
+                              style={({ pressed }) => [styles.personalNestRow, pressed && { opacity: 0.7 }]}
+                            >
+                              <Ionicons name="person-outline" size={13} color={ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)} />
+                              <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={[styles.personalNestTitle, { color: ui.valueColor }]} numberOfLines={1}>{pe.title}</Text>
+                                {pe.note || pe.place ? (
+                                  <Text style={[styles.personalNestSub, { color: ui.labelColor }]} numberOfLines={1}>{[pe.note, pe.place].filter(Boolean).join(' ・ ')}</Text>
+                                ) : null}
+                              </View>
+                              <Ionicons name="chevron-forward" size={13} color={ui.chevron} />
+                            </Pressable>
+                          ))}
+                        </View>
+                      ) : null}
+                    </>
+                  ),
+                })
+              } else {
+                rows.push({
+                  key: `p-${lr.period}`,
+                  node: (
+                    <>
+                      {lr.events.map((pe) => (
+                        <Pressable key={pe.id} onPress={() => navigation.navigate('PersonalEventForm', { editId: pe.id })} style={({ pressed }) => [styles.cls, pressed && { opacity: 0.7 }]}>
+                          <View style={styles.clsPeriod}>
+                            <Text style={[styles.cpNum, { color: ui.valueColor }]}>{pe.periods.join('・')}</Text>
+                            <Text style={[styles.cpTime, { color: ui.labelColor }]}>限</Text>
+                          </View>
+                          <View style={styles.clsMain}>
+                            <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>個人</Text></View>
+                            <Text style={[styles.cName, { color: ui.valueColor }]} numberOfLines={2}>{pe.title}</Text>
+                            {pe.note || pe.place ? <Text style={[styles.cRoom, { color: ui.labelColor }]} numberOfLines={1}>{[pe.note, pe.place].filter(Boolean).join(' ・ ')}</Text> : null}
+                          </View>
+                          <Ionicons name="chevron-forward" size={15} color={ui.chevron} />
+                        </Pressable>
+                      ))}
+                    </>
                   ),
                 })
               }
-            }
-            for (const pe of personal) {
-              rows.push({
-                key: `p-${pe.id}`,
-                node: (
-                  <Pressable onPress={() => navigation.navigate('PersonalEventForm', { editId: pe.id })} style={({ pressed }) => [styles.cls, pressed && { opacity: 0.7 }]}>
-                    <View style={styles.clsPeriod}>
-                      <Text style={[styles.cpNum, { color: ui.valueColor }]}>{pe.periods.join('・')}</Text>
-                      <Text style={[styles.cpTime, { color: ui.labelColor }]}>限</Text>
-                    </View>
-                    <View style={styles.clsMain}>
-                      <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>個人</Text></View>
-                      <Text style={[styles.cName, { color: ui.valueColor }]} numberOfLines={2}>{pe.title}</Text>
-                      {pe.note || pe.place ? <Text style={[styles.cRoom, { color: ui.labelColor }]} numberOfLines={1}>{[pe.note, pe.place].filter(Boolean).join(' ・ ')}</Text> : null}
-                    </View>
-                    <Ionicons name="chevron-forward" size={15} color={ui.chevron} />
-                  </Pressable>
-                ),
-              })
             }
             dayMakeups.forEach((m, i) => {
               rows.push({
@@ -680,6 +716,11 @@ const styles = StyleSheet.create({
   offCell: { opacity: 0.45 },
   personalCell: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.emerald },
   personalCellText: { color: COLORS.emeraldDark, fontStyle: 'italic' },
+  // 授業行に内包する個人予定ボックス（授業main列の下に食い込ませる＝同一コマとして見せる）。
+  personalNest: { marginLeft: 58, marginRight: 14, marginTop: -2, marginBottom: 10, borderRadius: RADIUS.sm, paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
+  personalNestRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  personalNestTitle: { fontSize: 13, lineHeight: 17, fontWeight: '500' },
+  personalNestSub: { fontSize: 11, lineHeight: 15, marginTop: 1 },
   personalDot: { position: 'absolute', bottom: 3, left: 3, width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.emerald },
   dhDate: { marginTop: 3, minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
 })
