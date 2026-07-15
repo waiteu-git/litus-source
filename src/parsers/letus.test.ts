@@ -187,6 +187,17 @@ describe('resolveLifecycleStatus', () => {
 })
 
 describe('parseAssignmentPage', () => {
+  // ライフサイクル判定（passed/active）は Date.now() 依存。フィクスチャの締切は 2026-07-15 固定のため、
+  // 実時刻で判定すると 07-16 以降『未来締切』テストが恒久的に赤化する。判定時刻を締切より前に固定して
+  // 日付非依存にする（ASSIGN_PASSED=2020 は依然 passed、年なし補完も固定年で整合）。
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 10, 0, 0, 0)) // 2026-07-10 00:00 ローカル（締切2026-07-15より前）
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('未提出・未来締切の課題ページを構造化する', () => {
     const r = parseAssignmentPage(ASSIGN_NOT_SUBMITTED, ASSIGN_URL)
     expect(r.submissionStatus).toBe('not_submitted')
