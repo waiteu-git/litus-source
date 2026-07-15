@@ -407,7 +407,9 @@ export default function HomeScreen() {
                 ) : null}
               </View>
               {hero.isNow && heroRemain != null ? (
-                <View style={[styles.heroSoftbox, { backgroundColor: ui.softBoxBg }]}>
+                // 残り時間の面はタップで出席登録へ（授業中の最有力アクション）。カード本体の科目詳細遷移とは
+                // 別導線。内側Pressableがタップを取るのでカードのonPress（openSubject）とは競合しない。
+                <PressableRow style={[styles.heroSoftbox, { backgroundColor: ui.softBoxBg }]} onPress={openAttendance}>
                   <View style={styles.remainRow}>
                     <View style={styles.remainLeft}>
                       <Text style={[styles.remainLabel, { color: ui.labelColor }]}>残り</Text>
@@ -420,7 +422,12 @@ export default function HomeScreen() {
                       <View style={[styles.progressFill, { width: `${heroPct}%`, backgroundColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) }]} />
                     </View>
                   ) : null}
-                </View>
+                  <View style={styles.remainCta}>
+                    <Ionicons name="flash-outline" size={13} color={ui.accent} />
+                    <Text style={[styles.remainCtaText, { color: ui.accentSoft }]}>タップで出席登録</Text>
+                    <Ionicons name="chevron-forward" size={13} color={ui.accentSoft} />
+                  </View>
+                </PressableRow>
               ) : null}
             </PressableCard>
           ) : null,
@@ -855,6 +862,9 @@ const styles = StyleSheet.create({
   remainEnd: { fontSize: 11 },
   progressTrack: { height: 4, borderRadius: 999, marginTop: 8, overflow: 'hidden' },
   progressFill: { height: 4, borderRadius: 999 },
+  // 残り時間面の「タップで出席登録」導線（タップ可能であることを示す）。
+  remainCta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  remainCtaText: { fontSize: 12, fontWeight: '600' },
   // このあと/締切カード共通
   listCard: {},
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
