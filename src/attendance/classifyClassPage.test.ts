@@ -31,6 +31,22 @@ describe('classifyClassPage', () => {
   it('システムエラー文言があれば error（login以外に優先）', () => {
     expect(classifyClassPage({ ...base, hasSystemError: true, hasClassMenu: true })).toBe('error')
   })
+  it('SSO stale（過去のリクエスト/CSRF）は error＝自動復帰対象（otherで行き止まりにしない）', () => {
+    // これが無いと stale ページが other に落ち、booting のまま navFailed になる（本バグの発生源）。
+    expect(classifyClassPage({ ...base, hasSsoStale: true })).toBe('error')
+    // 出席ページURL上のstaleでも、検出(attendance)より先にerrorへ載せて取り直す。
+    expect(
+      classifyClassPage({
+        ...base,
+        hasSsoStale: true,
+        url: 'https://class.admin.tus.ac.jp/uprx/up/xu/xua001/Xua00101.xhtml',
+      }),
+    ).toBe('error')
+  })
+  it('SSO staleでもパスワード欄(login)・多重画面(conflict)が優先', () => {
+    expect(classifyClassPage({ ...base, hasSsoStale: true, hasPasswordInput: true })).toBe('login')
+    expect(classifyClassPage({ ...base, hasSsoStale: true, hasMultiScreen: true })).toBe('conflict')
+  })
   it('多重画面(PC競合)は conflict（system errorより優先・専用ハンドリング）', () => {
     expect(classifyClassPage({ ...base, hasMultiScreen: true, hasSystemError: true, hasClassMenu: true })).toBe('conflict')
   })

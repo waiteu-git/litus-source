@@ -205,6 +205,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     portalTriesRef.current = 0
     errorRetryRef.current = 0
     navTimeoutRetryRef.current = 0
+    // 進行中のリアペ提出タイマーと busy フラグを畳む。畳まないと、作り直した booting 中の SSO WebView へ
+    // 残留タイマーが OPEN_ATTENDANCE_JS/DETECT を撃ち込んで遷移を撹乱し（stale/other 着地の一因）、
+    // reactionBusy が真のまま自己回復（ポーリング・前面復帰リフレッシュ）を止めてしまう。
+    resetReaction()
     lastConflictAttemptAtRef.current = Date.now()
     dispatch({ kind: 'reboot' })
     setWebviewKey((k) => k + 1)
@@ -484,6 +488,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         hasClassMenu: !!parsed.hasClassMenu,
         hasSystemError: !!parsed.hasSystemError,
         hasMultiScreen: !!parsed.hasMultiScreen,
+        // SSO stale（過去のリクエスト/CSRF）を渡さないと 'other' に落ち、booting のまま navFailed になる。
+        // DETECT_PAGE_JS は hasSsoStale を出しているが従来ここで捨てていた（本バグの発生源）。
+        hasSsoStale: !!parsed.hasSsoStale,
         url: typeof parsed.url === 'string' ? parsed.url : undefined,
       })
       dispatch({ kind: 'page', page: kind })

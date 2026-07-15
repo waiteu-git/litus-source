@@ -9,6 +9,9 @@ export interface ClassPageSignal {
   hasSystemError: boolean
   /** 「複数の画面でご利用／別の画面で操作されました」＝PC等の他画面と競合（CLASSは同一セッション複数画面禁止）。 */
   hasMultiScreen?: boolean
+  /** IdPの「過去のリクエスト」/CSRF＝SSOフローが壊れた状態。放置すると booting のまま navFailed に落ちるため、
+   *  error と同様に「新しいWebViewで取り直す」対象にする（gate側は 'stale' で回復済み・出席側にも回復口が必要）。 */
+  hasSsoStale?: boolean
   url?: string
 }
 
@@ -26,8 +29,10 @@ export function classifyClassPage(s: ClassPageSignal): ClassPageKind {
   // PC等の他画面と競合（複数の画面でご利用/別の画面で操作された）。自動やり直しでは解けないので
   // 専用表示＋PCが閉じるまで静かに再試行するため、システムエラーとは別verdictにする。
   if (s.hasMultiScreen) return 'conflict'
-  // JSF ViewExpired等の「システムエラー」ページ。放置すると操作不能なので検知して自動復帰する
-  if (s.hasSystemError) return 'error'
+  // JSF ViewExpired等の「システムエラー」ページ／SSO stale（過去のリクエスト・CSRF）。どちらも
+  // フローが壊れており、そのままでは出席ページに分類されず booting のまま navFailed に落ちる。
+  // 'error' として自動復帰（新しいWebViewで一からSSOをやり直す）へ載せる。
+  if (s.hasSystemError || s.hasSsoStale) return 'error'
   // 受付フォームがある（＝受付中の授業あり）か、出席ページURLに居るなら attendance。
   // 後者により「受付中の授業なし」の出席ページを portal と誤判定しない。
   if (s.hasAttendanceForm || isAttendanceUrl(s.url)) return 'attendance'
