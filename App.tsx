@@ -93,10 +93,6 @@ export default function App() {
   const fontsReady = fontsLoaded || fontError != null || fontTimedOut
 
   useEffect(() => {
-    if (fontsReady) SplashScreen.hideAsync().catch(() => undefined)
-  }, [fontsReady])
-
-  useEffect(() => {
     ;(async () => {
       try {
         await configureNotifications()
@@ -137,13 +133,12 @@ export default function App() {
   // ウィジェットのタップ（litus:// ディープリンク）で対応画面を開く。cold/warm 両対応。
   useEffect(() => subscribeWidgetLinks(), [])
 
-  // フォント確定前は描画しない（スプラッシュ保持中なので白画面にはならない）。
-  // ローカルアセットのためロードは実質即時で、起動体感には影響しない。
-  if (!fontsReady) return null
-
   return (
     <SafeAreaProvider>
       <ThemeProvider>
+        {/* フォントとテーマ復元の両方が済むまでスプラッシュを保持（BootGate）。テーマ復元前に描くと
+            保存済みダークでも既定の白テーマで初回フレームが描かれ白フラッシュになるため。 */}
+        <BootGate fontsReady={fontsReady}>
         {/* AuthProvider（LETUSウォームアップ）はLoginGateの内側に置く: 起動直後から裏SSOを走らせると、
             可視ログインのSSOフローと同一Cookie jarで並走してリレー先が混線し、ログイン後にLETUSへ
             着地して詰む実機バグがあった。ログイン完了後にのみ裏SSOを開始する。 */}
@@ -179,7 +174,23 @@ export default function App() {
         </ClassEventsVersionProvider>
         </AssignmentsVersionProvider>
         </DisplaySettingsProvider>
+        </BootGate>
       </ThemeProvider>
     </SafeAreaProvider>
   )
+}
+
+/**
+ * フォントとテーマ復元の両方が完了するまでネイティブスプラッシュを保持し、下流を描画しない。
+ * 復元前に描画すると保存済みダークでも既定の白テーマで一瞬描かれる（起動時の白フラッシュ）。
+ * 両readyでスプラッシュを閉じ、以後は復元済み variant で初回フレームを描く。
+ */
+function BootGate({ fontsReady, children }: { fontsReady: boolean; children: ReactNode }) {
+  const { ready } = useThemeVariant()
+  const appReady = fontsReady && ready
+  useEffect(() => {
+    if (appReady) SplashScreen.hideAsync().catch(() => undefined)
+  }, [appReady])
+  if (!appReady) return null
+  return <>{children}</>
 }
