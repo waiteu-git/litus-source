@@ -461,9 +461,11 @@ export default function TimetableScreen() {
           <Animated.View style={{ opacity: swipeOpacity, transform: [{ translateX: swipeShift }] }}>
           {(() => {
             const personal = personalEventsOfDay(personalEvents, selDay as PersonalDayKey)
-            const isEmpty = daySlots.length === 0 && personal.length === 0 && dayMakeups.length === 0
             // 授業と個人予定を時限順に統合（0限は1限の上・重なりは授業行に内包）。純ロジックはtimetableListRows。
             const listRows = buildTimetableListRows(daySlots, personal)
+            // isEmptyは実際に描画される行で判定する（periods空の個人予定は listRows で除外されるため、
+            // personal.length で数えると空の枠だけ描いてしまう）。
+            const isEmpty = listRows.length === 0 && dayMakeups.length === 0
             // 全行を1つのフラット面に集約（個別カード化しない・行間はヘアライン）。
             const rows: { key: string; node: ReactElement }[] = []
             for (const lr of listRows) {
@@ -534,9 +536,16 @@ export default function TimetableScreen() {
                               <Ionicons name="person-outline" size={13} color={ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)} />
                               <View style={{ flex: 1, minWidth: 0 }}>
                                 <Text style={[styles.personalNestTitle, { color: ui.valueColor }]} numberOfLines={1}>{pe.title}</Text>
-                                {pe.note || pe.place ? (
-                                  <Text style={[styles.personalNestSub, { color: ui.labelColor }]} numberOfLines={1}>{[pe.note, pe.place].filter(Boolean).join(' ・ ')}</Text>
-                                ) : null}
+                                {(() => {
+                                  // 複数コマにまたがる個人予定はアンカー時限の授業行に内包されるため、
+                                  // どの時限にまたがるかをサブ行に出す（単一コマは授業行の時限で自明なので出さない）。
+                                  const sub = [pe.periods.length > 1 ? `${pe.periods.join('・')}限` : null, pe.note, pe.place]
+                                    .filter(Boolean)
+                                    .join(' ・ ')
+                                  return sub ? (
+                                    <Text style={[styles.personalNestSub, { color: ui.labelColor }]} numberOfLines={1}>{sub}</Text>
+                                  ) : null
+                                })()}
                               </View>
                               <Ionicons name="chevron-forward" size={13} color={ui.chevron} />
                             </Pressable>
