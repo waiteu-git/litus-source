@@ -13,6 +13,7 @@ import BackgroundLetusSync from './src/collect/BackgroundLetusSync'
 import BackgroundBulletinSync from './src/collect/BackgroundBulletinSync'
 import { ClassViewProvider } from './src/collect/classViewArbiter'
 import { AttendanceEngineProvider } from './src/attendance/AttendanceEngineProvider'
+import AttendanceFab from './src/attendance/AttendanceFab'
 import { AuthProvider } from './src/auth/AuthProvider'
 import { AssignmentsVersionProvider } from './src/assignments/assignmentsVersion'
 import { ClassEventsVersionProvider } from './src/timetableEvents/classEventsVersion'
@@ -157,6 +158,8 @@ export default function App() {
                           背景2件は runner を呼ぶだけの薄いトリガ（Gateで包む＝停止中はトリガ自体を眠らせる）。 */}
                       <SyncProvider>
                         <RootTabs />
+                        {/* 全画面共通の出席フローティングボタン（受付中/授業時間帯・ホーム/出席画面では非表示）。 */}
+                        <AttendanceFab />
                         <KillSwitchGate feature="letus">
                           <BackgroundLetusSync />
                         </KillSwitchGate>
