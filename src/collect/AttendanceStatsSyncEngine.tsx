@@ -1,6 +1,8 @@
+import { useRef } from 'react'
 import { OPEN_ATTENDANCE_STATS_JS, COLLECT_ATTENDANCE_STATS_JS } from './injectedScripts'
 import { parseAttendanceStatsMessage } from './attendanceStatsMessage'
 import { saveAttendanceStats } from '../storage/attendanceStatsStore'
+import { saveAttendanceDiag } from '../storage/attendanceDiagStore'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
 
 /**
@@ -18,8 +20,25 @@ import ClassHeadlessCollector from './ClassHeadlessCollector'
  * 早撃ちCOLLECTの空結果が共有 triesRef を食い、有限上限だと着地前に枯渇し得る（並走チェーン問題）。
  * 上限を撤廃し「着地して表が描画された瞬間の抽出成功」か「25秒経過」でのみ終える。fallbackは
  * セッションがあっても保証人ページへ弾かれ使えないため未指定（実測2026-07-15）。
+ *
+ * 【一時デバッグ】onSignal/onData/onFinished で収集の途中経過を診断文字列に集約し保存する
+ * （saveAttendanceDiag）。実機でだけ落ちる原因（メニュー発火の可否・着地ページ・セッション競合・
+ * 抽出サイズ・パース件数）を科目詳細で読めるようにする。※原因特定後に撤去する。
  */
 export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: () => void }) {
+  const diag = useRef({
+    loads: 0,
+    stages: [] as string[],
+    flags: new Set<string>(),
+    lastPage: '',
+    statsMsgs: 0,
+    blen: 0,
+    pwd: 0,
+    htmlLen: 0,
+    parsed: -2, // -2=未到達, -1=パースエラー, >=0=件数
+    saved: false,
+  })
+
   return (
     <ClassHeadlessCollector
       openJs={OPEN_ATTENDANCE_STATS_JS}
@@ -27,17 +46,53 @@ export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: 
       resultType="attendanceStats"
       navOnce
       maxTries={Number.POSITIVE_INFINITY}
+      onSignal={(p) => {
+        const d = diag.current
+        const type = typeof p.type === 'string' ? p.type : ''
+        if (type === 'page') {
+          d.loads += 1
+          if (typeof p.url === 'string') d.lastPage = (p.url.split('/').pop() as string) || p.url
+          if (p.hasMaintenance) d.flags.add('maint')
+          if (p.hasMultiScreen) d.flags.add('multi')
+          if (p.hasSystemError) d.flags.add('syserr')
+          if (p.hasSsoStale) d.flags.add('ssostale')
+          if (p.hasPasswordInput) d.flags.add('login')
+          if (p.hasEnterSplash) d.flags.add('splash')
+          if (p.hasClassMenu) d.flags.add('menu')
+        } else if (type === 'nav') {
+          const stage = typeof p.stage === 'string' ? p.stage : '?'
+          d.stages.push(stage + (p.ok === false ? '!' : ''))
+        } else if (type === 'attendanceStats') {
+          d.statsMsgs += 1
+          if (typeof p.page === 'string' && p.page) d.lastPage = p.page as string
+          if (typeof p.blen === 'number') d.blen = p.blen
+          if (typeof p.pwd === 'number') d.pwd = p.pwd
+          if (typeof p.html === 'string') d.htmlLen = (p.html as string).length
+        } else if (type === 'error') {
+          d.flags.add('err')
+        }
+      }}
       onData={async (raw) => {
         const result = parseAttendanceStatsMessage(raw)
+        diag.current.parsed = result.error ? -1 : result.courses.length
         if (result.error || result.courses.length === 0) return false
         try {
           await saveAttendanceStats(result.courses)
+          diag.current.saved = true
         } catch {
           // 保存失敗でも到達済みなので完了扱い（無駄打ちしない）。
         }
         return true
       }}
-      onFinished={onFinished}
+      onFinished={() => {
+        const d = diag.current
+        const line =
+          `loads=${d.loads} page=${d.lastPage || '?'} flags=${[...d.flags].join(',') || '-'} ` +
+          `nav=${d.stages.join('>') || '-'} statsMsgs=${d.statsMsgs} blen=${d.blen} pwd=${d.pwd} ` +
+          `htmlLen=${d.htmlLen} parsed=${d.parsed} saved=${d.saved}`
+        saveAttendanceDiag(line).catch(() => undefined)
+        onFinished()
+      }}
     />
   )
 }
