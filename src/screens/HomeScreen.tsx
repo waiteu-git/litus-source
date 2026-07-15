@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
@@ -375,10 +375,8 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {/* 掲示同期のヒーロー表示: 同期中バナー → 完了で「✓ 最新」ピルへ変形（数秒で自動的に消える）。
-              統合同期では掲示フェーズだけこの演出を出し、続く課題フェーズはホームでは無演出（方針）。
-              背景boot同期では演出しない（勝手に動かない。バーの「同期中…」表示だけで伝える）。 */}
-          <BulletinSyncStatus syncing={sync.bulletinBusy && sync.bulletinUserRun} />
+          {/* 同期の演出はヘッダー右の HomeSyncButton（掲示同期中スピナー）に一本化。ホーム本文には
+              上から降りてくる同期バナーを出さず、ヘッダーのインジケーターだけを動かす（本文reflowゼロ）。 */}
 
           {(() => {
             const sectionNodes: Record<HomeSectionKey, ReactNode> = {
@@ -711,99 +709,6 @@ export default function HomeScreen() {
   )
 }
 
-/**
- * 掲示同期のヒーロー表示。`syncing` が true の間は「同期中…」バナーを上部へ出し、false へ落ちた瞬間に
- * バナーを上へ格納→「✓ 最新」ピルを控えめな hero バネ(0.9→1.03→1)で立ち上げ→数秒保持してフェード。
- * idle 時は何も描画しない（レイアウトを占有しない）。動きは transform/opacity のみ。
- */
-function BulletinSyncStatus({ syncing }: { syncing: boolean }) {
-  const [phase, setPhase] = useState<'idle' | 'syncing' | 'done'>('idle')
-  const bannerAnim = useRef(new Animated.Value(0)).current // 0=上へ格納 / 1=表示
-  const pillOpacity = useRef(new Animated.Value(0)).current
-  const pillScale = useRef(new Animated.Value(SPRING.from)).current
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const prev = useRef(false)
-
-  useEffect(() => {
-    if (syncing && !prev.current) {
-      // 開始: バナーが slow enter で降りてくる。
-      if (holdTimer.current) clearTimeout(holdTimer.current)
-      pillOpacity.setValue(0)
-      pillScale.setValue(SPRING.from)
-      setPhase('syncing')
-      bannerAnim.setValue(0)
-      Animated.timing(bannerAnim, { toValue: 1, duration: DUR.slow, easing: EASE.enter, useNativeDriver: true }).start()
-    } else if (!syncing && prev.current) {
-      // 完了: バナーが exit で上へ格納 → ピルが hero バネで登場 → 保持 → フェードして idle。
-      setPhase('done')
-      Animated.timing(bannerAnim, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }).start()
-      pillOpacity.setValue(0)
-      pillScale.setValue(SPRING.from)
-      Animated.sequence([
-        Animated.delay(DUR.fast),
-        Animated.parallel([
-          Animated.timing(pillOpacity, { toValue: 1, duration: DUR.fast, easing: EASE.enter, useNativeDriver: true }),
-          Animated.sequence([
-            Animated.timing(pillScale, { toValue: SPRING.over, duration: SPRING.upMs, easing: EASE.enter, useNativeDriver: true }),
-            Animated.timing(pillScale, { toValue: SPRING.to, duration: SPRING.downMs, easing: EASE.enter, useNativeDriver: true }),
-          ]),
-        ]),
-      ]).start()
-      holdTimer.current = setTimeout(() => {
-        Animated.timing(pillOpacity, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }).start(
-          ({ finished }) => {
-            if (finished) setPhase('idle')
-          },
-        )
-      }, 1900)
-    }
-    prev.current = syncing
-  }, [syncing, bannerAnim, pillOpacity, pillScale])
-
-  useEffect(() => () => {
-    if (holdTimer.current) clearTimeout(holdTimer.current)
-  }, [])
-
-  if (phase === 'idle') return null
-
-  return (
-    <View style={styles.syncZone}>
-      {/* バナーは done 中も exit を見せるため残す（idle で View ごと外れる）。
-          絶対配置で本文の上に重ねる＝マウント/アンマウントしてもレイアウトが動かない。 */}
-      <Animated.View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          opacity: bannerAnim,
-          transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-SHIFT.large, 0] }) }],
-        }}
-      >
-        <View style={[styles.banner, { backgroundColor: COLORS.cta }]}>
-          <View style={styles.bannerDot}>
-            <ActivityIndicator size="small" color={COLORS.white} />
-          </View>
-          <View style={styles.bannerBody}>
-            <Text style={styles.bannerTitle}>同期中…</Text>
-            {/* このバナーは掲示フェーズ（bulletinBusy）だけ表示される。課題フェーズは課題画面のバーが担う。 */}
-            <Text style={styles.bannerSub}>CLASS掲示を更新しています</Text>
-          </View>
-        </View>
-      </Animated.View>
-      {/* 完了ピル。バナーが格納された跡（右上）に控えめなバネで現れる。 */}
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.syncPill, { opacity: pillOpacity, transform: [{ scale: pillScale }] }]}
-      >
-        <Ionicons name="checkmark" size={14} color={COLORS.white} />
-        <Text style={styles.syncPillText}>最新</Text>
-      </Animated.View>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
   scroll: { paddingBottom: 24 },
@@ -833,25 +738,6 @@ const styles = StyleSheet.create({
   // 高さ0のアンカー。バナー/ピルは絶対配置でこの上に重ね、本文をreflowさせない（配置の上下ズレ防止）。
   // 出席バナー・同期バナーで共用。
   overlayAnchor: { position: 'relative', height: 0, zIndex: 20 },
-  syncZone: { position: 'relative', height: 0, zIndex: 20 },
-  syncPill: {
-    position: 'absolute',
-    top: 6,
-    right: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: COLORS.cta,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    shadowColor: COLORS.emeraldDark,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
-  },
-  syncPillText: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
 
   // いまの授業ヒーロー
   hero: {},
