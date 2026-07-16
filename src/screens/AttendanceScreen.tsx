@@ -451,6 +451,12 @@ export default function AttendanceScreen() {
                   <Ionicons name="checkmark" size={38} color={c.white} />
                 </View>
                 <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
+                {/* 成功時も診断を出す: 自動送信は元々「未検証」の経路で、間欠的に登録されない事象を
+                    追っている。どの経路(method)で通ったかが分かって初めて再発を潰せる。 */}
+                <Text selectable style={[styles.diag, styles.diagCenter, { color: labelColor }]}>
+                  診断: method={result?.method ?? '-'} / btn={String(result?.btnFound)} / 入力={result?.filled ?? '-'}桁
+                  {result?.ok ? ' / 検出=応答テキスト' : ' / 検出=CLASS出席済み'}
+                </Text>
               </View>
             ) : submitFailed ? (
               // 失敗時は actuator の理由をそのまま出し、CLASSの画面で手動登録できる逃げ道を必ず添える
@@ -549,6 +555,7 @@ const styles = StyleSheet.create({
   result: { marginTop: 12, borderRadius: 14, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
   diag: { fontSize: 10, lineHeight: 14, marginTop: 8 },
+  diagCenter: { textAlign: 'center' },
   verifyCard: { marginTop: 12, gap: 12 },
   verifyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   verifyText: { fontSize: 14, fontWeight: '600', flex: 1 },
