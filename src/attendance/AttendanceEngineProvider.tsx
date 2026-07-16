@@ -649,8 +649,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         wrong: !!parsed.wrong,
         err: !!parsed.err,
         // 診断を捨てない: btnFound=false は「送信していない」の確定シグナル（submitOutcome が失敗判定に使う）。
+        // onclick/filled は「送信は発火しているのに登録されない」ときの原因特定に要る（process範囲など）。
         btnFound: typeof parsed.btnFound === 'boolean' ? parsed.btnFound : undefined,
         method: typeof parsed.method === 'string' ? parsed.method : undefined,
+        onclick: typeof parsed.onclick === 'string' ? parsed.onclick : undefined,
+        filled: Array.isArray(parsed.values) ? parsed.values.filter((v) => !!v).length : undefined,
       }
       dispatch({ kind: 'submitResult', result })
       if (result.ok) {
