@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
+import { canRecordAttendance, isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 
 const rec = (over: Partial<AttendedRecord> = {}): AttendedRecord => ({
   date: '2026-07-07',
@@ -79,5 +79,27 @@ describe('mergeAttendedRecord', () => {
       expect(isAttendedNow(rec({ confirmWindow: '12:50〜14:30' }), at(14, 0), 780)).toBe(true)
       expect(isAttendedNow(rec({ confirmWindow: '12:50〜14:30' }), at(14, 31), 780)).toBe(false)
     })
+  })
+})
+
+describe('canRecordAttendance', () => {
+  it('科目名があれば記録してよい', () => {
+    expect(canRecordAttendance('法学１', null)).toBe(true)
+  })
+  it('受付時間があれば記録してよい（科目名が引けなくても授業の文脈はある）', () => {
+    expect(canRecordAttendance('', '12:50〜14:30')).toBe(true)
+  })
+  it('科目名も受付時間も無ければ記録しない（何に対する出席か特定できない）', () => {
+    // これを記録すると isAttendedNow が「その日ずっと出席済み」を返し（ends.length===0）、
+    // 後の本物の授業で出席フローが塞がれる（2026-07-17 実機で「（科目名不明）出席済み」が居座った）
+    expect(canRecordAttendance('', null)).toBe(false)
+    expect(canRecordAttendance('   ', null)).toBe(false)
+  })
+})
+
+describe('isAttendedNow: 科目も受付時間も無い記録の危険性（回帰の番人）', () => {
+  it('時刻情報が無い記録は当日ずっと true を返す＝だから canRecordAttendance で作らせない', () => {
+    const rec = { date: todayKey(new Date('2026-07-17T09:00:00')), courseName: '', confirmWindow: null, code: '' }
+    expect(isAttendedNow(rec, new Date('2026-07-17T23:59:00'))).toBe(true)
   })
 })
