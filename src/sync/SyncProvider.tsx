@@ -3,7 +3,10 @@ import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
+import { useClassView } from '../collect/classViewArbiter'
 import { planSync } from './syncGuards'
+import { decideClassSync } from './classSyncConfirm'
+import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
 import { loadAssignmentsRefreshedAt, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
@@ -15,7 +18,13 @@ import { syncSession } from '../collect/syncSession'
 export type SyncSource = 'user' | 'boot' | 'foreground'
 export type SyncSkip = { feature: 'class' | 'letus'; reason: SyncSkipReason }
 
-type RunOpts = { source?: SyncSource }
+type RunOpts = { source?: SyncSource; overrideAttending?: boolean }
+
+/**
+ * 同期開始の結果。'confirm-attending' は「授業中・出席タブ非表示でCLASS同期を保留した＝確認すれば
+ * override で回せる」。呼び出し側（useClassSyncConfirm）が確認ダイアログを出す。
+ */
+export type SyncStartResult = 'started' | 'busy' | 'skipped' | 'confirm-attending'
 
 export type SyncValue = {
   /** 掲示エンジン稼働中（手動・背景を問わない）。 */
@@ -33,12 +42,12 @@ export type SyncValue = {
   skip: SyncSkip | null
   bulletinHealth: StoredHealth | null
   letusHealth: StoredHealth | null
-  /** 掲示→課題の順で同期（ホーム上部ボタン）。開始できたら true。 */
-  runFullSync: (opts?: RunOpts) => boolean
-  /** 掲示のみ（背景boot用）。 */
-  runBulletinSync: (opts?: RunOpts) => boolean
+  /** 掲示→課題の順で同期（ホーム上部ボタン）。結果を返す（'confirm-attending'＝授業中の確認要求）。 */
+  runFullSync: (opts?: RunOpts) => SyncStartResult
+  /** 掲示のみ（背景boot用・確認override可）。 */
+  runBulletinSync: (opts?: RunOpts) => SyncStartResult
   /** 課題のみ（課題画面の更新・背景boot/foreground用）。 */
-  runAssignmentsSync: (opts?: RunOpts) => boolean
+  runAssignmentsSync: (opts?: RunOpts) => SyncStartResult
 }
 
 // Provider外（テスト等）は不活性: 何もせず・何も走らせない。
@@ -52,9 +61,9 @@ const Ctx = createContext<SyncValue>({
   skip: null,
   bulletinHealth: null,
   letusHealth: null,
-  runFullSync: () => false,
-  runBulletinSync: () => false,
-  runAssignmentsSync: () => false,
+  runFullSync: () => 'skipped',
+  runBulletinSync: () => 'skipped',
+  runAssignmentsSync: () => 'skipped',
 })
 
 // 課題同期の進捗ラベル（1ページ巡回ごとに更新される高頻度値）。本体contextから分離し、
@@ -84,6 +93,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const { running } = useAttendanceEngine()
   const runningRef = useRef(running)
   runningRef.current = running
+  // 出席タブが前面か（授業中の確認override判定に使う。前面なら据え置き＝出席画面を壊さない）。
+  const { attendanceFocused } = useClassView()
+  const attendanceFocusedRef = useRef(attendanceFocused)
+  attendanceFocusedRef.current = attendanceFocused
   const { status: killStatus, isKilled } = useKillSwitch()
   const isKilledRef = useRef(isKilled)
   isKilledRef.current = isKilled
@@ -142,63 +155,76 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const runBulletinSync = useCallback(
-    (opts?: RunOpts): boolean => {
+    (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
-      if (bulletinBusyRef.current) return false
+      if (bulletinBusyRef.current) return 'busy'
       if (isKilledRef.current('bulletin')) {
         // 停止中の無反応化を防ぐ（ユーザー起点のみ理由を提示。背景は無音）。
         if (source === 'user') showSkip({ feature: 'class', reason: 'stopped' })
-        return false
+        return 'skipped'
       }
-      const plan = planSync({ now: new Date(), isOnline: isOnlineNow(), running: runningRef.current })
-      if (plan.bulletin !== 'run') {
-        if (source === 'user') showSkip({ feature: 'class', reason: plan.bulletin })
-        return false
+      const decision = decideClassSync({
+        access: evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }),
+        running: runningRef.current,
+        attendanceFocused: attendanceFocusedRef.current,
+        override: opts?.overrideAttending ?? false,
+      })
+      if (decision.kind === 'confirm') {
+        // 授業中・出席タブ非表示＝確認すれば override で回せる。ここでは開始せず呼び出し側に委ねる。
+        return 'confirm-attending'
+      }
+      if (decision.kind === 'blocked') {
+        if (source === 'user') showSkip({ feature: 'class', reason: decision.reason })
+        return 'skipped'
       }
       clearSkip('class')
       bulletinBusyRef.current = true
       setBulletinUserRun(source === 'user')
       setBulletinBusy(true)
-      return true
+      return 'started'
     },
     [showSkip, clearSkip],
   )
 
   const runAssignmentsSync = useCallback(
-    (opts?: RunOpts): boolean => {
+    (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
-      if (assignmentBusyRef.current) return false
+      if (assignmentBusyRef.current) return 'busy'
       if (isKilledRef.current('letus')) {
         if (source === 'user') showSkip({ feature: 'letus', reason: 'stopped' })
-        return false
+        return 'skipped'
       }
       const plan = planSync({ now: new Date(), isOnline: isOnlineNow(), running: runningRef.current })
       if (plan.letus !== 'run') {
         if (source === 'user') showSkip({ feature: 'letus', reason: plan.letus })
-        return false
+        return 'skipped'
       }
       clearSkip('letus')
       assignmentBusyRef.current = true
       setAssignmentProgress(null)
       setAssignmentBusy(true)
-      return true
+      return 'started'
     },
     [showSkip, clearSkip],
   )
 
   const runFullSync = useCallback(
-    (opts?: RunOpts): boolean => {
+    (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
       // 掲示稼働中のみ二重開始を拒否する。課題（背景フル同期）稼働中でも掲示フェーズは開始できる
       // （CLASS/LETUSは別セッションで独立。課題フェーズの二重開始は runAssignmentsSync 側の
       //  in-flight ガードが弾き、完了時の連鎖も同ガードで無害に no-op する）。
-      if (bulletinBusyRef.current) return false
-      if (runBulletinSync({ source })) {
+      if (bulletinBusyRef.current) return 'busy'
+      const bulletin = runBulletinSync({ source, overrideAttending: opts?.overrideAttending })
+      if (bulletin === 'started') {
         chainRef.current = source
-        return true
+        return 'started'
       }
-      // 掲示が走れない（kill/メンテ/授業中/オフライン）なら課題だけ試す（授業中でもLETUSは同期可）。
-      return runAssignmentsSync({ source })
+      // 掲示が走れない（kill/メンテ/授業中/オフライン/確認待ち）なら課題だけ試す
+      // （授業中でもLETUSは同期可）。掲示が授業中の確認待ちなら、その旨を呼び出し側へ返す。
+      const assignments = runAssignmentsSync({ source })
+      if (bulletin === 'confirm-attending') return 'confirm-attending'
+      return assignments
     },
     [runBulletinSync, runAssignmentsSync],
   )

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Text } from '../ui/Text'
 import { useUi } from '../ui/screen'
 import { useSync } from '../sync/SyncProvider'
+import { useClassSyncConfirm } from '../sync/useClassSyncConfirm'
 import { syncHeaderView } from './syncBarLabel'
 import { PressableRow } from '../ui/Pressable'
 
@@ -16,6 +17,7 @@ import { PressableRow } from '../ui/Pressable'
 export default function HomeSyncButton() {
   const ui = useUi()
   const sync = useSync()
+  const requestFullSync = useClassSyncConfirm()
   // 「◯分前」の追随用に分単位で再評価（ホーム本体の tick とは独立・チップだけ再レンダー）。
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -41,7 +43,7 @@ export default function HomeSyncButton() {
   return (
     <PressableRow
       style={[styles.chip, { backgroundColor: warn ? ui.colors.warnBg : ui.pillBg }]}
-      onPress={() => sync.runFullSync({ source: 'user' })}
+      onPress={requestFullSync}
       disabled={busy}
       accessibilityRole="button"
       accessibilityLabel="同期"

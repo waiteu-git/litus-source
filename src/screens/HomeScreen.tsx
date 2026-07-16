@@ -29,6 +29,7 @@ import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { useSync } from '../sync/SyncProvider'
+import { useClassSyncConfirm } from '../sync/useClassSyncConfirm'
 import HomeSyncButton from '../home/HomeSyncButton'
 import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
 import { markCourseSeen, type CourseNewsMap } from '../updates/courseNews'
@@ -93,6 +94,7 @@ export default function HomeScreen() {
   const [weeklyPatterns, setWeeklyPatterns] = useState<WeeklyPatternMap>({})
   // 同期の状態・実行は SyncProvider が単独所有（掲示アニメ・鮮度・スキップ理由は上部同期バーに集約）。
   const sync = useSync()
+  const requestFullSync = useClassSyncConfirm()
   // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用。開発ビルドでのみ読み書き・表示する。
   const [bulletinDiag, setBulletinDiag] = useState('')
   // LETUS新着（コース活動の増分・見るまで残る累積）。ホームカード用。
@@ -600,7 +602,7 @@ export default function HomeScreen() {
             // 導線を残す。未取得の時だけタップで取得を促す。
             <PressableCard
               style={[ui.card, styles.bulletinCta]}
-              onPress={bulletinEmpty.action === 'list' ? openBulletin : () => sync.runFullSync({ source: 'user' })}
+              onPress={bulletinEmpty.action === 'list' ? openBulletin : requestFullSync}
             >
               <Ionicons name="megaphone-outline" size={20} color={ui.accent} />
               <View style={{ flex: 1 }}>
