@@ -24,6 +24,17 @@ export interface SubmitResult {
   onclick?: string
   /** 認証コード欄へ実際に入った値の桁数（内容は保存しない）。流し込み失敗の切り分け用。 */
   filled?: number
+  /**
+   * 送信ajax(PrimeFaces.ab)の**直接観測**結果。応答テキストの正規表現に頼らず
+   * 「そもそも届いたのか／返ってきたのか」を切り分けるための計器（実機で間欠的に
+   * 登録されない事象の原因特定用）。fired=呼び出しが走った / done=oncompleteが来た。
+   */
+  ajaxFired?: boolean
+  ajaxDone?: boolean
+  ajaxError?: string
+  ajaxStatus?: number
+  /** CLASSの応答本文から関連しそうな行を抜いたもの（未知の応答の正体を掴む）。保存はしない。 */
+  hint?: string
 }
 
 export interface EngineState {
