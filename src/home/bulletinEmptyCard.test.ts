@@ -10,9 +10,11 @@ describe('bulletinEmptyCard', () => {
     })
   })
 
-  it('未取得×授業中: 取得を控えている旨を出す', () => {
+  // 授業中でもタップすれば確認のうえ取得できる（decideClassSync）ため、「授業後に取得できます」と
+  // 断言する旧文言は、同じタップで出る確認ダイアログと矛盾する。
+  it('未取得×授業中: 控えている旨＋タップで確認のうえ取得できることを出す', () => {
     expect(bulletinEmptyCard({ syncing: false, running: true, collected: false })).toEqual({
-      text: '授業中は取得を控えています。授業後に取得できます。',
+      text: '授業中のため控えています。タップすると確認のうえ取得できます。',
       action: 'sync',
       showAllLink: false,
     })

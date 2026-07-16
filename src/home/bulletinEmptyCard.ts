@@ -31,7 +31,9 @@ export function bulletinEmptyCard({
     : collected
       ? '新着・未読の掲示はありません'
       : running
-        ? '授業中は取得を控えています。授業後に取得できます。'
+        ? // 授業中はCLASS取得を既定で控えるが、タップすれば確認のうえ実行できる（[[decideClassSync]]）。
+          // 「授業後に取得できます」と断言すると、同じタップで出る確認ダイアログと矛盾する。
+          '授業中のため控えています。タップすると確認のうえ取得できます。'
         : 'まだ取得できていません。タップで取得します。'
   return { text, action: collected ? 'list' : 'sync', showAllLink: collected }
 }
