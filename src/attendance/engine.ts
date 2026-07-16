@@ -8,6 +8,14 @@ export interface SubmitResult {
   ok: boolean
   wrong: boolean
   err: boolean
+  /**
+   * 「出席登録する」ボタンを掴めたか（actuator診断）。false＝そもそもJSFへ送信していない。
+   * ok/wrong/err が全て false でも送信失敗と確定できる唯一の手がかりなので捨てないこと
+   * （[[submitOutcome]] が失敗判定に使う）。省略時（旧データ）は未知として扱う。
+   */
+  btnFound?: boolean
+  /** 送信呼び出しの経路（'onclick' | 'click' | 'click-fb' | 'none' | 'err'）。実機診断用。 */
+  method?: string
 }
 
 export interface EngineState {
