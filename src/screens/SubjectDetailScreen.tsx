@@ -12,6 +12,8 @@ import { resolveNextSession, pickAttentionEvent, type NextSession } from '../tim
 import { COLORS } from '../theme'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
+import { mutateCourseNews } from '../storage/courseNewsStore'
+import { markCourseSeen } from '../updates/courseNews'
 import { buildSyllabusUrl } from '../links/syllabus'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import type { CourseSnapshot } from '../storage/courseSnapshotSerialize'
@@ -304,7 +306,12 @@ export default function SubjectDetailScreen() {
           <LinkAction
             icon="book-outline"
             title="LETUSコースを開く"
-            onPress={() => navigation.navigate('Web', { url: letusUrl, title: name })}
+            onPress={() => {
+              // コースを開いた＝新着を確認したとみなし既読化（ホーム/LETUSコース画面と同じ扱い）。
+              // これで時間割セルの●・LETUSコース画面の新着カウントも消える（focus復帰で再計算）。
+              mutateCourseNews((cur) => markCourseSeen(cur, letusUrl)).catch(() => undefined)
+              navigation.navigate('Web', { url: letusUrl, title: name })
+            }}
           />
         ) : (
           <View style={[ui.card, { marginBottom: 10 }]}>
