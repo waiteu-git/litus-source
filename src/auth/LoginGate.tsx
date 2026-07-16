@@ -20,6 +20,7 @@ import {
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { loadOnboardingDone, saveOnboardingDone } from '../storage/onboardingStore'
 import { classifyGatePage, type GateVerdict } from './classifyGatePage'
+import { recoverOutcome } from './gateRecovery'
 import { syncSession } from '../collect/syncSession'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
 import OnboardingSlides from '../screens/OnboardingSlides'
@@ -47,8 +48,20 @@ const BOOT_INTRO_MS = 4000
 const BOOT_LOOP_MS = 1400
 // CLASS定時メンテナンス中、明けを検知して自動復帰するための再probe間隔。
 const MAINTENANCE_REPROBE_MS = 60000
+// 接続エラー中、通信が戻ったら自動で入場/ログインへ進めるための静かな再probe間隔。
+const CONN_ERROR_REPROBE_MS = 15000
 
-type GateState = 'loading' | 'needsConsent' | 'firstRun' | 'checking' | 'needsLogin' | 'setup' | 'sync' | 'authed' | 'maintenance'
+type GateState =
+  | 'loading'
+  | 'needsConsent'
+  | 'firstRun'
+  | 'checking'
+  | 'needsLogin'
+  | 'setup'
+  | 'sync'
+  | 'authed'
+  | 'maintenance'
+  | 'connError'
 
 const LoginContext = createContext<{ requireLogin: () => void }>({ requireLogin: () => {} })
 
@@ -172,9 +185,22 @@ export function LoginGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (state !== 'checking') return
-    const t = setTimeout(() => setState((s) => (s === 'checking' ? 'needsLogin' : s)), CHECK_TIMEOUT_MS)
+    // 12秒で判定が出ない＝通信不良でページ読込が完了していない（onLoadEnd未発火→DETECT未実行）。
+    // これは「要ログイン」ではなく通信起因なので、CLASSログイン画面ではなく接続エラー表示へ。
+    const t = setTimeout(() => setState((s) => (s === 'checking' ? 'connError' : s)), CHECK_TIMEOUT_MS)
     return () => clearTimeout(t)
   }, [state, nonce])
+
+  // connError: 通信が戻ったら自動で復帰できるよう、静かに再probeする（メンテと同型）。
+  // recoverTries をリセットして nonce を上げ、probe WebView を作り直す（状態は connError のまま）。
+  useEffect(() => {
+    if (state !== 'connError') return
+    const t = setInterval(() => {
+      recoverTriesRef.current = 0
+      setNonce((n) => n + 1)
+    }, CONN_ERROR_REPROBE_MS)
+    return () => clearInterval(t)
+  }, [state])
 
   // maintenance: 定時メンテ（〜4:00）が明けたら自動で復帰できるよう、一定間隔で再probeする。
   useEffect(() => {
@@ -229,13 +255,15 @@ export function LoginGate({ children }: { children: ReactNode }) {
    * 上限を超えたら needsLogin（可視WebView＋再読み込みボタン）に落として手動復帰へ。
    */
   function recover() {
-    if (recoverTriesRef.current >= 3) {
-      setState('needsLogin')
+    if (recoverOutcome(recoverTriesRef.current) === 'connError') {
+      // 通信起因の失敗が続いた＝ログイン切れではない。CLASSログイン画面ではなく接続エラー表示へ。
+      setState((s) => (s === 'firstRun' || s === 'loading' ? s : 'connError'))
       return
     }
     recoverTriesRef.current += 1
     setNonce((n) => n + 1)
-    setState((s) => (s === 'firstRun' || s === 'loading' ? s : 'checking'))
+    // connError からの再probe中に load エラーが来ても、スピナー(checking)へ戻さず connError を保つ。
+    setState((s) => (s === 'firstRun' || s === 'loading' || s === 'connError' ? s : 'checking'))
   }
 
   /** setup（時間割）完了後の遷移先。初回はフル同期（コース→課題）も可視で済ませる。 */
@@ -314,10 +342,12 @@ export function LoginGate({ children }: { children: ReactNode }) {
       const s = stateRef.current
       if (verdict === 'maintenance') {
         // CLASS定時メンテナンス（2:00〜4:00）。ログインもできないので専用画面へ（詰まらせない）。
-        if (s === 'checking' || s === 'needsLogin') setState('maintenance')
+        if (s === 'checking' || s === 'needsLogin' || s === 'connError') setState('maintenance')
         return
       }
-      if (s === 'checking') {
+      // connError（接続エラー保留）中でも、probeが確定判定を出したらそれに従う:
+      // authed→入場 / needsLogin→本物のログイン画面へ昇格。checkingと同じ扱い。
+      if (s === 'checking' || s === 'connError') {
         if (verdict === 'authed') proceedToEntry()
         else setState('needsLogin')
       } else if (s === 'needsLogin' && verdict === 'authed') {
@@ -418,7 +448,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
             }}
           />
         ) : null}
-        {!bootAnimDone || state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' || (state === 'authed' && !bootReady) ? (
+        {state !== 'connError' && (!bootAnimDone || state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' || (state === 'authed' && !bootReady)) ? (
           <View style={[styles.boot, { backgroundColor: bootWhite ? '#ffffff' : COLORS.gradBottom }]}>
             {/* 起動ロゴアニメ（純CSS・ローカルHTML）。bootMode 決定前（null）はマウントせず下地色のみ。
                 warm はループのみ版で即ループへ。以降も裏でログイン/取得が進む間は表示。タッチは奪わない。 */}
@@ -500,6 +530,33 @@ export function LoginGate({ children }: { children: ReactNode }) {
                     <Text style={styles.maintGhostText}>このまま開く（時間割・課題は閲覧できます）</Text>
                   </Pressable>
                   <Text style={styles.maintNote}>※出席の受付確認と時間割の更新はCLASS復帰後に使えます。</Text>
+                </>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+        {state === 'connError' ? (
+          <View style={[styles.maintFill, { paddingTop: insets.top }]}>
+            <View style={styles.maintCard}>
+              <Text style={styles.maintTitle}>接続できませんでした</Text>
+              <Text style={styles.maintBody}>
+                通信状況を確認して、もう一度お試しください。電波の良い場所では自動的に再接続します。
+              </Text>
+              <Pressable
+                style={styles.maintPrimary}
+                onPress={() => {
+                  recoverTriesRef.current = 0
+                  requireLogin()
+                }}
+              >
+                <Text style={styles.maintPrimaryText}>再読み込み</Text>
+              </Pressable>
+              {!wasFirstRunRef.current ? (
+                <>
+                  <Pressable style={styles.maintGhost} onPress={enterDegraded}>
+                    <Text style={styles.maintGhostText}>このまま開く（時間割・課題は閲覧できます）</Text>
+                  </Pressable>
+                  <Text style={styles.maintNote}>※出席の受付確認と時間割の更新は接続の回復後に使えます。</Text>
                 </>
               ) : null}
             </View>
