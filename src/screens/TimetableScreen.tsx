@@ -40,6 +40,7 @@ import AttendanceStatsSyncEngine from '../collect/AttendanceStatsSyncEngine'
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadAttendanceOverrides } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk } from '../attendance/attendanceRisk'
+import { resolveTermDates, deriveExcludedDates } from '../attendance/attendanceTerm'
 import { loadPersonalEvents } from '../storage/personalEventsStore'
 import type { PersonalEvent, PersonalDayKey } from '../timetableEvents/personalEvent'
 import { personalEventAt, daysWithPersonal, hasZeroPeriod, personalEventsOfDay } from '../timetableEvents/personalEventSelectors'
@@ -111,10 +112,18 @@ export default function TimetableScreen() {
     ;(async () => {
       const data = await loadAttendanceStats()
       const ov = await loadAttendanceOverrides()
+      const pats = await loadWeeklyPatterns()
+      const now = new Date()
       const danger = new Set<string>()
       for (const c of data?.courses ?? []) {
         if (!c.courseCode) continue
-        const r = computeAttendanceRisk(c, ov[c.courseCode]?.total != null ? { totalOverride: ov[c.courseCode]!.total } : undefined)
+        // 実施パターンの休み週（隔週の非実施週）の×を除外して危険度を判定（科目詳細の計算と一致させる）。
+        const excludeDates = deriveExcludedDates(pats[c.courseCode] ?? {}, resolveTermDates(c.sessions, now))
+        const total = ov[c.courseCode]?.total
+        const r = computeAttendanceRisk(c, {
+          ...(total != null ? { totalOverride: total } : {}),
+          ...(excludeDates.length ? { excludeDates } : {}),
+        })
         if (r.trackable && (r.level === 'danger' || r.level === 'warning')) danger.add(c.courseCode)
       }
       setDangerCodes(danger)
