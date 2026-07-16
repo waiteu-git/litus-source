@@ -114,8 +114,8 @@ export default function WebViewerScreen() {
       const activityUrl = p.url
       const activityTitle = p.title || '（無題）'
       const activityCourse = p.courseName ?? title ?? ''
-      if (trackedUrls.includes(activityUrl)) {
-        // 追跡済み: 何も追加せず表示だけ揃える。
+      if (isSameTrackedActivity(activityUrl, trackedUrls)) {
+        // 追跡済み（URL変種も同一視）: 何も追加せず表示だけ揃える。
         webviewRef.current?.injectJavaScript(markActivityAddedJs(activityUrl))
         flash('すでに追加されています')
         return
