@@ -37,6 +37,7 @@ import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadAttendanceOverrides, saveAttendanceOverride } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk, type AttendanceRisk } from '../attendance/attendanceRisk'
 import { useAttendanceVersion } from '../attendance/attendanceVersion'
+import { resolveTermDates, termWeeksFromSessions, deriveExcludedDates } from '../attendance/attendanceTerm'
 import { loadAttendanceDiag } from '../storage/attendanceDiagStore'
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
@@ -130,8 +131,16 @@ export default function SubjectDetailScreen() {
   // 【一時デバッグ】出欠収集の診断1行。実機で収集がどこで落ちるかを画面で読む（原因特定後に撤去）。
   const [attDiag, setAttDiag] = useState<string | null>(null)
   const [unread, setUnread] = useState(0)
-  // カレンダー用の週リスト（今週の2週前〜16週後）。画面表示中は固定。
-  const weeks = useMemo(() => weekList(new Date(), 2, 16), [])
+  // 出欠の各回日付を実日付へ解決（隔週の非実施週除外・実施パターンの週リスト生成に使う）。
+  const resolvedSessions = useMemo(
+    () => resolveTermDates(attStats?.sessions ?? [], new Date()),
+    [attStats],
+  )
+  // 実施パターン編集の週リスト。出欠データがある科目は全学期週（過去〜将来）、無い科目は従来の近未来範囲。
+  const weeks = useMemo(() => {
+    const tw = termWeeksFromSessions(resolvedSessions)
+    return tw.length ? tw : weekList(new Date(), 2, 16)
+  }, [resolvedSessions])
   const thisKey = weekMondayKey(new Date())
 
   const syllabusUrl = buildSyllabusUrl(courseCode, new Date())
@@ -159,9 +168,20 @@ export default function SubjectDetailScreen() {
     })().catch(() => undefined)
   }, [courseCode, attVersion])
 
+  // 実施パターンで「休み」にした週の回を分子(欠席)・分母(総回数)の両方から除外する。
+  const excludeDates = useMemo(
+    () => deriveExcludedDates(pattern, resolvedSessions),
+    [pattern, resolvedSessions],
+  )
   const risk: AttendanceRisk | null = useMemo(
-    () => (attStats ? computeAttendanceRisk(attStats, attTotal != null ? { totalOverride: attTotal } : undefined) : null),
-    [attStats, attTotal],
+    () =>
+      attStats
+        ? computeAttendanceRisk(attStats, {
+            ...(attTotal != null ? { totalOverride: attTotal } : {}),
+            ...(excludeDates.length ? { excludeDates } : {}),
+          })
+        : null,
+    [attStats, attTotal, excludeDates],
   )
 
   const changeTotal = (delta: number) => {
