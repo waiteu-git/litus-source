@@ -8,6 +8,8 @@ import { COLORS, DARK } from '../theme'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments, upsertAssignment, removeAssignment } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
+import { refreshAllNotifications } from '../notifications/notificationRefresh'
+import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import DeadlineFields from '../assignments/DeadlineFields'
 import {
@@ -92,6 +94,9 @@ export default function ManualAssignmentScreen() {
       await upsertAssignment(makeManualAssignment({ title: t, courseName, deadline }, id, now))
     }
     bump()
+    // 締切の追加・変更は通知予約とウィジェットに即反映する（旧実装は次回収集まで反映されなかった）。
+    refreshAllNotifications().catch(() => undefined)
+    notifyWidgetDataChanged()
     navigation.goBack()
   }
 
@@ -105,6 +110,8 @@ export default function ManualAssignmentScreen() {
         onPress: async () => {
           await removeAssignment(editUrl)
           bump()
+          refreshAllNotifications().catch(() => undefined)
+          notifyWidgetDataChanged()
           navigation.goBack()
         },
       },
