@@ -11,6 +11,7 @@ import { REACTION_MAX_LEN, canSubmitReaction, reactionDraftApplies, reactionLeng
 import { todayKey } from '../attendance/attendedState'
 import { loadReactionDraft, saveReactionDraft } from '../storage/reactionDraftStore'
 import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
+import { submitOutcome } from '../attendance/submitOutcome'
 import ScreenHint from '../tutorial/ScreenHint'
 import { PressableRow } from '../ui/Pressable'
 import { COLORS } from '../theme'
@@ -43,6 +44,7 @@ export default function AttendanceScreen() {
     reactionSubmit,
     submitReaction,
     failCount,
+    submitAt,
     revealClass,
     setRevealClass,
     setAttendanceFocused,
@@ -141,10 +143,16 @@ export default function AttendanceScreen() {
             ? '受付状況を更新しています…'
             : '受付状況を確認しています…'
 
-  // 送信結果の3状態: 成功(ok)/失敗(wrong|err)/検出未確定(送信はした)。未確定は赤ではなく
-  // 「確認中」（送信後に .attendSuc を取り直して出席済みへ切り替わる）として中立表示にする。
-  const submitFailed = !!result && (result.wrong || result.err)
-  const verifying = !!result && !result.ok && !result.wrong && !result.err
+  // 送信結果の判定は submitOutcome に集約（純粋・テスト済み）。
+  // 旧実装は「ok/wrong/err のどれでもない＝送信はした」と決め打ちして無期限に「確認中」を出し、
+  // 実際には送信できていない場合（ボタン未検出等）にユーザーを永久に待たせていた。
+  const outcome = submitOutcome({
+    result,
+    attended: attendedNow || reception?.status === 'attended',
+    elapsedMs: submitAt ? now.getTime() - submitAt : 0,
+  })
+  const submitFailed = outcome === 'failed'
+  const verifying = outcome === 'verifying'
 
   const digits = [0, 1, 2, 3].map((i) => code[i] ?? '')
 
@@ -437,7 +445,7 @@ export default function AttendanceScreen() {
               )}
             </Pressable>
 
-            {result?.ok ? (
+            {outcome === 'ok' ? (
               <View style={[styles.card, cardStyle, styles.doneCard]}>
                 <View style={styles.doneCheck}>
                   <Ionicons name="checkmark" size={38} color={c.white} />
@@ -445,8 +453,30 @@ export default function AttendanceScreen() {
                 <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
               </View>
             ) : submitFailed ? (
-              <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
-                <Text style={[styles.resultText, { color: ui.colors.danger }]}>{result?.result}</Text>
+              // 失敗時は actuator の理由をそのまま出し、CLASSの画面で手動登録できる逃げ道を必ず添える
+              // （自動送信が効かない端末でも出席を落とさないため）。
+              <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
+                <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
+                  <Text style={[styles.resultText, { color: ui.colors.danger }]}>{result?.result}</Text>
+                </View>
+                <Text style={[styles.status, { color: labelColor, fontSize: 13, fontWeight: '400', marginTop: 8 }]}>
+                  出席は登録されていません。CLASSの画面を開いて「出席登録する」を押してください。
+                </Text>
+                <View style={styles.failRow}>
+                  <Pressable style={[styles.failBtn, { backgroundColor: c.cta }]} onPress={() => setRevealClass(true)}>
+                    <Text style={styles.failBtnText}>CLASSの画面を表示</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.failBtn,
+                      styles.failBtnGhost,
+                      { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder },
+                    ]}
+                    onPress={retry}
+                  >
+                    <Text style={[styles.failBtnText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>最初から</Text>
+                  </Pressable>
+                </View>
               </View>
             ) : phase === 'submitting' || verifying ? (
               // 送信タップ〜出席確定までの待機窓。スイープする不定進捗バーで「処理中」を明示する。

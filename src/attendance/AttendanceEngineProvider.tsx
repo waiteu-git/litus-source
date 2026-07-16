@@ -112,6 +112,8 @@ export type AttendanceEngineValue = {
   /** 競合が解けず自動再試行を打ち切った状態。UIは手動での再確認を促す。 */
   conflictExhausted: boolean
   failCount: number
+  /** 直近の送信時刻（epoch ms・未送信は null）。確認窓の経過判定に使う（[[submitOutcome]]）。 */
+  submitAt: number | null
   revealClass: boolean
   setRevealClass: (b: boolean) => void
   timetable: TimetableCollection[]
@@ -161,6 +163,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const [webviewKey, setWebviewKey] = useState(0)
   const [now, setNow] = useState(() => new Date())
   const [revealClass, setRevealClass] = useState(false)
+  // 直近の送信時刻。submitOutcome の確認窓（無期限の「確認しています」を防ぐ）の起点。
+  const [submitAt, setSubmitAt] = useState<number | null>(null)
   const [failCount, setFailCount] = useState(0)
   const [attended, setAttended] = useState<AttendedRecord | null>(null)
   const [timetable, setTimetable] = useState<TimetableCollection[]>([])
@@ -644,6 +648,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         ok: !!parsed.ok,
         wrong: !!parsed.wrong,
         err: !!parsed.err,
+        // 診断を捨てない: btnFound=false は「送信していない」の確定シグナル（submitOutcome が失敗判定に使う）。
+        btnFound: typeof parsed.btnFound === 'boolean' ? parsed.btnFound : undefined,
+        method: typeof parsed.method === 'string' ? parsed.method : undefined,
       }
       dispatch({ kind: 'submitResult', result })
       if (result.ok) {
@@ -676,6 +683,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     const c = normalizeAttendanceCode(code)
     if (!c) return
     lastCodeRef.current = c
+    // 確認窓（submitOutcome）の起点。無期限に「確認しています」を出さないための基準時刻。
+    setSubmitAt(Date.now())
     dispatch({ kind: 'submitStart' })
     inject(buildSubmitAttendanceJs(c))
   }
@@ -721,6 +730,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       conflict,
       conflictExhausted,
       failCount,
+      submitAt,
       revealClass,
       setRevealClass,
       timetable,
@@ -739,6 +749,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       conflict,
       conflictExhausted,
       failCount,
+      submitAt,
       revealClass,
       timetable,
       setAttendanceFocused,
