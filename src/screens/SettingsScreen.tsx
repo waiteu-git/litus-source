@@ -25,6 +25,8 @@ import { HOME_LAYOUT_OPS, HOME_SECTION_META } from '../home/homeSections'
 import { SUBJECT_LAYOUT_OPS, SUBJECT_SECTION_META } from '../subject/subjectSections'
 import Constants from 'expo-constants'
 import { formatVersionLabel } from '../appVersion'
+import { formatSubmitDiag, type SubmitDiag } from '../attendance/submitDiag'
+import { clearSubmitDiags, loadSubmitDiags } from '../storage/submitDiagStore'
 import { CHANGELOG, getRecentChangelog } from '../changelog'
 import ChangelogModal from '../ui/ChangelogModal'
 
@@ -49,6 +51,9 @@ export default function SettingsScreen() {
   const [bulletinNotify, setBulletinNotify] = useState<BulletinNotifySettings>({ enabled: true, mode: 'all' })
   const [letusNewsNotify, setLetusNewsNotify] = useState<LetusNewsNotifySettings>({ enabled: true })
   const [changelogOpen, setChangelogOpen] = useState(false)
+  // 出席送信の記録（真因未特定の間欠バグの証拠。開いた時だけ読み込む）。
+  const [diags, setDiags] = useState<SubmitDiag[]>([])
+  const [showDiags, setShowDiags] = useState(false)
   // ホームの並びをドラッグ中は親 ScrollView のスクロールを止める（縦ジェスチャ競合の回避）。
   const [reordering, setReordering] = useState(false)
   const recentChangelog = getRecentChangelog(CHANGELOG, 3)
@@ -103,6 +108,21 @@ export default function SettingsScreen() {
   async function onClear() {
     await clearTimetable()
     Alert.alert('消去しました', '保存した時間割データを消去しました。')
+  }
+
+  async function onToggleDiags() {
+    const next = !showDiags
+    setShowDiags(next)
+    if (next) setDiags(await loadSubmitDiags().catch(() => []))
+  }
+
+  async function onClearDiags() {
+    try {
+      await clearSubmitDiags()
+      setDiags([])
+    } catch (e) {
+      console.warn('出席送信の記録の消去に失敗しました', e)
+    }
   }
 
   async function onResetHints() {
@@ -303,6 +323,35 @@ export default function SettingsScreen() {
             </View>
             <Text style={[styles.danger, { color: ui.colors.danger }]}>リセット</Text>
           </Pressable>
+          {/* 出席送信の記録: 実機で間欠的に登録されない事象の真因が未特定のため、成功も失敗も
+              自動で貯めて後から見返せるようにしている（その瞬間に気づけなくても証拠が残る）。
+              認証コードそのものは記録しない。 */}
+          <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={onToggleDiags}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={[styles.rowLabel, { color: ui.valueColor }]}>出席送信の記録</Text>
+              <Text style={[styles.note, { color: ui.labelColor, marginTop: 4, marginLeft: 0 }]}>
+                直近{diags.length}件。うまく登録できなかった時は、この内容を開発者にお知らせください。
+              </Text>
+            </View>
+            <Text style={[styles.rowAction, { color: ui.labelColor }]}>{showDiags ? '閉じる' : '表示'}</Text>
+          </Pressable>
+          {showDiags ? (
+            <View style={[ui.card, { marginTop: 8 }]}>
+              {diags.length === 0 ? (
+                <Text style={[styles.note, { color: ui.labelColor, marginLeft: 0 }]}>まだ記録はありません。</Text>
+              ) : (
+                <>
+                  <Text selectable style={[styles.diagLog, { color: ui.valueColor }]}>
+                    {diags.map((d) => formatSubmitDiag(d)).join('\n\n')}
+                  </Text>
+                  <Pressable style={[styles.rowBetween, { marginTop: 10 }]} onPress={onClearDiags}>
+                    <Text style={[styles.rowLabel, { color: ui.labelColor }]}>記録を消去</Text>
+                    <Text style={[styles.rowAction, { color: ui.labelColor }]}>消去</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          ) : null}
         </Accordion>
 
         <Accordion title="アプリ情報" icon="information-circle-outline">
@@ -361,6 +410,7 @@ const styles = StyleSheet.create({
   rowAction: { fontSize: 14, fontWeight: '500' },
   link: { fontSize: 13, textDecorationLine: 'underline', marginTop: 8 },
   note: { fontSize: 12, marginTop: 8, marginLeft: 2 },
+  diagLog: { fontSize: 10, lineHeight: 15 },
   licenseBody: { fontSize: 10, lineHeight: 15, marginTop: 10 },
   fieldLabel: { fontSize: 13, marginLeft: 2, marginBottom: 2 },
   // 集約アコーディオン内の小見出し（表示=テーマ/時間割/課題/ホーム、通知=掲示/LETUS/出席）。

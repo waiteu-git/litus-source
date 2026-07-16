@@ -454,7 +454,8 @@ export default function AttendanceScreen() {
                 {/* 成功時も診断を出す: 自動送信は元々「未検証」の経路で、間欠的に登録されない事象を
                     追っている。どの経路(method)で通ったかが分かって初めて再発を潰せる。 */}
                 <Text selectable style={[styles.diag, styles.diagCenter, { color: labelColor }]}>
-                  診断: method={result?.method ?? '-'} / btn={String(result?.btnFound)} / 入力={result?.filled ?? '-'}桁
+                  診断: method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁 / 送信応答=
+                  {String(result?.ajaxDone)} / status={result?.ajaxStatus ?? '-'}
                   {result?.ok ? ' / 検出=応答テキスト' : ' / 検出=CLASS出席済み'}
                 </Text>
               </View>
@@ -472,6 +473,10 @@ export default function AttendanceScreen() {
                     失敗時だけ・折りたたまず小さく出す（作者が実機で読める唯一の経路）。 */}
                 <Text selectable style={[styles.diag, { color: labelColor }]}>
                   診断: btn={String(result?.btnFound)} / method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁
+                  {'\n'}送信: 発火={String(result?.ajaxFired)} / 応答={String(result?.ajaxDone)} / status=
+                  {result?.ajaxStatus ?? '-'}
+                  {result?.ajaxError ? ` / err=${result.ajaxError}` : ''}
+                  {result?.hint ? `\nCLASSの応答: ${result.hint}` : ''}
                   {result?.onclick ? `\n${result.onclick}` : ''}
                 </Text>
                 <View style={styles.failRow}>

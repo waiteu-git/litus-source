@@ -35,6 +35,8 @@ import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
 import { isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
+import { shouldAutoRetrySubmit, toSubmitDiag } from './submitDiag'
+import { addSubmitDiag } from '../storage/submitDiagStore'
 import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
 import {
   attendanceOpenKey,
@@ -157,6 +159,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const attendedRef = useRef(false)
   const attendedRecordRef = useRef<AttendedRecord | null>(null)
   const lastCodeRef = useRef('')
+  // 1回の送信操作あたりの自動再送回数（submit() で0に戻す）。
+  const submitRetryRef = useRef(0)
 
   const [state, dispatch] = useReducer(attendanceReducer, initialEngineState)
   const [code, setCode] = useState('')
@@ -654,6 +658,41 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         method: typeof parsed.method === 'string' ? parsed.method : undefined,
         onclick: typeof parsed.onclick === 'string' ? parsed.onclick : undefined,
         filled: Array.isArray(parsed.values) ? parsed.values.filter((v) => !!v).length : undefined,
+        // ajaxの直接観測（届いたか/返ってきたか）とCLASSの応答文言。原因特定の要。
+        ajaxFired: typeof parsed.ajaxFired === 'boolean' ? parsed.ajaxFired : undefined,
+        ajaxDone: typeof parsed.ajaxDone === 'boolean' ? parsed.ajaxDone : undefined,
+        ajaxError: typeof parsed.ajaxError === 'string' && parsed.ajaxError ? parsed.ajaxError : undefined,
+        ajaxStatus: typeof parsed.ajaxStatus === 'number' ? parsed.ajaxStatus : undefined,
+        hint: typeof parsed.hint === 'string' && parsed.hint ? parsed.hint : undefined,
+      }
+      // 診断を端末に貯める（成功も失敗も）。真因未特定の間欠バグの証拠を、ユーザーが
+      // その瞬間を捕まえなくても後から設定画面で見返せるようにする。失敗は無視。
+      const retrying = shouldAutoRetrySubmit({
+        result,
+        tries: submitRetryRef.current,
+        attended: receptionStatusRef.current === 'attended',
+        hasCode: !!lastCodeRef.current,
+      })
+      addSubmitDiag(
+        toSubmitDiag(result, {
+          nowIso: new Date().toISOString(),
+          courseName: state.reception?.courseName ?? null,
+          note: retrying ? '自動再送します（CLASSに届いていないため）' : undefined,
+        }),
+      ).catch(() => undefined)
+      if (retrying) {
+        // 送信がCLASSに**到達していない**と確定した時だけ1回だけ再送する（到達していない以上、
+        // 二重登録にならないのが根拠）。応答が返っている場合は曖昧なので再送しない。
+        submitRetryRef.current += 1
+        // 確認窓（submitOutcome の12秒）も再送時点から測り直す。
+        setSubmitAt(Date.now())
+        dispatch({ kind: 'submitStart' })
+        setTimeout(() => {
+          if (shouldRenderRef.current && !collectActiveRef.current && receptionStatusRef.current !== 'attended') {
+            inject(buildSubmitAttendanceJs(lastCodeRef.current))
+          }
+        }, 1200)
+        return
       }
       dispatch({ kind: 'submitResult', result })
       if (result.ok) {
@@ -688,6 +727,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     lastCodeRef.current = c
     // 確認窓（submitOutcome）の起点。無期限に「確認しています」を出さないための基準時刻。
     setSubmitAt(Date.now())
+    // 手動の送信操作ごとに自動再送の回数を戻す（1操作あたり最大 SUBMIT_MAX_RETRY 回）。
+    submitRetryRef.current = 0
     dispatch({ kind: 'submitStart' })
     inject(buildSubmitAttendanceJs(c))
   }
