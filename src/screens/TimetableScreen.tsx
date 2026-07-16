@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Animated, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
+import { Alert, Animated, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { Ionicons } from '@expo/vector-icons'
 import ScreenHint from '../tutorial/ScreenHint'
@@ -18,7 +18,9 @@ import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
-import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
+import { syncSkipMessage } from '../health/syncSkipNotice'
+import { decideClassSync } from '../sync/classSyncConfirm'
+import { useClassView } from '../collect/classViewArbiter'
 import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import CourseUpdateEngine from '../collect/CourseUpdateEngine'
@@ -71,6 +73,8 @@ export default function TimetableScreen() {
   const { timetableView } = useDisplaySettings()
   // 授業中（出席WebViewが稼働／CLASSセッションを専有中）フラグ。手動更新の授業中ガードに使う。
   const { running } = useAttendanceEngine()
+  // 出席タブが前面か（授業中の確認override判定に使う。前面なら据え置き＝確認を出さない）。
+  const { attendanceFocused } = useClassView()
   const [collections, setCollections] = useState<TimetableCollection[] | null>(null)
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
   const [events, setEvents] = useState<ClassEvent[]>([])
@@ -164,16 +168,34 @@ export default function TimetableScreen() {
   }
 
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
-  const startSync = useCallback((force: boolean) => {
+  // override=true は授業中確認ダイアログの「更新する」から呼ぶ（出席検知を一時停止して更新）。
+  const startSync = useCallback((force: boolean, override = false) => {
     if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
     // CLASS定時メンテナンス帯/オフラインは収集不能。手動(force=引っ張り)時はスキップ理由を短時間表示する。
-    // running(授業中)は Home と同様にガードする: 授業中は収集が背景の出席WebViewをアンマウントして
-    // プリエンプトする（classViewArbiter＋shouldRender=running&&!collectActive）ため、静的で実益の薄い
-    // 授業中の時間割手動更新は控える（'attending' を表示）。
-    const access = evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() })
-    const skip = syncSkipReason({ access, running })
-    if (skip) {
-      if (force) showSyncNotice(syncSkipMessage('class', skip))
+    // 授業中(running)は既定で控える（背景の出席WebViewをアンマウントしてプリエンプトするため）が、
+    // 出席タブ非表示なら確認のうえ override で更新できる（classViewArbiter が安全に直列化する）。
+    const decision = decideClassSync({
+      access: evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }),
+      running,
+      attendanceFocused,
+      override,
+    })
+    if (decision.kind === 'confirm') {
+      // 自動スロットル（非force）は据え置き（無音スキップ）。引っ張り更新のときだけ確認を出す。
+      if (force) {
+        Alert.alert(
+          '授業中です',
+          '出席の自動確認が一時的に止まりますが、時間割を更新しますか？',
+          [
+            { text: 'キャンセル', style: 'cancel' },
+            { text: '更新する', onPress: () => startSync(true, true) },
+          ],
+        )
+      }
+      return
+    }
+    if (decision.kind === 'blocked') {
+      if (force) showSyncNotice(syncSkipMessage('class', decision.reason))
       return
     }
     const begin = () => {
@@ -191,7 +213,7 @@ export default function TimetableScreen() {
         if (!syncingRef.current && isTimetableStale(at)) begin()
       })
       .catch(() => undefined)
-  }, [showSyncNotice, clearSyncNotice, running])
+  }, [showSyncNotice, clearSyncNotice, running, attendanceFocused])
 
   useEffect(() => {
     loadClassEvents().then(setEvents).catch(() => undefined)
