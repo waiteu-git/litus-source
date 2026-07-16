@@ -425,8 +425,8 @@ export default function SubjectDetailScreen() {
           <Text style={[styles.updatesHint, { color: ui.labelColor }]}>タップでLETUSコースを開く（開くと既読になります）</Text>
         </Pressable>
       ) : null,
-    // リンク: LETUS/シラバス/課題追加＋コース更新チェック（旧「更新状況」アコーディオンから導線を退避。
-    // UpdateCheck ルートへの唯一の導線なので消さない＝死に導線防止）。
+    // リンク: LETUS/シラバス/課題追加。コース更新チェックは時間割の引っ張り更新・同期に統合済み
+    // （専用画面 UpdateCheckScreen は v85 で廃止）。
     links: (
       <View>
         <SectionLabel>リンク</SectionLabel>
@@ -455,11 +455,6 @@ export default function SubjectDetailScreen() {
               initial: false,
             })
           }
-        />
-        <LinkAction
-          icon="refresh-outline"
-          title="コース更新をチェック"
-          onPress={() => navigation.navigate('UpdateCheck')}
         />
       </View>
     ),

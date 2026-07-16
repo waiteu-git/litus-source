@@ -21,6 +21,7 @@ import { isOnlineNow } from '../health/connectivity'
 import { syncSkipMessage, syncSkipReason } from '../health/syncSkipNotice'
 import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
+import CourseUpdateEngine from '../collect/CourseUpdateEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { NowPulse } from '../ui/NowPulse'
@@ -95,6 +96,10 @@ export default function TimetableScreen() {
   const [syncing, setSyncing] = useState(false)
   // 出欠統計の裏取得中フラグ。時間割収集の完了後にのみ true にする（CLASSセッションの同時アクセスを避けるため）。
   const [attendanceSyncing, setAttendanceSyncing] = useState(false)
+  // LETUSコース更新チェック中フラグ。引っ張り更新で起動（LETUS側＝CLASS収集と競合しないので並走）。
+  // 鮮度TTL内のコースはエンジン側でスキップされるため、引っ張るたびに全コースを巡回はしない。
+  const [courseChecking, setCourseChecking] = useState(false)
+  const courseCheckingRef = useRef(false)
   // 時間割収集の最終ヘルス（層1の正直表示バナー用）。
   const [health, setHealth] = useState<StoredHealth | null>(null)
   // 時間割の鮮度時刻（キャッシュ閲覧保証：常設ラベルでいつ取得した情報かを伝える）。
@@ -133,6 +138,30 @@ export default function TimetableScreen() {
   useEffect(() => {
     reloadAttendance()
   }, [])
+
+  // ●（コース更新ドット）は courseNews（LETUS新着累積・見るまで残る）駆動。科目詳細の「更新状況」
+  // カードの表示条件と一致し、コースを開いて markCourseSeen されれば●も消える。
+  // 旧実装の courseSnapshot 駆動は added が次回巡回で揮発し、科目詳細に表示のない removed でも
+  // 点灯して説明不能になるため廃止（v84）。
+  const reloadUpdatedDots = (isActive: () => boolean = () => true) => {
+    ;(async () => {
+      const map = await loadCourseMap()
+      const newsMap = await loadCourseNews()
+      const set = new Set<string>()
+      for (const [code, course] of Object.entries(map)) {
+        if ((newsMap[course.url]?.items.length ?? 0) > 0) set.add(code)
+      }
+      if (isActive()) setUpdatedCodes(set)
+    })().catch(() => undefined)
+  }
+
+  // 引っ張り更新時のLETUSコース更新チェック。CLASS側（時間割/出欠）の可否と独立に走らせる
+  // （CLASSメンテ帯や授業中でもLETUSは確認できる）。多重起動のみガード。
+  const startCourseCheck = () => {
+    if (courseCheckingRef.current) return
+    courseCheckingRef.current = true
+    setCourseChecking(true)
+  }
 
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
   const startSync = useCallback((force: boolean) => {
@@ -182,19 +211,7 @@ export default function TimetableScreen() {
       loadCollectionHealth().then((m) => { if (active) setHealth(m.timetable ?? null) }).catch(() => undefined)
       reloadAttendance()
       loadTimetableRefreshedAt().then((at) => { if (active) setRefreshedAt(at) }).catch(() => undefined)
-      ;(async () => {
-        // ●（コース更新ドット）は courseNews（LETUS新着累積・見るまで残る）駆動。科目詳細の「更新状況」
-        // カードの表示条件と一致し、コースを開いて markCourseSeen されれば●も消える。
-        // 旧実装の courseSnapshot 駆動は added が次回巡回で揮発し、科目詳細に表示のない removed でも
-        // 点灯して説明不能になるため廃止（v84）。
-        const map = await loadCourseMap()
-        const newsMap = await loadCourseNews()
-        const set = new Set<string>()
-        for (const [code, course] of Object.entries(map)) {
-          if ((newsMap[course.url]?.items.length ?? 0) > 0) set.add(code)
-        }
-        if (active) setUpdatedCodes(set)
-      })()
+      reloadUpdatedDots(() => active)
       ;(async () => {
         const digest = await loadBulletinDigest()
         const cols = await loadTimetable()
@@ -300,7 +317,16 @@ export default function TimetableScreen() {
   }
 
   const refresh = (
-    <RefreshControl refreshing={syncing} onRefresh={() => startSync(true)} tintColor={ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)} colors={[ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)]} />
+    <RefreshControl
+      refreshing={syncing}
+      onRefresh={() => {
+        // CLASS側（時間割→出欠）と、LETUS側（コース更新チェック）を並走で起動する。
+        startSync(true)
+        startCourseCheck()
+      }}
+      tintColor={ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)}
+      colors={[ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight)]}
+    />
   )
 
   const cellBg = ui.colors.gridCellEmptyBg
@@ -678,6 +704,15 @@ export default function TimetableScreen() {
             reloadAttendance()
             // マウント済みの科目詳細にも保存結果を反映（版数bump→出欠読込effectが再走）。
             bumpAttendance()
+          }}
+        />
+      ) : null}
+      {courseChecking ? (
+        <CourseUpdateEngine
+          onFinished={() => {
+            courseCheckingRef.current = false
+            setCourseChecking(false)
+            reloadUpdatedDots() // 新着があれば●を即時反映
           }}
         />
       ) : null}

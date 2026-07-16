@@ -2,7 +2,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import TimetableScreen from '../screens/TimetableScreen'
 import CollectTimetableScreen from '../screens/CollectTimetableScreen'
 import CollectCoursesScreen from '../screens/CollectCoursesScreen'
-import UpdateCheckScreen from '../screens/UpdateCheckScreen'
 import LetusCoursesScreen from '../screens/LetusCoursesScreen'
 import SubjectDetailScreen from '../screens/SubjectDetailScreen'
 import ClassEventFormScreen from '../screens/ClassEventFormScreen'
@@ -23,7 +22,6 @@ export default function TimetableStack() {
       <Stack.Screen name="TimetableHome" component={TimetableScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Collect" component={CollectTimetableScreen} options={{ title: '時間割を収集' }} />
       <Stack.Screen name="CollectCourses" component={CollectCoursesScreen} options={{ title: 'コース収集' }} />
-      <Stack.Screen name="UpdateCheck" component={UpdateCheckScreen} options={{ title: '更新チェック' }} />
       {/* LETUS自前UI（Turn4で確定した4b）。ScreenHeaderを自前描画するためheaderShown:false。 */}
       <Stack.Screen name="LetusCourses" component={LetusCoursesScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SubjectDetail" component={SubjectDetailScreen} options={{ title: '科目' }} />

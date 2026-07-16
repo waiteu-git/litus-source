@@ -29,7 +29,7 @@ describe('normalizeSubjectLayout', () => {
     expect(out.find((s) => s.key === 'attendance')!.enabled).toBe(false)
   })
 
-  it('links(fixedOn)はenabled=falseで保存されていても強制true（UpdateCheck等の導線を消さない）', () => {
+  it('links(fixedOn)はenabled=falseで保存されていても強制true（シラバス等の導線を消さない）', () => {
     const out = normalizeSubjectLayout([{ key: 'links', enabled: false }])
     expect(out.find((s) => s.key === 'links')!.enabled).toBe(true)
   })

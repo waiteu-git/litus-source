@@ -37,6 +37,8 @@ const styles = StyleSheet.create({
   liveBase: {
     flexDirection: 'row',
     alignItems: 'center',
+    // 親がalignItems:stretchの縦積み（時間割リストのclsMain等）でも行幅いっぱいに伸びず内容幅で収まる。
+    alignSelf: 'flex-start',
     gap: 5,
     backgroundColor: COLORS.cta,
     borderRadius: RADIUS.pill,
