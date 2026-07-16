@@ -34,7 +34,7 @@ import { canSubmitReaction } from './reactionPaper'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
-import { isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
+import { canRecordAttendance, isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 import { shouldAutoRetrySubmit, toSubmitDiag } from './submitDiag'
 import { addSubmitDiag } from '../storage/submitDiagStore'
 import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
@@ -697,15 +697,21 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       dispatch({ kind: 'submitResult', result })
       if (result.ok) {
         const d = new Date()
-        const rec = mergeAttendedRecord(attendedRecordRef.current, {
-          date: todayKey(d),
-          courseName: state.reception?.courseName ?? '',
-          confirmWindow: state.reception?.confirmWindow ?? null,
-          code: lastCodeRef.current,
-        })
-        setAttended(rec)
-        saveAttendedRecord(rec).catch(() => undefined)
-        notifyWidgetDataChanged()
+        const courseName = state.reception?.courseName ?? ''
+        const confirmWindow = state.reception?.confirmWindow ?? null
+        // 受付の文脈（科目名・受付時間）がどちらも無いときは記録しない。記録すると当日ずっと
+        // 「（科目名不明）出席済み」が居座り、後の本物の授業でコード入力が出なくなる（実機事象）。
+        if (canRecordAttendance(courseName, confirmWindow)) {
+          const rec = mergeAttendedRecord(attendedRecordRef.current, {
+            date: todayKey(d),
+            courseName,
+            confirmWindow,
+            code: lastCodeRef.current,
+          })
+          setAttended(rec)
+          saveAttendedRecord(rec).catch(() => undefined)
+          notifyWidgetDataChanged()
+        }
       }
       // 送信後は応答テキスト解析に頼らず、CLASSの確定マーカー(.attendSuc)で「出席済み」を確認する。
       // 出席ページを取り直し、出席済みなら attended に遷移（＝リング→出席済み表示）。まだなら受付フォームに戻る。

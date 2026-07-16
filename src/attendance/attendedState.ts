@@ -44,6 +44,18 @@ export function mergeAttendedRecord(
   return next
 }
 
+/**
+ * 出席記録を残してよいか（純粋）。科目名も受付時間も無い＝**何に対する出席か特定できない**ので記録しない。
+ *
+ * 記録してしまうと `isAttendedNow` が `ends.length === 0` の分岐で **その日ずっと true** を返し、
+ * 「（科目名不明）出席済み」が居座って **後の本物の授業の出席フロー（コード入力）を塞ぐ**。
+ * 実機で発生（2026-07-17・授業のない時間帯に送信 → 受付が無いため courseName='' / confirmWindow=null
+ * で保存され、その日ずっと出席済み表示になった）。
+ */
+export function canRecordAttendance(courseName: string, confirmWindow: string | null): boolean {
+  return !!courseName.trim() || !!confirmWindow
+}
+
 export function isAttendedNow(
   rec: AttendedRecord | null,
   now: Date,
