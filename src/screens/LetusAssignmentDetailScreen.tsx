@@ -11,6 +11,7 @@ import { COLORS, DARK } from '../theme'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments, mutateAssignments, removeAssignment } from '../storage/assignmentsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
+import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
 import { loadLetusBody } from '../storage/letusBodyStore'
@@ -130,6 +131,7 @@ export default function LetusAssignmentDetailScreen() {
     setAssignment(m[assignment.url] ?? null)
     bump()
     refreshAllNotifications().catch(() => undefined)
+    notifyWidgetDataChanged()
   }
 
   function openDeadlineEdit() {
@@ -164,6 +166,7 @@ export default function LetusAssignmentDetailScreen() {
     setEditingDeadline(false)
     bump()
     refreshAllNotifications().catch(() => undefined)
+    notifyWidgetDataChanged()
   }
 
   function confirmDelete() {
@@ -177,6 +180,7 @@ export default function LetusAssignmentDetailScreen() {
           await removeAssignment(assignment.url)
           bump()
           refreshAllNotifications().catch(() => undefined)
+          notifyWidgetDataChanged()
           navigation.goBack()
         },
       },
