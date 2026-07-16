@@ -11,8 +11,8 @@ export type SubjectSectionPref = SectionPref<SubjectSectionKey>
 /** 既定順（ユーザー確定 2026-07-16）: 各回の予定→更新状況→リンク→出席→実施パターン。 */
 export const SUBJECT_SECTION_ORDER: SubjectSectionKey[] = ['events', 'updates', 'links', 'attendance', 'pattern']
 
-/** セクション表示名と、非表示不可フラグ。links は LETUS/シラバス/課題追加/更新チェック（UpdateCheck 画面への
- * アプリ内唯一の導線）の動線なので常時表示（ホームの entries と同じ理由・死に導線防止）。 */
+/** セクション表示名と、非表示不可フラグ。links は LETUS/シラバス（アプリ内唯一の導線）/課題追加の
+ * 動線なので常時表示（ホームの entries と同じ理由・死に導線防止）。 */
 export const SUBJECT_SECTION_META: Record<SubjectSectionKey, SectionMeta> = {
   events: { label: '各回の予定', fixedOn: false },
   updates: { label: '更新状況', fixedOn: false },
