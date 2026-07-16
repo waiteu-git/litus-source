@@ -770,6 +770,16 @@ export function isPdfLikeUrl(url: string): boolean {
  */
 export const INJECT_COURSE_ADD_BUTTONS_JS = `(function(){
   try {
+    // 追加が確定したときにRN側から呼ぶ反映ヘルパー（タップ時の楽観反映はしない）。
+    window.__litusMarkAdded = function(url){
+      var btns = document.querySelectorAll('button[data-litus-add-url]');
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].getAttribute('data-litus-add-url') !== url) continue;
+        btns[i].textContent = '追加済み';
+        btns[i].disabled = true;
+        btns[i].style.color='#8a8a8a'; btns[i].style.borderColor='#d0d0d0'; btns[i].style.background='#f2f2f2';
+      }
+    };
     if (window.__litusCourseBtns) return true;
     window.__litusCourseBtns = true;
     var courseName = '';
@@ -785,19 +795,20 @@ export const INJECT_COURSE_ADD_BUTTONS_JS = `(function(){
       var b = document.createElement('button');
       b.textContent = '＋追加';
       b.setAttribute('type','button');
+      b.setAttribute('data-litus-add-url', a.href);
       // 行の右端にfloatで寄せ、リンク本体のタップ領域と物理的に分離する（誤タップでリンクが開くのを防ぐ）。
       // タップを確実にボタンで受けるため z-index を上げ、伝播も止める。
       b.style.cssText = 'float:right;margin:2px 0 6px 10px;padding:7px 14px;font-size:13px;line-height:1.4;border:1px solid #0aa579;color:#0aa579;background:#eafaf5;border-radius:14px;cursor:pointer;position:relative;z-index:20;';
       function onAdd(ev){
         ev.preventDefault(); ev.stopPropagation();
         if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
-        b.textContent = '追加済み'; b.style.color='#8a8a8a'; b.style.borderColor='#d0d0d0'; b.style.background='#f2f2f2';
         var mod = (href.match(/\\/mod\\/([a-z]+)\\//) || [])[1] || '';
         window.ReactNativeWebView.postMessage(JSON.stringify({ type:'addActivity', url: a.href, title: name, mod: mod, courseName: courseName }));
       }
-      // touchstart/clickの両方を捕捉相で受け、アンカーへ届く前に握りつぶす。
+      // clickのみ捕捉相で受ける（アンカーへ届く前に握りつぶす）。
+      // touchend は指がスクロール移動した後でも発火するため登録しない
+      // （ボタン上からスクロールを始めただけで追加が走る誤タップの原因だった）。
       b.addEventListener('click', onAdd, true);
-      b.addEventListener('touchend', onAdd, true);
       // 行(li.activity)の先頭に入れると float:right で右端に回り、左のリンクと重ならない。
       var host = (a.closest && (a.closest('li.activity') || a.closest('.activityinstance'))) || a.parentNode;
       if (host) host.insertBefore(b, host.firstChild); else a.parentNode.appendChild(b);
@@ -810,6 +821,18 @@ export const INJECT_COURSE_ADD_BUTTONS_JS = `(function(){
   }
   true;
 })();`
+
+/**
+ * 追加が確定したアクティビティの「＋追加」ボタンを「追加済み」表示へ変えるJSを返す。
+ * URLは JSON.stringify で埋め込み（引用符等で構文が壊れないように）。
+ * ヘルパー未定義（コースページ以外）なら何もしない。
+ */
+export function markActivityAddedJs(url: string): string {
+  return `(function(){
+  try { if (window.__litusMarkAdded) window.__litusMarkAdded(${JSON.stringify(url)}); } catch (e) {}
+})();
+true;`
+}
 
 /** コースページ本文HTMLを抽出して postMessage（抽出のみ）。 */
 export const COLLECT_COURSE_PAGE_JS = `(function(){

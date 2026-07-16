@@ -11,15 +11,18 @@ import DeadlineFields, { type DeadlineValue } from './DeadlineFields'
  * +追加で収集対象外URL(PDF resource等)を選んだときの締切入力ボトムシート。
  * 「保存して追加」でDeadlineFieldsの値をISOへ変換して渡す（形式不正はシート内エラーで閉じない）。
  * 「締切なしで追加」はdeadline=nullで即確定する。
+ * 背景タップ・Android戻る・「キャンセル」はすべて onCancel＝何も追加せず閉じる
+ * （旧実装は背景タップ/戻るが「締切なしで追加」に落ちて、開いたら必ず追加されてしまった）。
  */
 export default function AddActivityDeadlineSheet({
-  visible, presetTitle, presetCourseName, onSave, onSkip,
+  visible, presetTitle, presetCourseName, onSave, onSkip, onCancel,
 }: {
   visible: boolean
   presetTitle: string
   presetCourseName: string
   onSave: (deadline: string | null) => void
   onSkip: () => void
+  onCancel: () => void
 }) {
   const ui = useUi()
   const dark = ui.dark
@@ -40,8 +43,8 @@ export default function AddActivityDeadlineSheet({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onSkip}>
-      <Pressable style={styles.backdrop} onPress={onSkip} />
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
+      <Pressable style={styles.backdrop} onPress={onCancel} />
       <View style={[styles.sheet, dark && { backgroundColor: DARK.card }, { marginBottom: kbHeight }]}>
         <Text style={[styles.course, dark && { color: COLORS.emeraldLight }]}>{presetCourseName || '追加'}</Text>
         <Text style={[styles.title, dark && { color: DARK.heading }]} numberOfLines={2}>{presetTitle || '（無題）'}</Text>
@@ -56,9 +59,14 @@ export default function AddActivityDeadlineSheet({
         <Pressable style={styles.saveBtn} onPress={save}>
           <Text style={styles.saveText}>保存して追加</Text>
         </Pressable>
-        <Pressable style={styles.skipBtn} onPress={onSkip}>
-          <Text style={[styles.skipText, dark && { color: DARK.label }]}>締切なしで追加</Text>
-        </Pressable>
+        <View style={styles.subRow}>
+          <Pressable style={styles.skipBtn} onPress={onCancel}>
+            <Text style={[styles.skipText, dark && { color: DARK.label }]}>キャンセル</Text>
+          </Pressable>
+          <Pressable style={styles.skipBtn} onPress={onSkip}>
+            <Text style={[styles.skipText, dark && { color: DARK.label }]}>締切なしで追加</Text>
+          </Pressable>
+        </View>
       </View>
     </Modal>
   )
@@ -73,6 +81,7 @@ const styles = StyleSheet.create({
   error: { color: '#c0392b', fontSize: 13 },
   saveBtn: { backgroundColor: COLORS.cta, borderRadius: 14, height: 50, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  skipBtn: { height: 44, alignItems: 'center', justifyContent: 'center' },
+  subRow: { flexDirection: 'row' },
+  skipBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
   skipText: { color: '#5a6b64', fontSize: 14, fontWeight: '600' },
 })

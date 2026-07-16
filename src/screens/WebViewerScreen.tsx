@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { WebView } from 'react-native-webview'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
@@ -12,7 +12,9 @@ import {
   isCoursePageUrl,
   isDownloadableFileUrl,
   isPdfLikeUrl,
+  markActivityAddedJs,
 } from '../collect/injectedScripts'
+import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
 import { loadAssignments, mutateAssignments, upsertAssignment } from '../storage/assignmentsStore'
@@ -71,7 +73,10 @@ export default function WebViewerScreen() {
       const merged = await mutateAssignments((existing) => upsertAssignments(existing, [a], new Date()))
       setTrackedUrls(Object.keys(merged))
       await refreshAllNotifications()
+      notifyWidgetDataChanged()
       bump()
+      // 追加が確定してからコースページの「＋追加」ボタンを「追加済み」へ（楽観反映はしない）。
+      webviewRef.current?.injectJavaScript(markActivityAddedJs(a.url))
       flash(okMsg)
     } catch {
       flash('追加に失敗しました')
@@ -109,19 +114,41 @@ export default function WebViewerScreen() {
       const activityUrl = p.url
       const activityTitle = p.title || '（無題）'
       const activityCourse = p.courseName ?? title ?? ''
+      if (trackedUrls.includes(activityUrl)) {
+        // 追跡済み: 何も追加せず表示だけ揃える。
+        webviewRef.current?.injectJavaScript(markActivityAddedJs(activityUrl))
+        flash('すでに追加されています')
+        return
+      }
       if (isCollectedAssignmentUrl(activityUrl)) {
-        // 収集対象: 従来どおり即追加（締切等は次回収集で補完される）。
-        await addOne(
+        // 収集対象: 確認してから追加（締切等は次回収集で補完される）。
+        // 旧実装の無確認即追加は、誤タップ時に取り消す手段がなかった。
+        Alert.alert(`「${activityTitle}」を追加しますか？`, activityCourse || undefined, [
+          { text: 'キャンセル', style: 'cancel' },
           {
-            url: activityUrl, courseCode: null, courseName: activityCourse,
-            title: activityTitle, deadline: null, deadlineText: '',
-            submissionStatus: 'unknown', lifecycleStatus: 'active',
+            text: '追加',
+            onPress: () => {
+              void addOne(
+                {
+                  url: activityUrl, courseCode: null, courseName: activityCourse,
+                  title: activityTitle, deadline: null, deadlineText: '',
+                  submissionStatus: 'unknown', lifecycleStatus: 'active',
+                },
+                `「${p.title || '項目'}」を追加しました`,
+              )
+            },
           },
-          `「${p.title || '項目'}」を追加しました`,
-        )
+        ])
       } else {
         // 収集対象外(PDF resource等): 締切ボトムシートを開いてユーザー所有で追加。
         setPending({ url: activityUrl, title: activityTitle, courseName: activityCourse })
+      }
+      return
+    }
+    if (p.type === 'courseButtons') {
+      // ボタン注入完了: 追跡済みURLの「＋追加」を「追加済み」表示に復元する（再読込で消えないように）。
+      if (trackedUrls.length > 0) {
+        webviewRef.current?.injectJavaScript(trackedUrls.map((u) => markActivityAddedJs(u)).join('\n'))
       }
       return
     }
@@ -131,12 +158,15 @@ export default function WebViewerScreen() {
   // pending を確定保存するハンドラ（シートの保存/スキップから呼ばれる）。
   async function commitPending(deadline: string | null) {
     if (!pending) return
+    const committed = pending
     try {
-      await upsertAssignment(makeUserManagedActivity({ ...pending, deadline }, new Date().toISOString()))
+      await upsertAssignment(makeUserManagedActivity({ ...committed, deadline }, new Date().toISOString()))
       setTrackedUrls(await loadAssignments().then((m) => Object.keys(m)))
       await refreshAllNotifications()
+      notifyWidgetDataChanged()
       bump()
-      flash(`「${pending.title}」を追加しました`)
+      webviewRef.current?.injectJavaScript(markActivityAddedJs(committed.url))
+      flash(`「${committed.title}」を追加しました`)
     } catch {
       flash('追加に失敗しました')
     } finally {
@@ -192,6 +222,7 @@ export default function WebViewerScreen() {
         presetCourseName={pending?.courseName ?? ''}
         onSave={commitPending}
         onSkip={() => commitPending(null)}
+        onCancel={() => setPending(null)}
       />
     </View>
   )
