@@ -38,7 +38,6 @@ import { loadAttendanceOverrides, saveAttendanceOverride } from '../storage/atte
 import { computeAttendanceRisk, type AttendanceRisk } from '../attendance/attendanceRisk'
 import { useAttendanceVersion } from '../attendance/attendanceVersion'
 import { resolveTermDates, termWeeksFromSessions, deriveExcludedDates } from '../attendance/attendanceTerm'
-import { loadAttendanceDiag } from '../storage/attendanceDiagStore'
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
@@ -128,8 +127,6 @@ export default function SubjectDetailScreen() {
   const [attCollected, setAttCollected] = useState(true)
   // 出欠収集の完了通知（この画面を開いたまま同期が完走したら再読込するため版数を購読）。
   const { version: attVersion } = useAttendanceVersion()
-  // 【一時デバッグ】出欠収集の診断1行。実機で収集がどこで落ちるかを画面で読む（原因特定後に撤去）。
-  const [attDiag, setAttDiag] = useState<string | null>(null)
   const [unread, setUnread] = useState(0)
   // 出欠の各回日付を実日付へ解決（隔週の非実施週除外・実施パターンの週リスト生成に使う）。
   const resolvedSessions = useMemo(
@@ -164,7 +161,6 @@ export default function SubjectDetailScreen() {
       setAttStats(found)
       const ov = await loadAttendanceOverrides()
       setAttTotal(ov[courseCode]?.total ?? null)
-      setAttDiag(await loadAttendanceDiag())
     })().catch(() => undefined)
   }, [courseCode, attVersion])
 
@@ -370,7 +366,6 @@ export default function SubjectDetailScreen() {
             <Text style={[styles.attSub, { color: ui.labelColor }]}>
               出欠データはまだ取得できていません。時間割タブで下に引いて同期すると、CLASSの「学生出欠状況確認」から自動で取得します。
             </Text>
-            {attDiag ? <Text style={[styles.attSub, { color: ui.labelColor, marginTop: 8, opacity: 0.8 }]} selectable>診断: {attDiag}</Text> : null}
           </Accordion>
         ) : (
           // 収集済みだが当該科目に出欠データが無い（未記録／出席管理対象外／集中講義等でCLASS出欠に載らない）。
@@ -380,7 +375,6 @@ export default function SubjectDetailScreen() {
             <Text style={[styles.attSub, { color: ui.labelColor }]}>
               この科目はまだCLASS出欠の記録がありません。担当教員がCLASSで出欠を取らない科目や、学期序盤で記録がない場合は数字が表示されません。
             </Text>
-            {attDiag ? <Text style={[styles.attSub, { color: ui.labelColor, marginTop: 8, opacity: 0.8 }]} selectable>診断: {attDiag}</Text> : null}
           </Accordion>
         )}
 
