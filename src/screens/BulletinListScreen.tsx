@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Text } from '../ui/Text'
@@ -35,21 +35,25 @@ export default function BulletinListScreen() {
   const [tab, setTab] = useState<Tab>('unread')
   const [health, setHealth] = useState<StoredHealth | null>(null)
   const [refreshedAt, setRefreshedAt] = useState(0)
-  // 一覧から既読化中の掲示id（CLASS側既読化のヘッドレス実行中）。複数タップはCLASS収集リースで直列化される。
-  const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
-
   // 一覧の「既読にする」: 詳細を開かず openDetail アクションでCLASS側を既読化する。
   // ローカルのみの既読は次回同期で復活する（mergeBulletinItemsはincomingのunreadが権威）ため必ずCLASS側を通す。
-  const markRead = (id: string) => setBusyIds((prev) => new Set(prev).add(id))
-  const onMarkedRead = useCallback((id: string) => {
-    setBusyIds((prev) => {
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
+  // 押した順のキューで先頭1件だけエンジンをマウントする。全件同時マウントだと ClassHeadlessCollector の
+  // リース待ちガード（40秒）が全エンジンで同時に刻み始め、FIFO直列化で4〜5件目以降が自分の番の前に
+  // タイムアウトして静かに空振りするため（連続タップ＝この機能の主用途で破綻する）。
+  const [readQueue, setReadQueue] = useState<string[]>([])
+  const markRead = (id: string) => setReadQueue((prev) => (prev.includes(id) ? prev : [...prev, id]))
+  const onMarkedRead = useCallback(() => {
+    setReadQueue((prev) => prev.slice(1))
     // ストアを権威に再読込。成功時は unread=false で未読タブから消え、失敗/CLASS帯時は未読のまま残る（正直な反映）。
     loadBulletinDigest().then(setItems).catch(() => undefined)
   }, [])
+
+  const headId = readQueue[0] ?? null
+  const headItem = headId ? (items.find((i) => i.id === headId) ?? null) : null
+  // キュー先頭がストアから消えていた場合（同期での整理等）はエンジンが起きないため、ここで次へ送る。
+  useEffect(() => {
+    if (headId && !headItem) setReadQueue((prev) => prev.slice(1))
+  }, [headId, headItem])
 
   useFocusEffect(
     useCallback(() => {
@@ -128,7 +132,7 @@ export default function BulletinListScreen() {
                 <View style={styles.headRight}>
                   {b.flagged ? <Text style={styles.flag}>🚩</Text> : null}
                   {b.unread ? (
-                    busyIds.has(b.id) ? (
+                    readQueue.includes(b.id) ? (
                       <View style={styles.readBtn}>
                         <ActivityIndicator size="small" color={ui.accent} />
                       </View>
@@ -153,19 +157,16 @@ export default function BulletinListScreen() {
           ))
         )}
       </ScrollView>
-      {[...busyIds].map((id) => {
-        const b = items.find((i) => i.id === id)
-        if (!b) return null
-        return (
-          <BulletinActionEngine
-            key={id}
-            action="openDetail"
-            title={b.title}
-            date={b.date}
-            onFinished={() => onMarkedRead(id)}
-          />
-        )
-      })}
+      {headItem ? (
+        <BulletinActionEngine
+          key={headItem.id}
+          action="openDetail"
+          title={headItem.title}
+          // v1移行データは date が空のことがあるため id（"日付::件名"）から補完（BulletinDetailScreenと同じ回避）。
+          date={headItem.date || headItem.id.split('::')[0]}
+          onFinished={onMarkedRead}
+        />
+      ) : null}
     </ScreenBg>
   )
 }

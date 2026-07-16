@@ -1,10 +1,10 @@
 // app/src/screens/SubjectDetailScreen.tsx
-import { cloneElement, Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { cloneElement, Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
@@ -206,17 +206,28 @@ export default function SubjectDetailScreen() {
     saveAttendanceOverride(courseCode, { total: next }).catch(() => undefined)
   }
 
-  useEffect(() => {
-    ;(async () => {
-      const map = await loadCourseMap()
-      const course = map[courseCode] ?? null
-      setLetusUrl(course?.url ?? null)
-      if (course) {
-        const newsMap = await loadCourseNews()
-        setNews(newsMap[course.url]?.items ?? [])
+  // courseNews は他画面（ホーム/LETUSコース一覧）の markCourseSeen や背景同期でも変化するため、
+  // マウント時1回でなくフォーカス毎に再読込する（この画面がスタックに残ったまま古い件数を出さない）。
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      ;(async () => {
+        const map = await loadCourseMap()
+        const course = map[courseCode] ?? null
+        if (!active) return
+        setLetusUrl(course?.url ?? null)
+        if (course) {
+          const newsMap = await loadCourseNews()
+          if (active) setNews(newsMap[course.url]?.items ?? [])
+        } else {
+          setNews([])
+        }
+      })().catch(() => undefined)
+      return () => {
+        active = false
       }
-    })()
-  }, [courseCode])
+    }, [courseCode]),
+  )
 
   // コースを開いた＝新着を確認したとみなし既読化（ホーム/LETUSコース画面と同じ扱い）。
   // これで時間割セルの●・LETUSコース画面の新着カウント・この画面の更新状況セクションも消える。

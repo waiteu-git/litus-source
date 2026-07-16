@@ -18,15 +18,20 @@ describe('normalizeSubjectLayout', () => {
 
   it('保存順を維持し、不明キー/重複を除去、欠けた既知キーをアンカー位置へ挿入', () => {
     const raw = [
-      { key: 'links', enabled: false },
+      { key: 'attendance', enabled: false },
       { key: 'events', enabled: true },
       { key: 'zzz', enabled: true }, // 不明キー
-      { key: 'links', enabled: true }, // 重複
+      { key: 'attendance', enabled: true }, // 重複
     ]
     const out = normalizeSubjectLayout(raw)
-    // 保存は [links, events]。欠けキー(updates/attendance/pattern)は既定順の前後関係を尊重して挿入される。
-    expect(out.map((s) => s.key)).toEqual(['links', 'events', 'updates', 'attendance', 'pattern'])
-    expect(out.find((s) => s.key === 'links')!.enabled).toBe(false)
+    // 保存は [attendance, events]。欠けキー(updates/links/pattern)は既定順の前後関係を尊重して挿入される。
+    expect(out.map((s) => s.key)).toEqual(['attendance', 'events', 'updates', 'links', 'pattern'])
+    expect(out.find((s) => s.key === 'attendance')!.enabled).toBe(false)
+  })
+
+  it('links(fixedOn)はenabled=falseで保存されていても強制true（UpdateCheck等の導線を消さない）', () => {
+    const out = normalizeSubjectLayout([{ key: 'links', enabled: false }])
+    expect(out.find((s) => s.key === 'links')!.enabled).toBe(true)
   })
 })
 

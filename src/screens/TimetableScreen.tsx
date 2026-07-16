@@ -10,7 +10,7 @@ import type { TimetableCollection } from '../collect/timetableMessage'
 import type { DayOfWeek } from '../parsers/timetable'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
-import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
+import { loadCourseNews } from '../storage/courseNewsStore'
 import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMetaStore'
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
@@ -183,12 +183,15 @@ export default function TimetableScreen() {
       reloadAttendance()
       loadTimetableRefreshedAt().then((at) => { if (active) setRefreshedAt(at) }).catch(() => undefined)
       ;(async () => {
+        // ●（コース更新ドット）は courseNews（LETUS新着累積・見るまで残る）駆動。科目詳細の「更新状況」
+        // カードの表示条件と一致し、コースを開いて markCourseSeen されれば●も消える。
+        // 旧実装の courseSnapshot 駆動は added が次回巡回で揮発し、科目詳細に表示のない removed でも
+        // 点灯して説明不能になるため廃止（v84）。
         const map = await loadCourseMap()
-        const snaps = await loadCourseSnapshots()
+        const newsMap = await loadCourseNews()
         const set = new Set<string>()
         for (const [code, course] of Object.entries(map)) {
-          const snap = snaps[course.url]
-          if (snap && snap.added.length + snap.removed.length > 0) set.add(code)
+          if ((newsMap[course.url]?.items.length ?? 0) > 0) set.add(code)
         }
         if (active) setUpdatedCodes(set)
       })()
