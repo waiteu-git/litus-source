@@ -20,6 +20,8 @@ export type Assignment = {
   lastCheckedAt: string
   /** 手動追加した課題（LETUS由来でない）。自動収集はこのキーに触れず、編集・削除ができる。 */
   manual?: boolean
+  /** 締切未設定の収集課題にユーザーが手動で締切を入れた印。LETUSが締切を返さない限り再収集で温存する。 */
+  deadlineUserSet?: boolean
 }
 
 export type AssignmentMap = Record<string, Assignment>
@@ -71,6 +73,7 @@ export function deserializeAssignments(raw: string | null): AssignmentMap {
       lastCheckedAt: e.lastCheckedAt,
     }
     if (e.manual === true) out[k].manual = true
+    if (e.deadlineUserSet === true) out[k].deadlineUserSet = true
   }
   return out
 }

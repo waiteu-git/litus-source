@@ -1,35 +1,34 @@
 import { useMemo, useRef, useState } from 'react'
 import { Animated, PanResponder, Pressable, StyleSheet, View, type AccessibilityActionEvent } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Text } from '../ui/Text'
-import { useUi } from '../ui/screen'
-import { DUR, EASE } from '../ui/motion'
-import { SHADOW } from '../ui/scale'
-import {
-  HOME_SECTION_META,
-  moveSection,
-  reorderHomeLayout,
-  toggleSection,
-  type HomeSectionPref,
-} from './homeSections'
+import { Text } from './Text'
+import { useUi } from './screen'
+import { DUR, EASE } from './motion'
+import { SHADOW } from './scale'
+import type { SectionLayoutOps, SectionMeta, SectionPref } from './sectionLayout'
 
 /** 行の固定高さ（スロットのピッチ）。ドラッグ距離→挿入 index の換算に使う。 */
 const ROW_H = 48
 
 /**
- * 設定「ホームの並び」のドラッグ並び替え UI。各行のグリップ（≡）から縦ドラッグして順序を変更する。
+ * セクション並び替えのドラッグ UI（ホーム/科目詳細で共用の汎用版・旧 HomeLayoutReorder）。
+ * 各行のグリップ（≡）から縦ドラッグして順序を変更する。
  * 機構は素の PanResponder + Animated（新規依存なし・Carousel と同じ手法）。掴んだ行は指に追従し、
  * 他行は行高ぶんずれて挿入位置を示す。離すと確定スロットへ吸い込んでから onChange で確定する。
- * スクリーンリーダー向けにはグリップの accessibilityActions（上へ/下へ）で moveSection を提供する。
+ * スクリーンリーダー向けにはグリップの accessibilityActions（上へ/下へ）で ops.move を提供する。
  * ドラッグ中は onDragActive(true) を通知し、親の ScrollView スクロールを止めてもらう。
  */
-export default function HomeLayoutReorder({
+export default function SectionLayoutReorder<K extends string>({
   layout,
+  meta,
+  ops,
   onChange,
   onDragActive,
 }: {
-  layout: HomeSectionPref[]
-  onChange: (next: HomeSectionPref[]) => void
+  layout: SectionPref<K>[]
+  meta: Record<K, SectionMeta>
+  ops: Pick<SectionLayoutOps<K>, 'move' | 'reorder' | 'toggle'>
+  onChange: (next: SectionPref<K>[]) => void
   onDragActive: (active: boolean) => void
 }) {
   const ui = useUi()
@@ -66,11 +65,11 @@ export default function HomeLayoutReorder({
       duration: DUR.micro,
       easing: EASE.enter,
       // 指追従は per-frame setValue で駆動するため、同じ値に native/JS ドライバを混在させない
-      // （7 行の設定リストで性能は無関係・混在起因の描画不整合を確実に避ける）。
+      // （数行の設定リストで性能は無関係・混在起因の描画不整合を確実に避ける）。
       useNativeDriver: false,
     }).start(() => {
       for (let i = 0; i < shifts.length; i++) shifts[i].setValue(0)
-      if (to !== from) onChangeRef.current(reorderHomeLayout(layoutRef.current, from, to))
+      if (to !== from) onChangeRef.current(ops.reorder(layoutRef.current, from, to))
       dragIndexRef.current = null
       setDragging(null)
       onDragActiveRef.current(false)
@@ -126,10 +125,10 @@ export default function HomeLayoutReorder({
     [layout.length],
   )
 
-  function onGripA11yAction(key: HomeSectionPref['key'], e: AccessibilityActionEvent) {
+  function onGripA11yAction(key: K, e: AccessibilityActionEvent) {
     const name = e.nativeEvent.actionName
-    if (name === 'moveUp') onChange(moveSection(layoutRef.current, key, -1))
-    else if (name === 'moveDown') onChange(moveSection(layoutRef.current, key, 1))
+    if (name === 'moveUp') onChange(ops.move(layoutRef.current, key, -1))
+    else if (name === 'moveDown') onChange(ops.move(layoutRef.current, key, 1))
   }
 
   return (
@@ -138,7 +137,7 @@ export default function HomeLayoutReorder({
         グリップ（≡）を押しながら上下にドラッグして順番を変えられます。目のアイコンで表示/非表示を切り替えます。
       </Text>
       {layout.map((s, i) => {
-        const meta = HOME_SECTION_META[s.key]
+        const m = meta[s.key]
         const isDragged = dragging === i
         return (
           <Animated.View
@@ -163,7 +162,7 @@ export default function HomeLayoutReorder({
               {...responders[i].panHandlers}
               style={styles.grip}
               accessibilityRole="adjustable"
-              accessibilityLabel={`${meta.label}の並び順`}
+              accessibilityLabel={`${m.label}の並び順`}
               accessibilityHint="ダブルタップして上下のアクションで移動できます"
               accessibilityActions={[
                 { name: 'moveUp', label: '上へ' },
@@ -174,19 +173,19 @@ export default function HomeLayoutReorder({
               <Ionicons name="reorder-two-outline" size={22} color={ui.chevron} />
             </View>
             <Text style={[styles.label, { color: s.enabled ? ui.valueColor : ui.subMuted }]} numberOfLines={1}>
-              {meta.label}
+              {m.label}
             </Text>
-            {meta.fixedOn ? (
+            {m.fixedOn ? (
               <View style={styles.tglBtn}>
                 <Ionicons name="lock-closed" size={15} color={ui.chevron} />
               </View>
             ) : (
               <Pressable
-                onPress={() => onChange(toggleSection(layout, s.key))}
+                onPress={() => onChange(ops.toggle(layout, s.key))}
                 hitSlop={6}
                 style={styles.tglBtn}
                 accessibilityRole="button"
-                accessibilityLabel={`${meta.label}を${s.enabled ? '非表示' : '表示'}`}
+                accessibilityLabel={`${m.label}を${s.enabled ? '非表示' : '表示'}`}
               >
                 <Ionicons
                   name={s.enabled ? 'eye-outline' : 'eye-off-outline'}

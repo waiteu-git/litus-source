@@ -148,7 +148,16 @@ export default function LetusAssignmentDetailScreen() {
     }
     const m = await mutateAssignments((map) =>
       map[assignment.url]
-        ? { ...map, [assignment.url]: { ...map[assignment.url], deadline: iso, deadlineText: formatDeadlineText(iso) } }
+        ? {
+            ...map,
+            [assignment.url]: {
+              ...map[assignment.url],
+              deadline: iso,
+              deadlineText: formatDeadlineText(iso),
+              // 締切を入れたら収集の上書きから守る印を付け、消したら（締切なし）印を落とす。
+              deadlineUserSet: iso !== null,
+            },
+          }
         : map,
     )
     setAssignment(m[assignment.url] ?? null)
@@ -186,6 +195,9 @@ export default function LetusAssignmentDetailScreen() {
   }
 
   const submitted = assignment.submissionStatus === 'submitted' || assignment.submissionStatus === 'completed'
+  // 締切編集の可否: ユーザー所有 or 収集済みでも締切未設定（要望「締切未設定のものは自分で編集」）or 既にユーザーが締切を入れた項目。
+  // 収集済みで LETUS が実締切を持つものは対象外（LETUS 権威を尊重）。
+  const canEditDeadline = userManaged || assignment.deadline === null || assignment.deadlineUserSet === true
   const rel = relDue(assignment.deadline, now)
   const urgent = !submitted && !!assignment.deadline && new Date(assignment.deadline).getTime() - now.getTime() <= 24 * 3600 * 1000
 
@@ -220,7 +232,7 @@ export default function LetusAssignmentDetailScreen() {
 
           <View style={styles.deadlineRow}>
             <Text style={[styles.deadlineText, { color: ui.labelColor }]}>期限: {formatDeadline(assignment.deadline)}</Text>
-            {userManaged ? (
+            {canEditDeadline ? (
               <Pressable onPress={openDeadlineEdit} style={[styles.editLinkBtn, ui.dark && { backgroundColor: DARK.softBox }]}>
                 <Text style={[styles.editLinkText, ui.dark && { color: COLORS.emeraldLight }]}>編集</Text>
               </Pressable>
@@ -299,7 +311,7 @@ export default function LetusAssignmentDetailScreen() {
 
       {fetching ? <LetusPageFetcher url={assignment.url} onFinished={onFetched} /> : null}
 
-      {userManaged ? (
+      {canEditDeadline ? (
         <Modal visible={editingDeadline} transparent animationType="slide" onRequestClose={() => setEditingDeadline(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setEditingDeadline(false)} />
           <View style={[styles.modalSheet, ui.dark && { backgroundColor: DARK.card }, { marginBottom: kbHeight }]}>

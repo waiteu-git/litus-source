@@ -424,8 +424,9 @@ export default function HomeScreen() {
                     <Text style={[styles.remainEnd, { color: ui.labelColor }]}>{hero.end} 終了</Text>
                   </View>
                   {heroPct != null ? (
+                    // 残り時間バー: 幅＝残り率（100-経過率）。左詰めのまま右端が縮む＝時間が減るほど右から減っていく。
                     <View style={[styles.progressTrack, { backgroundColor: ui.dividerColor }]}>
-                      <View style={[styles.progressFill, { width: `${heroPct}%`, backgroundColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) }]} />
+                      <View style={[styles.progressFill, { width: `${100 - heroPct}%`, backgroundColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) }]} />
                     </View>
                   ) : null}
                   <View style={styles.remainCta}>

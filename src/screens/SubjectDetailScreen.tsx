@@ -1,5 +1,5 @@
 // app/src/screens/SubjectDetailScreen.tsx
-import { cloneElement, useEffect, useMemo, useState } from 'react'
+import { cloneElement, Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
@@ -12,11 +12,11 @@ import { resolveNextSession, pickAttentionEvent, type NextSession } from '../tim
 import { COLORS } from '../theme'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
-import { mutateCourseNews } from '../storage/courseNewsStore'
-import { markCourseSeen } from '../updates/courseNews'
+import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
+import { markCourseSeen, type CourseNewsItem } from '../updates/courseNews'
 import { buildSyllabusUrl } from '../links/syllabus'
-import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
-import type { CourseSnapshot } from '../storage/courseSnapshotSerialize'
+import { useDisplaySettings } from '../displaySettings'
+import type { SubjectSectionKey } from '../subject/subjectSections'
 import { loadClassEvents, upsertClassEvent } from '../storage/classEventsStore'
 import type { ClassEvent } from '../timetableEvents/classEvent'
 import { cellBadgeText } from '../timetableEvents/eventLabels'
@@ -36,6 +36,7 @@ import {
   type WeeklyPattern,
 } from '../timetableEvents/weeklyPattern'
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
+import type { AttendanceMark } from '../parsers/attendanceStats'
 import { loadAttendanceOverrides, saveAttendanceOverride } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk, type AttendanceRisk } from '../attendance/attendanceRisk'
 import { useAttendanceVersion } from '../attendance/attendanceVersion'
@@ -45,6 +46,19 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 
 type IconName = keyof typeof Ionicons.glyphMap
+
+// 各回リストの区分表示（CLASS凡例の記号＋文言。色単独禁止＝欠席の赤にも×と文言を必ず併記）。
+const MARK_LABEL: Record<AttendanceMark, string> = {
+  present: '〇 出席',
+  absent: '× 欠席',
+  late: '△ 遅刻',
+  earlyLeave: '▽ 早退',
+  official: '公欠',
+  canceled: '休講',
+  notInScope: '対象外',
+  examNotInScope: '試験対象外',
+  none: '未記録',
+}
 
 function InfoChip({ icon, label }: { icon: IconName; label: string }) {
   const ui = useUi()
@@ -118,8 +132,11 @@ export default function SubjectDetailScreen() {
   const clearance = useTabBarClearance()
   const { version, bump } = useClassEventsVersion()
   const candidates = useBulletinEventCandidates(courseCode, name)
+  // セクションの並び・表示は設定＞表示「科目詳細の並び」で全科目共通に変更できる。
+  const { subjectLayout } = useDisplaySettings()
   const [letusUrl, setLetusUrl] = useState<string | null>(null)
-  const [snapshot, setSnapshot] = useState<CourseSnapshot | null>(null)
+  // このコースの未読LETUS新着（更新状況セクション。見るまで残る累積・markCourseSeenで消える）。
+  const [news, setNews] = useState<CourseNewsItem[]>([])
   const [events, setEvents] = useState<ClassEvent[]>([])
   const [pattern, setPattern] = useState<WeeklyPattern>({})
   const [attStats, setAttStats] = useState<AttendanceCourseStats | null>(null)
@@ -195,11 +212,20 @@ export default function SubjectDetailScreen() {
       const course = map[courseCode] ?? null
       setLetusUrl(course?.url ?? null)
       if (course) {
-        const snaps = await loadCourseSnapshots()
-        setSnapshot(snaps[course.url] ?? null)
+        const newsMap = await loadCourseNews()
+        setNews(newsMap[course.url]?.items ?? [])
       }
     })()
   }, [courseCode])
+
+  // コースを開いた＝新着を確認したとみなし既読化（ホーム/LETUSコース画面と同じ扱い）。
+  // これで時間割セルの●・LETUSコース画面の新着カウント・この画面の更新状況セクションも消える。
+  const openLetusCourse = () => {
+    if (!letusUrl) return
+    mutateCourseNews((cur) => markCourseSeen(cur, letusUrl)).catch(() => undefined)
+    setNews([])
+    navigation.navigate('Web', { url: letusUrl, title: name })
+  }
 
   useEffect(() => {
     loadClassEvents()
@@ -212,8 +238,6 @@ export default function SubjectDetailScreen() {
       .then((d) => setUnread(courseUnreadCounts(d, new Set([courseCode])).get(courseCode) ?? 0))
       .catch(() => undefined)
   }, [courseCode])
-
-  const hasDiff = !!snapshot && snapshot.added.length + snapshot.removed.length > 0
 
   const now = new Date()
   const next = useMemo(
@@ -276,6 +300,279 @@ export default function SubjectDetailScreen() {
     refreshAllNotifications().catch(() => undefined)
   }
 
+  // セクション本体（キー付きノードマップ）。subjectLayout の順で描画し、enabled=false は出さない。
+  // ヒーロー/サマリカードは先頭固定（並び替え対象外）。
+  const sectionNodes: Record<SubjectSectionKey, ReactNode> = {
+    // 各回の予定: 休講・補講・教室変更・小テスト等（掲示由来の候補を含む）。
+    events: (
+      <Accordion
+        title="各回の予定"
+        icon="list-outline"
+        subtitle={attention ? `直近: ${Number(attention.date.split('-')[1])}/${Number(attention.date.split('-')[2])} ${attention.type === 'cancel' ? '休講' : '教室変更'}` : events.length ? `${events.length}件` : undefined}
+        right={
+          attention && attention.type === 'cancel' && attention.makeupStatus === 'undecided' ? (
+            <View style={styles.makeupPill}>
+              <Text style={styles.makeupPillText}>要対応</Text>
+            </View>
+          ) : undefined
+        }
+      >
+        <View style={styles.eventsHead}>
+          <Text style={{ color: ui.labelColor, fontSize: 12 }}>休講・補講・教室変更・小テスト等</Text>
+          <Pressable
+            style={[styles.addBtn, { backgroundColor: ui.softBoxBg }]}
+            onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })}
+          >
+            <Ionicons name="add" size={16} color={ui.accent} />
+            <Text style={[styles.addBtnText, { color: ui.accent }]}>予定を追加</Text>
+          </Pressable>
+        </View>
+        {candidates.map((v) => (
+          <View key={`cand-${v.candidate.sourceBulletinId}`} style={[ui.card, styles.candRow]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={styles.candHead}>
+                <View style={[styles.candTag, { backgroundColor: ui.pillBg }]}>
+                  <Text style={[styles.candTagText, { color: ui.pillText }]}>掲示より</Text>
+                </View>
+                <Text style={[styles.eventText, { color: ui.valueColor }]} numberOfLines={1}>
+                  {cellBadgeText(candidateToClassEvent(v.candidate, v.candidate.sourceBulletinId))}
+                </Text>
+              </View>
+              <Text style={[styles.eventSub, { color: ui.labelColor }]}>
+                {v.candidate.date} ・ {v.candidate.periods.join('・')}限
+                {v.candidate.makeup ? ` ・ 補講 ${v.candidate.makeup.date}` : ''}
+              </Text>
+            </View>
+            {v.state === 'added' ? (
+              <Text style={[styles.candDone, { color: ui.labelColor }]}>追加済み</Text>
+            ) : v.state === 'makeupAppend' ? (
+              <Pressable style={styles.candBtn} onPress={() => appendMakeup(v)}>
+                <Text style={styles.candBtnText}>補講を追記</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={styles.candBtn} onPress={() => addCandidate(v)}>
+                <Text style={styles.candBtnText}>追加</Text>
+              </Pressable>
+            )}
+          </View>
+        ))}
+        {events.length === 0 ? (
+          <Text style={{ color: ui.labelColor, fontSize: 13, marginTop: 8 }}>
+            休講・補講・教室変更・小テスト・中間・期末などを登録できます。
+          </Text>
+        ) : (
+          events.map((e) => (
+            <Pressable
+              key={e.id}
+              style={[ui.card, styles.eventRow]}
+              onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey, editId: e.id })}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.eventText, { color: ui.valueColor }]}>{cellBadgeText(e)}</Text>
+                <Text style={[styles.eventSub, { color: ui.labelColor }]}>
+                  {e.periods.join('・')}限{e.note ? ` ・ ${e.note}` : ''}
+                </Text>
+              </View>
+              {e.type === 'cancel' && e.makeupStatus === 'undecided' ? (
+                <View style={styles.makeupPill}>
+                  <Text style={styles.makeupPillText}>補講を入力</Text>
+                </View>
+              ) : (
+                <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
+              )}
+            </Pressable>
+          ))
+        )}
+      </Accordion>
+    ),
+    // 更新状況: このコースの未読LETUS新着があるときだけ表示（格納しない＝常時展開のカード）。
+    // タップでLETUSコースを開き、markCourseSeen で既読化＝このカード自体も消える（ユーザー要望 2026-07-16）。
+    updates:
+      news.length > 0 && letusUrl ? (
+        <Pressable
+          style={[ui.card, styles.updatesCard]}
+          onPress={openLetusCourse}
+          accessibilityRole="button"
+          accessibilityLabel={`LETUS新着${news.length}件・タップでコースを開いて既読にする`}
+        >
+          <View style={styles.updatesHead}>
+            <Ionicons name="sparkles-outline" size={16} color={ui.colors.info} />
+            <Text style={[styles.updatesTitle, { color: ui.valueColor }]}>更新状況・新着{news.length}件</Text>
+            <Ionicons name="chevron-forward" size={16} color={ui.chevron} />
+          </View>
+          {news.slice(0, 5).map((n) => (
+            <View key={n.url} style={styles.updatesRow}>
+              <Text style={[styles.updatesPlus, { color: ui.colors.info }]}>＋</Text>
+              <Text style={[styles.updatesText, { color: ui.valueColor }]} numberOfLines={1}>
+                {n.title}
+              </Text>
+            </View>
+          ))}
+          {news.length > 5 ? (
+            <Text style={[styles.updatesMore, { color: ui.labelColor }]}>ほか{news.length - 5}件</Text>
+          ) : null}
+          <Text style={[styles.updatesHint, { color: ui.labelColor }]}>タップでLETUSコースを開く（開くと既読になります）</Text>
+        </Pressable>
+      ) : null,
+    // リンク: LETUS/シラバス/課題追加＋コース更新チェック（旧「更新状況」アコーディオンから導線を退避。
+    // UpdateCheck ルートへの唯一の導線なので消さない＝死に導線防止）。
+    links: (
+      <View>
+        <SectionLabel>リンク</SectionLabel>
+        {letusUrl ? (
+          <LinkAction icon="book-outline" title="LETUSコースを開く" onPress={openLetusCourse} />
+        ) : (
+          <View style={[ui.card, { marginBottom: 10 }]}>
+            <Text style={{ color: ui.labelColor, fontSize: 13 }}>LETUSコース未突合（「コース収集」を実行してください）</Text>
+          </View>
+        )}
+        <LinkAction
+          icon="document-text-outline"
+          title="シラバスを開く"
+          onPress={() => navigation.navigate('Syllabus', { url: syllabusUrl, name })}
+        />
+        <LinkAction
+          icon="create-outline"
+          title="この科目の課題を追加"
+          onPress={() =>
+            // タブ（課題）→ネストのManualAssignmentへ横断遷移。親ナビゲータの型は緩いため最小I/Fにキャスト。
+            (navigation.getParent() as unknown as { navigate: (name: string, params: object) => void } | undefined)?.navigate('課題', {
+              screen: 'ManualAssignment',
+              params: { presetCourseName: name, presetCourseCode: courseCode },
+              // 課題タブ未訪問時に ManualAssignment がスタックのルート化して戻れなくなるのを防ぐ。
+              // initial:false で AssignmentsHome を下に敷き、ヘッダ戻る＝取消を常に残す。
+              initial: false,
+            })
+          }
+        />
+        <LinkAction
+          icon="refresh-outline"
+          title="コース更新をチェック"
+          onPress={() => navigation.navigate('UpdateCheck')}
+        />
+      </View>
+    ),
+    // 出欠: trackable→数値UI / 未収集→「未取得」案内 / 収集済み未記録・対象外→中立の「記録なし」。標準は折りたたみ。
+    attendance:
+      risk && risk.trackable ? (
+        <Accordion
+          title="出欠"
+          icon="checkmark-done-outline"
+          subtitle={risk.remaining > 0 ? `あと${risk.remaining}回休める（欠席${risk.absent}/上限${risk.allowedAbsences}）` : '危険ライン到達'}
+        >
+          <Text style={[styles.attSub, { color: ui.labelColor }]}>
+            欠席{risk.absent} / 上限{risk.allowedAbsences}（全{risk.scheduledTotal}回）
+          </Text>
+          <Text style={[styles.attSub, { color: ui.labelColor, marginTop: 6 }]}>
+            出席{risk.attended}・欠席{risk.absent}
+            {risk.late ? `・遅刻${risk.late}` : ''}
+            {risk.earlyLeave ? `・早退${risk.earlyLeave}` : ''}
+            {risk.official ? `・公欠${risk.official}` : ''}
+            {risk.canceled ? `・休講${risk.canceled}` : ''}
+          </Text>
+          {attStats && attStats.sessions.some((s) => s.date) ? (
+            // 各回の出欠（フラット行＋区切り線・高密度面）。実施パターンで休みにした週の回は「休み週」表示。
+            <View style={[styles.attSessionList, { borderTopColor: ui.dividerColor }]}>
+              {attStats.sessions
+                .filter((s) => s.date)
+                .map((s, i) => {
+                  const excluded = excludeDates.includes(s.date as string)
+                  const markColor = excluded
+                    ? ui.labelColor
+                    : s.mark === 'absent'
+                      ? ui.colors.danger
+                      : s.mark === 'none'
+                        ? ui.labelColor
+                        : ui.valueColor
+                  return (
+                    <View key={`${s.date}-${i}`} style={[styles.attSessionRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor }]}>
+                      <Text style={[styles.attSessionDate, { color: excluded ? ui.labelColor : ui.valueColor }]}>
+                        第{i + 1}回 ・ {s.date}
+                      </Text>
+                      <Text style={[styles.attSessionMark, { color: markColor }]}>
+                        {excluded ? '休み週・除外' : MARK_LABEL[s.mark]}
+                      </Text>
+                    </View>
+                  )
+                })}
+            </View>
+          ) : null}
+          <View style={[styles.attStepper, { borderTopColor: ui.dividerColor }]}>
+            <Text style={[styles.attSub, { color: ui.labelColor }]}>総回数（隔週などで手動調整）</Text>
+            <View style={styles.attStepBtns}>
+              <Pressable style={[styles.attStepBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => changeTotal(-1)}>
+                <Ionicons name="remove" size={16} color={ui.accentSoft} />
+              </Pressable>
+              <Text style={[styles.attTotalNum, { color: ui.valueColor }]}>{attTotal ?? risk.scheduledTotal}</Text>
+              <Pressable style={[styles.attStepBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => changeTotal(1)}>
+                <Ionicons name="add" size={16} color={ui.accentSoft} />
+              </Pressable>
+            </View>
+          </View>
+        </Accordion>
+      ) : !attCollected ? (
+        // 未収集: まだ一度も収集していない → 取得方法を案内する。
+        <Accordion title="出欠" icon="checkmark-done-outline" subtitle="未取得">
+          <Text style={[styles.attSub, { color: ui.labelColor }]}>
+            出欠データはまだ取得できていません。時間割タブで下に引いて同期すると、CLASSの「学生出欠状況確認」から自動で取得します。
+          </Text>
+        </Accordion>
+      ) : (
+        // 収集済みだが当該科目に出欠データが無い（未記録／出席管理対象外／集中講義等でCLASS出欠に載らない）。
+        // 0マーク科目に「あと◯回休める」を出すと誤情報になるため数値UIは出さず、中立の「記録なし」案内にする。
+        // これで学期序盤の全科目未記録でも機能が消えて見えず、収集失敗（=未取得）とも区別できる。
+        <Accordion title="出欠" icon="checkmark-done-outline" subtitle="記録なし">
+          <Text style={[styles.attSub, { color: ui.labelColor }]}>
+            この科目はまだCLASS出欠の記録がありません。担当教員がCLASSで出欠を取らない科目や、学期序盤で記録がない場合は数字が表示されません。
+          </Text>
+        </Accordion>
+      ),
+    // 実施パターン: 隔週・変則スケジュールの週別 実施/休み 編集。
+    pattern: (
+      <Accordion
+        title="実施パターン"
+        icon="repeat-outline"
+        subtitle={pattern.off && Object.keys(pattern.off).length ? '隔週・変則あり' : '全週実施'}
+      >
+        <Text style={[styles.patHint, { color: ui.labelColor, marginBottom: 8, marginTop: 0 }]}>
+          実施する週を選びます。既定は全週実施。隔週は「プリセット」で入れて、ずれた週だけタップで切り替えてください。
+        </Text>
+        <View style={styles.segRow}>
+          <Pressable style={[styles.presetBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => updatePattern(applyBiweeklyPreset(mondayOf(new Date()), weeks))}>
+            <Ionicons name="repeat-outline" size={15} color={ui.accentSoft} />
+            <Text style={[styles.presetText, { color: ui.accentSoft }]}>隔週プリセット</Text>
+          </Pressable>
+          <Pressable style={[styles.presetBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => updatePattern(clearPattern())}>
+            <Ionicons name="checkmark-done-outline" size={15} color={ui.accentSoft} />
+            <Text style={[styles.presetText, { color: ui.accentSoft }]}>全週実施に戻す</Text>
+          </Pressable>
+        </View>
+        <View style={{ marginTop: 8 }}>
+          {weeks.map((w) => {
+            const off = isWeekOff(pattern, w)
+            const isThis = weekMondayKey(w) === thisKey
+            return (
+              <Pressable
+                key={weekMondayKey(w)}
+                onPress={() => updatePattern(toggleWeek(pattern, w))}
+                style={[styles.weekRow, { borderBottomColor: ui.dividerColor }]}
+              >
+                <Text style={[styles.weekLabel, { color: off ? ui.labelColor : ui.valueColor, fontWeight: isThis ? '800' : '500' }]}>
+                  {w.getMonth() + 1}/{w.getDate()} の週{isThis ? ' ・ 今週' : ''}
+                </Text>
+                <View style={[styles.weekPill, { backgroundColor: off ? ui.colors.patternOffBg : ui.pillBg }]}>
+                  <Text style={{ color: off ? ui.colors.patternOffText : ui.pillText, fontSize: 12, fontWeight: '700' }}>
+                    {off ? '休み' : '実施'}
+                  </Text>
+                </View>
+              </Pressable>
+            )
+          })}
+        </View>
+      </Accordion>
+    ),
+  }
+
   return (
     <View style={styles.root}>
       {ui.colors.gradient ? <LinearGradient colors={ui.colors.gradient} style={StyleSheet.absoluteFill} /> : null}
@@ -301,243 +598,11 @@ export default function SubjectDetailScreen() {
 
         <SubjectSummaryCard rows={summaryRows} />
 
-        <SectionLabel>リンク</SectionLabel>
-        {letusUrl ? (
-          <LinkAction
-            icon="book-outline"
-            title="LETUSコースを開く"
-            onPress={() => {
-              // コースを開いた＝新着を確認したとみなし既読化（ホーム/LETUSコース画面と同じ扱い）。
-              // これで時間割セルの●・LETUSコース画面の新着カウントも消える（focus復帰で再計算）。
-              mutateCourseNews((cur) => markCourseSeen(cur, letusUrl)).catch(() => undefined)
-              navigation.navigate('Web', { url: letusUrl, title: name })
-            }}
-          />
-        ) : (
-          <View style={[ui.card, { marginBottom: 10 }]}>
-            <Text style={{ color: ui.labelColor, fontSize: 13 }}>LETUSコース未突合（「コース収集」を実行してください）</Text>
-          </View>
-        )}
-        <LinkAction
-          icon="document-text-outline"
-          title="シラバスを開く"
-          onPress={() => navigation.navigate('Syllabus', { url: syllabusUrl, name })}
-        />
-        <LinkAction
-          icon="create-outline"
-          title="この科目の課題を追加"
-          onPress={() =>
-            // タブ（課題）→ネストのManualAssignmentへ横断遷移。親ナビゲータの型は緩いため最小I/Fにキャスト。
-            (navigation.getParent() as unknown as { navigate: (name: string, params: object) => void } | undefined)?.navigate('課題', {
-              screen: 'ManualAssignment',
-              params: { presetCourseName: name, presetCourseCode: courseCode },
-              // 課題タブ未訪問時に ManualAssignment がスタックのルート化して戻れなくなるのを防ぐ。
-              // initial:false で AssignmentsHome を下に敷き、ヘッダ戻る＝取消を常に残す。
-              initial: false,
-            })
-          }
-        />
-
-        {risk && risk.trackable ? (
-          <Accordion
-            title="出欠"
-            icon="checkmark-done-outline"
-            subtitle={risk.remaining > 0 ? `あと${risk.remaining}回休める（欠席${risk.absent}/上限${risk.allowedAbsences}）` : '危険ライン到達'}
-          >
-            <Text style={[styles.attSub, { color: ui.labelColor }]}>
-              欠席{risk.absent} / 上限{risk.allowedAbsences}（全{risk.scheduledTotal}回）
-            </Text>
-            <Text style={[styles.attSub, { color: ui.labelColor, marginTop: 6 }]}>
-              出席{risk.attended}・欠席{risk.absent}
-              {risk.late ? `・遅刻${risk.late}` : ''}
-              {risk.earlyLeave ? `・早退${risk.earlyLeave}` : ''}
-              {risk.official ? `・公欠${risk.official}` : ''}
-              {risk.canceled ? `・休講${risk.canceled}` : ''}
-            </Text>
-            <View style={[styles.attStepper, { borderTopColor: ui.dividerColor }]}>
-              <Text style={[styles.attSub, { color: ui.labelColor }]}>総回数（隔週などで手動調整）</Text>
-              <View style={styles.attStepBtns}>
-                <Pressable style={[styles.attStepBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => changeTotal(-1)}>
-                  <Ionicons name="remove" size={16} color={ui.accentSoft} />
-                </Pressable>
-                <Text style={[styles.attTotalNum, { color: ui.valueColor }]}>{attTotal ?? risk.scheduledTotal}</Text>
-                <Pressable style={[styles.attStepBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => changeTotal(1)}>
-                  <Ionicons name="add" size={16} color={ui.accentSoft} />
-                </Pressable>
-              </View>
-            </View>
-          </Accordion>
-        ) : !attCollected ? (
-          // 未収集: まだ一度も収集していない → 取得方法を案内する。
-          <Accordion title="出欠" icon="checkmark-done-outline" subtitle="未取得">
-            <Text style={[styles.attSub, { color: ui.labelColor }]}>
-              出欠データはまだ取得できていません。時間割タブで下に引いて同期すると、CLASSの「学生出欠状況確認」から自動で取得します。
-            </Text>
-          </Accordion>
-        ) : (
-          // 収集済みだが当該科目に出欠データが無い（未記録／出席管理対象外／集中講義等でCLASS出欠に載らない）。
-          // 0マーク科目に「あと◯回休める」を出すと誤情報になるため数値UIは出さず、中立の「記録なし」案内にする。
-          // これで学期序盤の全科目未記録でも機能が消えて見えず、収集失敗（=未取得）とも区別できる。
-          <Accordion title="出欠" icon="checkmark-done-outline" subtitle="記録なし">
-            <Text style={[styles.attSub, { color: ui.labelColor }]}>
-              この科目はまだCLASS出欠の記録がありません。担当教員がCLASSで出欠を取らない科目や、学期序盤で記録がない場合は数字が表示されません。
-            </Text>
-          </Accordion>
-        )}
-
-        <Accordion
-          title="各回の予定"
-          icon="list-outline"
-          subtitle={attention ? `直近: ${Number(attention.date.split('-')[1])}/${Number(attention.date.split('-')[2])} ${attention.type === 'cancel' ? '休講' : '教室変更'}` : events.length ? `${events.length}件` : undefined}
-          right={
-            attention && attention.type === 'cancel' && attention.makeupStatus === 'undecided' ? (
-              <View style={styles.makeupPill}>
-                <Text style={styles.makeupPillText}>要対応</Text>
-              </View>
-            ) : undefined
-          }
-        >
-          <View style={styles.eventsHead}>
-            <Text style={{ color: ui.labelColor, fontSize: 12 }}>休講・補講・教室変更・小テスト等</Text>
-            <Pressable
-              style={[styles.addBtn, { backgroundColor: ui.softBoxBg }]}
-              onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })}
-            >
-              <Ionicons name="add" size={16} color={ui.accent} />
-              <Text style={[styles.addBtnText, { color: ui.accent }]}>予定を追加</Text>
-            </Pressable>
-          </View>
-          {candidates.map((v) => (
-            <View key={`cand-${v.candidate.sourceBulletinId}`} style={[ui.card, styles.candRow]}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={styles.candHead}>
-                  <View style={[styles.candTag, { backgroundColor: ui.pillBg }]}>
-                    <Text style={[styles.candTagText, { color: ui.pillText }]}>掲示より</Text>
-                  </View>
-                  <Text style={[styles.eventText, { color: ui.valueColor }]} numberOfLines={1}>
-                    {cellBadgeText(candidateToClassEvent(v.candidate, v.candidate.sourceBulletinId))}
-                  </Text>
-                </View>
-                <Text style={[styles.eventSub, { color: ui.labelColor }]}>
-                  {v.candidate.date} ・ {v.candidate.periods.join('・')}限
-                  {v.candidate.makeup ? ` ・ 補講 ${v.candidate.makeup.date}` : ''}
-                </Text>
-              </View>
-              {v.state === 'added' ? (
-                <Text style={[styles.candDone, { color: ui.labelColor }]}>追加済み</Text>
-              ) : v.state === 'makeupAppend' ? (
-                <Pressable style={styles.candBtn} onPress={() => appendMakeup(v)}>
-                  <Text style={styles.candBtnText}>補講を追記</Text>
-                </Pressable>
-              ) : (
-                <Pressable style={styles.candBtn} onPress={() => addCandidate(v)}>
-                  <Text style={styles.candBtnText}>追加</Text>
-                </Pressable>
-              )}
-            </View>
+        {subjectLayout
+          .filter((s) => s.enabled)
+          .map((s) => (
+            <Fragment key={s.key}>{sectionNodes[s.key]}</Fragment>
           ))}
-          {events.length === 0 ? (
-            <Text style={{ color: ui.labelColor, fontSize: 13, marginTop: 8 }}>
-              休講・補講・教室変更・小テスト・中間・期末などを登録できます。
-            </Text>
-          ) : (
-            events.map((e) => (
-              <Pressable
-                key={e.id}
-                style={[ui.card, styles.eventRow]}
-                onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey, editId: e.id })}
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[styles.eventText, { color: ui.valueColor }]}>{cellBadgeText(e)}</Text>
-                  <Text style={[styles.eventSub, { color: ui.labelColor }]}>
-                    {e.periods.join('・')}限{e.note ? ` ・ ${e.note}` : ''}
-                  </Text>
-                </View>
-                {e.type === 'cancel' && e.makeupStatus === 'undecided' ? (
-                  <View style={styles.makeupPill}>
-                    <Text style={styles.makeupPillText}>補講を入力</Text>
-                  </View>
-                ) : (
-                  <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
-                )}
-              </Pressable>
-            ))
-          )}
-        </Accordion>
-
-        <Accordion
-          title="実施パターン"
-          icon="repeat-outline"
-          subtitle={pattern.off && Object.keys(pattern.off).length ? '隔週・変則あり' : '全週実施'}
-        >
-          <Text style={[styles.patHint, { color: ui.labelColor, marginBottom: 8, marginTop: 0 }]}>
-            実施する週を選びます。既定は全週実施。隔週は「プリセット」で入れて、ずれた週だけタップで切り替えてください。
-          </Text>
-          <View style={styles.segRow}>
-            <Pressable style={[styles.presetBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => updatePattern(applyBiweeklyPreset(mondayOf(new Date()), weeks))}>
-              <Ionicons name="repeat-outline" size={15} color={ui.accentSoft} />
-              <Text style={[styles.presetText, { color: ui.accentSoft }]}>隔週プリセット</Text>
-            </Pressable>
-            <Pressable style={[styles.presetBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => updatePattern(clearPattern())}>
-              <Ionicons name="checkmark-done-outline" size={15} color={ui.accentSoft} />
-              <Text style={[styles.presetText, { color: ui.accentSoft }]}>全週実施に戻す</Text>
-            </Pressable>
-          </View>
-          <View style={{ marginTop: 8 }}>
-            {weeks.map((w) => {
-              const off = isWeekOff(pattern, w)
-              const isThis = weekMondayKey(w) === thisKey
-              return (
-                <Pressable
-                  key={weekMondayKey(w)}
-                  onPress={() => updatePattern(toggleWeek(pattern, w))}
-                  style={[styles.weekRow, { borderBottomColor: ui.dividerColor }]}
-                >
-                  <Text style={[styles.weekLabel, { color: off ? ui.labelColor : ui.valueColor, fontWeight: isThis ? '800' : '500' }]}>
-                    {w.getMonth() + 1}/{w.getDate()} の週{isThis ? ' ・ 今週' : ''}
-                  </Text>
-                  <View style={[styles.weekPill, { backgroundColor: off ? ui.colors.patternOffBg : ui.pillBg }]}>
-                    <Text style={{ color: off ? ui.colors.patternOffText : ui.pillText, fontSize: 12, fontWeight: '700' }}>
-                      {off ? '休み' : '実施'}
-                    </Text>
-                  </View>
-                </Pressable>
-              )
-            })}
-          </View>
-        </Accordion>
-
-        <Accordion
-          title="更新状況"
-          icon="refresh-outline"
-          subtitle={!snapshot ? '未チェック' : !hasDiff ? '更新なし' : `更新あり ${snapshot.added.length + snapshot.removed.length}件`}
-        >
-          {!snapshot ? (
-            // 更新チェック画面への唯一の導線（ルートは登録済みだが他に navigate が無い＝死に導線防止）。
-            <Pressable onPress={() => navigation.navigate('UpdateCheck')} accessibilityRole="button">
-              <Text style={{ color: ui.labelColor }}>
-                未チェック（タップして更新チェックを実行）
-              </Text>
-            </Pressable>
-          ) : !hasDiff ? (
-            <Text style={{ color: ui.labelColor }}>前回チェック以降の更新はありません。</Text>
-          ) : (
-            <View style={{ gap: 6 }}>
-              {snapshot.added.map((a) => (
-                <View key={`a-${a.url}`} style={styles.diffRow}>
-                  <Text style={[styles.diffPlus, { color: ui.colors.success }]}>＋</Text>
-                  <Text style={[styles.diffText, { color: ui.valueColor }]}>{a.title}</Text>
-                </View>
-              ))}
-              {snapshot.removed.map((r) => (
-                <View key={`r-${r.url}`} style={styles.diffRow}>
-                  <Text style={[styles.diffMinus, { color: ui.colors.danger }]}>－</Text>
-                  <Text style={[styles.diffText, { color: ui.labelColor }]}>{r.title}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </Accordion>
       </ScrollView>
     </View>
   )
@@ -556,10 +621,15 @@ const styles = StyleSheet.create({
   linkIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   linkTitle: { fontSize: 15, fontWeight: '500' },
   linkSub: { fontSize: 12, marginTop: 2 },
-  diffRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
-  diffPlus: { fontSize: 15, fontWeight: '700', color: COLORS.success, lineHeight: 20 },
-  diffMinus: { fontSize: 15, fontWeight: '700', color: COLORS.danger, lineHeight: 20 },
-  diffText: { fontSize: 14, flex: 1 },
+  // 更新状況（LETUS新着）カード。新着があるときだけ描画される。
+  updatesCard: { marginTop: 12, gap: 6 },
+  updatesHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  updatesTitle: { flex: 1, fontSize: 15, fontWeight: '600', minWidth: 0 },
+  updatesRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  updatesPlus: { fontSize: 15, fontWeight: '700', lineHeight: 20 },
+  updatesText: { fontSize: 14, flex: 1 },
+  updatesMore: { fontSize: 12 },
+  updatesHint: { fontSize: 11, marginTop: 2 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   summaryText: { flex: 1, fontSize: 13, fontWeight: '500' },
   eventsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -603,6 +673,10 @@ const styles = StyleSheet.create({
   attRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
   attRemain: { fontSize: 17, fontWeight: '800' },
   attSub: { fontSize: 12.5 },
+  attSessionList: { marginTop: 10, paddingTop: 4, borderTopWidth: StyleSheet.hairlineWidth },
+  attSessionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  attSessionDate: { fontSize: 13 },
+  attSessionMark: { fontSize: 13, fontWeight: '600' },
   attStepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   attStepBtns: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   attStepBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

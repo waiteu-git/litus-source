@@ -140,3 +140,41 @@ describe('upsertAssignments ユーザー所有項目の保護', () => {
     expect(out[ASSIGN].firstSeenAt).toBe('2026-07-01T00:00:00.000Z')
   })
 })
+
+describe('upsertAssignments 締切ユーザー上書きの温存', () => {
+  const now = new Date('2026-07-12T00:00:00Z')
+  const ASSIGN = 'https://letus.ed.tus.ac.jp/mod/assign/view.php?id=8'
+  const base = {
+    url: ASSIGN, courseCode: null as string | null, courseName: 'A', title: 'レポート',
+    deadline: null as string | null, deadlineText: '', submissionStatus: 'not_submitted' as const,
+    lifecycleStatus: 'active' as const, ignored: false,
+    firstSeenAt: '2026-07-01T00:00:00.000Z', lastSeenAt: '2026-07-01T00:00:00.000Z', lastCheckedAt: '2026-07-01T00:00:00.000Z',
+  }
+  const incoming = (deadline: string | null) => [{
+    url: ASSIGN, courseCode: null, courseName: 'A', title: 'レポート',
+    deadline, deadlineText: '', submissionStatus: 'not_submitted' as const, lifecycleStatus: 'active' as const,
+  }]
+
+  it('収集値が締切なしのとき、ユーザー設定の締切(deadlineUserSet)を温存する', () => {
+    const existing = { [ASSIGN]: { ...base, deadline: '2026-07-20T14:59:00.000Z', deadlineText: '手動', deadlineUserSet: true } }
+    const out = upsertAssignments(existing, incoming(null), now)
+    expect(out[ASSIGN].deadline).toBe('2026-07-20T14:59:00.000Z')
+    expect(out[ASSIGN].deadlineText).toBe('手動')
+    expect(out[ASSIGN].deadlineUserSet).toBe(true)
+    expect(out[ASSIGN].lastCheckedAt).toBe(now.toISOString())
+  })
+
+  it('LETUSが実締切を返したらLETUS権威に戻し、ユーザー印を落とす', () => {
+    const existing = { [ASSIGN]: { ...base, deadline: '2026-07-20T14:59:00.000Z', deadlineText: '手動', deadlineUserSet: true } }
+    const out = upsertAssignments(existing, incoming('2026-07-25T14:59:00.000Z'), now)
+    expect(out[ASSIGN].deadline).toBe('2026-07-25T14:59:00.000Z')
+    expect(out[ASSIGN].deadlineUserSet).toBeUndefined()
+  })
+
+  it('ユーザー印の無い収集済み項目は従来どおり収集の締切なしで上書きする', () => {
+    const existing = { [ASSIGN]: { ...base, deadline: '2026-07-20T14:59:00.000Z', deadlineText: '旧' } }
+    const out = upsertAssignments(existing, incoming(null), now)
+    expect(out[ASSIGN].deadline).toBeNull()
+    expect(out[ASSIGN].deadlineUserSet).toBeUndefined()
+  })
+})
