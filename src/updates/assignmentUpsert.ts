@@ -29,8 +29,15 @@ export function upsertAssignments(
       out[c.url] = { ...prev, lastSeenAt: nowIso, lastCheckedAt: nowIso }
       continue
     }
+    // 収集対象URLでも、締切未設定の課題にユーザーが手動で締切を入れていた場合（deadlineUserSet）は、
+    // LETUS が締切を返さない限り（収集値 deadline===null）その締切を温存する＝再収集で消さない。
+    // LETUS が実締切を返したら（deadline≠null）LETUS 権威へ戻し、印を落とす。
+    const keepUserDeadline = !!prev?.deadlineUserSet && c.deadline === null
     out[c.url] = {
       ...c,
+      ...(keepUserDeadline
+        ? { deadline: prev!.deadline, deadlineText: prev!.deadlineText, deadlineUserSet: true as const }
+        : {}),
       // コース同一性は空の収集値で塗り潰さない: 追跡解除やコース一覧の取りこぼしで urlInfo が
       // 引けなかった訪問（courseName ''）が、保存済みの実名/コードを消して「科目不明」に
       // 落とすのを防ぐ（追跡解除ダイアログの「収集済みの課題は残ります」を守る）。

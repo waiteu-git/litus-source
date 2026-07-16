@@ -1,8 +1,11 @@
 /**
- * ホーム画面の並び替え可能セクションの定義と、保存された並び順の正規化・操作（純粋関数）。
- * 端末非依存＝vitestで検証可能。設定タブでユーザーが順序と表示/非表示を変更し、HomeScreenがこの順で描画する。
+ * ホーム画面の並び替え可能セクションの定義。順序の正規化・操作（純粋関数）は汎用ファクトリ
+ * createSectionLayout（src/ui/sectionLayout.ts）で生成する（科目詳細と共用）。
+ * 設定タブでユーザーが順序と表示/非表示を変更し、HomeScreenがこの順で描画する。
  * 新セクションを後から追加しても normalizeHomeLayout が既存設定に自動マージするので破綻しない。
  */
+import { createSectionLayout, type SectionMeta, type SectionPref } from '../ui/sectionLayout'
+
 export type HomeSectionKey =
   | 'nowClass'
   | 'laterClasses'
@@ -11,7 +14,7 @@ export type HomeSectionKey =
   | 'letusNews'
   | 'bulletins'
   | 'entries'
-export type HomeSectionPref = { key: HomeSectionKey; enabled: boolean }
+export type HomeSectionPref = SectionPref<HomeSectionKey>
 
 /** 既定の並び順（ユーザー指定 2026-07-14: 今の授業→今日の変更→LETUS新着→CLASS掲示→直近の課題→このあとの授業→その他。
  * LETUS新着は「初期ではCLASS掲示の上」の指定）。 */
@@ -26,7 +29,7 @@ export const HOME_SECTION_ORDER: HomeSectionKey[] = [
 ]
 
 /** セクション表示名と、非表示不可（常に表示）フラグ。entries=出席登録/インフォは動線なので常時表示。 */
-export const HOME_SECTION_META: Record<HomeSectionKey, { label: string; fixedOn: boolean }> = {
+export const HOME_SECTION_META: Record<HomeSectionKey, SectionMeta> = {
   nowClass: { label: 'いまの授業', fixedOn: false },
   laterClasses: { label: 'このあとの授業', fixedOn: false },
   deadlines: { label: '直近の締切', fixedOn: false },
@@ -36,80 +39,13 @@ export const HOME_SECTION_META: Record<HomeSectionKey, { label: string; fixedOn:
   entries: { label: 'その他（出席登録・インフォ）', fixedOn: true },
 }
 
-const KEYS: ReadonlySet<string> = new Set(HOME_SECTION_ORDER)
+const ops = createSectionLayout(HOME_SECTION_ORDER, HOME_SECTION_META)
 
-export const DEFAULT_HOME_LAYOUT: HomeSectionPref[] = HOME_SECTION_ORDER.map((key) => ({ key, enabled: true }))
+/** SectionLayoutReorder へ渡す操作束（move/reorder/toggle）。 */
+export const HOME_LAYOUT_OPS = ops
 
-/**
- * 保存値（不明形式含む）を正規化する。既知キーを保存順で維持し、不明キー/重複は除去、
- * 欠けている既知キーは**既定順上のアンカー位置**へ挿入する（enabled=true）。
- * アンカー挿入＝既定順で自分より前にある最後の既存キーの直後（前に既存キーが無ければ先頭）。
- * 末尾追加だと、後から増えたセクション（例: letusNews=既定でCLASS掲示の上）が保存済み
- * レイアウトの全ユーザーで最下部に落ちてしまうため。fixedOnキーは常にenabled=true。
- */
-export function normalizeHomeLayout(raw: unknown): HomeSectionPref[] {
-  const out: HomeSectionPref[] = []
-  const seen = new Set<HomeSectionKey>()
-  if (Array.isArray(raw)) {
-    for (const e of raw) {
-      if (!e || typeof e !== 'object') continue
-      const key = (e as { key?: unknown }).key
-      if (typeof key !== 'string' || !KEYS.has(key) || seen.has(key as HomeSectionKey)) continue
-      const k = key as HomeSectionKey
-      const enabled = HOME_SECTION_META[k].fixedOn ? true : (e as { enabled?: unknown }).enabled !== false
-      out.push({ key: k, enabled })
-      seen.add(k)
-    }
-  }
-  // 欠けている既知キーをアンカー位置へ挿入する（既定順に処理＝連続して欠けても既定順が保たれる）。
-  // 挿入位置＝「既定順で自分より前にある全キー」のうち保存側に存在する最後尾の直後。
-  // これで既定順の前後関係（例: letusNews は todayChanges より後）を保存順を壊さずに満たす。
-  for (const k of HOME_SECTION_ORDER) {
-    if (seen.has(k)) continue
-    const orderIdx = HOME_SECTION_ORDER.indexOf(k)
-    let insertAt = 0
-    for (let i = 0; i < orderIdx; i++) {
-      const pos = out.findIndex((s) => s.key === HOME_SECTION_ORDER[i])
-      if (pos >= 0) insertAt = Math.max(insertAt, pos + 1)
-    }
-    out.splice(insertAt, 0, { key: k, enabled: true })
-    seen.add(k)
-  }
-  return out
-}
-
-/** dir=-1で上へ、+1で下へ移動（端はそのまま）。新配列を返す。 */
-export function moveSection(layout: HomeSectionPref[], key: HomeSectionKey, dir: -1 | 1): HomeSectionPref[] {
-  const i = layout.findIndex((s) => s.key === key)
-  if (i < 0) return layout
-  const j = i + dir
-  if (j < 0 || j >= layout.length) return layout
-  const next = layout.slice()
-  ;[next[i], next[j]] = [next[j], next[i]]
-  return next
-}
-
-/**
- * item を fromIndex から toIndex へ移動した新配列を返す（ドラッグ並び替えの確定用）。
- * from/to は [0, length-1] にクランプ。from を splice で抜いてから to へ挿入する。元配列は不変。
- */
-export function reorderHomeLayout(
-  layout: HomeSectionPref[],
-  fromIndex: number,
-  toIndex: number,
-): HomeSectionPref[] {
-  const n = layout.length
-  if (n === 0) return layout.slice()
-  const from = Math.max(0, Math.min(n - 1, Math.trunc(fromIndex)))
-  const to = Math.max(0, Math.min(n - 1, Math.trunc(toIndex)))
-  const next = layout.slice()
-  const [moved] = next.splice(from, 1)
-  next.splice(to, 0, moved)
-  return next
-}
-
-/** 表示/非表示を反転（fixedOnキーは変更しない）。新配列を返す。 */
-export function toggleSection(layout: HomeSectionPref[], key: HomeSectionKey): HomeSectionPref[] {
-  if (HOME_SECTION_META[key]?.fixedOn) return layout
-  return layout.map((s) => (s.key === key ? { ...s, enabled: !s.enabled } : s))
-}
+export const DEFAULT_HOME_LAYOUT: HomeSectionPref[] = ops.DEFAULT
+export const normalizeHomeLayout = ops.normalize
+export const moveSection = ops.move
+export const reorderHomeLayout = ops.reorder
+export const toggleSection = ops.toggle

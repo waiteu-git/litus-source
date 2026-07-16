@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { Text } from '../ui/Text'
 import { PressableRow } from '../ui/Pressable'
+import BulletinActionEngine from '../collect/BulletinActionEngine'
 import ScreenHint from '../tutorial/ScreenHint'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -33,6 +35,21 @@ export default function BulletinListScreen() {
   const [tab, setTab] = useState<Tab>('unread')
   const [health, setHealth] = useState<StoredHealth | null>(null)
   const [refreshedAt, setRefreshedAt] = useState(0)
+  // 一覧から既読化中の掲示id（CLASS側既読化のヘッドレス実行中）。複数タップはCLASS収集リースで直列化される。
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
+
+  // 一覧の「既読にする」: 詳細を開かず openDetail アクションでCLASS側を既読化する。
+  // ローカルのみの既読は次回同期で復活する（mergeBulletinItemsはincomingのunreadが権威）ため必ずCLASS側を通す。
+  const markRead = (id: string) => setBusyIds((prev) => new Set(prev).add(id))
+  const onMarkedRead = useCallback((id: string) => {
+    setBusyIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+    // ストアを権威に再読込。成功時は unread=false で未読タブから消え、失敗/CLASS帯時は未読のまま残る（正直な反映）。
+    loadBulletinDigest().then(setItems).catch(() => undefined)
+  }, [])
 
   useFocusEffect(
     useCallback(() => {
@@ -108,7 +125,27 @@ export default function BulletinListScreen() {
                 <View style={{ marginBottom: 6 }}>
                   <Tag label={b.category} size="sm" />
                 </View>
-                {b.flagged ? <Text style={styles.flag}>🚩</Text> : null}
+                <View style={styles.headRight}>
+                  {b.flagged ? <Text style={styles.flag}>🚩</Text> : null}
+                  {b.unread ? (
+                    busyIds.has(b.id) ? (
+                      <View style={styles.readBtn}>
+                        <ActivityIndicator size="small" color={ui.accent} />
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => markRead(b.id)}
+                        hitSlop={6}
+                        style={[styles.readBtn, { backgroundColor: ui.softBoxBg }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${b.title}を既読にする`}
+                      >
+                        <Ionicons name="checkmark" size={14} color={ui.accent} />
+                        <Text style={[styles.readBtnText, { color: ui.accent }]}>既読にする</Text>
+                      </Pressable>
+                    )
+                  ) : null}
+                </View>
               </View>
               <Text style={[styles.title, { color: ui.valueColor }]}>{b.title}</Text>
               <Text style={[styles.meta, { color: ui.labelColor }]}>{b.meta}</Text>
@@ -116,6 +153,19 @@ export default function BulletinListScreen() {
           ))
         )}
       </ScrollView>
+      {[...busyIds].map((id) => {
+        const b = items.find((i) => i.id === id)
+        if (!b) return null
+        return (
+          <BulletinActionEngine
+            key={id}
+            action="openDetail"
+            title={b.title}
+            date={b.date}
+            onFinished={() => onMarkedRead(id)}
+          />
+        )
+      })}
     </ScreenBg>
   )
 }
@@ -127,6 +177,9 @@ const styles = StyleSheet.create({
   list: { padding: 14, paddingTop: 12, paddingBottom: 24 },
   item: { marginBottom: 10 },
   itemHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  readBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  readBtnText: { fontSize: 11, fontWeight: '700' },
   flag: { fontSize: 13 },
   title: { fontSize: 15, fontWeight: '600', lineHeight: 21 },
   meta: { fontSize: 11, marginTop: 5 },

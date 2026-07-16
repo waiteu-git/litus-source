@@ -7,14 +7,17 @@ import {
   type TimetableView,
 } from './storage/displaySettingsSerialize'
 import type { HomeSectionPref } from './home/homeSections'
+import type { SubjectSectionPref } from './subject/subjectSections'
 
 type Ctx = {
   timetableView: TimetableView
   assignmentsView: AssignmentsView
   homeLayout: HomeSectionPref[]
+  subjectLayout: SubjectSectionPref[]
   setTimetableView: (v: TimetableView) => void
   setAssignmentsView: (v: AssignmentsView) => void
   setHomeLayout: (v: HomeSectionPref[]) => void
+  setSubjectLayout: (v: SubjectSectionPref[]) => void
 }
 
 const DisplaySettingsContext = createContext<Ctx>({
@@ -22,6 +25,7 @@ const DisplaySettingsContext = createContext<Ctx>({
   setTimetableView: () => {},
   setAssignmentsView: () => {},
   setHomeLayout: () => {},
+  setSubjectLayout: () => {},
 })
 
 /**
@@ -48,9 +52,11 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
         timetableView: settings.timetableView,
         assignmentsView: settings.assignmentsView,
         homeLayout: settings.homeLayout,
+        subjectLayout: settings.subjectLayout,
         setTimetableView: (v) => persist({ ...settings, timetableView: v }),
         setAssignmentsView: (v) => persist({ ...settings, assignmentsView: v }),
         setHomeLayout: (v) => persist({ ...settings, homeLayout: v }),
+        setSubjectLayout: (v) => persist({ ...settings, subjectLayout: v }),
       }}
     >
       {children}

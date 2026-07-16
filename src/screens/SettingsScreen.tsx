@@ -20,7 +20,9 @@ import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
 import { FONT_LICENSE_TEXT, FONT_LICENSE_TITLE } from '../legal/fontLicense'
 import { useDisplaySettings } from '../displaySettings'
-import HomeLayoutReorder from '../home/HomeLayoutReorder'
+import SectionLayoutReorder from '../ui/SectionLayoutReorder'
+import { HOME_LAYOUT_OPS, HOME_SECTION_META } from '../home/homeSections'
+import { SUBJECT_LAYOUT_OPS, SUBJECT_SECTION_META } from '../subject/subjectSections'
 import Constants from 'expo-constants'
 import { formatVersionLabel } from '../appVersion'
 import { CHANGELOG, getRecentChangelog } from '../changelog'
@@ -32,8 +34,16 @@ export default function SettingsScreen() {
   const ui = useUi()
   const clearance = useTabBarClearance()
   const { preference, setPreference } = useThemeVariant()
-  const { timetableView, assignmentsView, homeLayout, setTimetableView, setAssignmentsView, setHomeLayout } =
-    useDisplaySettings()
+  const {
+    timetableView,
+    assignmentsView,
+    homeLayout,
+    subjectLayout,
+    setTimetableView,
+    setAssignmentsView,
+    setHomeLayout,
+    setSubjectLayout,
+  } = useDisplaySettings()
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
   const [bulletinNotify, setBulletinNotify] = useState<BulletinNotifySettings>({ enabled: true, mode: 'all' })
@@ -179,7 +189,22 @@ export default function SettingsScreen() {
           />
 
           <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>ホームの並び</Text>
-          <HomeLayoutReorder layout={homeLayout} onChange={setHomeLayout} onDragActive={setReordering} />
+          <SectionLayoutReorder
+            layout={homeLayout}
+            meta={HOME_SECTION_META}
+            ops={HOME_LAYOUT_OPS}
+            onChange={setHomeLayout}
+            onDragActive={setReordering}
+          />
+
+          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>科目詳細の並び</Text>
+          <SectionLayoutReorder
+            layout={subjectLayout}
+            meta={SUBJECT_SECTION_META}
+            ops={SUBJECT_LAYOUT_OPS}
+            onChange={setSubjectLayout}
+            onDragActive={setReordering}
+          />
         </Accordion>
 
         <Accordion title="通知" icon="notifications-outline">
