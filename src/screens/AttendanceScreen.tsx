@@ -462,6 +462,12 @@ export default function AttendanceScreen() {
                 <Text style={[styles.status, { color: labelColor, fontSize: 13, fontWeight: '400', marginTop: 8 }]}>
                   出席は登録されていません。CLASSの画面を開いて「出席登録する」を押してください。
                 </Text>
+                {/* 送信診断: 「発火しているのに登録されない」原因（process範囲など）の特定に要る。
+                    失敗時だけ・折りたたまず小さく出す（作者が実機で読める唯一の経路）。 */}
+                <Text selectable style={[styles.diag, { color: labelColor }]}>
+                  診断: btn={String(result?.btnFound)} / method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁
+                  {result?.onclick ? `\n${result.onclick}` : ''}
+                </Text>
                 <View style={styles.failRow}>
                   <Pressable style={[styles.failBtn, { backgroundColor: c.cta }]} onPress={() => setRevealClass(true)}>
                     <Text style={styles.failBtnText}>CLASSの画面を表示</Text>
@@ -542,6 +548,7 @@ const styles = StyleSheet.create({
   ctaText: { color: COLORS.white, fontSize: 17, fontWeight: '600' },
   result: { marginTop: 12, borderRadius: 14, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
+  diag: { fontSize: 10, lineHeight: 14, marginTop: 8 },
   verifyCard: { marginTop: 12, gap: 12 },
   verifyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   verifyText: { fontSize: 14, fontWeight: '600', flex: 1 },

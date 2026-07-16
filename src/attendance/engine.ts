@@ -14,8 +14,16 @@ export interface SubmitResult {
    * （[[submitOutcome]] が失敗判定に使う）。省略時（旧データ）は未知として扱う。
    */
   btnFound?: boolean
-  /** 送信呼び出しの経路（'onclick' | 'click' | 'click-fb' | 'none' | 'err'）。実機診断用。 */
+  /** 送信呼び出しの経路（'pfconfirmcommand' | 'onclick' | 'click' | 'click-fb' | 'none' | 'err'）。実機診断用。 */
   method?: string
+  /**
+   * 実際に実行した送信呼び出しの中身（PrimeFaces.ab の s/p/u など）。実機診断用。
+   * 送信は発火しているのに登録されない場合、process 範囲(p)に認証コード欄が入っていない等の
+   * 原因をこれで特定する（採取fixtureは切り出しのためライブの値が要る）。
+   */
+  onclick?: string
+  /** 認証コード欄へ実際に入った値の桁数（内容は保存しない）。流し込み失敗の切り分け用。 */
+  filled?: number
 }
 
 export interface EngineState {
