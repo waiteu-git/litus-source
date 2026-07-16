@@ -20,7 +20,7 @@ import {
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { loadOnboardingDone, saveOnboardingDone } from '../storage/onboardingStore'
 import { classifyGatePage, type GateVerdict } from './classifyGatePage'
-import { recoverOutcome } from './gateRecovery'
+import { isRecoverPreserved, recoverPlan } from './gateRecovery'
 import { syncSession } from '../collect/syncSession'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
 import OnboardingSlides from '../screens/OnboardingSlides'
@@ -185,11 +185,21 @@ export function LoginGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (state !== 'checking') return
+    // loading 中に probe のロードが既に完了していると onLoadEnd は再発火しない。checking 開始時に
+    // 判定を再取得して、loading 中に来た authed/needsLogin の取りこぼし（→CHECK_TIMEOUTでconnError）を防ぐ。
+    webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
     // 12秒で判定が出ない＝通信不良でページ読込が完了していない（onLoadEnd未発火→DETECT未実行）。
     // これは「要ログイン」ではなく通信起因なので、CLASSログイン画面ではなく接続エラー表示へ。
     const t = setTimeout(() => setState((s) => (s === 'checking' ? 'connError' : s)), CHECK_TIMEOUT_MS)
     return () => clearTimeout(t)
   }, [state, nonce])
+
+  // 可視ログイン（needsLogin＝ユーザー操作中）に入ったら復帰カウンタを0に戻す。
+  // 起動probeの通信失敗回数を対話ログインへ持ち越して、本物のログインを早まって connError に
+  // 逸らさないため（レビュー指摘）。
+  useEffect(() => {
+    if (state === 'needsLogin') recoverTriesRef.current = 0
+  }, [state])
 
   // connError: 通信が戻ったら自動で復帰できるよう、静かに再probeする（メンテと同型）。
   // recoverTries をリセットして nonce を上げ、probe WebView を作り直す（状態は connError のまま）。
@@ -255,15 +265,18 @@ export function LoginGate({ children }: { children: ReactNode }) {
    * 上限を超えたら needsLogin（可視WebView＋再読み込みボタン）に落として手動復帰へ。
    */
   function recover() {
-    if (recoverOutcome(recoverTriesRef.current) === 'connError') {
+    const plan = recoverPlan(stateRef.current, recoverTriesRef.current)
+    // needsLogin（入力中）と connError（再probeは専用intervalが駆動）は触らない。
+    if (plan === 'noop') return
+    if (plan === 'toConnError') {
       // 通信起因の失敗が続いた＝ログイン切れではない。CLASSログイン画面ではなく接続エラー表示へ。
-      setState((s) => (s === 'firstRun' || s === 'loading' ? s : 'connError'))
+      // ただし規約同意/初回/loading の画面は壊さない（consent画面を消すと規約バイパスに繋がる）。
+      setState((s) => (isRecoverPreserved(s) ? s : 'connError'))
       return
     }
     recoverTriesRef.current += 1
     setNonce((n) => n + 1)
-    // connError からの再probe中に load エラーが来ても、スピナー(checking)へ戻さず connError を保つ。
-    setState((s) => (s === 'firstRun' || s === 'loading' || s === 'connError' ? s : 'checking'))
+    setState((s) => (isRecoverPreserved(s) ? s : 'checking'))
   }
 
   /** setup（時間割）完了後の遷移先。初回はフル同期（コース→課題）も可視で済ませる。 */
