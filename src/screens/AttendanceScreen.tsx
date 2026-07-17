@@ -87,11 +87,22 @@ export default function AttendanceScreen() {
     [],
   )
 
+  // 任意提出: リアペ必須でなくても、CLASSに提出ボタンが出ている＝書ける授業では書けるようにする
+  // （ユーザー要望 2026-07-17「ボタンがあるなら常に書けるように」）。必須(reactionPending)は
+  // 常にフォームを出す。任意はユーザーが「書く」で開いたときだけ出す（普段は邪魔しない）。
+  // ※下書き復元effectが showReactionForm を依存に取るため、必ずその前に宣言する（TDZ回避）。
+  const reactionAvailable = !!reception?.reactionAvailable
+  const [reactionOpen, setReactionOpen] = useState(false)
+  const showReactionForm = reactionPending || reactionOpen
+  // 任意提出の導線は、書ける授業で・まだ開いておらず・提出処理中でないときだけ出す。
+  const canOpenReaction = reactionAvailable && !reactionPending && !reactionOpen
+
   // リアペ本文（アプリ内提出用）。提出確定（出席済み検知）までAsyncStorageに下書き保全し、
   // 失敗・アプリ再起動でも本文を失わない。復元条件（同日＋科目照合）は純粋関数側。
   const [reactionText, setReactionText] = useState('')
   useEffect(() => {
-    if (!reactionPending) return
+    // 必須(reactionPending)だけでなく任意提出でフォームを開いた時も下書きを復元する。
+    if (!showReactionForm) return
     let alive = true
     loadReactionDraft()
       .then((d) => {
@@ -102,7 +113,7 @@ export default function AttendanceScreen() {
     return () => {
       alive = false
     }
-  }, [reactionPending, reactionCourse])
+  }, [showReactionForm, reactionCourse])
   const onChangeReactionText = (t: string) => {
     setReactionText(t)
     saveReactionDraft({ date: todayKey(new Date()), courseName: reactionCourse, text: t }).catch(() => undefined)
@@ -110,14 +121,6 @@ export default function AttendanceScreen() {
   const reactionSending = reactionSubmit.status === 'sending'
   const reactionLen = reactionLength(reactionText)
   const reactionOver = reactionLen > REACTION_MAX_LEN
-  // 任意提出: リアペ必須でなくても、CLASSに提出ボタンが出ている＝書ける授業では書けるようにする
-  // （ユーザー要望 2026-07-17「ボタンがあるなら常に書けるように」）。必須(reactionPending)は
-  // 常にフォームを出す。任意はユーザーが「書く」で開いたときだけ出す（普段は邪魔しない）。
-  const reactionAvailable = !!reception?.reactionAvailable
-  const [reactionOpen, setReactionOpen] = useState(false)
-  const showReactionForm = reactionPending || reactionOpen
-  // 任意提出の導線は、書ける授業で・まだ開いておらず・提出処理中でないときだけ出す。
-  const canOpenReaction = reactionAvailable && !reactionPending && !reactionOpen
   const confirmReactionSubmit = () => {
     // CLASS側の「提出」に事前確認は無い（onclickが直接PrimeFaces.ab）ため、確認はアプリ側で行う。
     Keyboard.dismiss()
@@ -231,7 +234,8 @@ export default function AttendanceScreen() {
               <Text style={styles.ctaText}>再確認</Text>
             </Pressable>
           </View>
-        ) : attendedNow ? (
+        ) : attendedNow && !reactionOpen ? (
+          <>
           <View style={[styles.card, cardStyle, styles.hero]}>
             <View style={styles.liveBadgeRow}>
               <Ionicons name="checkmark-circle" size={16} color={ui.colors.success} />
@@ -254,8 +258,22 @@ export default function AttendanceScreen() {
               <Text style={[styles.doneOther, { color: labelColor }]}>他の端末で出席登録済み</Text>
             )}
           </View>
-        ) : reactionPending ? (
-          // リアペ待ち: 出席コードは受理済み。本文をアプリ内で書いて提出できる（②フォームへ流し込み）。
+          {/* 出席済みでも、リアペを出せる授業なら書ける（任意提出・ユーザー要望 2026-07-17）。 */}
+          {canOpenReaction ? (
+            <Pressable
+              style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
+              onPress={() => setReactionOpen(true)}
+            >
+              <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
+                リアクションペーパーを書く
+              </Text>
+            </Pressable>
+          ) : null}
+          </>
+        ) : showReactionForm ? (
+          // リアペ入力。2通り:
+          //  ・必須(reactionPending): 出席コードは受理済みだが提出しないと出席にならない＝常に出す。
+          //  ・任意(reactionOpen): CLASSに提出ボタンが出ている授業で、ユーザーが「書く」で開いたとき。
           // 提出後は既存の .attendSuc 検知が attended に切り替える。CLASS画面での手動提出も常に併設
           // （actuatorスタブ環境・DOM変化時の逃げ道）。
           <>
@@ -264,7 +282,9 @@ export default function AttendanceScreen() {
                 <Ionicons name="create-outline" size={30} color={ui.accent} />
               </View>
               <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
-                出席コードは受理されました。リアクションペーパーを提出すると出席になります
+                {reactionPending
+                  ? '出席コードは受理されました。リアクションペーパーを提出すると出席になります'
+                  : 'リアクションペーパーを提出できます（この授業では出席の条件ではありません）'}
               </Text>
               {reception?.courseName || reception?.confirmWindow ? (
                 <Text style={[styles.conflictSub, { color: labelColor }]}>
@@ -335,6 +355,17 @@ export default function AttendanceScreen() {
                 CLASSの画面で書く
               </Text>
             </Pressable>
+
+            {/* 任意提出は閉じられる（必須は出席の条件なので閉じさせない）。下書きは保持したまま。 */}
+            {!reactionPending ? (
+              <Pressable
+                style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
+                disabled={reactionSending}
+                onPress={() => setReactionOpen(false)}
+              >
+                <Text style={[styles.reactionGhostText, { color: labelColor }]}>閉じる（下書きは残ります）</Text>
+              </Pressable>
+            ) : null}
           </>
         ) : closed ? (
           <View style={[styles.card, cardStyle, styles.hero]}>
@@ -516,6 +547,19 @@ export default function AttendanceScreen() {
                   trackColor={ui.colors.softBoxBg}
                 />
               </View>
+            ) : null}
+
+            {/* 受付中でも、リアペを出せる授業なら書ける（任意提出・ユーザー要望 2026-07-17）。
+                必須(reaction_pending)ではないので、出席登録の邪魔をしないよう控えめな導線にする。 */}
+            {canOpenReaction ? (
+              <Pressable
+                style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
+                onPress={() => setReactionOpen(true)}
+              >
+                <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
+                  リアクションペーパーを書く
+                </Text>
+              </Pressable>
             ) : null}
           </>
         )}
