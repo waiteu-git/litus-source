@@ -27,6 +27,8 @@ import Constants from 'expo-constants'
 import { formatVersionLabel } from '../appVersion'
 import { formatSubmitDiag, type SubmitDiag } from '../attendance/submitDiag'
 import { clearSubmitDiags, loadSubmitDiags } from '../storage/submitDiagStore'
+import { useSync } from '../sync/SyncProvider'
+import { attendanceStatsDiagLine } from '../health/attendanceStatsDiag'
 import { CHANGELOG, getRecentChangelog } from '../changelog'
 import ChangelogModal from '../ui/ChangelogModal'
 
@@ -36,6 +38,8 @@ export default function SettingsScreen() {
   const ui = useUi()
   const clearance = useTabBarClearance()
   const { preference, setPreference } = useThemeVariant()
+  // 出欠状況の取得ぐあい（前回成功時刻・失敗理由）を診断行に出すため。
+  const { attendanceStatsHealth, lastAttendanceStatsAt } = useSync()
   const {
     timetableView,
     assignmentsView,
@@ -306,6 +310,20 @@ export default function SettingsScreen() {
               ))}
             </View>
           )}
+
+          {/* 出欠状況の取得ぐあいを可視化する。収集ヘルスは保存していたのにUIに出ておらず、
+              「授業時間外でも取れない」の原因（競合／ログイン切れ／構造変化）をユーザーも開発者も
+              確認できなかった（2026-07-18）。ここで前回取得時刻と失敗理由を1行で示す。 */}
+          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>出欠状況の取得</Text>
+          <View style={ui.card}>
+            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>
+              {attendanceStatsDiagLine({
+                health: attendanceStatsHealth?.health ?? null,
+                lastSuccessAt: lastAttendanceStatsAt,
+                now: new Date(),
+              })}
+            </Text>
+          </View>
         </Accordion>
 
         <Accordion title="データ" icon="server-outline">
