@@ -179,6 +179,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const reactionBusyRef = useRef(false)
   const reactionTextRef = useRef('')
   const reactionFillTriesRef = useRef(0)
+  // この提出が「必須」だったか（submitReaction 時点の状態で確定させる。提出後は状態が変わるため
+  // 都度参照だと判定がぶれる）。必須=.attendSuc 待ち／任意=リアペが提出済みになるのを待つ。
+  const reactionRequiredRef = useRef(false)
+  // リアペを書けるか（＝ボタンあり＋未提出）の最新値。任意提出の成功確定に使う。
+  const reactionAvailableRef = useRef(false)
   const reactionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   // 上限到達で自動再試行を打ち切った状態。UIの案内文を切り替えるため state で持つ。
   const [conflictExhausted, setConflictExhausted] = useState(false)
@@ -191,6 +196,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // ポーリング条件を最新の受付状態で判定するための ref（interval クロージャの stale 回避）。
   const receptionStatusRef = useRef<AttendanceStatus | undefined>(undefined)
   receptionStatusRef.current = state.reception?.status
+  reactionAvailableRef.current = state.reception?.reactionAvailable === true
 
   phaseRef.current = state.phase
 
@@ -464,6 +470,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     }
     reactionTextRef.current = text
     reactionFillTriesRef.current = 0
+    // 提出開始時の状態で「必須か」を確定させる（提出後に状態が変わるので後から見ない）。
+    reactionRequiredRef.current = receptionStatusRef.current === 'reaction_pending'
     reactionBusyRef.current = true
     setReactionSubmitState({ status: 'sending', message: null })
     inject(OPEN_REACTION_FORM_JS)
@@ -555,19 +563,30 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       }
       // m.kind === 'fill'
       if (m.ok) {
-        // 提出発火済み。応答テキストに頼らず、出席状態を取り直して③（.attendSuc）で確定する
-        // （コード送信後の確認と同じ流儀）。確定は attendance ハンドラ側の resetReaction が担う。
+        // 提出発火済み。応答テキストに頼らず、出席ページを取り直して**確定マーカー**で判定する。
+        // 確定マーカーは提出の種類で違う:
+        //  ・必須(reaction_pending由来): .attendSuc（提出して初めて「出席」になる）
+        //  ・任意(それ以外): リアペが「提出済み」になる＝reactionAvailable が false になること。
+        //    任意提出は出席と紐づかないので .attendSuc を待つと**成功しても必ず失敗表示**になる。
+        const doneNow = () =>
+          reactionRequiredRef.current
+            ? receptionStatusRef.current === 'attended'
+            : !reactionAvailableRef.current
         scheduleReaction(() => {
           if (shouldRenderRef.current && !collectActiveRef.current) refreshAttendance()
         }, 2500)
         scheduleReaction(() => {
-          if (shouldRenderRef.current && !collectActiveRef.current && receptionStatusRef.current !== 'attended') {
+          if (shouldRenderRef.current && !collectActiveRef.current && !doneNow()) {
             refreshAttendance()
           }
         }, 6000)
         scheduleReaction(() => {
-          if (reactionBusyRef.current && receptionStatusRef.current !== 'attended') {
+          if (reactionBusyRef.current && !doneNow()) {
             failReaction('提出結果を確認できませんでした。本文は保存されています。「CLASSの画面で書く」から状況を確認してください')
+          } else if (reactionBusyRef.current) {
+            // 任意提出の成功確定（必須は attendance ハンドラ側の resetReaction が畳む）。
+            resetReaction()
+            clearReactionDraft().catch(() => undefined)
           }
         }, 11000)
         return
@@ -625,9 +644,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       // CLASSが「出席済み」を示したら、どのデバイスで出していても記録を更新（授業間の継続表示・
       // オフライン補助）。CLASSの状態が正。配信済みの受付open通知も消す（自分の送信/別デバイス出席いずれも）。
       if (rec.status === 'attended') {
-        // リアペ提出フロー中（または直前までリアペ待ち）だった場合はここが成功の確定点。
+        // リアペ**必須**の提出フロー中（または直前までリアペ待ち）だった場合はここが成功の確定点。
         // 進行状態を畳み、保全していた下書きを消す（提出済み本文を別授業へ誤復元しない）。
-        if (reactionBusyRef.current || receptionStatusRef.current === 'reaction_pending') {
+        // 任意提出は出席と紐づかない（元から出席済みでもあり得る）ので、ここを確定点にすると
+        // **提出の成否を見ないまま下書きを消す**。任意の確定は reactionAvailable が false になること
+        // （fill後の11秒判定 doneNow が担う）。
+        const requiredFlow = reactionBusyRef.current && reactionRequiredRef.current
+        if (requiredFlow || (!reactionBusyRef.current && receptionStatusRef.current === 'reaction_pending')) {
           resetReaction()
           clearReactionDraft().catch(() => undefined)
         }
