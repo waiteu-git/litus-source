@@ -33,10 +33,18 @@ import ClassHeadlessCollector from './ClassHeadlessCollector'
  * 完了時に必ず health を保存する＝多重画面競合(blocked)・未着地(blocked)・構造変更(structure_drift)が
  * 事実として残る。
  */
-export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: () => void }) {
+export default function AttendanceStatsSyncEngine({
+  onFinished,
+}: {
+  /** 収集の成否を渡す。**成功時のみ** once-per-boot を確定させるため（失敗は再試行に回す）。 */
+  onFinished: (succeeded: boolean) => void
+}) {
   const obs = useRef(createHealthObservation())
   const diag = useRef<AttendanceStatsCollectDiag | null>(null)
   const parsedCount = useRef(0)
+  // 保存まで到達したか。onFinished は成功・0件・競合・タイムアウトの全経路で呼ばれるため、
+  // 「成功で終わったのか」をここで持って伝える（呼び出し側が成否で分岐できるように）。
+  const succeeded = useRef(false)
 
   return (
     <ClassHeadlessCollector
@@ -70,6 +78,7 @@ export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: 
           // 最終成功時刻。背景トリガの鮮度TTL（6h）判定に使う＝起動のたびにCLASSを触らない。
           // 失敗（0件・未着地）では更新しない＝「取れていないのに鮮度内」で黙って諦めないこと。
           await saveAttendanceStatsRefreshedAt()
+          succeeded.current = true
         } catch {
           // 保存失敗でも到達済みなので完了扱い（無駄打ちしない）。
         }
@@ -81,7 +90,7 @@ export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: 
           'attendanceStats',
           attendanceStatsHealth(obs.current, diag.current, parsedCount.current),
         ).catch(() => undefined)
-        onFinished()
+        onFinished(succeeded.current)
       }}
     />
   )

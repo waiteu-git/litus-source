@@ -3,60 +3,72 @@ import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { useSync } from '../sync/SyncProvider'
 import { subscribeForeground } from '../app/foregroundOrchestrator'
 import { syncSession } from './syncSession'
+import { shouldAttemptAttendanceStats } from './attendanceStatsRetry'
 
-// 起動直後の描画・掲示/LETUS同期と競合しないよう、少し待ってから開始する（掲示より後ろ）。
+// 起動直後の描画・掲示/LETUS同期と競合しないよう、少し待ってから最初の試行を立てる（掲示より後ろ）。
 const START_DELAY_MS = 9000
+// 「再試行してよい時刻か」を確認する tick 間隔。実際の再試行間隔（12分）は shouldAttemptAttendanceStats
+// が判定するので、この tick はそれより細かくてよい（tick を進めるだけ＝収集はしない軽い処理）。
+const RECHECK_INTERVAL_MS = 60 * 1000
 
 /**
- * 出欠状況を起動時とフォアグラウンド復帰時に取りに行く薄いトリガ。
- * エンジンのマウント・完了処理は SyncProvider が単独所有し、ここはスケジューリングだけを担う
- * （BackgroundBulletinSync と同契約）。
+ * 出欠状況を起動時・フォアグラウンド復帰時・**失敗後の再試行**として取りに行く薄いトリガ。
+ * エンジンのマウント・完了処理は SyncProvider が単独所有し、ここはスケジューリングだけを担う。
  *
- * **「最低1日1回は更新されてほしい」への回答（ユーザー要望 2026-07-17）**:
- * このアプリに**バックグラウンド実行は無い**（expo-background-fetch/TaskManager の依存もコードも無い
- * ＝WebViewスクレイピング方式の必然）。したがって保証できるのは「**アプリを開いた日は必ず1回は取る**」
- * まで。開かない日は取得できない。これを満たすため:
- *   - 起動時（cold start）に1回
- *   - フォアグラウンド復帰時にも再評価（開きっぱなしで日をまたぐ端末を拾う）
- * いずれも鮮度TTL（6h・runner側で判定）を通すので、1日に取りに行くのは最大4回＝CLASS負荷は増えない
- * （[[litus-load-audit-2026-07-13]]「静かに運用」）。
+ * **v97 の不具合（2026-07-18修正・多角レビューで反証通過）**: 以前は once-per-boot フラグ1つでゲート
+ * しており、そのフラグが収集の**失敗でも立って**いた。起動直後の取得が 0 件で終わると、フォアグラウンド
+ * 復帰までフラグが下りず、アプリを開きっぱなしの端末では**二度と自動取得しなかった**（ユーザー報告
+ * 「一度取得できないとずっと取得できない」）。修正後は成功時のみ once-per-boot を確定し、失敗は
+ * 間隔（12分）を空けて最大回数（5回）まで自動再試行する。可否は shouldAttemptAttendanceStats（純粋・
+ * テスト済み）が決める。
  *
- * 授業中は出席WebViewがCLASSセッションを専有するため runner 側の decideClassSync が見送る。
- * 実測（2026-07-17・ユーザー報告）でも授業外なら取れている。見送られても TTL は消費しない
- * （鮮度時刻は収集成功時しか更新されない）ので、授業が終わった後の復帰で取り直せる。
+ * バックグラウンド実行は無い（WebViewスクレイピングの必然）ので、保証は「アプリを開いている間に
+ * 取りに行く」まで。鮮度TTL（6h・runner側）と再試行の上限で CLASS 負荷は抑える
+ * （[[litus-load-audit-2026-07-13]]「静かに運用」）。授業中は runner の decideClassSync が見送る。
  */
 export default function BackgroundAttendanceStatsSync() {
-  // フォアグラウンド復帰の再評価トリガー（授業終了後・TTL経過後に開始し直すため）。
-  const [wakeTick, setWakeTick] = useState(0)
+  // 再評価トリガー（初回遅延・定期リチェック・フォアグラウンド復帰で進める）。
+  const [tick, setTick] = useState(0)
   // 授業時間帯（出席WebViewが稼働）はCLASSセッションを出席が専有する。running が下がれば再評価される。
   const { running } = useAttendanceEngine()
   const { runAttendanceStatsSync, attendanceStatsBusy } = useSync()
 
+  // 起動直後に最初の tick を遅延で立てる（描画・他同期との競合回避）。
   useEffect(() => {
-    if (syncSession.attendanceStatsSyncedThisBoot) return
-    let cancelled = false
-    const t = setTimeout(() => {
-      if (cancelled || running) return
-      // 鮮度TTL・アクセス可否・授業中判定はすべて runner が持つ（背景source＝無音スキップ）。
-      // ここで TTL を判定して syncedThisBoot を立てないこと: 立てると復帰時の再評価が死に、
-      // 「開きっぱなしで日をまたぐ」端末が永久に更新されなくなる。
-      runAttendanceStatsSync({ source: wakeTick > 0 ? 'foreground' : 'boot' })
-    }, START_DELAY_MS)
-    return () => {
-      cancelled = true
-      clearTimeout(t)
-    }
-    // attendanceStatsBusy を依存に含める: 走行中の再評価は runner の in-flight ガードが弾き、
-    // 完走（busy下降）後にまだ未確定なら（＝途中破棄されていたら）再試行の機会になる。
-  }, [running, wakeTick, runAttendanceStatsSync, attendanceStatsBusy])
+    const t = setTimeout(() => setTick((n) => n + 1), START_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [])
 
-  // フォアグラウンド復帰で再評価する。TTL内なら runner が無音で見送るため、ここは素直に叩いてよい。
-  // （letusSync スロットと同じく最後発の枠に相乗りさせ、Auth再温め・出席再判定の後に来るようにする）
+  // 失敗が残っている間は定期的に再評価する（前面滞在中でも回復の機会を与える）。
+  // 成功して once-per-boot が確定すれば shouldAttempt が false を返し実収集は走らない
+  // （runner の鮮度TTLと二重の歯止め）。tick を進めるだけの軽い処理。
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), RECHECK_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    if (running) return // 授業中は出席がCLASSを専有。running 下降で再評価される。
+    if (attendanceStatsBusy) return // 収集中は二重起動しない（runner の in-flight ガードと二重歯止め）。
+    const attempt = shouldAttemptAttendanceStats({
+      succeededThisBoot: syncSession.attendanceStatsSyncedThisBoot,
+      attempts: syncSession.attendanceStatsAttempts,
+      lastAttemptAt: syncSession.attendanceStatsLastAttemptAt,
+      now: Date.now(),
+    })
+    if (!attempt) return
+    // 初回は boot、再試行・復帰後は foreground（鮮度TTLの扱いは同じ＝背景source）。
+    runAttendanceStatsSync({ source: syncSession.attendanceStatsAttempts === 0 ? 'boot' : 'foreground' })
+  }, [tick, running, attendanceStatsBusy, runAttendanceStatsSync])
+
+  // フォアグラウンド復帰は「取り直してよい」強いシグナル。試行カウントをリセットし、失敗打ち切り
+  // （最大回数）も解除して再評価する（授業終了後・長時間経過後に取り直す）。
+  // 成功済みフラグは触らない: 成功していれば鮮度TTL（6h）が二重取得を防ぐ。未成功なら次の tick で試す。
   useEffect(() => {
     return subscribeForeground('letusSync', () => {
-      // 復帰のたびに once-per-boot を解除して再評価させる。実際に取りに行くかは runner の TTL 判定次第。
-      syncSession.attendanceStatsSyncedThisBoot = false
-      setWakeTick((t) => t + 1)
+      syncSession.attendanceStatsAttempts = 0
+      syncSession.attendanceStatsLastAttemptAt = null
+      setTick((n) => n + 1)
     })
   }, [])
 

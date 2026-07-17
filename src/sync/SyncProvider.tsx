@@ -246,6 +246,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         return 'skipped'
       }
       clearSkip('class')
+      // 背景トリガの試行だけ記録する（再試行の間隔・最大回数の判定材料）。手動(user)は常に走らせたい
+      // ので数えない。成功時に onAttendanceStatsFinished がこのカウントを 0 へ戻す。
+      if (source !== 'user') {
+        syncSession.attendanceStatsAttempts += 1
+        syncSession.attendanceStatsLastAttemptAt = Date.now()
+      }
       attendanceStatsBusyRef.current = true
       setAttendanceStatsBusy(true)
       return 'started'
@@ -321,11 +327,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
   }, [runAssignmentsSync, runAttendanceStatsSync])
 
-  const onAttendanceStatsFinished = useCallback(() => {
+  const onAttendanceStatsFinished = useCallback((succeeded: boolean) => {
     attendanceStatsBusyRef.current = false
     setAttendanceStatsBusy(false)
-    // once-per-boot は**完走**で確定する（掲示と同契約。開始時に立てると途中破棄で空費する）。
-    syncSession.attendanceStatsSyncedThisBoot = true
+    // once-per-boot は**成功したときだけ**確定する。v97 では成否問わず立てていたため、起動直後の
+    // 背景取得が 0 件で終わると、開きっぱなしの端末では二度と自動取得しなかった（2026-07-18修正）。
+    // 失敗はここで syncSession を触らない＝shouldAttemptAttendanceStats が間隔を空けて再試行する。
+    if (succeeded) {
+      syncSession.attendanceStatsSyncedThisBoot = true
+      syncSession.attendanceStatsAttempts = 0
+    }
     loadAttendanceStatsRefreshedAt().then(setLastAttendanceStatsAt).catch(() => undefined)
     loadCollectionHealth()
       .then((m) => setAttendanceStatsHealth(m.attendanceStats ?? null))
