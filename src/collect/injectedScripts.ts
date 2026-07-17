@@ -119,19 +119,25 @@ export const OPEN_ATTENDANCE_JS = `(function(){
       try { el.click(); return 'click-fb'; } catch (e2) { return 'err'; }
     }
   }
-  // 着地ガード（OPEN_TIMETABLE_JS / OPEN_ATTENDANCE_STATS_JS と同型）: 既に出席登録ページ
-  // (Xua00101) に居るならメニューを叩かない。授業中の30秒ポーリングで onLoadEnd 毎に再クリック→
+  // 着地ガード（OPEN_TIMETABLE_JS / OPEN_ATTENDANCE_STATS_JS と同型）: 既に出席登録ページに
+  // 居るならメニューを叩かない。授業中の30秒ポーリングで onLoadEnd 毎に再クリック→
   // フルPOST連打（1コマ90分で最大約180回のCLASS POST）になるのを防ぐ。着地判定は RN 側の
-  // classifyClassPage と同じ定義＝「出席ページURL(isAttendanceUrl) or 受付フォームあり」。
-  // 受付中の授業が無い状態はフォームが消えて hasClassMenu だけ立つため URL で着地を確定する。
-  // 受付状況の抽出は呼び出し側が別途 DETECT_ATTENDANCE_JS を撃つので、ここは遷移抑止だけ担う。
+  // classifyClassPage と同じ定義に揃える。
+  // **実測(2026-07-17)で判明**: 実URLは xut113/Xut11301（授業なし）・xut124/Xut12401（授業あり）で、
+  // 旧の xua001|Xua00101 正規表現は**一度も当たらない**（画面の [Xua001] は機能IDでURLではない）。しかも
+  // 認証コード欄と「出席登録する」は**出席済みだと消える**。旧実装はこの2つだけを見ていたため、
+  // 出席済みページで着地を見失い、メニューを叩き直していた（＝portal誤判定→navFailed の一因）。
+  // → 主判定を「前の授業/次の授業ナビ」（出席ページの全状態に在りリアペページには無い不変マーカー）にする。
   function onAttendancePage(){
     try {
       var href = (location && location.href) || '';
-      if (/xua001|Xua00101/i.test(href)) return true;
+      if (/Xua00101|Xut11301|Xut12401/i.test(href)) return true;
       var body = document.body ? (document.body.innerText || '') : '';
       var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit]'));
-      var hasSubmit = btns.some(function(b){ return (((b.textContent || b.value) || '').replace(/\\s+/g, '')).indexOf('出席登録する') >= 0; });
+      function bt(b){ return (((b.textContent || b.value) || '').replace(/\\s+/g, '')); }
+      var hasNav = btns.some(function(b){ var t = bt(b); return t.indexOf('前の授業') >= 0 || t.indexOf('次の授業') >= 0; });
+      if (hasNav) return true;
+      var hasSubmit = btns.some(function(b){ return bt(b).indexOf('出席登録する') >= 0; });
       return hasSubmit && body.indexOf('認証コード') >= 0;
     } catch (e) { return false; }
   }
@@ -321,6 +327,13 @@ export const DETECT_PAGE_JS = `(function(){
     var hasAttendanceForm = hasSubmitBtn && body.indexOf('認証コード') >= 0;
     var hasEnterSplash = btns.some(function(b){ var t=txt(b); return t.indexOf('PC')>=0 && /ENTER/i.test(t); });
     var hasClassMenu = body.indexOf('出欠管理') >= 0;
+    // 出席ページの「前の授業／次の授業」ナビ。**出席ページの全状態（受付中/受付なし/出席済み）に在り、
+    // リアペ提出ページには無い**（実DOM3種で実測 2026-07-17）＝フォームが消える出席済みでも着地を確定できる
+    // 唯一の不変マーカー。これが無かったため出席済みページが portal 誤判定→navFailed に落ちていた。
+    var hasAttendanceNav = btns.some(function(b){
+      var t = txt(b);
+      return t.indexOf('前の授業') >= 0 || t.indexOf('次の授業') >= 0;
+    });
     // ログアウトリンク=ログイン済みの普遍シグナル。ログイン後ポータルに「出欠管理」文字が
     // 無い画面でも authed と判定できるようにする（ログイン済みなのにログイン表示になる不具合対策）。
     var hasLogout = btns.some(function(b){
@@ -343,6 +356,7 @@ export const DETECT_PAGE_JS = `(function(){
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'page', hasPasswordInput: hasPassword, hasAttendanceForm: hasAttendanceForm,
       hasEnterSplash: hasEnterSplash, hasClassMenu: hasClassMenu, hasLogout: hasLogout,
+      hasAttendanceNav: hasAttendanceNav,
       hasSystemError: hasSystemError, hasMultiScreen: hasMultiScreen, hasSsoStale: hasSsoStale,
       hasMaintenance: hasMaintenance, hasBulletinList: hasBulletinList, url: location.href
     }));

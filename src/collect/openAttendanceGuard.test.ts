@@ -117,3 +117,34 @@ describe('OPEN_ATTENDANCE_JS 着地ガード', () => {
     expect(posted.some((m) => m.stage === 'attendance-already')).toBe(false)
   })
 })
+
+describe('着地ガード回帰: 実URL・出席済みページ（実機採取 2026-07-17）', () => {
+  // 実URL（アドレスバー実測）: 授業なし=xut113/Xut11301・授業あり=xut124/Xut12401。
+  // 旧ガードは /xua001|Xua00101/ を見ていたため**実URLに一度も当たらず**、さらに出席済みだと
+  // 認証コード欄も「出席登録する」も消えるため、着地しているのにメニューを叩き直していた。
+  const REAL_ATTENDED_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut124/Xut12401.xhtml'
+
+  it('出席済みページ（実URL Xut12401・フォーム無し・前の授業/次の授業あり）→ メニューを叩かない', () => {
+    const menuAnchor = anchor('モバイル出席登録', 'menuForm:mobileAttendance')
+    const { posted, anchors } = runOpenAttendance({
+      url: REAL_ATTENDED_URL,
+      anchors: [menuAnchor],
+      body: '出席 リアクションペーパー提出済み',
+      submitButtons: [submitBtn('前の授業'), submitBtn('次の授業'), submitBtn('再表示する')],
+    })
+    expect(posted.some((m) => m.stage === 'attendance-already')).toBe(true)
+    expect(anchors[0]._clicked).toBe(0)
+  })
+
+  it('URLが汎用でも「前の授業/次の授業」があれば着地とみなす（不変マーカー）', () => {
+    const menuAnchor = anchor('モバイル出席登録', 'menuForm:mobileAttendance')
+    const { posted, anchors } = runOpenAttendance({
+      url: PORTAL_URL,
+      anchors: [menuAnchor],
+      body: '出席',
+      submitButtons: [submitBtn('前の授業'), submitBtn('次の授業')],
+    })
+    expect(posted.some((m) => m.stage === 'attendance-already')).toBe(true)
+    expect(anchors[0]._clicked).toBe(0)
+  })
+})

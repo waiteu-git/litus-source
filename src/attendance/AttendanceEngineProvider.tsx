@@ -510,6 +510,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         hasAttendanceForm: !!parsed.hasAttendanceForm,
         hasEnterSplash: !!parsed.hasEnterSplash,
         hasClassMenu: !!parsed.hasClassMenu,
+        // 出席ページの不変マーカー（前の授業/次の授業）。渡さないと出席済みページ（フォーム消滅）が
+        // portal に落ち、着地しているのに navFailed になる（実機バグ 2026-07-17）。
+        hasAttendanceNav: !!parsed.hasAttendanceNav,
         hasSystemError: !!parsed.hasSystemError,
         hasMultiScreen: !!parsed.hasMultiScreen,
         // SSO stale（過去のリクエスト/CSRF）を渡さないと 'other' に落ち、booting のまま navFailed になる。
