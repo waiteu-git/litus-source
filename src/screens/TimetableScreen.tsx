@@ -22,6 +22,7 @@ import { syncSkipMessage } from '../health/syncSkipNotice'
 import { decideClassSync } from '../sync/classSyncConfirm'
 import { useClassView } from '../collect/classViewArbiter'
 import { useSyncSkipNotice } from '../ui/useSyncSkipNotice'
+import { useSync } from '../sync/SyncProvider'
 import TimetableSyncEngine from '../collect/TimetableSyncEngine'
 import CourseUpdateEngine from '../collect/CourseUpdateEngine'
 import { currentPeriodNumber } from '../attendance/classPeriod'
@@ -39,7 +40,6 @@ import { pickCellEvent, upcomingMakeups } from '../timetableEvents/eventSelector
 import { cellBadgeText, shortDate } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { useAttendanceVersion } from '../attendance/attendanceVersion'
-import AttendanceStatsSyncEngine from '../collect/AttendanceStatsSyncEngine'
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadAttendanceOverrides } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk } from '../attendance/attendanceRisk'
@@ -98,8 +98,6 @@ export default function TimetableScreen() {
   const selDayAutoRef = useRef(true)
   // 時間割の裏取得中フラグ。true の間だけ headless エンジンをマウントして収集する。
   const [syncing, setSyncing] = useState(false)
-  // 出欠統計の裏取得中フラグ。時間割収集の完了後にのみ true にする（CLASSセッションの同時アクセスを避けるため）。
-  const [attendanceSyncing, setAttendanceSyncing] = useState(false)
   // LETUSコース更新チェック中フラグ。引っ張り更新で起動（LETUS側＝CLASS収集と競合しないので並走）。
   // 鮮度TTL内のコースはエンジン側でスキップされるため、引っ張るたびに全コースを巡回はしない。
   const [courseChecking, setCourseChecking] = useState(false)
@@ -116,6 +114,8 @@ export default function TimetableScreen() {
   const [unreadCodes, setUnreadCodes] = useState<Set<string>>(new Set())
   // 手動更新をガードでスキップした理由の一時表示（リリースでも出す）。
   const { message: syncNotice, show: showSyncNotice, clear: clearSyncNotice } = useSyncSkipNotice()
+  // 出欠収集は SyncProvider が単独所有する（この画面はマウントせず runner を呼ぶだけ）。
+  const { runAttendanceStatsSync, lastAttendanceStatsAt } = useSync()
 
   const reloadAttendance = () => {
     ;(async () => {
@@ -169,6 +169,10 @@ export default function TimetableScreen() {
 
   // 時間割の裏取得を開始する。force=false ならスロットル（前回更新から時間が経っている時だけ）。
   // override=true は授業中確認ダイアログの「更新する」から呼ぶ（出席検知を一時停止して更新）。
+  // この同期runが授業中のoverrideで始まったか。時間割の完走後に出欠を続けて取るとき、同じ許可を
+  // 引き継ぐために要る（引き継がないと「確認して時間割は更新できたのに出欠だけ黙ってブロック」＝
+  // ユーザー報告の『授業時間中の強制同期で出欠が取れない』がそのまま残る）。
+  const syncOverrideRef = useRef(false)
   const startSync = useCallback((force: boolean, override = false) => {
     if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
     // CLASS定時メンテナンス帯/オフラインは収集不能。手動(force=引っ張り)時はスキップ理由を短時間表示する。
@@ -201,6 +205,7 @@ export default function TimetableScreen() {
     const begin = () => {
       // 収集開始時は残っているスキップ通知（と自動消去タイマー）を確実に片付ける（HomeScreenと同契約）。
       clearSyncNotice()
+      syncOverrideRef.current = override
       syncingRef.current = true
       setSyncing(true)
     }
@@ -218,6 +223,20 @@ export default function TimetableScreen() {
   useEffect(() => {
     loadClassEvents().then(setEvents).catch(() => undefined)
   }, [eventsVersion])
+
+  // 出欠が**取れた**ら画面へ反映する。収集の所有権は SyncProvider にあるので、結果は鮮度時刻の
+  // 変化で受け取る（誰が起動したか＝時間割の引っ張り更新／ホームの同期／起動時、を問わない）。
+  // 鮮度時刻は成功時にしか動かないため、失敗run では無駄な再読込が起きない。
+  const lastStatsAtRef = useRef(0)
+  useEffect(() => {
+    if (lastAttendanceStatsAt === 0 || lastAttendanceStatsAt === lastStatsAtRef.current) return
+    lastStatsAtRef.current = lastAttendanceStatsAt
+    reloadAttendance()
+    // マウント済みの科目詳細にも保存結果を反映（版数bump→出欠読込effectが再走）。
+    bumpAttendance()
+    // reloadAttendance は毎レンダー再生成されるが、発火条件は鮮度時刻の変化のみ（意図的に依存へ入れない）。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAttendanceStatsAt])
 
   useFocusEffect(
     useCallback(() => {
@@ -715,17 +734,10 @@ export default function TimetableScreen() {
             setSyncing(false)
             loadTimetable().then(setCollections).catch(() => undefined)
             loadCollectionHealth().then((m) => setHealth(m.timetable ?? null)).catch(() => undefined)
-            setAttendanceSyncing(true)
-          }}
-        />
-      ) : null}
-      {attendanceSyncing ? (
-        <AttendanceStatsSyncEngine
-          onFinished={() => {
-            setAttendanceSyncing(false)
-            reloadAttendance()
-            // マウント済みの科目詳細にも保存結果を反映（版数bump→出欠読込effectが再走）。
-            bumpAttendance()
+            // 出欠を続けて取る。エンジンの実マウントは SyncProvider が単独所有するので、ここは
+            // runner を呼ぶだけ（画面が自前でマウントすると Provider と二重に走る）。
+            // source='user'＝引っ張り更新起点なので鮮度TTLは見ない。授業中のoverrideは引き継ぐ。
+            runAttendanceStatsSync({ source: 'user', overrideAttending: syncOverrideRef.current })
           }}
         />
       ) : null}

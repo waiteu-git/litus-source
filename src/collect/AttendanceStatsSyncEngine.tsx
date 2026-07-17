@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { OPEN_ATTENDANCE_STATS_JS, COLLECT_ATTENDANCE_STATS_JS } from './injectedScripts'
 import { parseAttendanceStatsMessage } from './attendanceStatsMessage'
 import { saveAttendanceStats } from '../storage/attendanceStatsStore'
+import { saveAttendanceStatsRefreshedAt } from '../storage/refreshMetaStore'
 import { saveCollectionHealth } from '../storage/collectionHealthStore'
 import {
   attendanceStatsHealth,
@@ -66,6 +67,9 @@ export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: 
         parsedCount.current = result.courses.length
         try {
           await saveAttendanceStats(result.courses)
+          // 最終成功時刻。背景トリガの鮮度TTL（6h）判定に使う＝起動のたびにCLASSを触らない。
+          // 失敗（0件・未着地）では更新しない＝「取れていないのに鮮度内」で黙って諦めないこと。
+          await saveAttendanceStatsRefreshedAt()
         } catch {
           // 保存失敗でも到達済みなので完了扱い（無駄打ちしない）。
         }
