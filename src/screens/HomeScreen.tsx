@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { computeHomeBanner } from '../attendance/homeBanner'
+import { homeRemaining } from '../attendance/receptionWindow'
+import { todayKey } from '../attendance/attendedState'
 import { todayRemainingClasses, type FocusClass } from '../home/focusClass'
 import { bulletinEmptyCard } from '../home/bulletinEmptyCard'
 import { homeDeadlines, type HomeDeadlineBand } from '../home/homeDeadlines'
@@ -52,11 +54,6 @@ const EVENT_TONE: Record<string, string> = {
 // 直近の締切の時間帯バンド見出し（This Evening型）。
 const BAND_LABEL: Record<HomeDeadlineBand, string> = { evening: '夕方 — 18:00まで', tonight: '今夜 — 23:59まで', thisWeek: '今週', later: 'それ以降' }
 
-function hhmmToMin(s: string): number | null {
-  const m = s.match(/^(\d{1,2}):(\d{2})$/)
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null
-}
-
 /** 今日の予定1件のサブ行（時限＋教室/補足）。教室変更は「→ 教室」、それ以外は「・ 教室」で付す。 */
 function eventSubText(it: TodayScheduleItem): string {
   const base = `${it.periods.join('・')}限`
@@ -75,7 +72,7 @@ export default function HomeScreen() {
   const ui = useUi()
   const clearance = useTabBarClearance()
   const { homeLayout } = useDisplaySettings()
-  const { reception, timetable, running, attendedNow } = useAttendanceEngine()
+  const { reception, timetable, running, attendedNow, receptionWindow } = useAttendanceEngine()
 
   // 「今やること」・出席バナー用の現在時刻。分単位で更新して次の授業/締切を追随させる
   // （秒精度のエンジンクロックは購読しない＝出席カウントダウン中にホームが毎秒再レンダーされない。
@@ -193,15 +190,11 @@ export default function HomeScreen() {
   const hero = classes[0] ?? null
   const laterClasses = classes.slice(1)
   const deadlineGroups = homeDeadlines(assignments, tick)
-  // いまの授業（進行中）の残り時間と進捗率（開始→終了の経過）。
-  const nowMin = tick.getHours() * 60 + tick.getMinutes()
-  const heroStart = hero ? hhmmToMin(hero.start) : null
-  const heroEnd = hero ? hhmmToMin(hero.end) : null
-  const heroRemain = hero?.isNow && heroEnd != null ? Math.max(0, heroEnd - nowMin) : null
-  const heroPct =
-    hero?.isNow && heroStart != null && heroEnd != null && heroEnd > heroStart
-      ? Math.min(100, Math.max(0, ((nowMin - heroStart) / (heroEnd - heroStart)) * 100))
-      : null
+  // いまの授業の「残り」面。**出席の受付時間が分かっていればそれを、無ければ授業の残りを**出す。
+  // 受付は授業より早く閉じるのが普通なので、時限終了までを一律「残り」と出しつつタップ先が
+  // 出席登録だと「まだ90分ある」と誤読させる。採否（今日か・このコマにアンカーできるか）は
+  // homeRemaining が単独で決める＝古い保存・別コマの保存は自動で無視され授業ベースへ落ちる。
+  const remain = homeRemaining({ hero, saved: receptionWindow, today: todayKey(tick), now: tick })
   // ストアは全件（既読・フラグ付き含む）を持つため、ホームの「未読」スライドは未読のみに絞る。
   const unreadBulletin = bulletin.filter((b) => b.unread)
   // 未読0件時のカード分岐（純ロジック）。「取得済みで未読なし」と「未取得」を区別する。
@@ -409,31 +402,40 @@ export default function HomeScreen() {
                   </View>
                 ) : null}
               </View>
-              {hero.isNow && heroRemain != null ? (
+              {remain ? (
                 // 残り時間の面はタップで出席登録へ（授業中の最有力アクション）。カード本体の科目詳細遷移とは
                 // 別導線。内側Pressableがタップを取るのでカードのonPress（openSubject）とは競合しない。
                 <PressableRow
                   style={[styles.heroSoftbox, { backgroundColor: ui.softBoxBg }]}
                   onPress={openAttendance}
                   accessibilityRole="button"
-                  accessibilityLabel={`残り${heroRemain}分・タップで出席登録へ`}
+                  accessibilityLabel={remain.a11yLabel}
                 >
                   <View style={styles.remainRow}>
                     <View style={styles.remainLeft}>
-                      <Text style={[styles.remainLabel, { color: ui.labelColor }]}>残り</Text>
-                      <Text style={[styles.remainStat, { color: ui.valueColor }]}>{heroRemain}分</Text>
+                      {remain.kind === 'closed' ? (
+                        // 受付が閉じた＝数値を出す対象が無い。授業の残りを「残り」と出すと出席できると
+                        // 誤読させるため、ここは事実（受付終了）だけを述べる。
+                        <Text style={[styles.remainStat, { color: ui.labelColor }]}>受付終了</Text>
+                      ) : (
+                        <>
+                          <Text style={[styles.remainLabel, { color: ui.labelColor }]}>{remain.label}</Text>
+                          <Text style={[styles.remainStat, { color: ui.valueColor }]}>{remain.minutes}分</Text>
+                        </>
+                      )}
                     </View>
-                    <Text style={[styles.remainEnd, { color: ui.labelColor }]}>{hero.end} 終了</Text>
+                    <Text style={[styles.remainEnd, { color: ui.labelColor }]}>{remain.endText}</Text>
                   </View>
-                  {heroPct != null ? (
-                    // 残り時間バー: 幅＝残り率（100-経過率）。左詰めのまま右端が縮む＝時間が減るほど右から減っていく。
-                    <View style={[styles.progressTrack, { backgroundColor: ui.dividerColor }]}>
-                      <View style={[styles.progressFill, { width: `${100 - heroPct}%`, backgroundColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) }]} />
-                    </View>
-                  ) : null}
+                  {/* 残り時間バー: 幅＝残り率。左詰めのまま右端が縮む＝時間が減るほど右から減っていく。
+                      受付時間が分かっていれば受付に対する率、無ければ授業に対する率（remainPctが決める）。 */}
+                  <View style={[styles.progressTrack, { backgroundColor: ui.dividerColor }]}>
+                    <View style={[styles.progressFill, { width: `${remain.remainPct}%`, backgroundColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) }]} />
+                  </View>
                   <View style={styles.remainCta}>
                     <Ionicons name="flash-outline" size={13} color={ui.accent} />
-                    <Text style={[styles.remainCtaText, { color: ui.accentSoft }]}>タップで出席登録</Text>
+                    <Text style={[styles.remainCtaText, { color: ui.accentSoft }]}>
+                      {remain.kind === 'closed' ? 'タップで出席画面へ' : 'タップで出席登録'}
+                    </Text>
                     <Ionicons name="chevron-forward" size={13} color={ui.accentSoft} />
                   </View>
                 </PressableRow>
