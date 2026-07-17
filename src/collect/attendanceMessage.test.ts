@@ -148,7 +148,7 @@ describe('リアペの任意提出（ボタンがあるなら書ける）', () =
     expect(r.status).toBe('accepting')
     expect(r.reactionAvailable).toBe(false)
   })
-  it('提出済みなら書けない（二重提出させない）', () => {
+  it('提出済みでも書ける（CLASSは再提出を許す＝「リアクションペーパー確認」から編集・再提出できる）', () => {
     const r = parseAttendanceMessage(
       msg({
         text: '12:50〜14:30 法学１\n出席確認中\n出席',
@@ -158,7 +158,15 @@ describe('リアペの任意提出（ボタンがあるなら書ける）', () =
       }),
     )
     expect(r.status).toBe('attended')
-    expect(r.reactionAvailable).toBe(false)
+    expect(r.reactionAvailable).toBe(true)
+    expect(r.reactionSubmitted).toBe(true)
+  })
+  it('未提出なら reactionSubmitted=false', () => {
+    const r = parseAttendanceMessage(
+      msg({ text: '12:50〜14:30 法学１\n出席確認中\n認証コード', hasCodeInput: true, hasReactionBtn: true, reactionMsg: 'リアクションペーパー未提出' }),
+    )
+    expect(r.reactionAvailable).toBe(true)
+    expect(r.reactionSubmitted).toBe(false)
   })
   it('出席済みでも未提出のリアペボタンがあれば書ける', () => {
     const r = parseAttendanceMessage(

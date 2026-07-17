@@ -182,8 +182,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // この提出が「必須」だったか（submitReaction 時点の状態で確定させる。提出後は状態が変わるため
   // 都度参照だと判定がぶれる）。必須=.attendSuc 待ち／任意=リアペが提出済みになるのを待つ。
   const reactionRequiredRef = useRef(false)
-  // リアペを書けるか（＝ボタンあり＋未提出）の最新値。任意提出の成功確定に使う。
-  const reactionAvailableRef = useRef(false)
+  // リアペが提出済みか（.reactionMsg）の最新値。任意提出の成功確定に使う。
+  const reactionSubmittedRef = useRef(false)
+  // 提出開始時に既に提出済みだったか（＝今回は「再提出」）。再提出は提出済みフラグが変化しないので、
+  // 成功確定にそれを使えない（ajax完走を確定点にする）。
+  const reactionWasSubmittedRef = useRef(false)
+  // 提出ajaxが完走したか（reactionSubmit actuator の観測結果）。再提出の確定点。
+  const reactionAjaxOkRef = useRef(false)
   const reactionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   // 上限到達で自動再試行を打ち切った状態。UIの案内文を切り替えるため state で持つ。
   const [conflictExhausted, setConflictExhausted] = useState(false)
@@ -196,7 +201,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // ポーリング条件を最新の受付状態で判定するための ref（interval クロージャの stale 回避）。
   const receptionStatusRef = useRef<AttendanceStatus | undefined>(undefined)
   receptionStatusRef.current = state.reception?.status
-  reactionAvailableRef.current = state.reception?.reactionAvailable === true
+  reactionSubmittedRef.current = state.reception?.reactionSubmitted === true
 
   phaseRef.current = state.phase
 
@@ -470,8 +475,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     }
     reactionTextRef.current = text
     reactionFillTriesRef.current = 0
-    // 提出開始時の状態で「必須か」を確定させる（提出後に状態が変わるので後から見ない）。
+    // 提出開始時の状態で「必須か」「既に提出済みか（＝再提出）」を確定させる
+    // （提出後は状態が変わるので後から見ない）。
     reactionRequiredRef.current = receptionStatusRef.current === 'reaction_pending'
+    reactionWasSubmittedRef.current = reactionSubmittedRef.current
+    reactionAjaxOkRef.current = false
     reactionBusyRef.current = true
     setReactionSubmitState({ status: 'sending', message: null })
     inject(OPEN_REACTION_FORM_JS)
@@ -563,15 +571,23 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       }
       // m.kind === 'fill'
       if (m.ok) {
+        // 提出ajaxが完走したか（再提出の確定点）。観測できない古い経路では undefined → false のまま。
+        reactionAjaxOkRef.current = m.ajaxDone === true && (m.ajaxStatus ?? 200) < 400
         // 提出発火済み。応答テキストに頼らず、出席ページを取り直して**確定マーカー**で判定する。
         // 確定マーカーは提出の種類で違う:
         //  ・必須(reaction_pending由来): .attendSuc（提出して初めて「出席」になる）
         //  ・任意(それ以外): リアペが「提出済み」になる＝reactionAvailable が false になること。
         //    任意提出は出席と紐づかないので .attendSuc を待つと**成功しても必ず失敗表示**になる。
+        //  ・必須(reaction_pending由来): .attendSuc（提出して初めて「出席」になる）
+        //  ・任意の初回提出: リアペが「提出済み」になること
+        //  ・再提出（既に提出済みの本文を編集）: 提出済みフラグは変化しないので、
+        //    提出ajaxが完走したことを確定点にする（actuator の観測結果）。
         const doneNow = () =>
           reactionRequiredRef.current
             ? receptionStatusRef.current === 'attended'
-            : !reactionAvailableRef.current
+            : reactionWasSubmittedRef.current
+              ? reactionAjaxOkRef.current
+              : reactionSubmittedRef.current
         scheduleReaction(() => {
           if (shouldRenderRef.current && !collectActiveRef.current) refreshAttendance()
         }, 2500)
@@ -585,8 +601,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
             failReaction('提出結果を確認できませんでした。本文は保存されています。「CLASSの画面で書く」から状況を確認してください')
           } else if (reactionBusyRef.current) {
             // 任意提出の成功確定（必須は attendance ハンドラ側の resetReaction が畳む）。
+            // **下書きは消さない**: CLASSは再提出を許すので、次に「編集」で開いた時に提出した本文が
+            // 出ないと編集できない（別授業への誤復元は reactionDraftApplies の日付＋科目照合が防ぐ）。
             resetReaction()
-            clearReactionDraft().catch(() => undefined)
           }
         }, 11000)
         return

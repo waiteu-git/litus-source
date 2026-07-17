@@ -203,11 +203,11 @@ export const DETECT_ATTENDANCE_JS = `(function(){
     // 同クラスが両状態に付くため全件連結して送り、未完了かの文言判定はRN側 parseAttendanceMessage。
     var rms = Array.prototype.slice.call(document.querySelectorAll('.reactionMsg'));
     var reactionMsg = rms.map(function(e){ return e.textContent||''; }).join(' ');
-    // リアペ提出ボタンの有無＝「この授業でリアペを出せるか」そのものの信号（実DOM 2026-07-17）。
-    // 文言(.reactionMsg)は状態で変わる（必須未提出/未提出/提出済み）が、ボタンの有無は
-    // 提出可否を直接表す。必須でない授業でも任意提出させるための判定に使う。
+    // リアペ画面へ入れるボタンの有無＝「この授業でリアペを扱えるか」そのものの信号（実DOM 2026-07-17）。
+    // **ラベルは状態で変わる**: 未提出=「リアクションペーパー」／提出済み=「リアクションペーパー確認」
+    // （実機採取で確認）。完全一致だと提出後に見失い、編集・再提出ができなくなるため前方一致で拾う。
     var hasReactionBtn = Array.prototype.slice.call(document.querySelectorAll('button')).some(function(b){
-      return ((b.textContent||'').replace(/\\s+/g,'')) === 'リアクションペーパー';
+      return ((b.textContent||'').replace(/\\s+/g,'')).indexOf('リアクションペーパー') === 0;
     });
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'attendance',
@@ -237,7 +237,9 @@ export const OPEN_REACTION_FORM_JS = `(function(){
   function post(o){ try { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); } catch (e) {} }
   try {
     var btns = Array.prototype.slice.call(document.querySelectorAll('button'));
-    var btn = btns.find(function(b){ return ((b.textContent||'').replace(/\\s+/g,'')) === 'リアクションペーパー'; });
+    // ラベルは状態で変わる: 未提出=「リアクションペーパー」／提出済み=「リアクションペーパー確認」。
+    // 完全一致だと提出後に開けず、編集・再提出ができない（実機採取 2026-07-17）。前方一致で拾う。
+    var btn = btns.find(function(b){ return ((b.textContent||'').replace(/\\s+/g,'')).indexOf('リアクションペーパー') === 0; });
     if (!btn) { post({ type: 'reaction', stage: 'open', ok: false }); return true; }
     var ok = true;
     try {

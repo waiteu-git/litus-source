@@ -3,7 +3,7 @@ import { attendanceReducer, initialEngineState, overlayVisible } from './engine'
 import type { AttendanceReception } from '../collect/attendanceMessage'
 
 const reception: AttendanceReception = {
-  status: 'accepting', accepting: true, courseName: '基礎電気工学', confirmWindow: '12:50〜14:30', remaining: 'あと91分', error: null, network: 'unknown', reactionAvailable: false,
+  status: 'accepting', accepting: true, courseName: '基礎電気工学', confirmWindow: '12:50〜14:30', remaining: 'あと91分', error: null, network: 'unknown', reactionAvailable: false, reactionSubmitted: false,
 }
 
 describe('attendanceReducer', () => {
