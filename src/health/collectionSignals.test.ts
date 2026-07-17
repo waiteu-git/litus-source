@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parseBulletinList } from '../parsers/bulletin'
 import { parseTimetable } from '../parsers/timetable'
 import {
+  attendanceStatsHealth,
   bulletinHealth,
   createHealthObservation,
   hasLetusLoginMarker,
@@ -11,6 +12,7 @@ import {
   letusAssignmentsHealth,
   observePageSignal,
   timetableHealth,
+  type HealthObservation,
 } from './collectionSignals'
 
 const BULLETIN_TABS = readFileSync(
@@ -147,5 +149,42 @@ describe('hasLetusLoginMarker', () => {
   })
   it('通常の課題ページ → false', () => {
     expect(hasLetusLoginMarker('<div class="submissionstatustable">まだ提出されていません</div>')).toBe(false)
+  })
+})
+
+describe('attendanceStatsHealth（出欠収集の健康記録＝授業中に取れない理由を残す）', () => {
+  const obs = (over: Partial<HealthObservation> = {}): HealthObservation => ({
+    ...createHealthObservation(),
+    ...over,
+  })
+
+  it('科目が取れたら ok', () => {
+    expect(attendanceStatsHealth(obs({ loggedIn: true }), { htmlLen: 500, rows: 12, blen: 900 }, 8)).toEqual({
+      status: 'ok',
+      count: 8,
+    })
+  })
+  it('多重画面競合（PC等と競合）は blocked＝授業中に取れない典型の理由が残る', () => {
+    expect(attendanceStatsHealth(obs({ conflictSeen: true }), { htmlLen: 0, rows: 0, blen: 400 }, 0)).toEqual({
+      status: 'blocked',
+    })
+  })
+  it('表は在るのに1件も解析できない＝structure_drift（DOM変更の疑い）', () => {
+    expect(attendanceStatsHealth(obs({ loggedIn: true }), { htmlLen: 500, rows: 12, blen: 900 }, 0)).toEqual({
+      status: 'structure_drift',
+    })
+  })
+  it('表は在って行0＝本当に0件（empty_valid）', () => {
+    expect(attendanceStatsHealth(obs({ loggedIn: true }), { htmlLen: 120, rows: 0, blen: 900 }, 0)).toEqual({
+      status: 'empty_valid',
+    })
+  })
+  it('未着地（出欠ページに辿り着けない）は blocked', () => {
+    expect(attendanceStatsHealth(obs({ lastUrl: 'Xut11301.xhtml' }), null, 0)).toEqual({ status: 'blocked' })
+  })
+  it('ログイン画面に落ちたら not_logged_in', () => {
+    expect(attendanceStatsHealth(obs({ passwordSeen: true }), { htmlLen: 0, rows: 0, pwd: 1, blen: 400 }, 0)).toEqual({
+      status: 'not_logged_in',
+    })
   })
 })

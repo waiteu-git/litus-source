@@ -34,7 +34,7 @@ function accepting(courseName: string | null): AttendanceReception {
     confirmWindow: '9:00〜9:15',
     remaining: 'あと5分',
     error: null,
-    network: 'unknown',
+    network: 'unknown', reactionAvailable: false,
   }
 }
 const notAccepting: AttendanceReception = {
@@ -44,7 +44,7 @@ const notAccepting: AttendanceReception = {
   confirmWindow: null,
   remaining: null,
   error: null,
-  network: 'unknown',
+  network: 'unknown', reactionAvailable: false,
 }
 
 // 2026-07-06 は月曜。1限=9:00-10:30。

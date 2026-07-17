@@ -121,3 +121,50 @@ describe('parseAttendanceMessage', () => {
     }
   })
 })
+
+describe('リアペの任意提出（ボタンがあるなら書ける）', () => {
+  it('リアペ必須・未提出は reaction_pending のまま（出席が塞がれている＝最優先で出す）', () => {
+    const r = parseAttendanceMessage(
+      msg({
+        text: '12:50〜14:30 法学１\n出席確認中',
+        reactionMsg: '出席登録は完了していません。 リアクションペーパーを提出してください。',
+        hasReactionBtn: true,
+      }),
+    )
+    expect(r.status).toBe('reaction_pending')
+    expect(r.reactionAvailable).toBe(true)
+  })
+  it('受付中でリアペボタンがあれば、必須でなくても書ける（reactionAvailable=true・状態は accepting のまま）', () => {
+    const r = parseAttendanceMessage(
+      msg({ text: '12:50〜14:30 法学１\n出席確認中\n認証コード', hasCodeInput: true, hasReactionBtn: true }),
+    )
+    expect(r.status).toBe('accepting')
+    expect(r.reactionAvailable).toBe(true)
+  })
+  it('リアペボタンが無い授業は書けない（reactionAvailable=false）', () => {
+    const r = parseAttendanceMessage(
+      msg({ text: '12:50〜14:30 法学１\n出席確認中\n認証コード', hasCodeInput: true }),
+    )
+    expect(r.status).toBe('accepting')
+    expect(r.reactionAvailable).toBe(false)
+  })
+  it('提出済みなら書けない（二重提出させない）', () => {
+    const r = parseAttendanceMessage(
+      msg({
+        text: '12:50〜14:30 法学１\n出席確認中\n出席',
+        attendSuc: true,
+        reactionMsg: 'リアクションペーパー提出済み',
+        hasReactionBtn: true,
+      }),
+    )
+    expect(r.status).toBe('attended')
+    expect(r.reactionAvailable).toBe(false)
+  })
+  it('出席済みでも未提出のリアペボタンがあれば書ける', () => {
+    const r = parseAttendanceMessage(
+      msg({ text: '12:50〜14:30 法学１\n出席', attendSuc: true, reactionMsg: 'リアクションペーパー未提出', hasReactionBtn: true }),
+    )
+    expect(r.status).toBe('attended')
+    expect(r.reactionAvailable).toBe(true)
+  })
+})
