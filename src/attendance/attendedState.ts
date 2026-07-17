@@ -56,6 +56,28 @@ export function canRecordAttendance(courseName: string, confirmWindow: string | 
   return !!courseName.trim() || !!confirmWindow
 }
 
+/**
+ * 「いま出席済みとして表示してよいか」の最終判定（純粋）。**CLASSの状態が正**で、ローカル記録は
+ * CLASSがそれを否定していない時だけの補助（授業間の継続表示・オフライン補助）。
+ *
+ * とくに `reaction_pending` は CLASS が「出席登録は完了していません／リアクションペーパーを提出して
+ * ください」と**出席していないことを明示**した状態なので、ローカル記録より必ず強い。
+ * ここでローカル記録を優先させると「出席済み」を表示し、AttendanceScreen では attended 分岐が
+ * リアペ提出フォームより先に来るため**提出画面が到達不能になり、ユーザーは提出しないまま欠席する**
+ * （実機 2026-07-17: 実DOMは attendSuc 無し＋リアペ待ちなのに出席済み表示。データ全消去で正常化＝
+ *  古いローカル記録が原因と確定）。
+ */
+export function resolveAttendedNow(
+  status: string | undefined,
+  rec: AttendedRecord | null,
+  now: Date,
+  classEndMin: number | null = null,
+): boolean {
+  if (status === 'attended') return true
+  if (status === 'reaction_pending') return false
+  return isAttendedNow(rec, now, classEndMin)
+}
+
 export function isAttendedNow(
   rec: AttendedRecord | null,
   now: Date,

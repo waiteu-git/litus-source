@@ -34,16 +34,21 @@ import { canSubmitReaction } from './reactionPaper'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
-import { canRecordAttendance, isAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
+import { canRecordAttendance, isAttendedNow, resolveAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 import { shouldAutoRetrySubmit, toSubmitDiag } from './submitDiag'
 import { addSubmitDiag } from '../storage/submitDiagStore'
 import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
+import { parseWindowMinutes, type ReceptionWindowRecord } from './receptionWindow'
+import { saveReceptionWindow, loadReceptionWindow } from '../storage/receptionWindowStore'
 import {
   attendanceOpenKey,
   shouldNotifyAttendanceOpen,
   buildAttendanceOpenContent,
+  courseCodeByName,
   pruneNotifiedAttendanceKeys,
 } from '../notifications/attendanceOpenNotify'
+import { loadAttendanceSettings } from '../storage/attendanceSettingsStore'
+import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
 import {
   loadNotifiedAttendanceOpen,
   mutateNotifiedAttendanceOpen,
@@ -51,6 +56,7 @@ import {
 import {
   presentAttendanceOpenNotification,
   clearDeliveredAttendanceOpenNotifications,
+  clearDeliveredAttendanceStartNotifications,
 } from '../notifications/notifier'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { normalizeAttendanceCode } from './normalizeCode'
@@ -109,6 +115,12 @@ export type AttendanceEngineValue = {
   submitReaction: (text: string) => void
   /** WebViewが起動中か（バナー判定で reception を信頼してよいかの目安）。 */
   running: boolean
+  /**
+   * 今日これまでに見た出席受付時間（"10:20〜12:00"）。**エンジン停止中でも有効**。
+   * reception と違い静的な時刻レンジなので陳腐化せず、ホームが大学へ追加アクセスせずに
+   * 「受付があと何分か」を出すのに使う（読み手は homeRemaining で今のコマにアンカーして採否を決める）。
+   */
+  receptionWindow: ReceptionWindowRecord | null
   /** PC等の他画面でCLASSを開いていて確認できない状態（複数画面競合）。UIは専用表示にする。 */
   conflict: boolean
   /** 競合が解けず自動再試行を打ち切った状態。UIは手動での再確認を促す。 */
@@ -171,7 +183,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const [submitAt, setSubmitAt] = useState<number | null>(null)
   const [failCount, setFailCount] = useState(0)
   const [attended, setAttended] = useState<AttendedRecord | null>(null)
+  const [receptionWindow, setReceptionWindow] = useState<ReceptionWindowRecord | null>(null)
   const [timetable, setTimetable] = useState<TimetableCollection[]>([])
+  // onMessage クロージャから最新の時間割を読むための ref（受付open通知の科目別OFF判定に使う）。
+  const timetableRef = useRef<TimetableCollection[]>([])
+  timetableRef.current = timetable
   const [attendanceFocused, setAttendanceFocusedState] = useState(false)
   const [conflict, setConflict] = useState(false)
   // アプリ内リアペ提出の進行状態。ref はタイマー/onMessage クロージャからの最新参照用。
@@ -202,6 +218,14 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const receptionStatusRef = useRef<AttendanceStatus | undefined>(undefined)
   receptionStatusRef.current = state.reception?.status
   reactionSubmittedRef.current = state.reception?.reactionSubmitted === true
+  // 直近で保存した受付時間の**日付込みキー**（`YYYY-MM-DD|10:20〜12:00`）。同一値の再書き込みを
+  // 避けるためのもの（ポーリングは数秒ごとに同じ rec を運ぶ）。
+  // **日付を必ず含めること**: confirmWindow は時限の時刻から作られるので、同じコマなら別の日・別の
+  // 科目でも完全に同一文字列になる（毎週の月2限は常に '10:20〜12:00'）。window だけを鍵にすると、
+  // 起動時に前回の記録で ref を埋めた後、翌週の同じコマで「同じ値だから書かない」と判定してしまい、
+  // 保存の date が古いまま → homeRemaining が日付で弾く → ホームが黙って授業ベースへ後退する。
+  const savedWindowRef = useRef<string | null>(null)
+  const windowKey = (date: string, window: string) => `${date}|${window}`
 
   phaseRef.current = state.phase
 
@@ -338,6 +362,16 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // 「出席済み」記録の読み込み（起動時）。
   useEffect(() => {
     loadAttendedRecord().then(setAttended).catch(() => undefined)
+    // 起動時に復元する。エンジンが動く前（ホームを開いた直後）でも、同じコマの受付時間なら
+    // 「受付あと○分」を出せる＝再起動しても表示が授業ベースへ後退しない。
+    loadReceptionWindow()
+      .then((r) => {
+        setReceptionWindow(r)
+        // 復元した記録の**日付ごと**キーで埋める。日付を落とすと翌日以降に同じコマの受付時間を
+        // 見ても「既に保存済み」と誤判定して保存が止まる。
+        savedWindowRef.current = r ? windowKey(r.date, r.window) : null
+      })
+      .catch(() => undefined)
   }, [])
 
   // アンマウント時にリアペ提出フローのタイマーを畳む（リーク・遅延injectの防止）。
@@ -631,6 +665,25 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       // dispatch前のrefは遷移前status（refは各レンダーで更新されるため、このハンドラ内では旧値）。
       const prevStatus = receptionStatusRef.current
       dispatch({ kind: 'reception', reception: rec })
+      // 受付時間を見たら保存する（**出席する前から**）。ホームは大学へ追加アクセスせずに
+      // 「出席の受付があと何分か」を出せるようになる（従来は時限終了までを一律「残り」と表示し、
+      // その面のタップ先が出席登録＝受付が先に閉じる授業で誤読を生んでいた）。
+      // confirmWindow は静的な時刻レンジなので保存しても腐らない（remaining は静止値なので保存しない）。
+      // 解析できない値は書かない＝読み手は授業ベースへ安全に落ちる。
+      if (rec.confirmWindow && parseWindowMinutes(rec.confirmWindow)) {
+        const date = todayKey(new Date())
+        const key = windowKey(date, rec.confirmWindow)
+        if (key !== savedWindowRef.current) {
+          savedWindowRef.current = key
+          const wrec: ReceptionWindowRecord = {
+            date,
+            window: rec.confirmWindow,
+            courseName: rec.courseName,
+          }
+          setReceptionWindow(wrec)
+          saveReceptionWindow(wrec).catch(() => undefined)
+        }
+      }
       // リアペ待ちへ「新規に」遷移した時、前回（別授業等）の失敗表示を持ち越さない。
       // busy中は同一提出フローの確認中なのでリセットしない。同一授業で status が
       // reaction_pending のまま続く限りはエッジが立たず、直近の失敗メッセージは残る。
@@ -647,6 +700,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         const key = attendanceOpenKey({ courseName: rec.courseName, confirmWindow: rec.confirmWindow, now: nowD })
         ;(async () => {
           const notified = await loadNotifiedAttendanceOpen()
+          // 科目別OFF（設定画面「出席アラーム（科目別）」）を受付open通知にも効かせる。
+          // 設定は courseCode 鍵・受付は科目名しか持たないので時間割で橋渡しする。
+          // 引けなければ undefined＝通知する側に倒す（黙って通知を殺さない）。
+          const code = courseCodeByName(timetableRef.current, rec.courseName)
+          const settings: AttendanceAlarmSettings = await loadAttendanceSettings().catch(() => ({}))
           if (
             shouldNotifyAttendanceOpen({
               status: rec.status,
@@ -654,9 +712,14 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
               attendanceFocused,
               key,
               notifiedKeys: notified,
+              courseDisabled: code ? settings[code] === false : false,
             })
           ) {
             await presentAttendanceOpenNotification(buildAttendanceOpenContent(rec))
+            // 授業開始の予約アラームとほぼ同時刻に鳴るため、推測ベースの開始アラームは畳む
+            // （受付open通知のほうが「受付中（時刻）」まで言える上位互換）。MAXチャンネルで
+            // 立て続けに2つ鳴るのを止める（実機報告「一気に2つきてうるさい」）。
+            await clearDeliveredAttendanceStartNotifications(code).catch(() => undefined)
             await mutateNotifiedAttendanceOpen((ks) => pruneNotifiedAttendanceKeys([...ks, key], todayKey(nowD)))
           }
         })().catch(() => undefined)
@@ -676,16 +739,22 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         }
         clearDeliveredAttendanceOpenNotifications().catch(() => undefined)
         const d = new Date()
-        // 再アクセス/別デバイス出席では lastCodeRef が空。既存の同日記録のコードを引き継いで消さない。
-        const arec = mergeAttendedRecord(attendedRecordRef.current, {
-          date: todayKey(d),
-          courseName: rec.courseName ?? '',
-          confirmWindow: rec.confirmWindow ?? null,
-          code: lastCodeRef.current,
-        })
-        setAttended(arec)
-        saveAttendedRecord(arec).catch(() => undefined)
-        notifyWidgetDataChanged()
+        // 受付の文脈（科目名・受付時間）がどちらも無いときは記録しない。記録すると isAttendedNow が
+        // 「終了時刻が1つも無い」分岐で**その日ずっと true** を返し、「（科目名不明）出席済み」が居座って
+        // 後の本物の授業のコード入力を塞ぐ（実機事象）。このガードは以前 result.ok 側の書き込みにだけ
+        // 付いていたが、そちらを廃止して**唯一の書き手になったここ**へ移した。
+        if (canRecordAttendance(rec.courseName ?? '', rec.confirmWindow ?? null)) {
+          // 再アクセス/別デバイス出席では lastCodeRef が空。既存の同日記録のコードを引き継いで消さない。
+          const arec = mergeAttendedRecord(attendedRecordRef.current, {
+            date: todayKey(d),
+            courseName: rec.courseName ?? '',
+            confirmWindow: rec.confirmWindow ?? null,
+            code: lastCodeRef.current,
+          })
+          setAttended(arec)
+          saveAttendedRecord(arec).catch(() => undefined)
+          notifyWidgetDataChanged()
+        }
       }
       return
     }
@@ -738,24 +807,14 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         return
       }
       dispatch({ kind: 'submitResult', result })
-      if (result.ok) {
-        const d = new Date()
-        const courseName = state.reception?.courseName ?? ''
-        const confirmWindow = state.reception?.confirmWindow ?? null
-        // 受付の文脈（科目名・受付時間）がどちらも無いときは記録しない。記録すると当日ずっと
-        // 「（科目名不明）出席済み」が居座り、後の本物の授業でコード入力が出なくなる（実機事象）。
-        if (canRecordAttendance(courseName, confirmWindow)) {
-          const rec = mergeAttendedRecord(attendedRecordRef.current, {
-            date: todayKey(d),
-            courseName,
-            confirmWindow,
-            code: lastCodeRef.current,
-          })
-          setAttended(rec)
-          saveAttendedRecord(rec).catch(() => undefined)
-          notifyWidgetDataChanged()
-        }
-      }
+      // **送信が成功したこと（result.ok）で出席記録を書いてはいけない。**
+      // result.ok は送信応答の文言一致（/出席しました|登録しました|…/）でしかなく、
+      // 「コードは受理されたがリアクションペーパー未提出＝まだ出席していない」授業を区別できない。
+      // ここで記録すると attendedNow が立ち、リアペ提出画面が出ないまま「出席済み」を見せて
+      // ユーザーを欠席させる（実機 2026-07-17）。記録は下の .attendSuc 確認（rec.status==='attended'）
+      // に一本化する＝直下のコメントが元々宣言していた設計に実装を合わせる。
+      // 送信自体の成否表示は submitOutcome が result.ok を見て別途行うので、ここで書く必要はない。
+
       // 送信後は応答テキスト解析に頼らず、CLASSの確定マーカー(.attendSuc)で「出席済み」を確認する。
       // 出席ページを取り直し、出席済みなら attended に遷移（＝リング→出席済み表示）。まだなら受付フォームに戻る。
       // 送信成功時のテキスト検出が「送信しました」止まりでも、これで確実に出席済みへ切り替わる。
@@ -797,8 +856,15 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   // CLASSが出席済みを示していれば最優先。無ければローカル記録（授業間の継続表示・オフライン補助）。
   // 受付が授業より早く閉じても、出席済み表示は当該授業の時限終了まで延長する（次の授業が始まれば切れる）。
+  //
+  // **reaction_pending はローカル記録より強い**: CLASSが「出席登録は完了していません／リアクション
+  // ペーパーを提出してください」と言っている＝**出席していないことの明示**。ここでローカル記録を
+  // 優先させると「出席済み」を表示し、しかも AttendanceScreen の attended 分岐が showReactionForm
+  // より先に来るためリアペ提出画面が到達不能になり、ユーザーは提出しないまま欠席する
+  // （実機 2026-07-17・基礎電気数学及び演習: 実DOMは attendSuc 無し＋リアペ待ちなのに出席済み表示。
+  //  データ全消去で正常化＝古いローカル記録が原因と確定）。CLASSの状態が正。
   const classEndMin = attendedClassEndMin(timetable, now, attended?.confirmWindow ?? null)
-  const attendedNow = state.reception?.status === 'attended' || isAttendedNow(attended, now, classEndMin)
+  const attendedNow = resolveAttendedNow(state.reception?.status, attended, now, classEndMin)
   attendedRef.current = attendedNow
   attendedRecordRef.current = attended
 
@@ -820,6 +886,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       reactionSubmit: reactionSubmitState,
       submitReaction,
       running,
+      receptionWindow,
       conflict,
       conflictExhausted,
       failCount,
@@ -839,6 +906,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       code,
       reactionSubmitState,
       running,
+      receptionWindow,
       conflict,
       conflictExhausted,
       failCount,
