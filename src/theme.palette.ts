@@ -33,6 +33,8 @@ export const COLORS = {
   // アクセント地（緑バナー）上に常時乗る白オーバーレイ（テーマ非依存の装飾値）。
   whiteOverlay25: 'rgba(255,255,255,0.25)',
   whiteSubtle90: 'rgba(255,255,255,0.9)',
+  /** 起動画面（白テーマ）の補助テキスト。起動アニメHTML内の「リタス」と同色に揃える。 */
+  bootLabelOnWhite: '#8a968f',
 }
 
 /** ダークテーマの地色・前景・境界。翠アクセントは COLORS.emeraldLight を流用する。 */
