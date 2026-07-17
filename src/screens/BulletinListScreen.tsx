@@ -14,6 +14,7 @@ import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import { loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
+import { clearDeliveredBulletinNotifications } from '../notifications/notifier'
 import HealthBanner from '../ui/HealthBanner'
 import FreshnessLabel from '../ui/FreshnessLabel'
 import type { HomeStackParamList } from '../navigation/types'
@@ -67,6 +68,11 @@ export default function BulletinListScreen() {
       loadBulletinRefreshedAt()
         .then((at) => active && setRefreshedAt(at))
         .catch(() => undefined)
+      // 一覧を開いた＝新着通知の用は済んだので、配信済みの通知をトレイから消す。
+      // 消さないと既読にしても通知が残り続ける（実機報告 2026-07-17）。
+      // 画面のアンマウントではなく**フォーカス時**に消すのは、通知をタップして来た場合も
+      // 一覧に着いた時点で用済みになるため。自タグ（bulletin-new）以外は触らない。
+      clearDeliveredBulletinNotifications().catch(() => undefined)
       return () => {
         active = false
       }

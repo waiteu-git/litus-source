@@ -24,9 +24,15 @@ export function buildClassEventNotifications(events: ClassEvent[], now: Date): E
   const push = (id: string, title: string, body: string, when: Date | null) => {
     if (when && when.getTime() > now.getTime()) out.push({ id, title, body, fireAt: when })
   }
+  /**
+   * 前日夜と当日朝の2段階で知らせる。**本文に「明日」「本日」を付けて段階を区別する**:
+   * 付けないと前日20:00と当日8:00に**1バイトも違わない同一文面**が届き、二重通知に見える
+   * （実測: どちらも「線形代数学１ 小テスト／2026-07-21 3限」・課題チャンネルHIGH）。
+   * 2通出すこと自体は意図（前夜に備え、当日に念押し）なので、消さずに読み分けられるようにする。
+   */
   const twoStage = (id: string, title: string, body: string, ymd: string) => {
-    push(`${id}:eve`, title, body, dayBefore(ymd, 20, 0))
-    push(`${id}:day`, title, body, at(ymd, 8, 0))
+    push(`${id}:eve`, title, body ? `明日 ${body}` : '明日', dayBefore(ymd, 20, 0))
+    push(`${id}:day`, title, body ? `本日 ${body}` : '本日', at(ymd, 8, 0))
   }
   for (const e of events) {
     const name = e.courseName

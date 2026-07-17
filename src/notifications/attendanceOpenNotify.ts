@@ -29,6 +29,7 @@ export function attendanceOpenKey(input: {
  *   - attendedNow === false（既に出席済みは通知しない）
  *   - attendanceFocused === false（出席画面を見ている最中はバナーで足りるため抑制）
  *   - notifiedKeys に当該キーを含まない（同一授業/受付ウィンドウで1回に制限）
+ *   - courseDisabled === false（設定画面で科目別にOFFにしていない）
  */
 export function shouldNotifyAttendanceOpen(input: {
   status: AttendanceStatus
@@ -36,12 +37,42 @@ export function shouldNotifyAttendanceOpen(input: {
   attendanceFocused: boolean
   key: string
   notifiedKeys: string[]
+  /**
+   * 設定画面「出席アラーム（科目別）」でこの科目がOFFか。
+   * これが無かった頃は科目別OFFが**予約型アラームにしか効かず**、OFFにした科目の受付open通知が
+   * MAXチャンネル（音＋ヘッドアップ）で届いていた＝アプリ内に止める手段が無かった（2026-07-17修正）。
+   * 解決できないときは false（＝通知する）に倒すこと。黙って通知を殺すより鳴るほうが安全。
+   */
+  courseDisabled?: boolean
 }): boolean {
   if (input.status !== 'accepting') return false
   if (input.attendedNow) return false
   if (input.attendanceFocused) return false
+  if (input.courseDisabled === true) return false
   if (input.notifiedKeys.includes(input.key)) return false
   return true
+}
+
+/**
+ * 時間割から科目名で courseCode を引く（純粋）。受付open通知は科目名しか持たない一方、
+ * 設定は courseCode 鍵なので橋渡しが要る。
+ *
+ * **完全一致のみ・引けなければ null**。null は呼び出し側で「OFFか分からない＝通知する」に倒す。
+ * 表記ゆれや補講（時間割に無い）で引けなくても、失敗の向きが「余分に鳴る」側なので出席を落とさない。
+ */
+export function courseCodeByName(
+  collections: { slots: { classes: { courseCode: string; name: string }[] }[] }[],
+  name: string | null,
+): string | null {
+  if (!name) return null
+  for (const col of collections) {
+    for (const slot of col.slots) {
+      for (const c of slot.classes) {
+        if (c.name === name) return c.courseCode
+      }
+    }
+  }
+  return null
 }
 
 /**

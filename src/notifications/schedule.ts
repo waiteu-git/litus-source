@@ -31,7 +31,25 @@ export type MorningDigest = {
   dueTomorrow: number
 }
 
-export type ScheduledNotification = DeadlineReminder | MorningDigest
+/**
+ * 各回イベント（休講/補講/小テスト/中間/期末/教室変更）の通知。課題リマインダーと同じ予約枠を
+ * 共有するが、**文面は timetableEvents/eventSchedule が組み立て済み**なのでそのまま運ぶ。
+ *
+ * かつては kind:'deadline-24h' に潰して流していたため、assignmentContent が
+ * 「締切まで24時間」「「◯◯ 休講（2026-07-20）」の締切が近づいています」という文面を作っていた。
+ * 休講に締切は無く、発火は当日8:00で24時間でもない＝全イベント通知が事実と食い違っていた
+ * （2026-07-17 修正）。**この型は文面を持ち回ることが存在理由なので、kind へ潰さないこと。**
+ */
+export type ClassEventNotice = {
+  kind: 'class-event'
+  /** 予約枠の識別に使う（eventSchedule が :eve / :day のサフィックスを付けた後のid）。 */
+  eventId: string
+  title: string
+  body: string
+  fireAt: string
+}
+
+export type ScheduledNotification = DeadlineReminder | MorningDigest | ClassEventNotice
 
 export type ScheduleOptions = {
   /** 朝まとめの発火時（ローカル）。既定7時。 */
@@ -112,8 +130,15 @@ export function computeNotificationSchedule(
     for (const a of targets) {
       const dl = new Date(a.deadline as string)
       if (Number.isNaN(dl.getTime())) continue
-      if (isSameLocalDate(dl, morning)) dueToday++
-      else if (isSameLocalDate(dl, tomorrow)) dueTomorrow++
+      // 「今日締切」は**まとめが鳴る時点でまだ締め切られていないもの**だけ数える。
+      // 同日判定だけだと当日3:00締切の課題を7:00のまとめが「今日締切 1件」として知らせてしまい、
+      // その課題は4時間前に閉じている＝ユーザーは確認しに行って初めて空振りと分かる。
+      // 締切前リマインダー(24h/3h/1h)は `fireMs <= now` で過去を落としているので、
+      // まとめだけが過去の締切を通知していた（2026-07-17修正）。
+      // 明日締切は丸一日先なので発火時刻より後であることが自明＝追加の判定は要らない。
+      if (isSameLocalDate(dl, morning)) {
+        if (dl.getTime() > morning.getTime()) dueToday++
+      } else if (isSameLocalDate(dl, tomorrow)) dueTomorrow++
     }
     if (dueToday + dueTomorrow === 0) continue
 

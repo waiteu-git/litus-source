@@ -21,6 +21,8 @@ import { buildBulletinNotificationContent } from './bulletinNotify'
 
 const TAG = 'attendance-alarm'
 const ASSIGNMENT_TAG = 'assignment-reminder'
+/** 各回イベント（休講/補講/小テスト等）。予約枠は課題と共有するが分類とタップ先が別。 */
+export const CLASS_EVENT_TAG = 'class-event'
 export const BULLETIN_TAG = 'bulletin-new'
 export const ATTENDANCE_OPEN_TAG = 'attendance-open'
 export const LETUS_NEWS_TAG = 'letus-news'
@@ -29,6 +31,13 @@ export const ATTENDANCE_CHANNEL_ID = 'attendance'
 export const ASSIGNMENT_CHANNEL_ID = 'assignments'
 export const BULLETIN_CHANNEL_ID = 'bulletins'
 export const LETUS_NEWS_CHANNEL_ID = 'letus-updates'
+/**
+ * 各回イベント（休講/補講/小テスト/教室変更）専用チャンネル。
+ * 予約枠は課題と共有するが、**通知の性質が別物**なので OS 上の分類は分ける。
+ * 同居していた頃は「休講」がOS設定で『課題リマインド』に属し、課題通知を切ると休講も消え、
+ * 逆に休講だけ切ることもできなかった（2026-07-17修正）。
+ */
+export const CLASS_EVENT_CHANNEL_ID = 'class-events'
 
 /** Expo Go では expo-notifications を読み込めない（読むと落ちる）。 */
 const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
@@ -78,6 +87,10 @@ export async function configureNotifications(): Promise<void> {
     })
     await Notifications.setNotificationChannelAsync(ASSIGNMENT_CHANNEL_ID, {
       name: '課題リマインド',
+      importance: Notifications.AndroidImportance.HIGH,
+    })
+    await Notifications.setNotificationChannelAsync(CLASS_EVENT_CHANNEL_ID, {
+      name: '休講・補講・小テスト',
       importance: Notifications.AndroidImportance.HIGH,
     })
     await Notifications.setNotificationChannelAsync(BULLETIN_CHANNEL_ID, {
@@ -158,18 +171,26 @@ export async function syncAssignmentReminders(notifications: ScheduledNotificati
   const scheduled = await Notifications.getAllScheduledNotificationsAsync()
   for (const n of scheduled) {
     const data = n.content.data as { tag?: string } | null
-    if (data?.tag === ASSIGNMENT_TAG) {
+    // 各回イベントは別タグ・別チャンネルへ分けたが、予約はこの関数が一括で貼り直す。
+    // **両方のタグを掃除すること**（片方だけだと分離前に貼った予約や、イベントの取り消しが
+    // 消えずに残る＝全キャンセル→貼り直し方式の前提が崩れる）。
+    if (data?.tag === ASSIGNMENT_TAG || data?.tag === CLASS_EVENT_TAG) {
       await Notifications.cancelScheduledNotificationAsync(n.identifier)
     }
   }
   for (const n of notifications) {
     const { title, body } = buildAssignmentNotificationContent(n)
+    const isEvent = n.kind === 'class-event'
     await Notifications.scheduleNotificationAsync({
-      content: { title, body, data: { tag: ASSIGNMENT_TAG, kind: n.kind } },
+      content: {
+        title,
+        body,
+        data: { tag: isEvent ? CLASS_EVENT_TAG : ASSIGNMENT_TAG, kind: n.kind },
+      },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(n.fireAt),
-        channelId: ASSIGNMENT_CHANNEL_ID,
+        channelId: isEvent ? CLASS_EVENT_CHANNEL_ID : ASSIGNMENT_CHANNEL_ID,
       },
     })
   }
@@ -208,18 +229,49 @@ export async function presentAttendanceOpenNotification(content: {
   })
 }
 
-/** 配信済みの受付open通知を消す（出席済み検出時に呼ぶ）。他タグは触らない。 */
-export async function clearDeliveredAttendanceOpenNotifications(): Promise<void> {
+/**
+ * 配信済み通知のうち、指定タグ（かつ match を満たすもの）を通知トレイから消す。
+ * **自タグ以外は絶対に触らない**（他機能の通知を巻き込んで消さないこと）。
+ * 用が済んだ通知を残すと、ユーザーはアプリで解決済みの件を何度も見ることになる。
+ */
+async function clearDelivered(
+  tags: string[],
+  match?: (data: NotifResponseData) => boolean,
+): Promise<void> {
   const Notifications = await loadNotifications()
   if (!Notifications) return
   const presented = await Notifications.getPresentedNotificationsAsync()
   for (const n of presented) {
-    const data = n.request.content.data as { tag?: string } | null
-    if (data?.tag === ATTENDANCE_OPEN_TAG) {
-      await Notifications.dismissNotificationAsync(n.request.identifier)
-    }
+    const data = (n.request.content.data ?? {}) as NotifResponseData
+    if (!data.tag || !tags.includes(data.tag)) continue
+    if (match && !match(data)) continue
+    await Notifications.dismissNotificationAsync(n.request.identifier)
   }
 }
+
+/** 配信済みの受付open通知を消す（出席済み検出時に呼ぶ）。他タグは触らない。 */
+export async function clearDeliveredAttendanceOpenNotifications(): Promise<void> {
+  await clearDelivered([ATTENDANCE_OPEN_TAG])
+}
+
+/**
+ * 授業開始の予約アラーム（attendance-start）の配信済み通知を消す。
+ *
+ * **受付open通知が出たときに呼ぶ**。開始アラームは時間割から推測して「入力できるか確認しましょう」と
+ * 言うだけだが、受付open通知は CLASS を実際に見て「受付中（14:40〜16:10）」と事実を言う。
+ * 授業開始で isInClassPeriod が真→エンジン起動→accepting 検知、が予約アラームとほぼ同時刻になるため、
+ * 両方MAXチャンネル（音＋ヘッドアップ）で立て続けに鳴っていた（実機報告 2026-07-17「一気に2つきてうるさい」）。
+ * 情報として上位の受付open通知を残し、推測ベースの開始アラームを畳む。
+ * courseCode 指定時はその科目のものだけ消す（別授業の予約アラームを巻き込まない）。
+ * last-chance は「まだなら今のうちに」＝別の役割なので消さない。
+ */
+export async function clearDeliveredAttendanceStartNotifications(courseCode?: string | null): Promise<void> {
+  await clearDelivered(
+    [TAG],
+    (d) => d.kind === 'attendance-start' && (!courseCode || d.courseCode === courseCode),
+  )
+}
+
 
 /**
  * LETUS新着（コース活動の増分）を即時ローカル通知する。新着掲示と同型
@@ -234,28 +286,19 @@ export async function presentLetusNewsNotification(content: { title: string; bod
   })
 }
 
-/** 配信済みのLETUS新着通知を消す（起動時に呼び、通知欄への溜まりを防ぐ）。他タグは触らない。 */
+/**
+ * 配信済みのLETUS新着通知を消す。**起動時とコース一覧を開いた時**に呼ぶ。他タグは触らない。
+ * 起動時だけだと、アプリを使っている最中に届いた通知が一覧を見ても消えず、再起動まで残る。
+ */
 export async function clearDeliveredLetusNewsNotifications(): Promise<void> {
-  const Notifications = await loadNotifications()
-  if (!Notifications) return
-  const presented = await Notifications.getPresentedNotificationsAsync()
-  for (const n of presented) {
-    const data = n.request.content.data as { tag?: string } | null
-    if (data?.tag === LETUS_NEWS_TAG) {
-      await Notifications.dismissNotificationAsync(n.request.identifier)
-    }
-  }
+  await clearDelivered([LETUS_NEWS_TAG])
 }
 
-/** 配信済みの新着掲示通知を消す（起動時に呼び、通知欄への溜まりを防ぐ）。他タグは触らない。 */
+/**
+ * 配信済みの新着掲示通知を消す。**起動時と掲示一覧を開いた時**に呼ぶ。他タグは触らない。
+ * 起動時だけだと、アプリを使っている最中に届いた通知が一覧を見ても消えず、再起動まで残る
+ * （実機報告 2026-07-17「一覧に入っても消えない」）。
+ */
 export async function clearDeliveredBulletinNotifications(): Promise<void> {
-  const Notifications = await loadNotifications()
-  if (!Notifications) return
-  const presented = await Notifications.getPresentedNotificationsAsync()
-  for (const n of presented) {
-    const data = n.request.content.data as { tag?: string } | null
-    if (data?.tag === BULLETIN_TAG) {
-      await Notifications.dismissNotificationAsync(n.request.identifier)
-    }
-  }
+  await clearDelivered([BULLETIN_TAG])
 }

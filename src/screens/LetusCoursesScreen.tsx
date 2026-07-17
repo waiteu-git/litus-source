@@ -8,6 +8,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Chip, ScreenBg, ScreenHeader, useUi, useTabBarClearance } from '../ui/screen'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
+import { clearDeliveredLetusNewsNotifications } from '../notifications/notifier'
 import { markCourseSeen, unseenCounts } from '../updates/courseNews'
 import type { TimetableStackParamList } from '../navigation/types'
 import { Badge } from '../ui/Badge'
@@ -29,6 +30,8 @@ export default function LetusCoursesScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true
+      // 新着一覧を開いた＝通知の用は済んだので配信済みのLETUS新着通知を消す（掲示一覧と同契約）。
+      clearDeliveredLetusNewsNotifications().catch(() => undefined)
       ;(async () => {
         const map = await loadCourseMap()
         // 新着バッジは累積ストア（LETUS新着）から。スナップショットの added は次の実巡回で消える

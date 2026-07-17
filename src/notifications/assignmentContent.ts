@@ -14,6 +14,9 @@ const REMAINDER_HOURS: Record<DeadlineReminderKind, string> = {
 export function buildAssignmentNotificationContent(
   n: ScheduledNotification,
 ): { title: string; body: string } {
+  // 各回イベントは eventSchedule が既に文面を組んでいる（「線形代数1 休講」/「2026-07-20」）。
+  // 締切の言い回しへ変換してはならない（休講に締切は無い）。
+  if (n.kind === 'class-event') return { title: n.title, body: n.body }
   if (n.kind === 'morning-digest') {
     const parts: string[] = []
     if (n.dueToday > 0) parts.push(`今日締切 ${n.dueToday}件`)
