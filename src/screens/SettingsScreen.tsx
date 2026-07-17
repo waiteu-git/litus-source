@@ -362,7 +362,7 @@ export default function SettingsScreen() {
             <Text style={{ color: ui.valueColor, fontWeight: '500' }}>
               リタス {formatVersionLabel(Constants.nativeAppVersion, Constants.nativeBuildVersion)}（開発版）
             </Text>
-            <Pressable onPress={() => Linking.openURL('https://lms.waiteu.dev/app')}>
+            <Pressable onPress={() => Linking.openURL('https://litus.waiteu.dev/')}>
               <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
             </Pressable>
           </View>
