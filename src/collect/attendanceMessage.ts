@@ -30,12 +30,15 @@ export type AttendanceReception = {
   /** 学内/学外ネットワーク判定（ページ文言由来。'off' のときだけ画面が警告を出す）。 */
   network: AttendanceNetwork
   /**
-   * この授業でリアクションペーパーを**書けるか**（必須かどうかとは独立）。
-   * 判定＝リアペ提出ボタンが出ている かつ 未提出。文言(.reactionMsg)は状態で変わる
-   * （必須未提出／未提出／提出済み）が、**ボタンの有無が提出可否そのもの**なのでそれを信号にする。
-   * 必須(reaction_pending)でない授業でも任意提出の導線を出すために使う。
+   * この授業でリアクションペーパーを**扱えるか**（必須かどうか・提出済みかどうかとは独立）。
+   * 判定＝リアペ画面へ入るボタンが出ていること。ラベルは状態で変わる
+   * （未提出=「リアクションペーパー」／提出済み=「リアクションペーパー確認」）が、
+   * **ボタンの有無が「リアペ画面へ入れるか」そのもの**なのでそれを信号にする。
+   * **CLASSは再提出を許す**ため、提出済みでも true（編集して再提出できる・実機確認 2026-07-17）。
    */
   reactionAvailable: boolean
+  /** リアペを提出済みか（.reactionMsg の「提出済み」）。UIの文言（書く/編集）と成否判定に使う。 */
+  reactionSubmitted: boolean
 }
 
 const NONE_MARKER = '出席確認中の履修授業はありません'
@@ -68,6 +71,7 @@ function base(status: AttendanceStatus): AttendanceReception {
     error: null,
     network: 'unknown',
     reactionAvailable: false,
+    reactionSubmitted: false,
   }
 }
 
@@ -77,11 +81,12 @@ function isReactionSubmitted(reactionMsg: string): boolean {
 }
 
 /**
- * リアペを書けるか。ボタンが出ていて、かつ提出済みでないこと。
- * 必須(reaction_pending)かどうかとは独立＝必須でない授業でも任意提出の導線を出すために使う。
+ * リアペ画面へ入れるか＝ボタンが出ているか。必須かどうか・提出済みかどうかとは独立。
+ * **提出済みを除外しないこと**: CLASSは「リアクションペーパー確認」→「再提出」で本文の編集を
+ * 許しており、除外すると提出後に編集できなくなる（実機確認 2026-07-17・ユーザー要望）。
  */
-function reactionAvailableOf(p: Payload, reactionMsg: string): boolean {
-  return p.hasReactionBtn === true && !isReactionSubmitted(reactionMsg)
+function reactionAvailableOf(p: Payload): boolean {
+  return p.hasReactionBtn === true
 }
 
 function fail(error: string): AttendanceReception {
@@ -137,8 +142,9 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
   // 学内/学外はどの状態でも本文から拾える（表示されないページでは unknown）。
   const network = detectAttendanceNetwork(text)
   const reactionMsg = typeof p.reactionMsg === 'string' ? p.reactionMsg : ''
-  // リアペを書けるか（＝ボタンが出ていて未提出）。必須かどうかとは独立なので、どの状態でも付ける。
-  const reactionAvailable = reactionAvailableOf(p, reactionMsg)
+  // リアペ画面へ入れるか（＝ボタンの有無）。必須/提出済みとは独立なので、どの状態でも付ける。
+  const reactionAvailable = reactionAvailableOf(p)
+  const reactionSubmitted = isReactionSubmitted(reactionMsg)
 
   // 1) 出席済み: attendSuc は本文が薄くても確定。空本文チェックより先に見る。
   if (p.attendSuc === true) {
@@ -147,13 +153,14 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     r.confirmWindow = windowOf()
     r.network = network
     r.reactionAvailable = reactionAvailable
+    r.reactionSubmitted = reactionSubmitted
     return r
   }
 
   if (!text.trim()) return fail(READ_ERROR)
 
   // 2) 受付なし
-  if (text.includes(NONE_MARKER)) return { ...base('none'), network, reactionAvailable }
+  if (text.includes(NONE_MARKER)) return { ...base('none'), network, reactionAvailable, reactionSubmitted }
 
   const cw = windowOf()
 
@@ -169,6 +176,7 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     r.remaining = extractRemaining(text) ?? remainingFromSec(p.timeSum)
     r.network = network
     r.reactionAvailable = reactionAvailable
+    r.reactionSubmitted = reactionSubmitted
     return r
   }
 
@@ -180,6 +188,7 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     r.remaining = extractRemaining(text) ?? remainingFromSec(p.timeSum)
     r.network = network
     r.reactionAvailable = reactionAvailable
+    r.reactionSubmitted = reactionSubmitted
     return r
   }
 
@@ -191,9 +200,10 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
     r.confirmWindow = cw
     r.network = network
     r.reactionAvailable = reactionAvailable
+    r.reactionSubmitted = reactionSubmitted
     return r
   }
 
   // 6) 遷移中/その他
-  return { ...base('unknown'), network, reactionAvailable }
+  return { ...base('unknown'), network, reactionAvailable, reactionSubmitted }
 }

@@ -9,7 +9,15 @@ export type ReactionFillFailReason = 'form-missing' | 'verify-failed' | 'button-
 
 export type ReactionScriptMessage =
   | { kind: 'open'; ok: boolean }
-  | { kind: 'fill'; ok: true; reason: null }
+  | {
+      kind: 'fill'
+      ok: true
+      reason: null
+      /** 提出ajax(PrimeFaces.ab)の観測結果。**再提出の確定点**（提出済みフラグが変化しないため）。 */
+      ajaxDone?: boolean
+      ajaxStatus?: number
+      ajaxError?: string
+    }
   | { kind: 'fill'; ok: false; reason: ReactionFillFailReason }
 
 const FILL_FAIL_REASONS: readonly ReactionFillFailReason[] = ['form-missing', 'verify-failed', 'button-missing', 'stub']
@@ -26,7 +34,17 @@ export function parseReactionMessage(raw: string): ReactionScriptMessage | null 
   if (p.type !== 'reaction') return null
   if (p.stage === 'open') return { kind: 'open', ok: p.ok === true }
   if (p.stage === 'fill') {
-    if (p.ok === true) return { kind: 'fill', ok: true, reason: null }
+    if (p.ok === true) {
+      const q = payload as { ajaxDone?: unknown; ajaxStatus?: unknown; ajaxError?: unknown }
+      return {
+        kind: 'fill',
+        ok: true,
+        reason: null,
+        ajaxDone: typeof q.ajaxDone === 'boolean' ? q.ajaxDone : undefined,
+        ajaxStatus: typeof q.ajaxStatus === 'number' ? q.ajaxStatus : undefined,
+        ajaxError: typeof q.ajaxError === 'string' && q.ajaxError ? q.ajaxError : undefined,
+      }
+    }
     const reason = FILL_FAIL_REASONS.find((r) => r === p.reason) ?? 'error'
     return { kind: 'fill', ok: false, reason }
   }

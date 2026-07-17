@@ -92,6 +92,9 @@ export default function AttendanceScreen() {
   // 常にフォームを出す。任意はユーザーが「書く」で開いたときだけ出す（普段は邪魔しない）。
   // ※下書き復元effectが showReactionForm を依存に取るため、必ずその前に宣言する（TDZ回避）。
   const reactionAvailable = !!reception?.reactionAvailable
+  // 提出済みか。CLASSは「リアクションペーパー確認」→「再提出」で編集を許すので、提出後も導線を残す
+  // （ユーザー要望 2026-07-17「提出後もリアペのUIは出席画面に残せるように」）。文言だけ切り替える。
+  const reactionSubmitted = !!reception?.reactionSubmitted
   const [reactionOpen, setReactionOpen] = useState(false)
   const showReactionForm = reactionPending || reactionOpen
   // 任意提出の導線は、書ける授業で・まだ開いておらず・提出処理中でないときだけ出す。
@@ -125,11 +128,13 @@ export default function AttendanceScreen() {
     // CLASS側の「提出」に事前確認は無い（onclickが直接PrimeFaces.ab）ため、確認はアプリ側で行う。
     Keyboard.dismiss()
     Alert.alert(
-      'リアクションペーパーを提出',
-      `${reactionCourse ?? 'この授業'}にこの内容で提出します。よろしいですか？`,
+      reactionSubmitted ? 'リアクションペーパーを再提出' : 'リアクションペーパーを提出',
+      reactionSubmitted
+        ? `${reactionCourse ?? 'この授業'}の提出済みの内容を、この内容で上書きします。よろしいですか？`
+        : `${reactionCourse ?? 'この授業'}にこの内容で提出します。よろしいですか？`,
       [
         { text: 'キャンセル', style: 'cancel' },
-        { text: '提出する', onPress: () => submitReaction(reactionText) },
+        { text: reactionSubmitted ? '再提出する' : '提出する', onPress: () => submitReaction(reactionText) },
       ],
     )
   }
@@ -265,7 +270,7 @@ export default function AttendanceScreen() {
               onPress={() => setReactionOpen(true)}
             >
               <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
-                リアクションペーパーを書く
+                {reactionSubmitted ? 'リアクションペーパーを編集（提出済み）' : 'リアクションペーパーを書く'}
               </Text>
             </Pressable>
           ) : null}
@@ -284,7 +289,9 @@ export default function AttendanceScreen() {
               <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
                 {reactionPending
                   ? '出席コードは受理されました。リアクションペーパーを提出すると出席になります'
-                  : 'リアクションペーパーを提出できます（この授業では出席の条件ではありません）'}
+                  : reactionSubmitted
+                    ? '提出済みのリアクションペーパーです。編集して再提出できます'
+                    : 'リアクションペーパーを提出できます（この授業では出席の条件ではありません）'}
               </Text>
               {reception?.courseName || reception?.confirmWindow ? (
                 <Text style={[styles.conflictSub, { color: labelColor }]}>
@@ -326,7 +333,7 @@ export default function AttendanceScreen() {
               {reactionSending ? (
                 <Text style={styles.ctaText}>提出中…</Text>
               ) : (
-                <Text style={styles.ctaText}>リアクションペーパーを提出</Text>
+                <Text style={styles.ctaText}>{reactionSubmitted ? 'リアクションペーパーを再提出' : 'リアクションペーパーを提出'}</Text>
               )}
             </Pressable>
 
@@ -557,7 +564,7 @@ export default function AttendanceScreen() {
                 onPress={() => setReactionOpen(true)}
               >
                 <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
-                  リアクションペーパーを書く
+                  {reactionSubmitted ? 'リアクションペーパーを編集（提出済み）' : 'リアクションペーパーを書く'}
                 </Text>
               </Pressable>
             ) : null}
