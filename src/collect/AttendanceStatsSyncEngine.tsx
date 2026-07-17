@@ -1,6 +1,14 @@
+import { useRef } from 'react'
 import { OPEN_ATTENDANCE_STATS_JS, COLLECT_ATTENDANCE_STATS_JS } from './injectedScripts'
 import { parseAttendanceStatsMessage } from './attendanceStatsMessage'
 import { saveAttendanceStats } from '../storage/attendanceStatsStore'
+import { saveCollectionHealth } from '../storage/collectionHealthStore'
+import {
+  attendanceStatsHealth,
+  createHealthObservation,
+  observePageSignal,
+  type AttendanceStatsCollectDiag,
+} from '../health/collectionSignals'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
 
 /**
@@ -18,8 +26,17 @@ import ClassHeadlessCollector from './ClassHeadlessCollector'
  * 早撃ちCOLLECTの空結果が共有 triesRef を食い、有限上限だと着地前に枯渇し得る。上限を撤廃し
  * 「着地して表が描画された瞬間の抽出成功」か「25秒経過」でのみ終える。fallbackは
  * セッションがあっても保証人ページへ弾かれ使えないため未指定（実測2026-07-15）。
+ *
+ * 健康記録（2026-07-17追加）: 掲示/時間割/課題は onSignal＋saveCollectionHealth で失敗理由を残すのに
+ * **出欠だけ何も残していなかった**ため、「授業中に取れない」を推測でしか語れなかった（ユーザー報告）。
+ * 完了時に必ず health を保存する＝多重画面競合(blocked)・未着地(blocked)・構造変更(structure_drift)が
+ * 事実として残る。
  */
 export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: () => void }) {
+  const obs = useRef(createHealthObservation())
+  const diag = useRef<AttendanceStatsCollectDiag | null>(null)
+  const parsedCount = useRef(0)
+
   return (
     <ClassHeadlessCollector
       openJs={OPEN_ATTENDANCE_STATS_JS}
@@ -27,9 +44,26 @@ export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: 
       resultType="attendanceStats"
       navOnce
       maxTries={Number.POSITIVE_INFINITY}
+      onSignal={(p) => {
+        observePageSignal(obs.current, p)
+        if (p.type === 'page' && typeof p.url === 'string') {
+          diag.current = { ...(diag.current ?? {}), page: (p.url.split('/').pop() as string) || p.url }
+        }
+        if (p.type === 'attendanceStats') {
+          diag.current = {
+            ...(diag.current ?? {}),
+            htmlLen: typeof p.html === 'string' ? p.html.length : 0,
+            rows: typeof p.rows === 'number' ? p.rows : 0,
+            pwd: typeof p.pwd === 'number' ? p.pwd : 0,
+            blen: typeof p.blen === 'number' ? p.blen : 0,
+            page: typeof p.page === 'string' && p.page ? p.page : diag.current?.page,
+          }
+        }
+      }}
       onData={async (raw) => {
         const result = parseAttendanceStatsMessage(raw)
         if (result.error || result.courses.length === 0) return false
+        parsedCount.current = result.courses.length
         try {
           await saveAttendanceStats(result.courses)
         } catch {
@@ -37,7 +71,14 @@ export default function AttendanceStatsSyncEngine({ onFinished }: { onFinished: 
         }
         return true
       }}
-      onFinished={onFinished}
+      onFinished={() => {
+        // 成功・失敗にかかわらず理由を残す（ここが無いと授業中の失敗が永遠に不可視になる）。
+        saveCollectionHealth(
+          'attendanceStats',
+          attendanceStatsHealth(obs.current, diag.current, parsedCount.current),
+        ).catch(() => undefined)
+        onFinished()
+      }}
     />
   )
 }

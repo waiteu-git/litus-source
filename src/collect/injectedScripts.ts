@@ -203,6 +203,12 @@ export const DETECT_ATTENDANCE_JS = `(function(){
     // 同クラスが両状態に付くため全件連結して送り、未完了かの文言判定はRN側 parseAttendanceMessage。
     var rms = Array.prototype.slice.call(document.querySelectorAll('.reactionMsg'));
     var reactionMsg = rms.map(function(e){ return e.textContent||''; }).join(' ');
+    // リアペ提出ボタンの有無＝「この授業でリアペを出せるか」そのものの信号（実DOM 2026-07-17）。
+    // 文言(.reactionMsg)は状態で変わる（必須未提出/未提出/提出済み）が、ボタンの有無は
+    // 提出可否を直接表す。必須でない授業でも任意提出させるための判定に使う。
+    var hasReactionBtn = Array.prototype.slice.call(document.querySelectorAll('button')).some(function(b){
+      return ((b.textContent||'').replace(/\\s+/g,'')) === 'リアクションペーパー';
+    });
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'attendance',
       text: body,
@@ -212,7 +218,7 @@ export const DETECT_ATTENDANCE_JS = `(function(){
       hasCodeInput: hasCodeInput,
       signEnded: signEnded,
       timeSum: timeSum,
-      reactionMsg: reactionMsg
+      reactionMsg: reactionMsg, hasReactionBtn: hasReactionBtn
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
@@ -858,11 +864,14 @@ export const COLLECT_ATTENDANCE_STATS_JS = `(function(){
     var box = document.querySelector('div[id$="jugyoKaisuTbl"]');
     var body = document.body ? (document.body.innerText || '') : '';
     var hasPwd = !!document.querySelector('input[type=password]');
+    // rows = パース前のDOM行数。健康判定で「表は在るのに1件も解析できない（構造変更）」と
+    // 「本当に0件」を区別するのに要る（これが無いと両者を取り違える）。
+    var rows = box ? box.querySelectorAll('tr').length : 0;
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'attendanceStats',
       html: box ? box.outerHTML : '',
       page: (location.pathname||'').split('/').pop() || '',
-      pwd: hasPwd?1:0, blen: body.length
+      rows: rows, pwd: hasPwd?1:0, blen: body.length
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));

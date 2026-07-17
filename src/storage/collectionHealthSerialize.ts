@@ -1,12 +1,12 @@
 import type { CollectionHealth } from '../health/collectionHealth'
 
 /** ヘルスを保存する収集の識別子。増やすときはここに追記（未知idはdeserializeで捨てられる）。 */
-export type CollectionId = 'bulletin' | 'timetable' | 'letusAssignments'
+export type CollectionId = 'bulletin' | 'timetable' | 'letusAssignments' | 'attendanceStats'
 
 export type StoredHealth = { health: CollectionHealth; at: number }
 export type CollectionHealthMap = Partial<Record<CollectionId, StoredHealth>>
 
-const IDS: readonly CollectionId[] = ['bulletin', 'timetable', 'letusAssignments']
+const IDS: readonly CollectionId[] = ['bulletin', 'timetable', 'letusAssignments', 'attendanceStats']
 const PLAIN_STATUSES = ['empty_valid', 'structure_drift', 'not_logged_in', 'maintenance', 'blocked'] as const
 
 export function serializeCollectionHealth(m: CollectionHealthMap): string {

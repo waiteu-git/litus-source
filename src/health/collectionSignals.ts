@@ -103,6 +103,42 @@ export function timetableHealth(
   return classifyCollectionHealth(s)
 }
 
+/** 出欠収集（学生出欠状況確認）の抽出診断。COLLECT_ATTENDANCE_STATS_JS が返す値。 */
+export type AttendanceStatsCollectDiag = {
+  page?: string
+  /** 出欠テーブル div[id$=jugyoKaisuTbl] の outerHTML 長。>0＝期待コンテナに着地。 */
+  htmlLen?: number
+  /** パース前のDOM行数。「表は在るのに解析0＝構造変更」と「本当に0件」を区別する。 */
+  rows?: number
+  pwd?: number
+  blen?: number
+}
+
+/**
+ * 出欠収集の健康判定（掲示/時間割と同型）。
+ * これが無かったため出欠収集は**失敗しても証拠が残らず**、「授業中に取れない」を推測でしか
+ * 語れなかった（2026-07-17ユーザー報告）。多重画面競合は conflictSeen→blocked として記録される。
+ */
+export function attendanceStatsHealth(
+  o: HealthObservation,
+  c: AttendanceStatsCollectDiag | null,
+  parsedCourseCount: number,
+): CollectionHealth {
+  const page = c?.page || o.lastUrl
+  const s: HealthSignals = {
+    containerPresent: (c?.htmlLen ?? 0) > 0,
+    rawItemCount: c?.rows ?? 0,
+    parsedItemCount: parsedCourseCount,
+    maintenanceSeen: o.maintenanceSeen,
+    conflictSeen: o.conflictSeen,
+    passwordSeen: o.passwordSeen || (c?.pwd ?? 0) > 0,
+    loggedIn: o.loggedIn,
+    offTarget: isKnownOffTargetPage(page),
+    bodyLength: c?.blen ?? 0,
+  }
+  return classifyCollectionHealth(s)
+}
+
 /** LETUS課題巡回1回の集計。visited=onMessageが返ったページ数、parsedOk=締切or提出状態を解析できた数。 */
 export type LetusRunStats = { visited: number; parsedOk: number; loginSeen: boolean }
 

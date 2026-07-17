@@ -110,6 +110,14 @@ export default function AttendanceScreen() {
   const reactionSending = reactionSubmit.status === 'sending'
   const reactionLen = reactionLength(reactionText)
   const reactionOver = reactionLen > REACTION_MAX_LEN
+  // 任意提出: リアペ必須でなくても、CLASSに提出ボタンが出ている＝書ける授業では書けるようにする
+  // （ユーザー要望 2026-07-17「ボタンがあるなら常に書けるように」）。必須(reactionPending)は
+  // 常にフォームを出す。任意はユーザーが「書く」で開いたときだけ出す（普段は邪魔しない）。
+  const reactionAvailable = !!reception?.reactionAvailable
+  const [reactionOpen, setReactionOpen] = useState(false)
+  const showReactionForm = reactionPending || reactionOpen
+  // 任意提出の導線は、書ける授業で・まだ開いておらず・提出処理中でないときだけ出す。
+  const canOpenReaction = reactionAvailable && !reactionPending && !reactionOpen
   const confirmReactionSubmit = () => {
     // CLASS側の「提出」に事前確認は無い（onclickが直接PrimeFaces.ab）ため、確認はアプリ側で行う。
     Keyboard.dismiss()
