@@ -11,6 +11,7 @@ import { IBMPlexSansJP_700Bold } from '@expo-google-fonts/ibm-plex-sans-jp/700Bo
 import RootTabs from './src/navigation/RootTabs'
 import BackgroundLetusSync from './src/collect/BackgroundLetusSync'
 import BackgroundBulletinSync from './src/collect/BackgroundBulletinSync'
+import BackgroundAttendanceStatsSync from './src/collect/BackgroundAttendanceStatsSync'
 import { ClassViewProvider } from './src/collect/classViewArbiter'
 import { AttendanceEngineProvider } from './src/attendance/AttendanceEngineProvider'
 import AttendanceFab from './src/attendance/AttendanceFab'
@@ -167,6 +168,10 @@ export default function App() {
                         </KillSwitchGate>
                         <KillSwitchGate feature="bulletin">
                           <BackgroundBulletinSync />
+                        </KillSwitchGate>
+                        {/* 出欠もCLASS収集なので掲示のkillキーに追従する（出欠専用キーは無い）。 */}
+                        <KillSwitchGate feature="bulletin">
+                          <BackgroundAttendanceStatsSync />
                         </KillSwitchGate>
                       </SyncProvider>
                     </AttendanceEngineProvider>

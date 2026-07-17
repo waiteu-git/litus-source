@@ -7,11 +7,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 const TIMETABLE_KEY = 'refresh.timetable.at.v1'
 const BULLETIN_KEY = 'refresh.bulletin.at.v1'
 const ASSIGNMENTS_KEY = 'refresh.assignments.at.v1'
+const ATTENDANCE_STATS_KEY = 'refresh.attendanceStats.at.v1'
 
 // この間隔以内に更新済みならスキップする（起動のたびにCLASSを触らない）。
 export const TIMETABLE_REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000 // 20時間
 // 掲示は時間割より更新頻度が高いので短め。インフォタブを開いたときに古ければ裏更新する。
 export const BULLETIN_REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000 // 3時間
+// 出欠状況は1コマ終わるごとにしか動かない。背景トリガを増やす以上、CLASS負荷を増やさないため
+// 長めに取る（[[litus-load-audit-2026-07-13]]「静かに運用」）。ユーザー起点の同期はTTLを無視する。
+export const ATTENDANCE_STATS_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6時間
 
 export async function loadTimetableRefreshedAt(): Promise<number> {
   const raw = await AsyncStorage.getItem(TIMETABLE_KEY)
@@ -51,4 +55,19 @@ export async function loadAssignmentsRefreshedAt(): Promise<number> {
 
 export async function saveAssignmentsRefreshedAt(at: number = Date.now()): Promise<void> {
   await AsyncStorage.setItem(ASSIGNMENTS_KEY, String(at))
+}
+
+export async function loadAttendanceStatsRefreshedAt(): Promise<number> {
+  const raw = await AsyncStorage.getItem(ATTENDANCE_STATS_KEY)
+  const n = raw ? Number(raw) : 0
+  return Number.isFinite(n) ? n : 0
+}
+
+export async function saveAttendanceStatsRefreshedAt(at: number = Date.now()): Promise<void> {
+  await AsyncStorage.setItem(ATTENDANCE_STATS_KEY, String(at))
+}
+
+/** 出欠の前回更新から間隔を過ぎていれば true（背景トリガ専用。ユーザー起点はTTLを見ない）。 */
+export function isAttendanceStatsStale(lastAt: number, now: number = Date.now()): boolean {
+  return now - lastAt >= ATTENDANCE_STATS_REFRESH_INTERVAL_MS
 }

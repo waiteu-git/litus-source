@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import BulletinSyncEngine from '../collect/BulletinSyncEngine'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
+import AttendanceStatsSyncEngine from '../collect/AttendanceStatsSyncEngine'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { useClassView } from '../collect/classViewArbiter'
@@ -8,7 +9,12 @@ import { planSync } from './syncGuards'
 import { decideClassSync } from './classSyncConfirm'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
-import { loadAssignmentsRefreshedAt, loadBulletinRefreshedAt } from '../storage/refreshMetaStore'
+import {
+  isAttendanceStatsStale,
+  loadAssignmentsRefreshedAt,
+  loadAttendanceStatsRefreshedAt,
+  loadBulletinRefreshedAt,
+} from '../storage/refreshMetaStore'
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import type { SyncSkipReason } from '../health/syncSkipNotice'
@@ -33,21 +39,31 @@ export type SyncValue = {
   bulletinUserRun: boolean
   /** LETUS課題フル同期エンジン稼働中（手動・背景を問わない）。 */
   assignmentBusy: boolean
+  /** 出欠状況（CLASS「学生出欠状況確認」）収集エンジン稼働中。 */
+  attendanceStatsBusy: boolean
   /** 掲示/課題の最終成功時刻（保存値の反映。0=未収集）。 */
   lastBulletinAt: number
   lastAssignmentsAt: number
+  /** 出欠の最終成功時刻（0=未収集）。 */
+  lastAttendanceStatsAt: number
   /** 両者の合成（古い方＝全データの保証時刻）。両方未収集なら null。 */
   lastSyncAt: number | null
   /** 直近のスキップ理由（source==='user' のときだけ設定・数秒で自動クリア）。 */
   skip: SyncSkip | null
   bulletinHealth: StoredHealth | null
   letusHealth: StoredHealth | null
-  /** 掲示→課題の順で同期（ホーム上部ボタン）。結果を返す（'confirm-attending'＝授業中の確認要求）。 */
+  attendanceStatsHealth: StoredHealth | null
+  /** 掲示→出欠→課題の順で同期（ホーム上部ボタン）。結果を返す（'confirm-attending'＝授業中の確認要求）。 */
   runFullSync: (opts?: RunOpts) => SyncStartResult
   /** 掲示のみ（背景boot用・確認override可）。 */
   runBulletinSync: (opts?: RunOpts) => SyncStartResult
   /** 課題のみ（課題画面の更新・背景boot/foreground用）。 */
   runAssignmentsSync: (opts?: RunOpts) => SyncStartResult
+  /**
+   * 出欠のみ（時間割同期の完走後・背景boot用）。CLASS収集なので可否は掲示と同じ decideClassSync。
+   * source!=='user' のときだけ鮮度TTL（6h）でスキップする（ユーザー起点は常に取りに行く）。
+   */
+  runAttendanceStatsSync: (opts?: RunOpts) => SyncStartResult
 }
 
 // Provider外（テスト等）は不活性: 何もせず・何も走らせない。
@@ -55,15 +71,19 @@ const Ctx = createContext<SyncValue>({
   bulletinBusy: false,
   bulletinUserRun: false,
   assignmentBusy: false,
+  attendanceStatsBusy: false,
   lastBulletinAt: 0,
   lastAssignmentsAt: 0,
+  lastAttendanceStatsAt: 0,
   lastSyncAt: null,
   skip: null,
   bulletinHealth: null,
   letusHealth: null,
+  attendanceStatsHealth: null,
   runFullSync: () => 'skipped',
   runBulletinSync: () => 'skipped',
   runAssignmentsSync: () => 'skipped',
+  runAttendanceStatsSync: () => 'skipped',
 })
 
 // 課題同期の進捗ラベル（1ページ巡回ごとに更新される高頻度値）。本体contextから分離し、
@@ -103,17 +123,24 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const [bulletinBusy, setBulletinBusy] = useState(false)
   const [assignmentBusy, setAssignmentBusy] = useState(false)
+  const [attendanceStatsBusy, setAttendanceStatsBusy] = useState(false)
   const bulletinBusyRef = useRef(false)
   const assignmentBusyRef = useRef(false)
-  // 掲示完了後に課題フェーズを連鎖するか（runFullSync のときだけ true）と、その発火元。
+  const attendanceStatsBusyRef = useRef(false)
+  // フル同期の残りフェーズを連鎖するか（runFullSync のときだけ立つ）と、その発火元。
+  // 連鎖は 掲示 → 出欠 → 課題。CLASS収集どうし（掲示・出欠）は classCollectLease で直列化される。
   const chainRef = useRef<SyncSource | null>(null)
 
   const [assignmentProgress, setAssignmentProgress] = useState<string | null>(null)
   const [bulletinUserRun, setBulletinUserRun] = useState(false)
   const [lastBulletinAt, setLastBulletinAt] = useState(0)
   const [lastAssignmentsAt, setLastAssignmentsAt] = useState(0)
+  const [lastAttendanceStatsAt, setLastAttendanceStatsAt] = useState(0)
+  const lastAttendanceStatsAtRef = useRef(0)
+  lastAttendanceStatsAtRef.current = lastAttendanceStatsAt
   const [bulletinHealth, setBulletinHealth] = useState<StoredHealth | null>(null)
   const [letusHealth, setLetusHealth] = useState<StoredHealth | null>(null)
+  const [attendanceStatsHealth, setAttendanceStatsHealth] = useState<StoredHealth | null>(null)
 
   const [skip, setSkip] = useState<SyncSkip | null>(null)
   const skipRef = useRef<SyncSkip | null>(null)
@@ -146,10 +173,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadBulletinRefreshedAt().then(setLastBulletinAt).catch(() => undefined)
     loadAssignmentsRefreshedAt().then(setLastAssignmentsAt).catch(() => undefined)
+    loadAttendanceStatsRefreshedAt().then(setLastAttendanceStatsAt).catch(() => undefined)
     loadCollectionHealth()
       .then((m) => {
         setBulletinHealth(m.bulletin ?? null)
         setLetusHealth(m.letusAssignments ?? null)
+        setAttendanceStatsHealth(m.attendanceStats ?? null)
       })
       .catch(() => undefined)
   }, [])
@@ -181,6 +210,44 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       bulletinBusyRef.current = true
       setBulletinUserRun(source === 'user')
       setBulletinBusy(true)
+      return 'started'
+    },
+    [showSkip, clearSkip],
+  )
+
+  /**
+   * 出欠状況（CLASS）収集。従来は TimetableScreen が「時間割同期の完走時」だけマウントしており、
+   * ホームの同期チップ・初回ログインからは**構造上一度も起動しなかった**（ユーザー報告の①②は同じ根）。
+   * 所有権を Provider へ移し、掲示と同じ可否判定・同じ場所で回す。
+   */
+  const runAttendanceStatsSync = useCallback(
+    (opts?: RunOpts): SyncStartResult => {
+      const source = opts?.source ?? 'user'
+      if (attendanceStatsBusyRef.current) return 'busy'
+      // 出欠は掲示と同じCLASS収集なので、掲示の停止スイッチに追従する（出欠専用のkillキーは無い）。
+      if (isKilledRef.current('bulletin')) {
+        if (source === 'user') showSkip({ feature: 'class', reason: 'stopped' })
+        return 'skipped'
+      }
+      // 背景トリガだけ鮮度TTLで見送る（CLASS負荷を増やさない）。ユーザー起点は常に取りに行く
+      // ＝「同期したのに出欠が古いまま」を作らない。
+      if (source !== 'user' && !isAttendanceStatsStale(lastAttendanceStatsAtRef.current)) {
+        return 'skipped'
+      }
+      const decision = decideClassSync({
+        access: evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }),
+        running: runningRef.current,
+        attendanceFocused: attendanceFocusedRef.current,
+        override: opts?.overrideAttending ?? false,
+      })
+      if (decision.kind === 'confirm') return 'confirm-attending'
+      if (decision.kind === 'blocked') {
+        if (source === 'user') showSkip({ feature: 'class', reason: decision.reason })
+        return 'skipped'
+      }
+      clearSkip('class')
+      attendanceStatsBusyRef.current = true
+      setAttendanceStatsBusy(true)
       return 'started'
     },
     [showSkip, clearSkip],
@@ -220,13 +287,20 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         chainRef.current = source
         return 'started'
       }
-      // 掲示が走れない（kill/メンテ/授業中/オフライン/確認待ち）なら課題だけ試す
-      // （授業中でもLETUSは同期可）。掲示が授業中の確認待ちなら、その旨を呼び出し側へ返す。
+      // 掲示が走れない（kill/メンテ/授業中/オフライン/確認待ち）なら、まず出欠を試す。
+      // 掲示だけが停止中（kill）でも出欠は取れるため、ここで諦めずCLASSフェーズを使い切る。
+      const stats = runAttendanceStatsSync({ source, overrideAttending: opts?.overrideAttending })
+      if (stats === 'started') {
+        chainRef.current = source
+        return 'started'
+      }
+      // CLASSがどちらも走れないなら課題だけ試す（授業中でもLETUSは同期可）。
+      // 掲示が授業中の確認待ちなら、その旨を呼び出し側へ返す。
       const assignments = runAssignmentsSync({ source })
       if (bulletin === 'confirm-attending') return 'confirm-attending'
       return assignments
     },
-    [runBulletinSync, runAssignmentsSync],
+    [runBulletinSync, runAssignmentsSync, runAttendanceStatsSync],
   )
 
   const onBulletinFinished = useCallback(() => {
@@ -238,11 +312,28 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     loadBulletinRefreshedAt().then(setLastBulletinAt).catch(() => undefined)
     loadCollectionHealth().then((m) => setBulletinHealth(m.bulletin ?? null)).catch(() => undefined)
     const chained = chainRef.current
-    chainRef.current = null
     if (chained) {
-      // 課題フェーズへ連鎖（可否は改めて planSync 判定。ホーム側の演出は掲示完了時点で格納済み）。
+      // CLASSフェーズ2: 出欠。走れば onAttendanceStatsFinished が課題へ連鎖する。
+      // 走れない（鮮度内/授業中/停止）なら**ここで課題へ飛ばす**＝連鎖を途切れさせない。
+      if (runAttendanceStatsSync({ source: chained }) === 'started') return
+      chainRef.current = null
       runAssignmentsSync({ source: chained })
     }
+  }, [runAssignmentsSync, runAttendanceStatsSync])
+
+  const onAttendanceStatsFinished = useCallback(() => {
+    attendanceStatsBusyRef.current = false
+    setAttendanceStatsBusy(false)
+    // once-per-boot は**完走**で確定する（掲示と同契約。開始時に立てると途中破棄で空費する）。
+    syncSession.attendanceStatsSyncedThisBoot = true
+    loadAttendanceStatsRefreshedAt().then(setLastAttendanceStatsAt).catch(() => undefined)
+    loadCollectionHealth()
+      .then((m) => setAttendanceStatsHealth(m.attendanceStats ?? null))
+      .catch(() => undefined)
+    // 単独起動（時間割同期の完走後・背景boot）では chainRef が null＝ここで終わる。
+    const chained = chainRef.current
+    chainRef.current = null
+    if (chained) runAssignmentsSync({ source: chained })
   }, [runAssignmentsSync])
 
   const onAssignmentsFinished = useCallback(() => {
@@ -265,6 +356,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setBulletinBusy(false)
       setBulletinUserRun(false)
     }
+    // 出欠は掲示のkillキーに追従する（同じCLASS収集）。
+    if (isKilled('bulletin') && attendanceStatsBusyRef.current) {
+      chainRef.current = null
+      attendanceStatsBusyRef.current = false
+      setAttendanceStatsBusy(false)
+    }
     if (isKilled('letus') && assignmentBusyRef.current) {
       assignmentBusyRef.current = false
       setAssignmentBusy(false)
@@ -279,29 +376,37 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       bulletinBusy,
       bulletinUserRun,
       assignmentBusy,
+      attendanceStatsBusy,
       lastBulletinAt,
       lastAssignmentsAt,
+      lastAttendanceStatsAt,
       lastSyncAt,
       skip,
       bulletinHealth,
       letusHealth,
+      attendanceStatsHealth,
       runFullSync,
       runBulletinSync,
       runAssignmentsSync,
+      runAttendanceStatsSync,
     }),
     [
       bulletinBusy,
       bulletinUserRun,
       assignmentBusy,
+      attendanceStatsBusy,
       lastBulletinAt,
       lastAssignmentsAt,
+      lastAttendanceStatsAt,
       lastSyncAt,
       skip,
       bulletinHealth,
       letusHealth,
+      attendanceStatsHealth,
       runFullSync,
       runBulletinSync,
       runAssignmentsSync,
+      runAttendanceStatsSync,
     ],
   )
 
@@ -314,6 +419,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
             kill switch は runner の事前チェック＋上の即時降ろし effect で反映する（Gateで包むと
             稼働中の停止で onFinished が来ず busy が固着するため使わない）。 */}
         {bulletinBusy ? <BulletinSyncEngine onFinished={onBulletinFinished} /> : null}
+        {/* 出欠も Provider が単独所有する。以前は TimetableScreen がマウントしており、
+            時間割同期の完走時しか起動しなかった＝ホーム同期・初回ログインでは構造上取れなかった。
+            二重マウント厳禁（CLASS収集が二重に走る）。 */}
+        {attendanceStatsBusy ? <AttendanceStatsSyncEngine onFinished={onAttendanceStatsFinished} /> : null}
         {assignmentBusy ? (
           <LetusSyncEngine onProgress={(label) => setAssignmentProgress(label)} onFinished={onAssignmentsFinished} />
         ) : null}
