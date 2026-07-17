@@ -81,3 +81,39 @@ describe('classifyClassPage', () => {
     ).toBe('login')
   })
 })
+
+describe('出席済み/受付なしの出席ページ（実機採取 2026-07-17）', () => {
+  // 実URLは xua001 ではない: 授業なし=xut113/Xut11301・授業あり=xut124/Xut12401（アドレスバー実測）。
+  // 画面に出る [Xua001] は**機能IDであってURLではない**。旧 isAttendanceUrl は実URLに当たらず、
+  // 出席済み（フォームが消える）ページを portal と誤判定して navFailed に落としていた。
+  const REAL_ATTENDED_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut124/Xut12401.xhtml'
+  const REAL_NOCLASS_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut113/Xut11301.xhtml'
+  const REAL_REACTION_URL = 'https://class.admin.tus.ac.jp/uprx/up/xu/xua001/Xua00102.xhtml'
+
+  it('出席済みページ（フォーム無し・メニュー有り・実URL Xut12401）は attendance', () => {
+    expect(
+      classifyClassPage({
+        ...base,
+        hasAttendanceForm: false,
+        hasClassMenu: true,
+        hasAttendanceNav: true,
+        url: REAL_ATTENDED_URL,
+      }),
+    ).toBe('attendance')
+  })
+  it('受付なしの出席ページ（実URL Xut11301）も attendance', () => {
+    expect(
+      classifyClassPage({ ...base, hasAttendanceForm: false, hasClassMenu: true, hasAttendanceNav: true, url: REAL_NOCLASS_URL }),
+    ).toBe('attendance')
+  })
+  it('リアペページ（xua001配下）は attendance にしない＝前後ナビが無い', () => {
+    expect(
+      classifyClassPage({ ...base, hasAttendanceForm: false, hasClassMenu: true, hasAttendanceNav: false, url: REAL_REACTION_URL }),
+    ).toBe('portal')
+  })
+  it('前後ナビが無く実URLでもない普通のポータルは portal のまま', () => {
+    expect(
+      classifyClassPage({ ...base, hasClassMenu: true, hasAttendanceNav: false, url: 'https://class.admin.tus.ac.jp/uprx/up/pk/pkx012/Pkx01201.xhtml' }),
+    ).toBe('portal')
+  })
+})
