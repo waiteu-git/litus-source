@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { Animated, Pressable, StyleSheet, useColorScheme, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { WebView } from 'react-native-webview'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -27,8 +27,7 @@ import OnboardingSlides from '../screens/OnboardingSlides'
 import TermsConsentScreen from '../screens/TermsConsentScreen'
 import { TERMS_VERSION } from '../legal/termsVersion'
 import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
-import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from '../screens/bootLogoHtml'
-import { WARM_BOOT_LOGO_GREEN, WARM_BOOT_LOGO_WHITE } from '../screens/bootLogoWarm'
+import { BOOT_FADE_MS, bootChrome, bootLogoHtml, nativeSplashBg, needsBootFade } from './bootTheme'
 import { isWarmBoot, loadLastAuthedAt, saveLastAuthedAt } from '../storage/bootMetaStore'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import { COLORS, useThemeVariant } from '../theme'
@@ -105,9 +104,28 @@ export function LoginGate({ children }: { children: ReactNode }) {
   killSwitchRef.current = killSwitch
   // 初回フル同期の進捗表示。
   const [syncLabel, setSyncLabel] = useState('データを取り込んでいます…')
-  // 起動アニメの背景バリアントはテーマ由来（green=翠グラデ／white=白）。
+  // 起動アニメの見た目はテーマ由来の3値（green=翠グラデ／white=白／dark=夜の翠）。
+  // 2値（bootWhite）で分岐していた頃はダークが翠版へ落ち、起動のたびに緑の閃光が出ていた。
   const { variant } = useThemeVariant()
-  const bootWhite = variant === 'white'
+  const chrome = bootChrome(variant)
+  // ネイティブスプラッシュはOSのスキームにしか従えない（テーマ設定はAsyncStorage＝読めない）ため、
+  // 「テーマ=ダーク・OS=ライト」等では起動画面と色が食い違い一瞬飛ぶ。スプラッシュが出していた色を
+  // 上から被せ、BOOT_FADE_MS かけて消す＝飛びをクロスフェードに変える。色が一致していれば不要。
+  // useColorScheme は 'unspecified' も返しうる。theme.tsx と同じ正規化で light/dark 以外は undefined に倒す。
+  const rawScheme = useColorScheme()
+  const scheme = rawScheme === 'dark' || rawScheme === 'light' ? rawScheme : undefined
+  const fadeNeeded = needsBootFade(variant, scheme)
+  const splashFade = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    if (!fadeNeeded) return
+    const a = Animated.timing(splashFade, {
+      toValue: 0,
+      duration: BOOT_FADE_MS,
+      useNativeDriver: true,
+    })
+    a.start()
+    return () => a.stop()
+  }, [fadeNeeded, splashFade])
   // イントロ完走ゲート（これが立つまでスライド/接続状況テキストは出さない）。
   const [bootAnimDone, setBootAnimDone] = useState(false)
   // 入場可否ゲート: イントロ完走＋認証完了＋（ループ中に認証完了したなら次の周期境界）で true。
@@ -462,37 +480,39 @@ export function LoginGate({ children }: { children: ReactNode }) {
           />
         ) : null}
         {state !== 'connError' && (!bootAnimDone || state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' || (state === 'authed' && !bootReady)) ? (
-          <View style={[styles.boot, { backgroundColor: bootWhite ? '#ffffff' : COLORS.gradBottom }]}>
+          <View style={[styles.boot, { backgroundColor: chrome.bg }]}>
             {/* 起動ロゴアニメ（純CSS・ローカルHTML）。bootMode 決定前（null）はマウントせず下地色のみ。
                 warm はループのみ版で即ループへ。以降も裏でログイン/取得が進む間は表示。タッチは奪わない。 */}
             {bootMode != null ? (
               <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <WebView
-                  source={{
-                    html:
-                      bootMode === 'warm'
-                        ? bootWhite
-                          ? WARM_BOOT_LOGO_WHITE
-                          : WARM_BOOT_LOGO_GREEN
-                        : bootWhite
-                          ? BOOT_LOGO_WHITE
-                          : BOOT_LOGO_GREEN,
-                  }}
+                  source={{ html: bootLogoHtml(variant, bootMode) }}
                   scrollEnabled={false}
                   showsVerticalScrollIndicator={false}
                   overScrollMode="never"
-                  // 翠版は自前でグラデ背景を描く。白版は白。読込中の一瞬の下地を合わせる。
-                  style={{ backgroundColor: bootWhite ? '#ffffff' : COLORS.gradBottom }}
+                  // 各版が自前で描く地色に合わせる（読込中の一瞬の下地を一致させる）。
+                  style={{ backgroundColor: chrome.bg }}
                 />
               </View>
+            ) : null}
+            {/* フラッシュ抑制: ネイティブスプラッシュが出していた色を被せ、BOOT_FADE_MS で消す。
+                スプラッシュはOSスキーム固定なのでテーマと食い違うことがあり（例: テーマ=ダーク/OS=ライト）、
+                そのままだと白→暗が瞬間的に飛ぶ。色が一致していれば被せない（fadeNeeded=false）。
+                ロゴWebViewより後＝上に置き、タッチは奪わない。 */}
+            {fadeNeeded ? (
+              <Animated.View
+                style={[
+                  StyleSheet.absoluteFill,
+                  { backgroundColor: nativeSplashBg(scheme), opacity: splashFade },
+                ]}
+                pointerEvents="none"
+              />
             ) : null}
             {/* 接続状況（アニメ完了後も長い待ちで固まって見えないよう）。背景色に応じて可読色に。
                 アニメ再生中（!bootAnimDone かつ通常フロー）は邪魔しないよう出さない。 */}
             {bootAnimDone ? (
               <View style={styles.bootStatusWrap} pointerEvents="none">
-                <Text
-                  style={[styles.bootStatusText, { color: bootWhite ? '#8a968f' : 'rgba(255,255,255,0.92)' }]}
-                >
+                <Text style={[styles.bootStatusText, { color: chrome.statusColor }]}>
                   {bootStatus}
                   {state === 'sync' ? '（初回のみ・少し時間がかかります）' : ''}
                 </Text>
