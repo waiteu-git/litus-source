@@ -4,6 +4,7 @@ import {
   shouldNotifyAttendanceOpen,
   buildAttendanceOpenContent,
   pruneNotifiedAttendanceKeys,
+  courseCodeByName,
 } from './attendanceOpenNotify'
 
 const NOW = new Date('2026-07-13T10:40:00+09:00') // ローカル(JST)で2026-07-13
@@ -117,5 +118,61 @@ describe('pruneNotifiedAttendanceKeys', () => {
 
   it('空配列はそのまま', () => {
     expect(pruneNotifiedAttendanceKeys([], '2026-07-13')).toEqual([])
+  })
+})
+
+
+describe('科目別OFFを受付open通知にも効かせる', () => {
+  // 修正前は科目別OFFが**予約型アラームにしか効かず**、OFFにした科目の受付open通知が
+  // MAXチャンネル（音＋ヘッドアップ）で届いていた＝アプリ内に止める手段が無かった。
+  const ok = {
+    status: 'accepting' as const,
+    attendedNow: false,
+    attendanceFocused: false,
+    key: '2026-07-17|物理学実験Ａ|14:40〜16:10',
+    notifiedKeys: [] as string[],
+  }
+
+  it('OFFにした科目は通知しない', () => {
+    expect(shouldNotifyAttendanceOpen({ ...ok, courseDisabled: true })).toBe(false)
+  })
+
+  it('ONの科目はこれまで通り通知する', () => {
+    expect(shouldNotifyAttendanceOpen({ ...ok, courseDisabled: false })).toBe(true)
+  })
+
+  it('指定が無ければ通知する（後方互換・黙って殺さない）', () => {
+    expect(shouldNotifyAttendanceOpen(ok)).toBe(true)
+    expect(shouldNotifyAttendanceOpen({ ...ok, courseDisabled: undefined })).toBe(true)
+  })
+})
+
+describe('courseCodeByName（設定の courseCode 鍵と受付の科目名を橋渡し）', () => {
+  const col = (classes: { courseCode: string; name: string }[]) => ({ slots: [{ classes }] })
+
+  it('科目名からcourseCodeを引く', () => {
+    const cols = [col([{ courseCode: '9973344', name: '物理学実験Ａ' }])]
+    expect(courseCodeByName(cols, '物理学実験Ａ')).toBe('9973344')
+  })
+
+  it('複数コレクション・複数slotを横断して引く', () => {
+    const cols = [
+      col([{ courseCode: 'A', name: '英語' }]),
+      col([{ courseCode: 'B', name: '物理' }]),
+    ]
+    expect(courseCodeByName(cols, '物理')).toBe('B')
+  })
+
+  it('引けなければ null（＝呼び出し側は通知する側に倒す）', () => {
+    const cols = [col([{ courseCode: 'A', name: '英語' }])]
+    expect(courseCodeByName(cols, '物理学実験Ａ')).toBeNull()
+    expect(courseCodeByName(cols, null)).toBeNull()
+    expect(courseCodeByName([], '英語')).toBeNull()
+  })
+
+  it('表記が少しでも違えば引かない（誤った科目のOFFを適用しない）', () => {
+    const cols = [col([{ courseCode: 'A', name: '基礎電気数学及び演習 （１組）' }])]
+    // 全角/半角・空白の揺れは一致させない＝失敗の向きは「余分に鳴る」側で安全
+    expect(courseCodeByName(cols, '基礎電気数学及び演習（1組）')).toBeNull()
   })
 })

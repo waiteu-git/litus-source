@@ -6,15 +6,16 @@
  */
 import { loadTimetable } from '../storage/timetableStore'
 import { loadAttendanceSettings } from '../storage/attendanceSettingsStore'
-import { computeAttendanceAlarms } from './attendanceSchedule'
+import { computeAttendanceAlarms, type CancelledClass } from './attendanceSchedule'
 import { loadAssignments } from '../storage/assignmentsStore'
-import { computeNotificationSchedule, type SchedulableAssignment, type ScheduledNotification } from './schedule'
+import { computeNotificationSchedule, type SchedulableAssignment } from './schedule'
 import { planNotifications } from './notificationPlan'
 import { syncAttendanceAlarms, syncAssignmentReminders } from './notifier'
 import type { AssignmentMap } from '../storage/assignmentsSerialize'
 import { loadClassEvents } from '../storage/classEventsStore'
-import { buildClassEventNotifications } from '../timetableEvents/eventSchedule'
-import type { ClassEvent } from '../timetableEvents/classEvent'
+// 変換は純粋層（classEventNotify）に置いてテストで固定する。このファイルはストア（AsyncStorage）を
+// 引き込むため vitest から読めず、ここに変換を書くとテストの穴になる（実際にそれで文面が壊れていた）。
+import { classEventNotifications } from './classEventNotify'
 import { serializeRuns } from './serializeRuns'
 
 function toSchedulable(map: AssignmentMap): SchedulableAssignment[] {
@@ -28,15 +29,6 @@ function toSchedulable(map: AssignmentMap): SchedulableAssignment[] {
     }))
 }
 
-/** 各回イベントの通知を、課題リマインダーと同じ通知枠へ流すため ScheduledNotification 形状に変換する。 */
-function classEventNotifications(events: ClassEvent[], now: Date): ScheduledNotification[] {
-  return buildClassEventNotifications(events, now).map((n) => ({
-    kind: 'deadline-24h',
-    assignmentId: `evt:${n.id}`,
-    title: n.body ? `${n.title}（${n.body}）` : n.title,
-    fireAt: n.fireAt.toISOString(),
-  }))
-}
 
 /**
  * 直列化: 起動時/AppState復帰/収集完了/設定変更から多重発火するため、素のまま並走させると
@@ -47,12 +39,24 @@ export const refreshAllNotifications: (now?: Date) => Promise<void> = serializeR
   async (now: Date = new Date()): Promise<void> => {
     const collections = await loadTimetable()
     const settings = await loadAttendanceSettings()
-    const attendanceAlarms = collections ? computeAttendanceAlarms(collections, settings, now) : []
+    const classEvents = await loadClassEvents()
+    // 休講登録済みのコマには出席アラームを出さない。渡さないと同じ日に「◯◯ 休講」と
+    // 「◯◯ 出席コード」が両方届き、ホームの休講タグとも食い違う（2026-07-17修正）。
+    const cancelled: CancelledClass[] = classEvents
+      .filter((e) => e.type === 'cancel')
+      .map((e) => ({
+        date: e.date,
+        periods: e.periods,
+        courseCode: e.courseCode,
+        courseName: e.courseName,
+      }))
+    const attendanceAlarms = collections
+      ? computeAttendanceAlarms(collections, settings, now, {}, cancelled)
+      : []
 
     const assignmentMap = await loadAssignments()
     const assignmentNotifications = computeNotificationSchedule(toSchedulable(assignmentMap), now)
 
-    const classEvents = await loadClassEvents()
     const eventNotifications = classEventNotifications(classEvents, now)
 
     const plan = planNotifications(attendanceAlarms, [...assignmentNotifications, ...eventNotifications], now)

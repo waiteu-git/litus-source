@@ -108,3 +108,53 @@ describe('computeNotificationSchedule — 全体', () => {
     expect(computeNotificationSchedule([], new Date(2026, 6, 5))).toEqual([])
   })
 })
+
+describe('朝まとめは既に締め切られた課題を数えない', () => {
+  // 修正前は同日判定（isSameLocalDate）だけで、締切時刻と発火時刻(7:00)の前後を見ていなかった。
+  // 当日3:00締切の課題を7:00のまとめが「今日締切 1件」として知らせ、その課題は4時間前に閉じている。
+  // 文面は件数のみで科目名が無いため、ユーザーは確認しに行って初めて空振りと分かる。
+  // 締切前リマインダー(24h/3h/1h)は `fireMs <= now` で過去を落としており、まとめだけが漏れていた。
+  const digestsOf = (assignments: SchedulableAssignment[], now: Date) =>
+    computeNotificationSchedule(assignments, now).filter((s) => s.kind === 'morning-digest')
+
+  it('朝7時より前の締切は「今日締切」に数えない', () => {
+    // 7/17 15:00 時点で、7/18 03:00 締切の課題 → 7/18 07:00 のまとめには数えない
+    const now = new Date(2026, 6, 17, 15, 0)
+    const d = digestsOf([assignment('a', localIso(2026, 7, 18, 3, 0))], now)
+    const jul18 = d.find((x) => new Date(x.fireAt).getDate() === 18)
+    // 数える対象が無いのでその朝のまとめ自体が予約されない
+    expect(jul18).toBeUndefined()
+  })
+
+  it('朝7時より後の締切は今日締切に数える', () => {
+    const now = new Date(2026, 6, 17, 15, 0)
+    const d = digestsOf([assignment('a', localIso(2026, 7, 18, 23, 59))], now)
+    const jul18 = d.find((x) => new Date(x.fireAt).getDate() === 18)
+    expect(jul18).toMatchObject({ dueToday: 1 })
+  })
+
+  it('朝7時ちょうどの締切は数えない（境界・その瞬間には出せない）', () => {
+    const now = new Date(2026, 6, 17, 15, 0)
+    const d = digestsOf([assignment('a', localIso(2026, 7, 18, 7, 0))], now)
+    expect(d.find((x) => new Date(x.fireAt).getDate() === 18)).toBeUndefined()
+  })
+
+  it('過去締切と未来締切が混在しても未来分だけ数える', () => {
+    const now = new Date(2026, 6, 17, 15, 0)
+    const d = digestsOf(
+      [
+        assignment('past', localIso(2026, 7, 18, 3, 0)),
+        assignment('future', localIso(2026, 7, 18, 18, 0)),
+      ],
+      now,
+    )
+    expect(d.find((x) => new Date(x.fireAt).getDate() === 18)).toMatchObject({ dueToday: 1 })
+  })
+
+  it('明日締切は丸一日先なので従来どおり数える', () => {
+    const now = new Date(2026, 6, 17, 15, 0)
+    const d = digestsOf([assignment('a', localIso(2026, 7, 19, 3, 0))], now)
+    // 7/18朝のまとめから見て 7/19 03:00 は「明日締切」
+    expect(d.find((x) => new Date(x.fireAt).getDate() === 18)).toMatchObject({ dueTomorrow: 1 })
+  })
+})
