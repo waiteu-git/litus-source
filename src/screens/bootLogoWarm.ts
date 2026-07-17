@@ -1,4 +1,5 @@
 import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from './bootLogoHtml'
+import { BOOT_LOGO_DARK } from './bootLogoDark'
 
 // bootLogoHtml.ts は生成物でアニメが全てインラインstyle（クラス無し）。CSS上書きが効かないため
 // animation プロパティ値を文字列変換して「ロゴ完成＋ループのみ」の短縮版を作る。
@@ -63,3 +64,6 @@ export function toWarmBootHtml(html: string): string {
 // 起動時のコストを避けるためモジュール読込時に一度だけ変換してキャッシュ。
 export const WARM_BOOT_LOGO_GREEN = toWarmBootHtml(BOOT_LOGO_GREEN)
 export const WARM_BOOT_LOGO_WHITE = toWarmBootHtml(BOOT_LOGO_WHITE)
+// ダークは色置換（bootLogoDark）→短縮（ここ）の二段派生。順序はどちらでも同じ結果になるが、
+// BOOT_LOGO_DARK を正典に据えてフル版と warm 版の色を一致させる。
+export const WARM_BOOT_LOGO_DARK = toWarmBootHtml(BOOT_LOGO_DARK)
