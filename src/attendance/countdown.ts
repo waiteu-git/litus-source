@@ -1,7 +1,26 @@
+import { parseWindowMinutes } from './receptionWindow'
+
+/**
+ * 受付終了までの残り秒。**null は「受付時間が分からない」だけ**を意味し、終了済みは 0 以下の数値を返す。
+ *
+ * これが要る理由: countdownClock / countdownText は終了を**文字列 '受付終了' で表す**ため、
+ * `clock ? A : B` のような truthy 判定では終了を検出できず、そのまま文面へ埋め込まれて
+ * 「提出の受付終了まで 受付終了」のような破綻表示になる（2026-07-17 のレビューで実機再現）。
+ * **状態の判定にはこちらを使い、文字列比較で状態を判定しないこと。**
+ */
+export function countdownRemainingSec(confirmWindow: string | null, now: Date): number | null {
+  const w = parseWindowMinutes(confirmWindow)
+  if (!w) return null
+  const end = new Date(now)
+  end.setHours(Math.floor(w.endMin / 60), w.endMin % 60, 0, 0)
+  return Math.floor((end.getTime() - now.getTime()) / 1000)
+}
+
 /**
  * 受付可能時間（"12:50〜14:30" など）の終了時刻までの残りを now 基準で算出して文面化する（純粋）。
  * CLASSから取った静的な残り時間の代わりに、UIで毎秒カウントダウン表示するために使う。
  * 終了時刻ちょうど/超過は「受付終了」、時刻を含まない/nullは null。
+ * **戻り値で状態を判定しないこと**（終了も非nullの文字列）。判定は countdownRemainingSec を使う。
  */
 export function countdownText(confirmWindow: string | null, now: Date): string | null {
   if (!confirmWindow) return null

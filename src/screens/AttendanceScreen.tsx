@@ -5,7 +5,7 @@ import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import { ScreenBg, CountdownRing, IndeterminateBar, useUi, useTabBarClearance } from '../ui/screen'
 import KillSwitchBanner from '../ui/KillSwitchBanner'
-import { countdownClock, countdownFraction } from '../attendance/countdown'
+import { countdownClock, countdownFraction, countdownRemainingSec } from '../attendance/countdown'
 import { normalizeAttendanceCode } from '../attendance/normalizeCode'
 import { REACTION_MAX_LEN, canSubmitReaction, reactionDraftApplies, reactionLength } from '../attendance/reactionPaper'
 import { todayKey } from '../attendance/attendedState'
@@ -176,6 +176,13 @@ export default function AttendanceScreen() {
   const labelColor = ui.labelColor
   const valueColor = ui.valueColor
   const accepting = !!reception?.accepting
+  // 受付終了までの実カウントダウン（毎秒）。受付中のリングとリアペ必須の督促の両方で使う。
+  // **「終了」と「受付時間が不明」を必ず区別する**: countdownClock は終了時も文字列（'受付終了'）を
+  // 返すので、これを truthy 判定に使うと「提出の受付終了まで 受付終了」のような文になる。
+  // 状態は countdownRemainingSec（null=不明／0以下=終了）で判定し、clock は「残っている時だけ」持つ。
+  const remainSec = countdownRemainingSec(reception?.confirmWindow ?? null, now)
+  const windowEnded = remainSec != null && remainSec <= 0
+  const clock = remainSec != null && remainSec > 0 ? countdownClock(reception?.confirmWindow ?? null, now) : null
 
   return (
     <View style={styles.wrap}>
@@ -299,6 +306,20 @@ export default function AttendanceScreen() {
                   {reception?.confirmWindow ? `${reception?.courseName ? ' ・ ' : ''}${reception.confirmWindow}` : ''}
                 </Text>
               ) : null}
+              {/* 必須リアペは**受付が閉じると出席にならない**＝ここが最も時間に追われる局面なのに、
+                  従来はカウントダウンが受付中(accepting)のリングにしか無く、この画面では静的な
+                  受付時間しか見えなかった。締切までの実残りを出す。任意提出は出席と無関係なので出さない。
+                  受付が閉じた後は残りではなく**閉じた事実**を出す（リアペ必須の status は受付終了後も
+                  reaction_pending のまま居座るので、ここに来る）。 */}
+              {reactionPending && clock ? (
+                <Text style={[styles.conflictSub, { color: ui.colors.warn, fontWeight: '600' }]}>
+                  提出の受付終了まで {clock}
+                </Text>
+              ) : reactionPending && windowEnded ? (
+                <Text style={[styles.conflictSub, { color: ui.colors.danger, fontWeight: '600' }]}>
+                  受付は終了しました。いま提出しても出席にならない可能性があります
+                </Text>
+              ) : null}
             </View>
 
             <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
@@ -401,9 +422,12 @@ export default function AttendanceScreen() {
                     {updating ? '（更新中…）' : ''}
                   </Text>
                   <View style={styles.ringWrap}>
+                    {/* 受付時間から now で毎秒引いた実カウントダウン。**reception.remaining へは落とさない**:
+                        あれは取得時点で固定された静止値で、「残り時間」の下に置くと減らない数字が居座る
+                        （＝嘘をつく）。取得できないときは '—' と明示し、静止値は下に出典付きで添える。 */}
                     <CountdownRing
-                      centerText={countdownClock(reception?.confirmWindow ?? null, now) ?? reception?.remaining ?? '—'}
-                      subText="残り時間"
+                      centerText={clock ?? '—'}
+                      subText={clock ? '残り時間' : windowEnded ? '受付終了' : '受付時間 不明'}
                       size={176}
                       progress={countdownFraction(reception?.confirmWindow ?? null, now) ?? undefined}
                     />
@@ -411,6 +435,13 @@ export default function AttendanceScreen() {
                   <Text style={[styles.heroWindow, { color: labelColor }]}>
                     出席確認時間 {reception?.confirmWindow ?? '—'}
                   </Text>
+                  {!clock && reception?.remaining ? (
+                    // remaining はパーサ側で既に「あと〜」の形（attendanceMessage の extractRemaining /
+                    // remainingFromSec）。「残り」を足すと「残り あと12分34秒」と二重表現になる。
+                    <Text style={[styles.heroWindow, { color: labelColor }]}>
+                      CLASSの表示（取得時点）: {reception.remaining}
+                    </Text>
+                  ) : null}
                 </>
               ) : (
                 <>
