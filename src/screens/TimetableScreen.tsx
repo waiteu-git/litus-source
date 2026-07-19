@@ -56,7 +56,7 @@ import { weekDatesFrom, dayHeadLabel, weekRangeLabelFrom } from '../timetableEve
 import { viewedWeekMonday, currentWeekOffset, clampOffset, weekOrdinal } from '../timetableEvents/weekNav'
 import { deriveTermBounds } from '../timetableEvents/termBounds'
 import { shouldShowThisWeekChip } from '../timetableEvents/thisWeekPill'
-import { RADIUS, SHADOW } from '../ui/scale'
+import { RADIUS, SHADOW, DIM_OPACITY } from '../ui/scale'
 import { DUR, EASE, SHIFT } from '../ui/motion'
 import { Badge } from '../ui/Badge'
 
@@ -590,8 +590,7 @@ export default function TimetableScreen() {
                         { backgroundColor: isNow ? cellNowBg : classes.length ? (today ? cellTodayBg : cellFilledBg) : cellBg },
                         isNow ? styles.gridCellNow : today && classes.length ? styles.gridCellToday : null,
                         !classes.length && pev ? [styles.personalCell, { backgroundColor: ui.colors.gridCellPersonalBg }] : null,
-                        anyCanceled ? styles.canceledCard : null,
-                        anyOff ? styles.offCell : null,
+                        anyCanceled || anyOff ? styles.offCell : null,
                       ]}
                     >
                       {classes.length > 0 ? (
@@ -693,7 +692,7 @@ export default function TimetableScreen() {
                                 ) : ev ? (
                                   <View style={[styles.badge, { backgroundColor: ui.colors.infoBg }]}><Text style={[styles.badgeText, { color: ui.colors.info }]} numberOfLines={1}>{cellBadgeText(ev)}</Text></View>
                                 ) : off ? (
-                                  <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>今週休み</Text></View>
+                                  <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>休み週</Text></View>
                                 ) : null}
                                 <Text style={[styles.cName, { color: mainColor }, strike && styles.strike]} numberOfLines={2}>
                                   {cl.name}
@@ -905,7 +904,6 @@ const styles = StyleSheet.create({
   // 「今日」FAB
   fab: { position: 'absolute', right: 16, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: RADIUS.pill, paddingHorizontal: 16, paddingVertical: 10, ...SHADOW.fab },
   fabText: { fontSize: 13, fontWeight: '700' },
-  canceledCard: { opacity: 0.6 },
   canceledName: { textDecorationLine: 'line-through' },
   // グリッド表示（設定送り・維持）
   gridCard: { padding: 8 },
@@ -925,7 +923,7 @@ const styles = StyleSheet.create({
   gridUnreadDot: { position: 'absolute', bottom: 6, left: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.emerald },
   gridEvDot: { position: 'absolute', bottom: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   gridHint: { fontSize: 11, textAlign: 'center', marginTop: 6 },
-  offCell: { opacity: 0.45 },
+  offCell: { opacity: DIM_OPACITY },
   personalCell: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.emerald },
   personalCellText: { color: COLORS.emeraldDark, fontStyle: 'italic' },
   // 授業行に内包する個人予定ボックス（授業main列の下に食い込ませる＝同一コマとして見せる）。
