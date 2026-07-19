@@ -31,6 +31,9 @@ import { NowPulse } from '../ui/NowPulse'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
+import { loadTimetableOverrides, loadCurrentQuarter, saveCurrentQuarter } from '../storage/timetableOverridesStore'
+import { applyQuarterOverrides, resolveCurrentQuarter, isQuarterSlot, isDimmedForCurrentQuarter, type TimetableOverrides } from '../timetableEvents/quarter'
+import type { Quarter } from '../parsers/timetable'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
 import { useDisplaySettings } from '../displaySettings'
@@ -81,6 +84,9 @@ export default function TimetableScreen() {
   const [events, setEvents] = useState<ClassEvent[]>([])
   const [personalEvents, setPersonalEvents] = useState<PersonalEvent[]>([])
   const [patterns, setPatterns] = useState<WeeklyPatternMap>({})
+  // 半期(1Q/2Q)指定 override と「今が前半/後半か」の手動指定（未指定なら日付から既定値）。
+  const [overrides, setOverrides] = useState<TimetableOverrides>({})
+  const [currentQuarterPref, setCurrentQuarterPref] = useState<Quarter | null>(null)
   const { version: eventsVersion } = useClassEventsVersion()
   // 出欠収集の完了を、開きっぱなしの科目詳細へ伝播させる（同期中に開いて滞在するケースの取りこぼし防止）。
   const { bump: bumpAttendance } = useAttendanceVersion()
@@ -269,6 +275,8 @@ export default function TimetableScreen() {
         if (active) setPersonalEvents(list)
       }).catch(() => undefined)
       loadWeeklyPatterns().then((m) => { if (active) setPatterns(m) }).catch(() => undefined)
+      loadTimetableOverrides().then((o) => { if (active) setOverrides(o) }).catch(() => undefined)
+      loadCurrentQuarter().then((q) => { if (active) setCurrentQuarterPref(q) }).catch(() => undefined)
       loadCollectionHealth().then((m) => { if (active) setHealth(m.timetable ?? null) }).catch(() => undefined)
       reloadAttendance()
       loadTimetableRefreshedAt().then((at) => { if (active) setRefreshedAt(at) }).catch(() => undefined)
@@ -289,6 +297,13 @@ export default function TimetableScreen() {
   )
 
   const col = collections && collections.length > 0 ? collections[Math.min(selCol, collections.length - 1)] : null
+  // 半期指定 override を表示直前にマージ（保存済みcollectionには焼き込まない）。
+  const colQ = useMemo(
+    () => (col ? { ...col, slots: applyQuarterOverrides(col.slots, overrides) } : null),
+    [col, overrides],
+  )
+  const currentQuarter = resolveCurrentQuarter(currentQuarterPref, now)
+  const hasStacked = !!colQ?.slots.some(isQuarterSlot)
   // 今この瞬間が属する時限（当該コマ強調用）。どの時限でもなければ null。
   const curPeriod = currentPeriodNumber(col?.periodTimes ?? null, now)
   // 表示中の週の月曜（アンカー日）と各曜日の実日付。weekOffset=0 は既定週（日曜のみ来週）。
@@ -363,7 +378,7 @@ export default function TimetableScreen() {
     }),
   ).current
 
-  const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
+  const daySlots = colQ ? colQ.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
   // 選択曜日に落ちる補講オカレンス（表示週の selDay 当日に実施されるもののみ・休講内包＋単独）。
   const p2 = (n: number) => String(n).padStart(2, '0')
   const ymd = (d: Date) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
@@ -382,7 +397,7 @@ export default function TimetableScreen() {
   }, [col, personalEvents])
 
   function slotAt(day: DayKey, period: number) {
-    return col?.slots.find((s) => s.day === day && s.period === period) ?? null
+    return colQ?.slots.find((s) => s.day === day && s.period === period) ?? null
   }
 
   function openSubject(cl: ClassEntry, day: DayOfWeek, period: number) {
@@ -500,6 +515,24 @@ export default function TimetableScreen() {
         </>
       ) : null}
 
+      {hasStacked ? (
+        <View style={styles.quarterRow}>
+          <Segmented
+            options={[
+              { key: 'auto', label: '自動' },
+              { key: 'first', label: '前半' },
+              { key: 'second', label: '後半' },
+            ]}
+            value={currentQuarterPref ?? 'auto'}
+            onChange={(k) => {
+              const next = k === 'auto' ? null : (k as Quarter)
+              setCurrentQuarterPref(next)
+              saveCurrentQuarter(next).catch(() => undefined)
+            }}
+          />
+        </View>
+      ) : null}
+
       {timetableView === 'list' && col ? (
         <View style={styles.dayBar}>
           {days.map((d) => {
@@ -600,11 +633,17 @@ export default function TimetableScreen() {
                           // 隔週でその週は休みの授業は薄く（取消線）表示する。
                           const gOff = !isClassOnDate(patterns[cl.courseCode], wd[d])
                           const dim = gCanceled || gOff
+                          // 積みコマで現在の半期と異なる指定の科目は薄く（取消線なし＝§8の量的トーン統一）。
+                          const qDim = isDimmedForCurrentQuarter(cl.quarter, currentQuarter, classes.length >= 2)
                           return (
                             <Pressable
                               key={`${ci}-${cl.courseCode || cl.name}`}
                               onPress={() => openSubject(cl, d as DayOfWeek, p)}
-                              style={[styles.gridClass, ci > 0 ? [styles.gridClassStacked, { borderTopColor: ui.dividerColor }] : null]}
+                              style={[
+                                styles.gridClass,
+                                ci > 0 ? [styles.gridClassStacked, { borderTopColor: ui.dividerColor }] : null,
+                                qDim ? styles.offCell : null,
+                              ]}
                             >
                               <Text
                                 numberOfLines={classes.length > 1 ? 2 : 3}
@@ -668,6 +707,8 @@ export default function TimetableScreen() {
                           const canceled = ev?.type === 'cancel'
                           const off = !isClassOnDate(patterns[cl.courseCode], wd[selDay])
                           const strike = canceled || off
+                          // 積みコマで現在の半期と異なる指定の科目は薄く（取消線は休講/隔週休みに予約・§8統一）。
+                          const qDim = isDimmedForCurrentQuarter(cl.quarter, currentQuarter, s.classes.length >= 2)
                           const mainColor = rowNow ? ui.pillText : ui.valueColor
                           return (
                             <Pressable
@@ -676,6 +717,7 @@ export default function TimetableScreen() {
                               style={({ pressed }) => [
                                 styles.cls,
                                 rowNow && { backgroundColor: ui.pillBg, borderLeftWidth: 3, borderLeftColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) },
+                                qDim ? styles.offCell : null,
                                 pressed && { opacity: 0.7 },
                               ]}
                             >
@@ -872,6 +914,8 @@ const styles = StyleSheet.create({
   weekOrdinalText: { fontSize: 11, fontWeight: '700' },
   thisWeekChip: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, borderRadius: RADIUS.pill, paddingHorizontal: 12, paddingVertical: 5 },
   thisWeekText: { fontSize: 12, fontWeight: '700' },
+  // 現在半期トグル（積みコマ有時のみ表示。Segmented は自前で marginTop を持つため薄く）
+  quarterRow: { marginTop: 4 },
   // 曜日バー（曜日＋日付を1ブロックに）
   dayBar: { flexDirection: 'row', gap: 4, marginTop: 8, marginBottom: 2 },
   dtab: { flex: 1, minWidth: 0, alignItems: 'center', paddingTop: 7, paddingBottom: 10, borderRadius: RADIUS.md, position: 'relative' },
