@@ -54,6 +54,7 @@ export default function BackgroundAttendanceStatsSync() {
       succeededThisBoot: syncSession.attendanceStatsSyncedThisBoot,
       attempts: syncSession.attendanceStatsAttempts,
       lastAttemptAt: syncSession.attendanceStatsLastAttemptAt,
+      lifetimeAttempts: syncSession.attendanceStatsLifetimeAttempts,
       now: Date.now(),
     })
     if (!attempt) return
@@ -64,6 +65,8 @@ export default function BackgroundAttendanceStatsSync() {
   // フォアグラウンド復帰は「取り直してよい」強いシグナル。試行カウントをリセットし、失敗打ち切り
   // （最大回数）も解除して再評価する（授業終了後・長時間経過後に取り直す）。
   // 成功済みフラグは触らない: 成功していれば鮮度TTL（6h）が二重取得を防ぐ。未成功なら次の tick で試す。
+  // attendanceStatsLifetimeAttempts は**リセットしない**: 復帰で解除される per-boot 上限とは別建ての
+  // プロセス寿命の負荷天井で、病的な連続出し入れ（復帰のたびにスロットルが開く）を有界化するため。
   useEffect(() => {
     return subscribeForeground('letusSync', () => {
       syncSession.attendanceStatsAttempts = 0
