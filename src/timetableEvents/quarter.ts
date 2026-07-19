@@ -53,5 +53,11 @@ export function applyQuarterOverrides(slots: TimetableSlot[], overrides: Timetab
 export function representativeClass(classes: TimetableClass[], currentQuarter?: Quarter): TimetableClass | undefined {
   if (classes.length === 0) return undefined
   if (classes.length === 1 || currentQuarter === undefined) return classes[0]
-  return classes.find((c) => c.quarter === currentQuarter) ?? classes[0]
+  // 現在半期に一致する科目を最優先、無ければ半期未指定(通期扱い＝薄字にならない)科目、それも無ければ先頭。
+  // 片方だけ半期指定された積みコマで、非該当(薄字)側を代表に選んでしまうのを防ぐ。
+  return (
+    classes.find((c) => c.quarter === currentQuarter) ??
+    classes.find((c) => c.quarter === undefined) ??
+    classes[0]
+  )
 }

@@ -69,4 +69,9 @@ describe('representativeClass', () => {
     expect(representativeClass([cls('a', 'A', 'first'), cls('b', 'B', 'first')], 'second')?.courseCode).toBe('a')
     expect(representativeClass([cls('a', 'A'), cls('b', 'B')])?.courseCode).toBe('a')
   })
+  it('片方だけ半期指定の積みは、非該当(薄字)側でなく未指定(実施)側を代表に選ぶ', () => {
+    // A=first(現在半期=secondなので非該当・薄字), B=未指定(薄字にならない) → B が代表。
+    const r = representativeClass([cls('a', 'A', 'first'), cls('b', 'B')], 'second')
+    expect(r?.courseCode).toBe('b')
+  })
 })
