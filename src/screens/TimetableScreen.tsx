@@ -487,52 +487,70 @@ export default function TimetableScreen() {
                 </View>
                 {days.map((d) => {
                   const slot = slotAt(d, p)
-                  const cl = slot?.classes[0]
+                  const classes = slot?.classes ?? []
                   const pev = personalEventAt(personalEvents, d as PersonalDayKey, p)
                   const today = d === todayKey
-                  const isNow = today && !!cl && p === curPeriod
-                  const gev = cl ? pickCellEvent(events, cl.name, p, now) : null
-                  const gCanceled = gev?.type === 'cancel'
-                  // 隔週で今週は休みの授業は薄く（取消線）表示する。
-                  const gOff = !!cl && !isClassOnDate(patterns[cl.courseCode], now)
+                  const isNow = today && classes.length > 0 && p === curPeriod
+                  // ステータスドットはセル単位（積みコマは科目群を集約）。単一科目なら現状と同一。
+                  const anyUpdated = classes.some((c) => updatedCodes.has(c.courseCode))
+                  const anyDanger = classes.some((c) => dangerCodes.has(c.courseCode))
+                  const anyUnread = classes.some((c) => unreadCodes.has(c.courseCode))
+                  const anyEvent = classes.some((c) => !!pickCellEvent(events, c.name, p, now))
                   return (
-                    <Pressable
+                    <View
                       key={d}
-                      disabled={false}
-                      onPress={() => {
-                        if (cl) return openSubject(cl, d as DayOfWeek, p)
-                        if (pev) return navigation.navigate('PersonalEventForm', { editId: pev.id })
-                        return navigation.navigate('PersonalEventForm', { day: d as PersonalDayKey, period: p })
-                      }}
                       style={[
                         styles.gridCell,
-                        { backgroundColor: isNow ? cellNowBg : cl ? (today ? cellTodayBg : cellFilledBg) : cellBg },
-                        isNow ? styles.gridCellNow : today && cl ? styles.gridCellToday : null,
-                        gCanceled ? styles.canceledCard : null,
-                        gOff ? styles.offCell : null,
-                        !cl && pev ? [styles.personalCell, { backgroundColor: ui.colors.gridCellPersonalBg }] : null,
+                        { backgroundColor: isNow ? cellNowBg : classes.length ? (today ? cellTodayBg : cellFilledBg) : cellBg },
+                        isNow ? styles.gridCellNow : today && classes.length ? styles.gridCellToday : null,
+                        !classes.length && pev ? [styles.personalCell, { backgroundColor: ui.colors.gridCellPersonalBg }] : null,
                       ]}
                     >
-                      {cl ? (
-                        <>
-                          <Text numberOfLines={3} style={[styles.gridCellText, { color: cellTextColor }, (gCanceled || gOff) && styles.canceledName]}>
-                            {cl.name}
-                          </Text>
-                          {updatedCodes.has(cl.courseCode) ? <View style={[styles.gridDot, { backgroundColor: ui.colors.updateDot }]} /> : null}
-                          {cl && dangerCodes.has(cl.courseCode) ? <View style={[styles.gridDanger, { backgroundColor: ui.colors.danger }]} /> : null}
-                          {unreadCodes.has(cl.courseCode) ? <View style={[styles.gridUnreadDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
-                          {gev ? <View style={[styles.gridEvDot, { backgroundColor: ui.colors.info }]} /> : null}
-                          {isNow ? (
-                            <View style={styles.nowDot}>
-                              <NowPulse size={7} />
-                            </View>
-                          ) : null}
-                          {pev ? <View style={[styles.personalDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
-                        </>
+                      {classes.length > 0 ? (
+                        classes.map((cl, ci) => {
+                          const gev = pickCellEvent(events, cl.name, p, now)
+                          const gCanceled = gev?.type === 'cancel'
+                          // 隔週で今週は休みの授業は薄く（取消線）表示する。
+                          const gOff = !isClassOnDate(patterns[cl.courseCode], now)
+                          const dim = gCanceled || gOff
+                          return (
+                            <Pressable
+                              key={`${ci}-${cl.courseCode || cl.name}`}
+                              onPress={() => openSubject(cl, d as DayOfWeek, p)}
+                              style={[styles.gridClass, ci > 0 ? [styles.gridClassStacked, { borderTopColor: ui.dividerColor }] : null, dim ? styles.offCell : null]}
+                            >
+                              <Text
+                                numberOfLines={classes.length > 1 ? 2 : 3}
+                                style={[styles.gridCellText, { color: cellTextColor }, dim && styles.canceledName]}
+                              >
+                                {cl.name}
+                              </Text>
+                            </Pressable>
+                          )
+                        })
                       ) : pev ? (
-                        <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText, ui.dark && { color: COLORS.emeraldLight }]}>{pev.title}</Text>
+                        <Pressable style={styles.gridFill} onPress={() => navigation.navigate('PersonalEventForm', { editId: pev.id })}>
+                          <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText, ui.dark && { color: COLORS.emeraldLight }]}>
+                            {pev.title}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          style={styles.gridFill}
+                          onPress={() => navigation.navigate('PersonalEventForm', { day: d as PersonalDayKey, period: p })}
+                        />
+                      )}
+                      {anyUpdated ? <View style={[styles.gridDot, { backgroundColor: ui.colors.updateDot }]} /> : null}
+                      {anyDanger ? <View style={[styles.gridDanger, { backgroundColor: ui.colors.danger }]} /> : null}
+                      {anyUnread ? <View style={[styles.gridUnreadDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
+                      {anyEvent ? <View style={[styles.gridEvDot, { backgroundColor: ui.colors.info }]} /> : null}
+                      {classes.length > 0 && pev ? <View style={[styles.personalDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
+                      {isNow ? (
+                        <View style={styles.nowDot}>
+                          <NowPulse size={7} />
+                        </View>
                       ) : null}
-                    </Pressable>
+                    </View>
                   )
                 })}
               </View>
@@ -799,6 +817,9 @@ const styles = StyleSheet.create({
   gridPerCol: { width: 22, alignItems: 'center', justifyContent: 'center' },
   gridDayHead: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 8 },
   gridCell: { flex: 1, minHeight: 74, borderRadius: 11, padding: 6, justifyContent: 'center' },
+  gridClass: { justifyContent: 'center' },
+  gridClassStacked: { marginTop: 4, borderTopWidth: 1 },
+  gridFill: { flex: 1, justifyContent: 'center' },
   gridCellToday: { borderWidth: 1.5, borderColor: COLORS.emerald },
   gridCellNow: { borderWidth: 2.5, borderColor: COLORS.cta },
   nowDot: { position: 'absolute', top: 6, left: 6 },
