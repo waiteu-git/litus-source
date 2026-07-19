@@ -1,6 +1,7 @@
 import { parse, type HTMLElement } from 'node-html-parser'
 import { firstCourseCode, isCourseCode } from './courseCode'
 
+export type Quarter = 'first' | 'second'
 export type TimetableClass = {
   courseCode: string
   name: string
@@ -9,6 +10,8 @@ export type TimetableClass = {
   isRemote: boolean
   credits: number | null
   badges: string[]
+  /** 半期(1Q/2Q)。CLASS非公開＝ユーザー指定でのみ埋まる（パース時は常に undefined）。 */
+  quarter?: Quarter
 }
 export type DayOfWeek = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
 export type TimetableSlot = { day: DayOfWeek; period: number; classes: TimetableClass[] }
