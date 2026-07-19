@@ -3,6 +3,7 @@ import {
   shouldAttemptAttendanceStats,
   ATTENDANCE_STATS_RETRY_INTERVAL_MS,
   ATTENDANCE_STATS_MAX_ATTEMPTS,
+  ATTENDANCE_STATS_MAX_LIFETIME_ATTEMPTS,
 } from './attendanceStatsRetry'
 
 const MIN = 60 * 1000
@@ -12,6 +13,7 @@ const base = {
   succeededThisBoot: false,
   attempts: 0,
   lastAttemptAt: null as number | null,
+  lifetimeAttempts: 0,
   now: t0,
 }
 
@@ -63,5 +65,31 @@ describe('shouldAttemptAttendanceStats', () => {
     // 12分間隔・最大5回＝前面滞在中でも最大5回/約1時間で打ち切る
     expect(ATTENDANCE_STATS_RETRY_INTERVAL_MS).toBe(12 * MIN)
     expect(ATTENDANCE_STATS_MAX_ATTEMPTS).toBe(5)
+  })
+
+  describe('プロセス寿命の累積上限（復帰リセットで解除されない負荷天井）', () => {
+    // per-boot の attempts/lastAttemptAt は復帰でゼロに戻る＝復帰直後の1回は間隔ゲート無しで即発火
+    // しうる。病的な連続出し入れを繰り返すと、リセットのたびに throttle ゼロで CLASS を叩ける。
+    // これを有界化するのが lifetimeAttempts の累積上限（復帰でも成功でもリセットしない）。
+    it('累積試行が天井に達したら、per-boot も間隔も開いていて未成功でも取りに行かない', () => {
+      const s = {
+        ...base,
+        succeededThisBoot: false, // 未成功
+        attempts: 0, // 復帰リセット直後（per-boot は開いている）
+        lastAttemptAt: null, // 間隔ゲートも開いている
+        lifetimeAttempts: ATTENDANCE_STATS_MAX_LIFETIME_ATTEMPTS, // 生涯上限に到達
+        now: t0 + 100 * ATTENDANCE_STATS_RETRY_INTERVAL_MS,
+      }
+      expect(shouldAttemptAttendanceStats(s)).toBe(false)
+    })
+
+    it('天井の1歩手前なら（per-boot・間隔が開いていれば）取りに行く', () => {
+      const s = { ...base, lifetimeAttempts: ATTENDANCE_STATS_MAX_LIFETIME_ATTEMPTS - 1 }
+      expect(shouldAttemptAttendanceStats(s)).toBe(true)
+    })
+
+    it('天井は「数十回」＝正常利用では当たらず病的操作だけを有界化する値', () => {
+      expect(ATTENDANCE_STATS_MAX_LIFETIME_ATTEMPTS).toBe(50)
+    })
   })
 })
