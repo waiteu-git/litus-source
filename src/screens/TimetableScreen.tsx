@@ -52,8 +52,10 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
 import { shouldShowTodayPill } from '../timetableEvents/todayPill'
-import { weekDatesFrom, dayHeadLabel } from '../timetableEvents/weekDates'
-import { viewedWeekMonday, currentWeekOffset } from '../timetableEvents/weekNav'
+import { weekDatesFrom, dayHeadLabel, weekRangeLabelFrom } from '../timetableEvents/weekDates'
+import { viewedWeekMonday, currentWeekOffset, clampOffset, weekOrdinal } from '../timetableEvents/weekNav'
+import { deriveTermBounds } from '../timetableEvents/termBounds'
+import { shouldShowThisWeekChip } from '../timetableEvents/thisWeekPill'
 import { RADIUS, SHADOW } from '../ui/scale'
 import { DUR, EASE, SHIFT } from '../ui/motion'
 import { Badge } from '../ui/Badge'
@@ -120,6 +122,8 @@ export default function TimetableScreen() {
   const syncingRef = useRef(false)
   // 出欠危険/警告に該当する科目コード集合（グリッドの赤バッジ用）。
   const [dangerCodes, setDangerCodes] = useState<Set<string>>(new Set())
+  // 週送りクランプ用: 全科目の出欠各回の実日付（学期起点/最終週の導出に使う）。
+  const [termDates, setTermDates] = useState<Date[]>([])
   // 未読掲示のある科目コード集合（グリッド/リストの未読ドット用・保存済み掲示digestから算出）。
   const [unreadCodes, setUnreadCodes] = useState<Set<string>>(new Set())
   // 手動更新をガードでスキップした理由の一時表示（リリースでも出す）。
@@ -146,6 +150,11 @@ export default function TimetableScreen() {
         if (r.trackable && (r.level === 'danger' || r.level === 'warning')) danger.add(c.courseCode)
       }
       setDangerCodes(danger)
+      const allDates: Date[] = []
+      for (const c of data?.courses ?? []) {
+        for (const r of resolveTermDates(c.sessions, now)) allDates.push(r.full)
+      }
+      setTermDates(allDates)
     })().catch(() => undefined)
   }
 
@@ -287,6 +296,19 @@ export default function TimetableScreen() {
   const wd = weekDatesFrom(viewedMonday)
   // 今日を含む週を見ているか（今日ハイライト・現在コマ強調のゲート）。
   const isCurrentWeek = weekOffset === currentWeekOffset(now)
+  // 週送りの学期内クランプ範囲・第N週・「今週へ戻る」ピルの表示可否。
+  const bounds = deriveTermBounds(termDates, now)
+  const curOffset = currentWeekOffset(now)
+  const clampedOffset = clampOffset(weekOffset, bounds)
+  const atMin = weekOffset <= bounds.min
+  const atMax = weekOffset >= bounds.max
+  const ordinal = weekOrdinal(viewedMonday, bounds.termStartMonday)
+  const showThisWeek = shouldShowThisWeekChip({ weekOffset, currentOffset: curOffset })
+  const goWeek = (delta: number) => setWeekOffset((o) => clampOffset(o + delta, bounds))
+  // クランプで丸められたら state も是正（学期外に居座らせない）。
+  useEffect(() => {
+    if (clampedOffset !== weekOffset) setWeekOffset(clampedOffset)
+  }, [clampedOffset, weekOffset])
   const hasSat = !!col?.slots.some((s) => s.day === 'sat')
   const personalDays = daysWithPersonal(personalEvents)
   const hasSun = personalDays.has('sun')
@@ -432,6 +454,50 @@ export default function TimetableScreen() {
           value={String(selCol)}
           onChange={(k) => setSelCol(Number(k))}
         />
+      ) : null}
+
+      {col ? (
+        <>
+          <View style={[styles.weekBar, { backgroundColor: ui.softBoxBg, borderColor: ui.dividerColor }]}>
+            <Pressable
+              onPress={() => goWeek(-1)}
+              disabled={atMin}
+              style={({ pressed }) => [styles.weekArrow, atMin && { opacity: 0.3 }, pressed && !atMin && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="前の週へ"
+            >
+              <Ionicons name="chevron-back" size={18} color={ui.valueColor} />
+            </Pressable>
+            <Text style={[styles.weekLabel, { color: ui.valueColor }]} numberOfLines={1}>
+              {weekRangeLabelFrom(viewedMonday, days)}
+            </Text>
+            {ordinal != null ? (
+              <View style={[styles.weekOrdinal, { backgroundColor: ui.pillBg }]}>
+                <Text style={[styles.weekOrdinalText, { color: ui.pillText }]}>第{ordinal}週</Text>
+              </View>
+            ) : null}
+            <Pressable
+              onPress={() => goWeek(1)}
+              disabled={atMax}
+              style={({ pressed }) => [styles.weekArrow, atMax && { opacity: 0.3 }, pressed && !atMax && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="次の週へ"
+            >
+              <Ionicons name="chevron-forward" size={18} color={ui.valueColor} />
+            </Pressable>
+          </View>
+          {showThisWeek ? (
+            <Pressable
+              onPress={() => setWeekOffset(curOffset)}
+              style={({ pressed }) => [styles.thisWeekChip, { backgroundColor: ui.pillBg }, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="今週へ戻る"
+            >
+              <Ionicons name="today-outline" size={13} color={ui.pillText} />
+              <Text style={[styles.thisWeekText, { color: ui.pillText }]}>今週へ戻る</Text>
+            </Pressable>
+          ) : null}
+        </>
       ) : null}
 
       {timetableView === 'list' && col ? (
@@ -799,6 +865,14 @@ const styles = StyleSheet.create({
   list: { paddingTop: 12, paddingBottom: 12 },
   syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
   heroSub: { fontSize: 11, fontWeight: '500', marginTop: 2, marginBottom: 2 },
+  // 週ナビバー（前後週・週レンジ・第N週）＋今週へ戻るピル
+  weekBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingHorizontal: 6, paddingVertical: 6, borderWidth: 1, borderRadius: RADIUS.md },
+  weekArrow: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.pill },
+  weekLabel: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '600' },
+  weekOrdinal: { borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 1 },
+  weekOrdinalText: { fontSize: 11, fontWeight: '700' },
+  thisWeekChip: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, borderRadius: RADIUS.pill, paddingHorizontal: 12, paddingVertical: 5 },
+  thisWeekText: { fontSize: 12, fontWeight: '700' },
   // 曜日バー（曜日＋日付を1ブロックに）
   dayBar: { flexDirection: 'row', gap: 4, marginTop: 8, marginBottom: 2 },
   dtab: { flex: 1, minWidth: 0, alignItems: 'center', paddingTop: 7, paddingBottom: 10, borderRadius: RADIUS.md, position: 'relative' },
