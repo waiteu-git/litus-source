@@ -30,6 +30,9 @@ export const RADIUS = { sm: 8, md: 12, card: 18, sheet: 20, pill: 999 } as const
 /** 余白。s4=14 は画面横パディングの標準（掲示2画面の左右28px二重掛けを是正する基準）。 */
 export const SPACE = { s1: 4, s2: 8, s3: 12, s4: 14, s5: 16, s6: 24 } as const
 
+/** 非実施セル（隔週休み・半期非該当・イベント休講）の共通薄表示 opacity。3種で視覚統一する。 */
+export const DIM_OPACITY = 0.45
+
 type ShadowStyle = {
   shadowColor: string
   shadowOffset: { width: number; height: number }
