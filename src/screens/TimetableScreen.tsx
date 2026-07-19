@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Alert, Animated, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
+import { Alert, Animated, AppState, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { Ionicons } from '@expo/vector-icons'
 import ScreenHint from '../tutorial/ScreenHint'
@@ -52,12 +52,11 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
 import { shouldShowTodayPill } from '../timetableEvents/todayPill'
-import { weekDates, dayHeadLabel } from '../timetableEvents/weekDates'
+import { weekDatesFrom, dayHeadLabel } from '../timetableEvents/weekDates'
+import { viewedWeekMonday, currentWeekOffset } from '../timetableEvents/weekNav'
 import { RADIUS, SHADOW } from '../ui/scale'
 import { DUR, EASE, SHIFT } from '../ui/motion'
 import { Badge } from '../ui/Badge'
-
-const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 type DayKey = (typeof DAY_ORDER)[number]
@@ -89,6 +88,17 @@ export default function TimetableScreen() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000)
     return () => clearInterval(id)
+  }, [])
+  // 表示中の週（既定0＝日曜なら来週・平日なら今週）。フォーカス/フォアグラウンド復帰で0へ戻す。
+  const [weekOffset, setWeekOffset] = useState(0)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') {
+        setWeekOffset(0)
+        setNow(new Date())
+      }
+    })
+    return () => sub.remove()
   }, [])
   const todayKey = TODAY_KEYS[now.getDay()]
   const [selDay, setSelDay] = useState<DayKey>(TODAY_KEYS[new Date().getDay()])
@@ -241,6 +251,7 @@ export default function TimetableScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true
+      setWeekOffset(0)
       loadTimetable().then((c) => {
         if (active) setCollections(c)
       })
@@ -271,6 +282,11 @@ export default function TimetableScreen() {
   const col = collections && collections.length > 0 ? collections[Math.min(selCol, collections.length - 1)] : null
   // 今この瞬間が属する時限（当該コマ強調用）。どの時限でもなければ null。
   const curPeriod = currentPeriodNumber(col?.periodTimes ?? null, now)
+  // 表示中の週の月曜（アンカー日）と各曜日の実日付。weekOffset=0 は既定週（日曜のみ来週）。
+  const viewedMonday = viewedWeekMonday(now, weekOffset)
+  const wd = weekDatesFrom(viewedMonday)
+  // 今日を含む週を見ているか（今日ハイライト・現在コマ強調のゲート）。
+  const isCurrentWeek = weekOffset === currentWeekOffset(now)
   const hasSat = !!col?.slots.some((s) => s.day === 'sat')
   const personalDays = daysWithPersonal(personalEvents)
   const hasSun = personalDays.has('sun')
@@ -326,8 +342,11 @@ export default function TimetableScreen() {
   ).current
 
   const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
-  // 選択曜日に落ちる補講オカレンス（休講内包＋単独）。時間割の通常コマとは別に一回限りで表示。
-  const dayMakeups = upcomingMakeups(events, now).filter((m) => WEEKDAY_KEY[new Date(m.date).getDay()] === selDay)
+  // 選択曜日に落ちる補講オカレンス（表示週の selDay 当日に実施されるもののみ・休講内包＋単独）。
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  const ymd = (d: Date) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+  const selDayKey = ymd(wd[selDay])
+  const dayMakeups = upcomingMakeups(events, viewedMonday).filter((m) => m.date === selDayKey)
   const startTime = (period: number) => col?.periodTimes?.periods.find((p) => p.period === period)?.start ?? ''
   const endTime = (period: number) => col?.periodTimes?.periods.find((p) => p.period === period)?.end ?? ''
 
@@ -376,10 +395,8 @@ export default function TimetableScreen() {
   const cellNowBg = ui.colors.gridCellNowBg
   const cellTextColor = ui.colors.gridCellText
 
-  // 「今日へ戻る」: リストで今日以外を見ているとき、今日へ一発で戻し自動追従も戻す。
-  const showTodayPill = shouldShowTodayPill({ view: timetableView, selDay, todayKey, days })
-  // 今週の日付（曜日バーの日付・日ヘッダ）。時間割はテンプレートだが today 基準で今週を出す。
-  const wd = weekDates(now)
+  // 「今日へ戻る」: リストで今日以外を見ているとき、今日へ一発で戻し自動追従も戻す。今日が表示週になければ出さない。
+  const showTodayPill = isCurrentWeek && shouldShowTodayPill({ view: timetableView, selDay, todayKey, days })
   const campus = col?.periodTimes?.campus ?? ''
   const returnToToday = () => {
     selDayAutoRef.current = true
@@ -421,7 +438,7 @@ export default function TimetableScreen() {
         <View style={styles.dayBar}>
           {days.map((d) => {
             const on = d === selDay
-            const isToday = d === todayKey
+            const isToday = isCurrentWeek && d === todayKey
             return (
               <Pressable
                 key={d}
@@ -465,7 +482,7 @@ export default function TimetableScreen() {
             <View style={styles.gridRow}>
               <View style={styles.gridPerCol} />
               {days.map((d) => {
-                const isToday = d === todayKey
+                const isToday = isCurrentWeek && d === todayKey
                 return (
                   <View key={d} style={styles.gridDayHead}>
                     <Text style={{ fontSize: 11, fontWeight: isToday ? '700' : '500', color: isToday ? cellTextColor : ui.labelColor }}>
@@ -489,16 +506,16 @@ export default function TimetableScreen() {
                   const slot = slotAt(d, p)
                   const classes = slot?.classes ?? []
                   const pev = personalEventAt(personalEvents, d as PersonalDayKey, p)
-                  const today = d === todayKey
-                  const isNow = today && classes.length > 0 && p === curPeriod
+                  const today = isCurrentWeek && d === todayKey
+                  const isNow = isCurrentWeek && today && classes.length > 0 && p === curPeriod
                   // ステータスドットはセル単位（積みコマは科目群を集約）。単一科目なら現状と同一。
                   const anyUpdated = classes.some((c) => updatedCodes.has(c.courseCode))
                   const anyDanger = classes.some((c) => dangerCodes.has(c.courseCode))
                   const anyUnread = classes.some((c) => unreadCodes.has(c.courseCode))
-                  const anyEvent = classes.some((c) => !!pickCellEvent(events, c.name, p, now))
+                  const anyEvent = classes.some((c) => !!pickCellEvent(events, c.name, p, wd[d]))
                   // 休講/隔週休みはセル単位で薄表示（旧単一Pressable時代と同一の見た目を維持）。
-                  const anyCanceled = classes.some((c) => pickCellEvent(events, c.name, p, now)?.type === 'cancel')
-                  const anyOff = classes.some((c) => !isClassOnDate(patterns[c.courseCode], now))
+                  const anyCanceled = classes.some((c) => pickCellEvent(events, c.name, p, wd[d])?.type === 'cancel')
+                  const anyOff = classes.some((c) => !isClassOnDate(patterns[c.courseCode], wd[d]))
                   return (
                     <View
                       key={d}
@@ -513,10 +530,10 @@ export default function TimetableScreen() {
                     >
                       {classes.length > 0 ? (
                         classes.map((cl, ci) => {
-                          const gev = pickCellEvent(events, cl.name, p, now)
+                          const gev = pickCellEvent(events, cl.name, p, wd[d])
                           const gCanceled = gev?.type === 'cancel'
-                          // 隔週で今週は休みの授業は薄く（取消線）表示する。
-                          const gOff = !isClassOnDate(patterns[cl.courseCode], now)
+                          // 隔週でその週は休みの授業は薄く（取消線）表示する。
+                          const gOff = !isClassOnDate(patterns[cl.courseCode], wd[d])
                           const dim = gCanceled || gOff
                           return (
                             <Pressable
@@ -575,16 +592,16 @@ export default function TimetableScreen() {
             const rows: { key: string; node: ReactElement }[] = []
             for (const lr of listRows) {
               if (lr.kind === 'class') {
-                const rowNow = selDay === todayKey && lr.period === curPeriod
+                const rowNow = isCurrentWeek && selDay === todayKey && lr.period === curPeriod
                 rows.push({
                   key: `c-${lr.period}`,
                   node: (
                     <>
                       {lr.slots.flatMap((s) =>
                         s.classes.map((cl) => {
-                          const ev = pickCellEvent(events, cl.name, s.period, now)
+                          const ev = pickCellEvent(events, cl.name, s.period, wd[selDay])
                           const canceled = ev?.type === 'cancel'
-                          const off = !isClassOnDate(patterns[cl.courseCode], now)
+                          const off = !isClassOnDate(patterns[cl.courseCode], wd[selDay])
                           const strike = canceled || off
                           const mainColor = rowNow ? ui.pillText : ui.valueColor
                           return (
@@ -706,7 +723,7 @@ export default function TimetableScreen() {
               <>
                 <View style={styles.panelHead}>
                   <Text style={[styles.phDate, { color: ui.valueColor }]}>{dayHeadLabel(wd[selDay], DAY_LABEL[selDay])}</Text>
-                  {selDay === todayKey ? (
+                  {isCurrentWeek && selDay === todayKey ? (
                     <View style={[styles.phTodayPill, { backgroundColor: ui.pillBg }]}>
                       <Text style={[styles.phTodayText, { color: ui.pillText }]}>今日</Text>
                     </View>
@@ -719,7 +736,7 @@ export default function TimetableScreen() {
                     <Text style={[styles.emptyDayText, { color: ui.labelColor }]}>{DAY_LABEL[selDay]}曜日は授業がありません</Text>
                   </View>
                 ) : (
-                  <View style={[styles.dayList, { backgroundColor: ui.colors.cardBg, borderColor: selDay === todayKey ? ui.colors.priorityBorder : ui.colors.cardBorder }]}>
+                  <View style={[styles.dayList, { backgroundColor: ui.colors.cardBg, borderColor: isCurrentWeek && selDay === todayKey ? ui.colors.priorityBorder : ui.colors.cardBorder }]}>
                     {rows.map((r, i) => (
                       <View key={r.key} style={i > 0 ? { borderTopWidth: 1, borderTopColor: ui.dividerColor } : undefined}>
                         {r.node}
