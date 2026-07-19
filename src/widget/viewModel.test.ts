@@ -146,6 +146,26 @@ describe('buildWidgetModel', () => {
     expect(m.attendance.targetCourse).toBe('情報理論')
   })
 
+  it('積みコマは currentQuarter に一致する科目を代表に選ぶ', () => {
+    const cols = collection([
+      {
+        day: 'mon',
+        period: 3,
+        classes: [
+          { courseCode: 'a', name: '前半科目', teachers: [], room: 'K1', isRemote: false, credits: null, badges: [], quarter: 'first' as const },
+          { courseCode: 'b', name: '後半科目', teachers: [], room: 'K2', isRemote: false, credits: null, badges: [], quarter: 'second' as const },
+        ],
+      },
+    ])
+    const m1 = buildWidgetModel(MON(13, 30), cols, [], null, undefined, 'second')
+    expect(m1.nextClass?.name).toBe('後半科目')
+    const m2 = buildWidgetModel(MON(13, 30), cols, [], null, undefined, 'first')
+    expect(m2.nextClass?.name).toBe('前半科目')
+    // currentQuarter 省略時は先頭（後方互換）
+    const m3 = buildWidgetModel(MON(13, 30), cols, [], null)
+    expect(m3.nextClass?.name).toBe('前半科目')
+  })
+
   it('本日その授業に出席済みなら attendance.state=done', () => {
     const cols = collection([{ day: 'mon', period: 3, classes: [cls('情報理論')] }])
     const attended: AttendedRecord = {

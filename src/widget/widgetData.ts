@@ -10,16 +10,23 @@ import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import type { AssignmentMap } from '../storage/assignmentsSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
+import { loadTimetableOverrides, loadCurrentQuarter } from '../storage/timetableOverridesStore'
+import { applyQuarterOverrides, resolveCurrentQuarter } from '../timetableEvents/quarter'
 import { buildWidgetModel, type WidgetModel } from './viewModel'
 
 /** 現在時刻でウィジェット表示モデルを組み立てる。読み取り失敗は空データにフォールバック。 */
 export async function loadWidgetModel(now: Date = new Date()): Promise<WidgetModel> {
-  const [timetable, assignmentMap, attended, weeklyPatterns] = await Promise.all([
+  const [timetable, assignmentMap, attended, weeklyPatterns, ttOverrides, ttQuarterPref] = await Promise.all([
     loadTimetable().catch(() => null),
     loadAssignments().catch((): AssignmentMap => ({})),
     loadAttendedRecord().catch(() => null),
     loadWeeklyPatterns().catch((): WeeklyPatternMap => ({})),
+    loadTimetableOverrides().catch(() => ({})),
+    loadCurrentQuarter().catch(() => null),
   ])
   const isOn = (code: string) => isClassOnDate(weeklyPatterns[code], now)
-  return buildWidgetModel(now, timetable ?? [], Object.values(assignmentMap), attended, isOn)
+  // 積みコマ（半期科目）の代表選択用に override をマージし、現在半期（手動指定優先・無ければ日付既定）を算出。
+  const ttQ = (timetable ?? []).map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) }))
+  const cq = resolveCurrentQuarter(ttQuarterPref, now)
+  return buildWidgetModel(now, ttQ, Object.values(assignmentMap), attended, isOn, cq)
 }

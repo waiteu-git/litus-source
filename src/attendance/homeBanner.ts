@@ -9,7 +9,8 @@
  */
 import type { TimetableCollection } from '../collect/timetableMessage'
 import type { AttendanceReception } from '../collect/attendanceMessage'
-import type { DayOfWeek } from '../parsers/timetable'
+import type { DayOfWeek, Quarter } from '../parsers/timetable'
+import { representativeClass } from '../timetableEvents/quarter'
 
 const WEEKDAY: Record<DayOfWeek, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
 
@@ -29,6 +30,7 @@ export function findActiveClass(
   collections: TimetableCollection[],
   now: Date,
   preMinutes = 5,
+  currentQuarter?: Quarter,
 ): ActiveClass | null {
   const weekday = now.getDay()
   const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -43,7 +45,8 @@ export function findActiveClass(
       const end = hhmmToMin(pt.end)
       if (start === null || end === null) continue
       if (nowMin >= start - preMinutes && nowMin <= end) {
-        const c = slot.classes[0]
+        const c = representativeClass(slot.classes, currentQuarter)
+        if (!c) continue
         return { courseCode: c.courseCode, courseName: c.name }
       }
     }
@@ -66,6 +69,7 @@ export function computeHomeBanner(
   collections: TimetableCollection[],
   reception: AttendanceReception | null,
   now: Date,
+  currentQuarter?: Quarter,
 ): HomeBanner {
   // 受付確定が最優先（時間割に無い補講等も拾える）。
   if (reception?.accepting) {
@@ -73,7 +77,7 @@ export function computeHomeBanner(
     return { active: true, kind: 'accepting', courseName: reception.courseName, text: `${name} 出席登録受付中` }
   }
   // 次に時間割上の授業時間帯。受付は未確認だが「出席を確認」ナッジを出す。
-  const active = findActiveClass(collections, now)
+  const active = findActiveClass(collections, now, 5, currentQuarter)
   if (active) {
     return {
       active: true,

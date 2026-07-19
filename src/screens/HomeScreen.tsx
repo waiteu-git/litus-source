@@ -29,6 +29,9 @@ import { Badge } from '../ui/Badge'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
+import { loadTimetableOverrides, loadCurrentQuarter } from '../storage/timetableOverridesStore'
+import { applyQuarterOverrides, resolveCurrentQuarter, type TimetableOverrides } from '../timetableEvents/quarter'
+import type { Quarter } from '../parsers/timetable'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { useSync } from '../sync/SyncProvider'
 import { useClassSyncConfirm } from '../sync/useClassSyncConfirm'
@@ -89,6 +92,9 @@ export default function HomeScreen() {
   const { version: classEventsVersion } = useClassEventsVersion()
 
   const [weeklyPatterns, setWeeklyPatterns] = useState<WeeklyPatternMap>({})
+  // 積みコマ（半期科目）の代表選択用。前半/後半の手動指定(override)と「今が前半/後半か」の手動指定。
+  const [ttOverrides, setTtOverrides] = useState<TimetableOverrides>({})
+  const [ttQuarterPref, setTtQuarterPref] = useState<Quarter | null>(null)
   // 同期の状態・実行は SyncProvider が単独所有（掲示アニメ・鮮度・スキップ理由は上部同期バーに集約）。
   const sync = useSync()
   const requestFullSync = useClassSyncConfirm()
@@ -113,6 +119,12 @@ export default function HomeScreen() {
       }
       loadWeeklyPatterns()
         .then((m) => active && setWeeklyPatterns(m))
+        .catch(() => undefined)
+      loadTimetableOverrides()
+        .then((o) => active && setTtOverrides(o))
+        .catch(() => undefined)
+      loadCurrentQuarter()
+        .then((q) => active && setTtQuarterPref(q))
         .catch(() => undefined)
       loadClassEvents()
         .then((e) => active && setClassEvents(e))
@@ -181,12 +193,16 @@ export default function HomeScreen() {
     })
   }
 
+  // 積みコマ（半期科目）の代表選択用に override をマージし、現在半期（手動指定優先・無ければ日付既定）を算出。
+  const ttQ = timetable.map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) }))
+  const cq = resolveCurrentQuarter(ttQuarterPref, tick)
+
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
   // 出席済みのときは「出席登録受付中/出席を確認」バナーは出さない（案内が不要・紛らわしい）。
-  const rawBanner = computeHomeBanner(timetable, running ? reception : null, tick)
+  const rawBanner = computeHomeBanner(ttQ, running ? reception : null, tick, cq)
   const banner = attendedNow ? { ...rawBanner, active: false } : rawBanner
 
-  const classes = todayRemainingClasses(timetable, tick, (code) => isClassOnDate(weeklyPatterns[code], tick))
+  const classes = todayRemainingClasses(ttQ, tick, (code) => isClassOnDate(weeklyPatterns[code], tick), cq)
   const hero = classes[0] ?? null
   const laterClasses = classes.slice(1)
   const deadlineGroups = homeDeadlines(assignments, tick)

@@ -8,7 +8,8 @@
  *   - どちらも無ければ null（本日の授業が終了 or 授業なし）
  */
 import type { TimetableCollection } from '../collect/timetableMessage'
-import type { DayOfWeek } from '../parsers/timetable'
+import type { DayOfWeek, Quarter } from '../parsers/timetable'
+import { representativeClass } from '../timetableEvents/quarter'
 
 const WEEKDAY: Record<DayOfWeek, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
 
@@ -37,6 +38,7 @@ export function pickFocusClass(
   now: Date,
   /** その科目が今週実施されるか（隔週で休みの週は除外）。省略時は常に実施扱い。 */
   isOn?: (courseCode: string) => boolean,
+  currentQuarter?: Quarter,
 ): FocusClass | null {
   const weekday = now.getDay()
   const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -54,7 +56,8 @@ export function pickFocusClass(
       const start = hhmmToMin(pt.start)
       const end = hhmmToMin(pt.end)
       if (start === null || end === null) continue
-      const c = slot.classes[0]
+      const c = representativeClass(slot.classes, currentQuarter)
+      if (!c) continue
       if (isOn && !isOn(c.courseCode)) continue
       const base = {
         period: slot.period,
@@ -86,6 +89,7 @@ export function todayRemainingClasses(
   collections: TimetableCollection[],
   now: Date,
   isOn?: (courseCode: string) => boolean,
+  currentQuarter?: Quarter,
 ): HomeClass[] {
   const weekday = now.getDay()
   const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -100,7 +104,8 @@ export function todayRemainingClasses(
       const start = hhmmToMin(pt.start)
       const end = hhmmToMin(pt.end)
       if (start === null || end === null) continue
-      const c = slot.classes[0]
+      const c = representativeClass(slot.classes, currentQuarter)
+      if (!c) continue
       if (isOn && !isOn(c.courseCode)) continue
       const ongoing = nowMin >= start && nowMin <= end
       const upcoming = nowMin < start
