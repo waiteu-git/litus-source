@@ -496,6 +496,9 @@ export default function TimetableScreen() {
                   const anyDanger = classes.some((c) => dangerCodes.has(c.courseCode))
                   const anyUnread = classes.some((c) => unreadCodes.has(c.courseCode))
                   const anyEvent = classes.some((c) => !!pickCellEvent(events, c.name, p, now))
+                  // 休講/隔週休みはセル単位で薄表示（旧単一Pressable時代と同一の見た目を維持）。
+                  const anyCanceled = classes.some((c) => pickCellEvent(events, c.name, p, now)?.type === 'cancel')
+                  const anyOff = classes.some((c) => !isClassOnDate(patterns[c.courseCode], now))
                   return (
                     <View
                       key={d}
@@ -504,6 +507,8 @@ export default function TimetableScreen() {
                         { backgroundColor: isNow ? cellNowBg : classes.length ? (today ? cellTodayBg : cellFilledBg) : cellBg },
                         isNow ? styles.gridCellNow : today && classes.length ? styles.gridCellToday : null,
                         !classes.length && pev ? [styles.personalCell, { backgroundColor: ui.colors.gridCellPersonalBg }] : null,
+                        anyCanceled ? styles.canceledCard : null,
+                        anyOff ? styles.offCell : null,
                       ]}
                     >
                       {classes.length > 0 ? (
@@ -517,7 +522,7 @@ export default function TimetableScreen() {
                             <Pressable
                               key={`${ci}-${cl.courseCode || cl.name}`}
                               onPress={() => openSubject(cl, d as DayOfWeek, p)}
-                              style={[styles.gridClass, ci > 0 ? [styles.gridClassStacked, { borderTopColor: ui.dividerColor }] : null, dim ? styles.offCell : null]}
+                              style={[styles.gridClass, ci > 0 ? [styles.gridClassStacked, { borderTopColor: ui.dividerColor }] : null]}
                             >
                               <Text
                                 numberOfLines={classes.length > 1 ? 2 : 3}
@@ -817,7 +822,7 @@ const styles = StyleSheet.create({
   gridPerCol: { width: 22, alignItems: 'center', justifyContent: 'center' },
   gridDayHead: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 8 },
   gridCell: { flex: 1, minHeight: 74, borderRadius: 11, padding: 6, justifyContent: 'center' },
-  gridClass: { justifyContent: 'center' },
+  gridClass: { flex: 1, justifyContent: 'center' },
   gridClassStacked: { marginTop: 4, borderTopWidth: 1 },
   gridFill: { flex: 1, justifyContent: 'center' },
   gridCellToday: { borderWidth: 1.5, borderColor: COLORS.emerald },
