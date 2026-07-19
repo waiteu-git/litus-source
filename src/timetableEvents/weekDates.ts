@@ -3,7 +3,7 @@
 // 各曜日の実日付を算出し、曜日ヘッダの日付・週範囲ラベルの表示に使う（週送りは持たない＝常に今週）。
 export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
-export const ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
 /** today を含む週の月曜（ローカル0:00）を返す。日曜は同じ週の始まりの月曜（6日前）へ寄せる。 */
 export function mondayOf(today: Date): Date {

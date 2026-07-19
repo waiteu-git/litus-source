@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
@@ -194,7 +194,7 @@ export default function HomeScreen() {
   }
 
   // 積みコマ（半期科目）の代表選択用に override をマージし、現在半期（手動指定優先・無ければ日付既定）を算出。
-  const ttQ = timetable.map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) }))
+  const ttQ = useMemo(() => timetable.map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) })), [timetable, ttOverrides])
   const cq = resolveCurrentQuarter(ttQuarterPref, tick)
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
