@@ -608,13 +608,25 @@ export default function TimetableScreen() {
                   const today = isCurrentWeek && d === todayKey
                   const isNow = isCurrentWeek && today && classes.length > 0 && p === curPeriod
                   // ステータスドットはセル単位（積みコマは科目群を集約）。単一科目なら現状と同一。
+                  const stacked = classes.length >= 2
+                  // イベント/隔週/半期の判定は科目ごとに1回だけ計算し、集約・描画で使い回す。
+                  const perClass = classes.map((cl) => {
+                    const gev = pickCellEvent(events, cl.name, p, wd[d])
+                    const gOff = !isClassOnDate(patterns[cl.courseCode], wd[d])
+                    return {
+                      cl,
+                      gev,
+                      dim: gev?.type === 'cancel' || gOff,
+                      qDim: isDimmedForCurrentQuarter(cl.quarter, currentQuarter, stacked),
+                    }
+                  })
                   const anyUpdated = classes.some((c) => updatedCodes.has(c.courseCode))
                   const anyDanger = classes.some((c) => dangerCodes.has(c.courseCode))
                   const anyUnread = classes.some((c) => unreadCodes.has(c.courseCode))
-                  const anyEvent = classes.some((c) => !!pickCellEvent(events, c.name, p, wd[d]))
-                  // 休講/隔週休みはセル単位で薄表示（旧単一Pressable時代と同一の見た目を維持）。
-                  const anyCanceled = classes.some((c) => pickCellEvent(events, c.name, p, wd[d])?.type === 'cancel')
-                  const anyOff = classes.some((c) => !isClassOnDate(patterns[c.courseCode], wd[d]))
+                  const anyEvent = perClass.some((pc) => !!pc.gev)
+                  // 単一科目セルは従来通りセル全体を薄表示（旧単一Pressable時代と同一の見た目）。
+                  // 積みコマは科目ごとに薄くする（下）ため、セル全体は薄くしない（二重掛け回避）。
+                  const cellDim = !stacked && perClass.some((pc) => pc.dim)
                   return (
                     <View
                       key={d}
@@ -623,37 +635,28 @@ export default function TimetableScreen() {
                         { backgroundColor: isNow ? cellNowBg : classes.length ? (today ? cellTodayBg : cellFilledBg) : cellBg },
                         isNow ? styles.gridCellNow : today && classes.length ? styles.gridCellToday : null,
                         !classes.length && pev ? [styles.personalCell, { backgroundColor: ui.colors.gridCellPersonalBg }] : null,
-                        anyCanceled || anyOff ? styles.offCell : null,
+                        cellDim ? styles.offCell : null,
                       ]}
                     >
                       {classes.length > 0 ? (
-                        classes.map((cl, ci) => {
-                          const gev = pickCellEvent(events, cl.name, p, wd[d])
-                          const gCanceled = gev?.type === 'cancel'
-                          // 隔週でその週は休みの授業は薄く（取消線）表示する。
-                          const gOff = !isClassOnDate(patterns[cl.courseCode], wd[d])
-                          const dim = gCanceled || gOff
-                          // 積みコマで現在の半期と異なる指定の科目は薄く（取消線なし＝§8の量的トーン統一）。
-                          const qDim = isDimmedForCurrentQuarter(cl.quarter, currentQuarter, classes.length >= 2)
-                          return (
-                            <Pressable
-                              key={`${ci}-${cl.courseCode || cl.name}`}
-                              onPress={() => openSubject(cl, d as DayOfWeek, p)}
-                              style={[
-                                styles.gridClass,
-                                ci > 0 ? [styles.gridClassStacked, { borderTopColor: ui.dividerColor }] : null,
-                                qDim ? styles.offCell : null,
-                              ]}
+                        perClass.map(({ cl, dim, qDim }, ci) => (
+                          <Pressable
+                            key={`${ci}-${cl.courseCode || cl.name}`}
+                            onPress={() => openSubject(cl, d as DayOfWeek, p)}
+                            style={[
+                              styles.gridClass,
+                              ci > 0 ? [styles.gridClassStacked, { borderTopColor: ui.dividerColor }] : null,
+                              stacked && (dim || qDim) ? styles.offCell : null,
+                            ]}
+                          >
+                            <Text
+                              numberOfLines={classes.length > 1 ? 2 : 3}
+                              style={[styles.gridCellText, { color: cellTextColor }, dim && styles.canceledName]}
                             >
-                              <Text
-                                numberOfLines={classes.length > 1 ? 2 : 3}
-                                style={[styles.gridCellText, { color: cellTextColor }, dim && styles.canceledName]}
-                              >
-                                {cl.name}
-                              </Text>
-                            </Pressable>
-                          )
-                        })
+                              {cl.name}
+                            </Text>
+                          </Pressable>
+                        ))
                       ) : pev ? (
                         <Pressable style={styles.gridFill} onPress={() => navigation.navigate('PersonalEventForm', { editId: pev.id })}>
                           <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText, ui.dark && { color: COLORS.emeraldLight }]}>
