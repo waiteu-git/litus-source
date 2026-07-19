@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Text } from '../ui/Text'
@@ -48,7 +48,7 @@ export default function AttendanceFab() {
     return unsub
   }, [])
 
-  const ttQ = timetable.map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) }))
+  const ttQ = useMemo(() => timetable.map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) })), [timetable, ttOverrides])
   const cq = resolveCurrentQuarter(ttQuarterPref, tick)
   const raw = computeHomeBanner(ttQ, running ? reception : null, tick, cq)
   const active = raw.active && !attendedNow
