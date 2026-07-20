@@ -302,3 +302,17 @@ export async function clearDeliveredLetusNewsNotifications(): Promise<void> {
 export async function clearDeliveredBulletinNotifications(): Promise<void> {
   await clearDelivered([BULLETIN_TAG])
 }
+
+/**
+ * 予約済みローカル通知を全キャンセルする。全データ消去（resetAll）から呼ぶ。
+ *
+ * この関数がある理由: 呼び出し側が expo-notifications を直接 import すると、Expo Go では
+ * **モジュール評価時点で throw して起動できなくなる**（冒頭コメント参照）。try/catch では
+ * 守れない（守れるのは呼び出しだけで、import は無条件に走る）。expo-notifications への
+ * 到達は必ず本モジュールの loadNotifications() を経由させること。
+ */
+export async function cancelAllScheduledNotifications(): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  await Notifications.cancelAllScheduledNotificationsAsync()
+}
