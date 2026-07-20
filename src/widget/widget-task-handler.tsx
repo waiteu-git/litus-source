@@ -1,7 +1,7 @@
 /**
  * ウィジェットのヘッドレスタスクハンドラ。アプリ停止中でも OS から起動され、AsyncStorage を直読して
  * 現在の表示モデルを組み立て、ウィジェット名に応じたレイアウトを描画する。
- * index.ts で registerWidgetTaskHandler(widgetTaskHandler) として登録する。
+ * registerTaskHandler.android.ts が登録し、それを index.ts が呼ぶ（非 Android では no-op に解決される）。
  *
  * タップ（clickAction='OPEN_URI'）は OS がアプリ起動＋ litus:// を配信する形で処理されるため、
  * ここでは WIDGET_CLICK でも最新モデルの再描画に留める（遷移は widgetLinking が担う）。

@@ -1,12 +1,13 @@
 import { registerRootComponent } from 'expo';
-import { registerWidgetTaskHandler } from 'react-native-android-widget';
 
 import App from './App';
-import { widgetTaskHandler } from './src/widget/widget-task-handler';
+import { registerWidgetTaskHandler } from './src/widget/registerTaskHandler';
 
 // ホーム画面ウィジェットのヘッドレスタスク登録（アプリ停止中も OS から起動されて描画する）。
 // registerRootComponent より前に登録する。widgetTaskHandler は AsyncStorage 直読のみで軽量。
-registerWidgetTaskHandler(widgetTaskHandler);
+// react-native-android-widget への依存は registerTaskHandler.android.ts 側に閉じ込めてある
+// （iOS / Expo Go には当該ネイティブモジュールが無く、静的 import すると起動時に落ちるため）。
+registerWidgetTaskHandler();
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,
