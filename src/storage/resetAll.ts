@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import * as Notifications from 'expo-notifications'
+import { cancelAllScheduledNotifications } from '../notifications/notifier'
 
 /**
  * すべてのアプリデータを消去する（設定・時間割・課題・掲示・同意記録・予約通知）。
@@ -13,10 +13,12 @@ import * as Notifications from 'expo-notifications'
  */
 export async function resetAllData(): Promise<void> {
   // 1) 予約済みローカル通知を全キャンセル（AsyncStorage消去後に古い予約が復活しないよう先に消す）。
+  // notifier 経由で呼ぶこと。expo-notifications を直接 import すると Expo Go では
+  // モジュール評価時に throw して起動不能になる（notifier.ts 冒頭とラチェットテスト参照）。
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync()
+    await cancelAllScheduledNotifications()
   } catch {
-    /* Expo Go 等では no-op */
+    /* 通知モジュール未搭載環境では no-op */
   }
   // 2) AsyncStorage を全消去。
   await AsyncStorage.clear()
