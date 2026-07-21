@@ -30,7 +30,7 @@ import { buildSubmitAttendanceJs } from '../collect/attendanceSubmit.private'
 import { buildSubmitReactionJs } from '../collect/reactionSubmit.private'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { parseReactionMessage } from '../collect/reactionMessage'
-import { canSubmitReaction } from './reactionPaper'
+import { canSubmitReaction, REACTION_FILL_MAX_TRIES, REACTION_FILL_RETRY_MS } from './reactionPaper'
 import { toReactionDiag, type ReactionOutcome } from './reactionDiag'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage } from './classifyClassPage'
@@ -513,6 +513,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         {
           nowIso: new Date().toISOString(),
           courseName: state.reception?.courseName ?? null,
+          // ②フォーム待ちのポーリング回数。form-missing で落ちた時に「何秒待ったか」が分かる。
+          note: reactionFillTriesRef.current > 0 ? `②待ち${reactionFillTriesRef.current}回` : undefined,
         },
       ),
     ).catch(() => undefined)
@@ -685,10 +687,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         }, 11000)
         return
       }
-      if (m.reason === 'form-missing' && reactionFillTriesRef.current < 1) {
-        // ②フォームの描画がまだ間に合っていない可能性。少し待って1回だけやり直す。
+      if (m.reason === 'form-missing' && reactionFillTriesRef.current < REACTION_FILL_MAX_TRIES) {
+        // ②フォームがまだ描画されていない。**着地するまで短間隔でポーリングする**（固定1回では
+        // 遅い回線で②の描画に間に合わず form-missing で落ちる＝収集エンジンで踏んだ穴と同型）。
         reactionFillTriesRef.current += 1
-        scheduleReaction(() => inject(buildSubmitReactionJs(reactionTextRef.current)), 1800)
+        scheduleReaction(() => inject(buildSubmitReactionJs(reactionTextRef.current)), REACTION_FILL_RETRY_MS)
         return
       }
       failReaction(
