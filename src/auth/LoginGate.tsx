@@ -420,6 +420,20 @@ export function LoginGate({ children }: { children: ReactNode }) {
     return <LoginContext.Provider value={{ requireLogin }}>{children}</LoginContext.Provider>
   }
 
+  // デモ導線。**needsLogin 以外でも出す。** 審査員は多くの場合海外から開くため、
+  // CLASS に到達できないと connError に落ちる。そこでデモが見えないと「再読み込み」しか
+  // 選択肢がない行き止まりになり（enterDegraded は初回起動では出ない）、2.1 で即リジェクトになる。
+  const demoEntry = (onCard: boolean) => (
+    <Pressable
+      style={onCard ? styles.demoBtnCard : styles.demoBtn}
+      onPress={() => void enterDemo()}
+      accessibilityRole="button"
+    >
+      <Text style={onCard ? styles.demoBtnCardText : styles.demoBtnText}>
+        ログインせずにデモを見る
+      </Text>
+    </Pressable>
+  )
   const showLoginUi = state === 'needsLogin'
   const bootStatus =
     state === 'loading'
@@ -449,12 +463,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
                 <Text style={styles.reloadBtnText}>再読み込み</Text>
               </Pressable>
             </View>
-            {/* デモ導線。ストア審査ではログインできないため、ここから全機能をサンプルデータで
-                確認できるようにする（App Store 2.1 / Play アプリのアクセス権）。
-                審査員が見落とすと審査往復の原因になるので、隠さず常に表示する。 */}
-            <Pressable style={styles.demoBtn} onPress={() => void enterDemo()} accessibilityRole="button">
-              <Text style={styles.demoBtnText}>ログインせずにデモを見る</Text>
-            </Pressable>
+            {demoEntry(false)}
           </View>
         ) : null}
         <View style={showLoginUi ? styles.webBox : styles.webHidden}>
@@ -574,6 +583,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
                   <Text style={styles.maintNote}>※出席の受付確認と時間割の更新はCLASS復帰後に使えます。</Text>
                 </>
               ) : null}
+              {demoEntry(true)}
             </View>
           </View>
         ) : null}
@@ -601,6 +611,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
                   <Text style={styles.maintNote}>※出席の受付確認と時間割の更新は接続の回復後に使えます。</Text>
                 </>
               ) : null}
+              {demoEntry(true)}
             </View>
           </View>
         ) : null}
@@ -676,6 +687,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   demoBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
+  // メンテ/接続エラーの白カード内で使う版（翠ヘッダー用の白文字だと見えないため）。
+  demoBtnCard: {
+    backgroundColor: '#eef5f2',
+    borderWidth: 1,
+    borderColor: '#b9ddcd',
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  demoBtnCardText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
   webBox: { flex: 1 },
   // 判定用に読み込みは続けるが画面には出さない（サイズ0だと読み込まれない端末があるため1x1）。
   webHidden: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
