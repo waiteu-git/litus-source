@@ -4,6 +4,8 @@ import {
   reactionLength,
   canSubmitReaction,
   reactionDraftApplies,
+  REACTION_FILL_MAX_TRIES,
+  REACTION_FILL_RETRY_MS,
   type ReactionDraft,
 } from './reactionPaper'
 
@@ -69,5 +71,24 @@ describe('reactionDraftApplies（下書きの復元条件）', () => {
 
   it('本文が空の下書きは適用しない', () => {
     expect(reactionDraftApplies(draft({ text: '' }), '2026-07-13', '法学１')).toBe(false)
+  })
+})
+
+describe('②フォーム待ちのポーリング設定（2026-07-20の実機失敗への対処）', () => {
+  // ①→②は PrimeFaces の u:"@all"（全体再描画）で数秒かかりうる。v98までは 1800ms×1回＝約3.6秒で
+  // 諦めており、混雑した学内Wi-Fiでは form-missing で落ちた。実DOMのprobeでは遷移・流し込み・
+  // 提出発火すべて成功したため、DOM構造ではなくタイミングが原因と特定した。
+  it('短間隔で複数回ポーリングする（固定1回で諦めない）', () => {
+    expect(REACTION_FILL_MAX_TRIES).toBeGreaterThan(1)
+    expect(REACTION_FILL_RETRY_MS).toBeLessThanOrEqual(1000)
+  })
+
+  it('待てる合計時間は約5秒以上（遅い回線の②描画を拾える）', () => {
+    expect(REACTION_FILL_RETRY_MS * REACTION_FILL_MAX_TRIES).toBeGreaterThanOrEqual(4500)
+  })
+
+  it('全体タイムアウト20秒の内側に収まる（先に全体保険が落ちない）', () => {
+    // 初回1800ms + ポーリング分。20秒の全体保険より十分早く決着する。
+    expect(1800 + REACTION_FILL_RETRY_MS * REACTION_FILL_MAX_TRIES).toBeLessThan(20000)
   })
 })
