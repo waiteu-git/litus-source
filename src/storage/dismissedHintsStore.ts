@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import { createWriteQueue } from './writeQueue'
 
 const KEY = 'tutorial.dismissedHints.v1'
@@ -7,7 +7,7 @@ const enqueueWrite = createWriteQueue()
 
 /** 閉じられたヒントカードのキー集合（壊れ値は空＝再表示に倒す）。 */
 export async function loadDismissedHints(): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(KEY)
+  const raw = await Storage.getItem(KEY)
   if (!raw) return []
   try {
     const parsed: unknown = JSON.parse(raw)
@@ -21,11 +21,11 @@ export async function loadDismissedHints(): Promise<string[]> {
 export async function mutateDismissedHints(mutate: (keys: string[]) => string[]): Promise<void> {
   await enqueueWrite(async () => {
     const next = mutate(await loadDismissedHints())
-    await AsyncStorage.setItem(KEY, JSON.stringify(next))
+    await Storage.setItem(KEY, JSON.stringify(next))
   })
 }
 
 /** 設定「ヒントを再表示」用。全ヒントを未クローズへ戻す（同じキューを通し並行クローズと直列化）。 */
 export async function clearDismissedHints(): Promise<void> {
-  await enqueueWrite(() => AsyncStorage.removeItem(KEY))
+  await enqueueWrite(() => Storage.removeItem(KEY))
 }

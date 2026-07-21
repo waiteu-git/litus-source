@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import {
   serializeCourseSnapshots,
   deserializeCourseSnapshots,
@@ -8,9 +8,9 @@ import {
 const KEY = 'letus.courseSnapshots.v1'
 
 export async function saveCourseSnapshots(m: CourseSnapshotMap): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeCourseSnapshots(m))
+  await Storage.setItem(KEY, serializeCourseSnapshots(m))
 }
 
 export async function loadCourseSnapshots(): Promise<CourseSnapshotMap> {
-  return deserializeCourseSnapshots(await AsyncStorage.getItem(KEY))
+  return deserializeCourseSnapshots(await Storage.getItem(KEY))
 }

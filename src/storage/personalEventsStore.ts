@@ -1,14 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import type { PersonalEvent } from '../timetableEvents/personalEvent'
 import { deserializePersonalEvents, serializePersonalEvents } from './personalEventsSerialize'
 
 const KEY = 'litus.personalEvents.v1'
 
 export async function loadPersonalEvents(): Promise<PersonalEvent[]> {
-  return deserializePersonalEvents(await AsyncStorage.getItem(KEY))
+  return deserializePersonalEvents(await Storage.getItem(KEY))
 }
 export async function savePersonalEvents(events: PersonalEvent[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializePersonalEvents(events))
+  await Storage.setItem(KEY, serializePersonalEvents(events))
 }
 export async function upsertPersonalEvent(event: PersonalEvent): Promise<PersonalEvent[]> {
   const cur = await loadPersonalEvents()

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import {
   serializeAttendanceOverrides,
   deserializeAttendanceOverrides,
@@ -9,11 +9,11 @@ import {
 const KEY = 'attendance.overrides.v1'
 
 export async function loadAttendanceOverrides(): Promise<AttendanceOverrides> {
-  return deserializeAttendanceOverrides(await AsyncStorage.getItem(KEY))
+  return deserializeAttendanceOverrides(await Storage.getItem(KEY))
 }
 
 export async function saveAttendanceOverride(courseCode: string, override: AttendanceOverride): Promise<void> {
   const all = await loadAttendanceOverrides()
   all[courseCode] = override
-  await AsyncStorage.setItem(KEY, serializeAttendanceOverrides(all))
+  await Storage.setItem(KEY, serializeAttendanceOverrides(all))
 }

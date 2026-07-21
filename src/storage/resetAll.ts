@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import { cancelAllScheduledNotifications } from '../notifications/notifier'
 
 /**
@@ -21,5 +21,5 @@ export async function resetAllData(): Promise<void> {
     /* 通知モジュール未搭載環境では no-op */
   }
   // 2) AsyncStorage を全消去。
-  await AsyncStorage.clear()
+  await Storage.clearAll()
 }

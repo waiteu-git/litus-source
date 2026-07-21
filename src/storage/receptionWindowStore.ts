@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import type { ReceptionWindowRecord } from '../attendance/receptionWindow'
 import { serializeReceptionWindow, deserializeReceptionWindow } from './receptionWindowSerialize'
 
@@ -17,9 +17,9 @@ import { serializeReceptionWindow, deserializeReceptionWindow } from './receptio
 const KEY = 'attendance.receptionWindow.v1'
 
 export async function saveReceptionWindow(r: ReceptionWindowRecord): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeReceptionWindow(r))
+  await Storage.setItem(KEY, serializeReceptionWindow(r))
 }
 
 export async function loadReceptionWindow(): Promise<ReceptionWindowRecord | null> {
-  return deserializeReceptionWindow(await AsyncStorage.getItem(KEY))
+  return deserializeReceptionWindow(await Storage.getItem(KEY))
 }

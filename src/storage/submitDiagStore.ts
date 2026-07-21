@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import { SUBMIT_DIAG_MAX, appendSubmitDiag, type SubmitDiag } from '../attendance/submitDiag'
 
 /**
@@ -10,7 +10,7 @@ import { SUBMIT_DIAG_MAX, appendSubmitDiag, type SubmitDiag } from '../attendanc
 const KEY = 'attendance.submitDiag.v1'
 
 export async function loadSubmitDiags(): Promise<SubmitDiag[]> {
-  const raw = await AsyncStorage.getItem(KEY)
+  const raw = await Storage.getItem(KEY)
   if (!raw) return []
   try {
     const p = JSON.parse(raw)
@@ -24,9 +24,9 @@ export async function loadSubmitDiags(): Promise<SubmitDiag[]> {
 /** 1件追加する（上限で古いものを捨てる）。失敗しても呼び出し側の動作は止めない。 */
 export async function addSubmitDiag(entry: SubmitDiag): Promise<void> {
   const list = await loadSubmitDiags()
-  await AsyncStorage.setItem(KEY, JSON.stringify(appendSubmitDiag(list, entry)))
+  await Storage.setItem(KEY, JSON.stringify(appendSubmitDiag(list, entry)))
 }
 
 export async function clearSubmitDiags(): Promise<void> {
-  await AsyncStorage.removeItem(KEY)
+  await Storage.removeItem(KEY)
 }

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import { serializeNotifiedIds, deserializeNotifiedIds } from './notifiedBulletinsSerialize'
 import { createWriteQueue } from './writeQueue'
 
@@ -14,7 +14,7 @@ const enqueueWrite = createWriteQueue()
 
 /** これまでに受付open通知を出したキーの集合（キル→再起動しても同一受付で再通知しない）。 */
 export async function loadNotifiedAttendanceOpen(): Promise<string[]> {
-  return deserializeNotifiedIds(await AsyncStorage.getItem(KEY))
+  return deserializeNotifiedIds(await Storage.getItem(KEY))
 }
 
 /** 通知済みキーを直列キュー内で read-modify-write する（単一ライタ）。更新後を返す。 */
@@ -23,7 +23,7 @@ export async function mutateNotifiedAttendanceOpen(
 ): Promise<string[]> {
   return enqueueWrite(async () => {
     const next = mutate(await loadNotifiedAttendanceOpen())
-    await AsyncStorage.setItem(KEY, serializeNotifiedIds(next))
+    await Storage.setItem(KEY, serializeNotifiedIds(next))
     return next
   })
 }

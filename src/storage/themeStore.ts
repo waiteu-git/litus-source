@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import {
   deserializeThemeSettings,
   serializeThemeSettings,
@@ -9,9 +9,9 @@ import {
 const KEY = 'theme.variant.v1'
 
 export async function saveTheme(s: ThemeSettings): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeThemeSettings(s))
+  await Storage.setItem(KEY, serializeThemeSettings(s))
 }
 
 export async function loadTheme(): Promise<ThemeSettings> {
-  return deserializeThemeSettings(await AsyncStorage.getItem(KEY))
+  return deserializeThemeSettings(await Storage.getItem(KEY))
 }
