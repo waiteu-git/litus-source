@@ -30,6 +30,7 @@ import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
 import { BOOT_FADE_MS, bootChrome, bootLogoHtml, nativeSplashBg, needsBootFade } from './bootTheme'
 import { isWarmBoot, loadLastAuthedAt, saveLastAuthedAt } from '../storage/bootMetaStore'
 import { useKillSwitch } from '../health/KillSwitchProvider'
+import { useDemo } from '../demo/DemoProvider'
 import { COLORS, useThemeVariant } from '../theme'
 
 // checking中に本物のログイン状態が判定できない場合の保険（リダイレクト完了待ち）。
@@ -102,6 +103,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const killSwitch = useKillSwitch()
   const killSwitchRef = useRef(killSwitch)
   killSwitchRef.current = killSwitch
+  // デモ導線。enter でデモ名前空間へ切り替わり、App.tsx 側で本ゲートごとツリーから外れる。
+  const { enter: enterDemo } = useDemo()
   // 初回フル同期の進捗表示。
   const [syncLabel, setSyncLabel] = useState('データを取り込んでいます…')
   // 起動アニメの見た目はテーマ由来の3値（green=翠グラデ／white=白／dark=夜の翠）。
@@ -446,6 +449,12 @@ export function LoginGate({ children }: { children: ReactNode }) {
                 <Text style={styles.reloadBtnText}>再読み込み</Text>
               </Pressable>
             </View>
+            {/* デモ導線。ストア審査ではログインできないため、ここから全機能をサンプルデータで
+                確認できるようにする（App Store 2.1 / Play アプリのアクセス権）。
+                審査員が見落とすと審査往復の原因になるので、隠さず常に表示する。 */}
+            <Pressable style={styles.demoBtn} onPress={() => void enterDemo()} accessibilityRole="button">
+              <Text style={styles.demoBtnText}>ログインせずにデモを見る</Text>
+            </Pressable>
           </View>
         ) : null}
         <View style={showLoginUi ? styles.webBox : styles.webHidden}>
@@ -657,6 +666,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   reloadBtnText: { color: '#ffffff', fontSize: 13 },
+  demoBtn: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  demoBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
   webBox: { flex: 1 },
   // 判定用に読み込みは続けるが画面には出さない（サイズ0だと読み込まれない端末があるため1x1）。
   webHidden: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
