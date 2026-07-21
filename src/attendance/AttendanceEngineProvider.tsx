@@ -31,6 +31,7 @@ import { buildSubmitReactionJs } from '../collect/reactionSubmit.private'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { parseReactionMessage } from '../collect/reactionMessage'
 import { canSubmitReaction } from './reactionPaper'
+import { toReactionDiag, type ReactionOutcome } from './reactionDiag'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage } from './classifyClassPage'
 import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
@@ -205,6 +206,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const reactionWasSubmittedRef = useRef(false)
   // 提出ajaxが完走したか（reactionSubmit actuator の観測結果）。再提出の確定点。
   const reactionAjaxOkRef = useRef(false)
+  // 提出ajaxの観測値（診断に残すため保持。reactionAjaxOkRef は成否の判定用で値を持たない）。
+  const reactionAjaxDoneRef = useRef<boolean | undefined>(undefined)
+  const reactionAjaxStatusRef = useRef<number | undefined>(undefined)
+  const reactionAjaxErrorRef = useRef<string | undefined>(undefined)
   const reactionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   // 上限到達で自動再試行を打ち切った状態。UIの案内文を切り替えるため state で持つ。
   const [conflictExhausted, setConflictExhausted] = useState(false)
@@ -487,9 +492,36 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     reactionTimersRef.current = []
   }
 
-  function failReaction(message: string) {
+  /**
+   * リアペ提出の診断を記録する（出席送信と同じ「出席送信の記録」へ）。
+   * 提出の失敗は v98 まで**どこにも残っていなかった**ため、テスターが画面を撮り忘れると原因が消えた
+   * （2026-07-20 実機報告）。全終端（成功・各失敗・確認タイムアウト）から必ず呼ぶこと。
+   * 本文そのものは渡さない（長さだけ）。
+   */
+  function recordReactionDiag(outcome: ReactionOutcome) {
+    addSubmitDiag(
+      toReactionDiag(
+        {
+          outcome,
+          required: reactionRequiredRef.current,
+          resubmit: reactionWasSubmittedRef.current,
+          length: reactionTextRef.current.length,
+          ajaxDone: reactionAjaxDoneRef.current,
+          ajaxStatus: reactionAjaxStatusRef.current,
+          ajaxError: reactionAjaxErrorRef.current,
+        },
+        {
+          nowIso: new Date().toISOString(),
+          courseName: state.reception?.courseName ?? null,
+        },
+      ),
+    ).catch(() => undefined)
+  }
+
+  function failReaction(message: string, outcome: ReactionOutcome) {
     clearReactionTimers()
     reactionBusyRef.current = false
+    recordReactionDiag(outcome)
     setReactionSubmitState({ status: 'failed', message })
   }
 
@@ -514,13 +546,16 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     reactionRequiredRef.current = receptionStatusRef.current === 'reaction_pending'
     reactionWasSubmittedRef.current = reactionSubmittedRef.current
     reactionAjaxOkRef.current = false
+    reactionAjaxDoneRef.current = undefined
+    reactionAjaxStatusRef.current = undefined
+    reactionAjaxErrorRef.current = undefined
     reactionBusyRef.current = true
     setReactionSubmitState({ status: 'sending', message: null })
     inject(OPEN_REACTION_FORM_JS)
     // 応答が一切来ない場合の最終保険（進行できていれば fill 側の確認タイマーが先に決着させる）。
     scheduleReaction(() => {
       if (reactionBusyRef.current) {
-        failReaction('提出を確認できませんでした。本文は保存されています。「CLASSの画面で書く」から状況を確認してください')
+        failReaction('提出を確認できませんでした。本文は保存されています。「CLASSの画面で書く」から状況を確認してください', 'unconfirmed')
       }
     }, 20000)
   }
@@ -599,7 +634,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       if (!m || !reactionBusyRef.current) return
       if (m.kind === 'open') {
         if (!m.ok) {
-          failReaction('リアクションペーパーの画面を開けませんでした。「CLASSの画面で書く」から提出してください')
+          failReaction('リアクションペーパーの画面を開けませんでした。「CLASSの画面で書く」から提出してください', 'open-failed')
           return
         }
         // ①→②はPrimeFacesのAJAX postback（ページロードなし＝onLoadEnd不発）。再描画を待って流し込む。
@@ -610,6 +645,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       if (m.ok) {
         // 提出ajaxが完走したか（再提出の確定点）。観測できない古い経路では undefined → false のまま。
         reactionAjaxOkRef.current = m.ajaxDone === true && (m.ajaxStatus ?? 200) < 400
+        reactionAjaxDoneRef.current = m.ajaxDone
+        reactionAjaxStatusRef.current = m.ajaxStatus
+        reactionAjaxErrorRef.current = m.ajaxError
         // 提出発火済み。応答テキストに頼らず、出席ページを取り直して**確定マーカー**で判定する。
         // 確定マーカーは提出の種類で違う:
         //  ・必須(reaction_pending由来): .attendSuc（提出して初めて「出席」になる）
@@ -635,8 +673,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         }, 6000)
         scheduleReaction(() => {
           if (reactionBusyRef.current && !doneNow()) {
-            failReaction('提出結果を確認できませんでした。本文は保存されています。「CLASSの画面で書く」から状況を確認してください')
+            failReaction('提出結果を確認できませんでした。本文は保存されています。「CLASSの画面で書く」から状況を確認してください', 'unconfirmed')
           } else if (reactionBusyRef.current) {
+            // 成功も記録する（失敗だけ残すと「出せた時は何が違ったのか」を後から比べられない）。
+            recordReactionDiag('ok')
             // 任意提出の成功確定（必須は attendance ハンドラ側の resetReaction が畳む）。
             // **下書きは消さない**: CLASSは再提出を許すので、次に「編集」で開いた時に提出した本文が
             // 出ないと編集できない（別授業への誤復元は reactionDraftApplies の日付＋科目照合が防ぐ）。
@@ -657,6 +697,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
           : m.reason === 'verify-failed'
             ? '本文を正しく流し込めたか確認できませんでした。「CLASSの画面で書く」から提出してください'
             : '提出画面を操作できませんでした。「CLASSの画面で書く」から提出してください',
+        // reason をそのまま診断へ落とす（UIは3文言に畳むが、記録では5種を区別する）。
+        m.reason,
       )
       return
     }
@@ -734,6 +776,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         // （fill後の11秒判定 doneNow が担う）。
         const requiredFlow = reactionBusyRef.current && reactionRequiredRef.current
         if (requiredFlow || (!reactionBusyRef.current && receptionStatusRef.current === 'reaction_pending')) {
+          // 必須リアペの成功確定点（.attendSuc＝出席になった）。提出フロー中のときだけ記録する。
+          if (reactionBusyRef.current) recordReactionDiag('ok')
           resetReaction()
           clearReactionDraft().catch(() => undefined)
         }
