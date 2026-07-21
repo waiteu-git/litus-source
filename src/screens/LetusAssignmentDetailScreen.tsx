@@ -102,9 +102,12 @@ export default function LetusAssignmentDetailScreen() {
   // ユーザー所有アクティビティ(PDF/resource等)では起動しない＝自動ダウンロードを回避する。
   useEffect(() => {
     if (!assignment || userManaged || startedRef.current) return
+    // デモ中は取得を起動しない。GuardedWebView が null を返すため onFinished が永久に来ず、
+    // 「更新中…」のまま止まる（本文はシード済みなので取得の必要もない）。
+    if (demo) return
     startedRef.current = true
     setFetching(true)
-  }, [assignment, userManaged])
+  }, [assignment, userManaged, demo])
 
   const onFetched = useCallback(
     async (_r: { ok: boolean }) => {

@@ -32,6 +32,7 @@ import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
+import { useDemo } from '../demo/DemoProvider'
 import { COLORS } from '../theme'
 import { useDisplaySettings } from '../displaySettings'
 import { loadClassEvents } from '../storage/classEventsStore'
@@ -98,6 +99,9 @@ export default function TimetableScreen() {
   const selDayAutoRef = useRef(true)
   // 時間割の裏取得中フラグ。true の間だけ headless エンジンをマウントして収集する。
   const [syncing, setSyncing] = useState(false)
+  const { active: demo } = useDemo()
+  const demoRef = useRef(false)
+  demoRef.current = demo
   // LETUSコース更新チェック中フラグ。引っ張り更新で起動（LETUS側＝CLASS収集と競合しないので並走）。
   // 鮮度TTL内のコースはエンジン側でスキップされるため、引っ張るたびに全コースを巡回はしない。
   const [courseChecking, setCourseChecking] = useState(false)
@@ -163,6 +167,7 @@ export default function TimetableScreen() {
   // （CLASSメンテ帯や授業中でもLETUSは確認できる）。多重起動のみガード。
   const startCourseCheck = () => {
     if (courseCheckingRef.current) return
+    if (demoRef.current) return // デモ中は起動しない（onFinished が来ず回り続ける）
     courseCheckingRef.current = true
     setCourseChecking(true)
   }
@@ -175,6 +180,9 @@ export default function TimetableScreen() {
   const syncOverrideRef = useRef(false)
   const startSync = useCallback((force: boolean, override = false) => {
     if (syncingRef.current) return // 実行中/開始判定中は多重起動しない
+    // デモ中は起動しない。GuardedWebView が null を返すため onFinished が来ず、
+    // 引っ張り更新のスピナーが回りっぱなしになる。
+    if (demoRef.current) return
     // CLASS定時メンテナンス帯/オフラインは収集不能。手動(force=引っ張り)時はスキップ理由を短時間表示する。
     // 授業中(running)は既定で控える（背景の出席WebViewをアンマウントしてプリエンプトするため）が、
     // 出席タブ非表示なら確認のうえ override で更新できる（classViewArbiter が安全に直列化する）。
