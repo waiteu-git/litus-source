@@ -44,3 +44,16 @@ export function reactionDraftApplies(
   if (draft.courseName != null && courseName != null && draft.courseName !== courseName) return false
   return true
 }
+
+/**
+ * ②フォームの出現を待つポーリング設定（①→②はPrimeFacesの `u:"@all"`＝ページ全体の再描画で、
+ * 回線・端末しだいで数秒かかる）。
+ *
+ * v98 までは「1800ms待って1回だけ再試行」＝**約3.6秒で諦める**固定タイマだった。授業中の混雑した
+ * 学内Wi-Fiでは②の描画がこれを超え、`form-missing` で失敗する（2026-07-20 実機報告の最有力原因。
+ * 実DOMに対する probe では遷移・流し込み・提出ボタン発火のすべてが成功したため、DOM構造ではなく
+ * タイミングが疑わしいと確定した）。収集エンジンで既に学んだ「固定タイマではなく着地駆動」と同じ形へ寄せる。
+ */
+export const REACTION_FILL_RETRY_MS = 600
+/** 再試行の上限（600ms × 8 ≒ 4.8秒ぶん待てる。初回1800msと合わせて約6.6秒＝全体20秒の保険内）。 */
+export const REACTION_FILL_MAX_TRIES = 8
