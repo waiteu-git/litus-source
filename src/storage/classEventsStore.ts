@@ -1,14 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import type { ClassEvent } from '../timetableEvents/classEvent'
 import { deserializeClassEvents, serializeClassEvents } from './classEventsSerialize'
 
 const KEY = 'litus.classEvents.v1'
 
 export async function loadClassEvents(): Promise<ClassEvent[]> {
-  return deserializeClassEvents(await AsyncStorage.getItem(KEY))
+  return deserializeClassEvents(await Storage.getItem(KEY))
 }
 export async function saveClassEvents(events: ClassEvent[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeClassEvents(events))
+  await Storage.setItem(KEY, serializeClassEvents(events))
 }
 export async function upsertClassEvent(event: ClassEvent): Promise<ClassEvent[]> {
   const cur = await loadClassEvents()

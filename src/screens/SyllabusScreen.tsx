@@ -7,6 +7,7 @@ import { parseSyllabus, type ParsedSyllabus } from '../parsers/syllabus'
 import type { TimetableStackParamList } from '../navigation/types'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
 import { COLORS } from '../theme'
+import { useDemo } from '../demo/DemoProvider'
 
 type Status = 'loading' | 'ok' | 'error'
 
@@ -19,12 +20,19 @@ export default function SyllabusScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const ui = useUi()
   const clearance = useTabBarClearance()
+  const { active: demo } = useDemo()
   const { url } = route.params
   const [status, setStatus] = useState<Status>('loading')
   const [data, setData] = useState<ParsedSyllabus | null>(null)
 
   useEffect(() => {
     let active = true
+    // デモ中はシラバスを取得しない（デモ中はネットワークに一切出ない）。
+    // エラー表示に倒す＝デモデータに架空のシラバスを持たせるより誠実。
+    if (demo) {
+      setStatus('error')
+      return
+    }
     ;(async () => {
       try {
         const res = await fetch(url)
@@ -44,7 +52,7 @@ export default function SyllabusScreen() {
     return () => {
       active = false
     }
-  }, [url])
+  }, [url, demo])
 
   if (status === 'loading') {
     return (

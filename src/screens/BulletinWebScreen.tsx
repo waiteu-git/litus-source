@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native'
 import { useClassView } from '../collect/classViewArbiter'
 import {
@@ -33,7 +33,7 @@ const REPROBE_MS = 1400
  */
 export default function BulletinWebScreen() {
   const route = useRoute<RouteProp<HomeStackParamList, 'BulletinWeb'>>()
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const { setCollectActive } = useClassView()
   const [nonce, setNonce] = useState(0)
   const dark = useThemeVariant().variant === 'dark'

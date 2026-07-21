@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { DESKTOP_UA, DETECT_AUTH_JS, MYCOURSES_URL } from '../collect/injectedScripts'
 import { classifyAuthState, type AuthStatus } from './classifyAuthState'
 import { subscribeForeground } from '../app/foregroundOrchestrator'

@@ -8,6 +8,7 @@ import ScreenHint from '../tutorial/ScreenHint'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
+import { useDemo } from '../demo/DemoProvider'
 import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
@@ -50,6 +51,7 @@ export default function BulletinListScreen() {
   }, [])
 
   const headId = readQueue[0] ?? null
+  const { active: demo } = useDemo()
   const headItem = headId ? (items.find((i) => i.id === headId) ?? null) : null
   // キュー先頭がストアから消えていた場合（同期での整理等）はエンジンが起きないため、ここで次へ送る。
   useEffect(() => {
@@ -163,7 +165,9 @@ export default function BulletinListScreen() {
           ))
         )}
       </ScrollView>
-      {headItem ? (
+      {/* デモ中はマウントしない（GuardedWebView が null を返し onFinished が来ないため、
+          既読キューが先頭で詰まって進まなくなる）。 */}
+      {headItem && !demo ? (
         <BulletinActionEngine
           key={headItem.id}
           action="openDetail"

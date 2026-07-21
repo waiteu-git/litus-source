@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Animated, Pressable, StyleSheet, useColorScheme, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   CLASS_PC_LOGIN_URL,
@@ -30,6 +30,7 @@ import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
 import { BOOT_FADE_MS, bootChrome, bootLogoHtml, nativeSplashBg, needsBootFade } from './bootTheme'
 import { isWarmBoot, loadLastAuthedAt, saveLastAuthedAt } from '../storage/bootMetaStore'
 import { useKillSwitch } from '../health/KillSwitchProvider'
+import { useDemo } from '../demo/DemoProvider'
 import { COLORS, useThemeVariant } from '../theme'
 
 // checking中に本物のログイン状態が判定できない場合の保険（リダイレクト完了待ち）。
@@ -85,7 +86,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets()
   const [state, setState] = useState<GateState>('loading')
   const [nonce, setNonce] = useState(0)
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   // コールバック（onLoadEnd/onMessage/タイマー）から最新stateを読むためのref。
   const stateRef = useRef<GateState>('loading')
   stateRef.current = state
@@ -102,6 +103,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const killSwitch = useKillSwitch()
   const killSwitchRef = useRef(killSwitch)
   killSwitchRef.current = killSwitch
+  // デモ導線。enter でデモ名前空間へ切り替わり、App.tsx 側で本ゲートごとツリーから外れる。
+  const { enter: enterDemo } = useDemo()
   // 初回フル同期の進捗表示。
   const [syncLabel, setSyncLabel] = useState('データを取り込んでいます…')
   // 起動アニメの見た目はテーマ由来の3値（green=翠グラデ／white=白／dark=夜の翠）。
@@ -417,6 +420,20 @@ export function LoginGate({ children }: { children: ReactNode }) {
     return <LoginContext.Provider value={{ requireLogin }}>{children}</LoginContext.Provider>
   }
 
+  // デモ導線。**needsLogin 以外でも出す。** 審査員は多くの場合海外から開くため、
+  // CLASS に到達できないと connError に落ちる。そこでデモが見えないと「再読み込み」しか
+  // 選択肢がない行き止まりになり（enterDegraded は初回起動では出ない）、2.1 で即リジェクトになる。
+  const demoEntry = (onCard: boolean) => (
+    <Pressable
+      style={onCard ? styles.demoBtnCard : styles.demoBtn}
+      onPress={() => void enterDemo()}
+      accessibilityRole="button"
+    >
+      <Text style={onCard ? styles.demoBtnCardText : styles.demoBtnText}>
+        ログインせずにデモを見る
+      </Text>
+    </Pressable>
+  )
   const showLoginUi = state === 'needsLogin'
   const bootStatus =
     state === 'loading'
@@ -446,6 +463,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
                 <Text style={styles.reloadBtnText}>再読み込み</Text>
               </Pressable>
             </View>
+            {demoEntry(false)}
           </View>
         ) : null}
         <View style={showLoginUi ? styles.webBox : styles.webHidden}>
@@ -565,6 +583,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
                   <Text style={styles.maintNote}>※出席の受付確認と時間割の更新はCLASS復帰後に使えます。</Text>
                 </>
               ) : null}
+              {demoEntry(true)}
             </View>
           </View>
         ) : null}
@@ -592,6 +611,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
                   <Text style={styles.maintNote}>※出席の受付確認と時間割の更新は接続の回復後に使えます。</Text>
                 </>
               ) : null}
+              {demoEntry(true)}
             </View>
           </View>
         ) : null}
@@ -657,6 +677,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   reloadBtnText: { color: '#ffffff', fontSize: 13 },
+  demoBtn: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  demoBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
+  // メンテ/接続エラーの白カード内で使う版（翠ヘッダー用の白文字だと見えないため）。
+  demoBtnCard: {
+    backgroundColor: '#eef5f2',
+    borderWidth: 1,
+    borderColor: '#b9ddcd',
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  demoBtnCardText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
   webBox: { flex: 1 },
   // 判定用に読み込みは続けるが画面には出さない（サイズ0だと読み込まれない端末があるため1x1）。
   webHidden: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },

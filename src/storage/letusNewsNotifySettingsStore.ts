@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import type { LetusNewsNotifySettings } from '../notifications/letusNewsNotify'
 import {
   deserializeLetusNewsNotifySettings,
@@ -8,9 +8,9 @@ import {
 const KEY = 'letus.newsNotifySettings.v1'
 
 export async function loadLetusNewsNotifySettings(): Promise<LetusNewsNotifySettings> {
-  return deserializeLetusNewsNotifySettings(await AsyncStorage.getItem(KEY))
+  return deserializeLetusNewsNotifySettings(await Storage.getItem(KEY))
 }
 
 export async function saveLetusNewsNotifySettings(s: LetusNewsNotifySettings): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeLetusNewsNotifySettings(s))
+  await Storage.setItem(KEY, serializeLetusNewsNotifySettings(s))
 }

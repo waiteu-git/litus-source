@@ -28,6 +28,7 @@ import { formatVersionLabel } from '../appVersion'
 import { formatSubmitDiag, type SubmitDiag } from '../attendance/submitDiag'
 import { clearSubmitDiags, loadSubmitDiags } from '../storage/submitDiagStore'
 import { useSync } from '../sync/SyncProvider'
+import { useDemo } from '../demo/DemoProvider'
 import { attendanceStatsDiagLine } from '../health/attendanceStatsDiag'
 import { CHANGELOG, getRecentChangelog } from '../changelog'
 import ChangelogModal from '../ui/ChangelogModal'
@@ -40,6 +41,7 @@ export default function SettingsScreen() {
   const { preference, setPreference } = useThemeVariant()
   // 出欠状況の取得ぐあい（前回成功時刻・失敗理由）を診断行に出すため。
   const { attendanceStatsHealth, lastAttendanceStatsAt } = useSync()
+  const { active: demo, enter: enterDemo } = useDemo()
   const {
     timetableView,
     assignmentsView,
@@ -331,6 +333,20 @@ export default function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: ui.valueColor }]}>時間割データを消去</Text>
             <Text style={[styles.danger, { color: ui.colors.danger }]}>消去</Text>
           </Pressable>
+          {/* デモ導線。ログイン画面にも置いているが、**セッションが生きているとログイン画面に
+              到達しない**（Cookie は resetAll でも消えない）ため、ここが実質唯一の入口になる。
+              審査員が既にログイン済みの状態から入る経路としても効く。 */}
+          {demo ? null : (
+            <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={() => void enterDemo()}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={[styles.rowLabel, { color: ui.valueColor }]}>デモを表示する</Text>
+                <Text style={[styles.note, { color: ui.labelColor, marginTop: 4, marginLeft: 0 }]}>
+                  サンプルデータで全機能を確認できます。実際のデータには影響しません。
+                </Text>
+              </View>
+              <Text style={[styles.rowAction, { color: ui.labelColor }]}>表示</Text>
+            </Pressable>
+          )}
           <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={onResetHints}>
             <Text style={[styles.rowLabel, { color: ui.valueColor }]}>ヒントを再表示</Text>
             <Text style={[styles.rowAction, { color: ui.labelColor }]}>再表示</Text>

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import type { CollectionHealth } from '../health/collectionHealth'
 import {
   deserializeCollectionHealth,
@@ -10,7 +10,7 @@ import {
 const KEY = 'health.collections.v1'
 
 export async function loadCollectionHealth(): Promise<CollectionHealthMap> {
-  return deserializeCollectionHealth(await AsyncStorage.getItem(KEY))
+  return deserializeCollectionHealth(await Storage.getItem(KEY))
 }
 
 /** 1収集分のヘルスを read-modify-write で更新する（他の収集のヘルスは保持）。 */
@@ -21,5 +21,5 @@ export async function saveCollectionHealth(
 ): Promise<void> {
   const map = await loadCollectionHealth()
   map[id] = { health, at }
-  await AsyncStorage.setItem(KEY, serializeCollectionHealth(map))
+  await Storage.setItem(KEY, serializeCollectionHealth(map))
 }

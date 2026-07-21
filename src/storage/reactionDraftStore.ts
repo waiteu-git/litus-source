@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import type { ReactionDraft } from '../attendance/reactionPaper'
 
 /**
@@ -9,11 +9,11 @@ import type { ReactionDraft } from '../attendance/reactionPaper'
 const KEY = 'attendance.reactionDraft.v1'
 
 export async function saveReactionDraft(d: ReactionDraft): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(d))
+  await Storage.setItem(KEY, JSON.stringify(d))
 }
 
 export async function loadReactionDraft(): Promise<ReactionDraft | null> {
-  const raw = await AsyncStorage.getItem(KEY)
+  const raw = await Storage.getItem(KEY)
   if (!raw) return null
   try {
     const p = JSON.parse(raw) as Partial<ReactionDraft>
@@ -31,5 +31,5 @@ export async function loadReactionDraft(): Promise<ReactionDraft | null> {
 }
 
 export async function clearReactionDraft(): Promise<void> {
-  await AsyncStorage.removeItem(KEY)
+  await Storage.removeItem(KEY)
 }

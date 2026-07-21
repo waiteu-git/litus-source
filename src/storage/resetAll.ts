@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage, isDemoNamespace } from './asyncStorage'
 import { cancelAllScheduledNotifications } from '../notifications/notifier'
 
 /**
@@ -12,6 +12,13 @@ import { cancelAllScheduledNotifications } from '../notifications/notifier'
  * （@preeternal/react-native-cookie-manager 等）を検討する（docs/apk-build.md）。
  */
 export async function resetAllData(): Promise<void> {
+  // デモ中はデモ名前空間だけを消す。設定画面はデモ中も到達可能で、ここで
+  // AsyncStorage.clear() を通すと**実ユーザーの全データと予約通知を巻き添えに消す**。
+  // 通知のキャンセルもしない（実ユーザーの出席アラーム・課題リマインダを落とさない）。
+  if (isDemoNamespace()) {
+    await Storage.clearDemoNamespace()
+    return
+  }
   // 1) 予約済みローカル通知を全キャンセル（AsyncStorage消去後に古い予約が復活しないよう先に消す）。
   // notifier 経由で呼ぶこと。expo-notifications を直接 import すると Expo Go では
   // モジュール評価時に throw して起動不能になる（notifier.ts 冒頭とラチェットテスト参照）。
@@ -21,5 +28,5 @@ export async function resetAllData(): Promise<void> {
     /* 通知モジュール未搭載環境では no-op */
   }
   // 2) AsyncStorage を全消去。
-  await AsyncStorage.clear()
+  await Storage.clearAll()
 }

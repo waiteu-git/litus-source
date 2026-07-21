@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import type { BulletinNotifySettings } from '../notifications/bulletinNotify'
 import {
   serializeBulletinNotifySettings,
@@ -8,9 +8,9 @@ import {
 const KEY = 'info.bulletinNotifySettings.v1'
 
 export async function loadBulletinNotifySettings(): Promise<BulletinNotifySettings> {
-  return deserializeBulletinNotifySettings(await AsyncStorage.getItem(KEY))
+  return deserializeBulletinNotifySettings(await Storage.getItem(KEY))
 }
 
 export async function saveBulletinNotifySettings(s: BulletinNotifySettings): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeBulletinNotifySettings(s))
+  await Storage.setItem(KEY, serializeBulletinNotifySettings(s))
 }
