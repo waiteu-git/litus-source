@@ -12,6 +12,11 @@ import type { SubmitResult } from './engine'
 
 /** 1回の送信の診断（原因特定用。認証コードそのものは記録しない）。 */
 export type SubmitDiag = {
+  /**
+   * 何の送信か。省略時は出席コード送信（既存の保存データとの後方互換）。
+   * リアペ提出も同じ記録に混ぜる＝ユーザーは設定の1箇所を見ればよく、テスターへの依頼も変わらない。
+   */
+  kind?: 'attendance' | 'reaction'
   /** 送信時刻（ISO）。 */
   at: string
   courseName: string | null
@@ -95,10 +100,16 @@ export function shouldAutoRetrySubmit(opts: {
 
 /** 記録を人が読める1行にする（設定画面での表示・コピー用）。 */
 export function formatSubmitDiag(d: SubmitDiag): string {
-  const head = `${d.at}${d.courseName ? ` ${d.courseName}` : ''}${d.note ? `（${d.note}）` : ''}`
+  const isReaction = d.kind === 'reaction'
+  // リアペは出席コード送信と一目で区別できるようにする（同じ記録に混在するため）。
+  const label = isReaction ? '[リアペ] ' : ''
+  const head = `${label}${d.at}${d.courseName ? ` ${d.courseName}` : ''}${d.note ? `（${d.note}）` : ''}`
   const verdict = d.ok ? 'OK' : d.wrong ? 'コード誤り' : d.err ? 'エラー' : '未確定'
   const ajax = `発火=${String(d.ajaxFired)} 応答=${String(d.ajaxDone)} status=${d.ajaxStatus ?? '-'}${d.ajaxError ? ` err=${d.ajaxError}` : ''}`
-  const meta = `btn=${String(d.btnFound)} method=${d.method ?? '-'} 入力=${d.filled ?? '-'}桁`
+  // リアペは「入力=N桁」ではなく本文の文字数。ボタン/method は出席送信側の観測項目なので出さない。
+  const meta = isReaction
+    ? `本文=${d.filled ?? '-'}文字`
+    : `btn=${String(d.btnFound)} method=${d.method ?? '-'} 入力=${d.filled ?? '-'}桁`
   return [head, `${verdict}: ${d.result}`, ajax, meta, d.hint ? `CLASS: ${d.hint}` : '']
     .filter(Boolean)
     .join('\n')
