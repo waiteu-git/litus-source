@@ -16,21 +16,22 @@ import { saveTermsConsent } from '../storage/termsConsentStore'
 import { saveOnboardingDone } from '../storage/onboardingStore'
 import {
   DEMO_TIMETABLE,
-  DEMO_ASSIGNMENTS,
-  DEMO_BULLETINS,
-  DEMO_ATTENDANCE_STATS,
-  DEMO_CLASS_EVENTS,
   DEMO_TERMS_CONSENT,
+  buildDemoAssignments,
+  buildDemoBulletins,
+  buildDemoAttendanceStats,
+  buildDemoClassEvents,
 } from './demoFixtures'
 
-export async function seedDemoData(): Promise<void> {
+export async function seedDemoData(now: Date = new Date()): Promise<void> {
   // 同意・オンボーディングを先に済ませる（これが無いとデモに入っても同意画面から始まる）。
   await saveTermsConsent(DEMO_TERMS_CONSENT)
   await saveOnboardingDone()
 
   await saveTimetable(DEMO_TIMETABLE)
-  await mutateAssignments(() => DEMO_ASSIGNMENTS)
-  await mutateBulletinDigest(() => DEMO_BULLETINS)
-  await saveAttendanceStats(DEMO_ATTENDANCE_STATS)
-  await saveClassEvents(DEMO_CLASS_EVENTS)
+  // 日付を持つものは now 基準で生成する（固定日付だと審査時期に全部が過去になる）。
+  await mutateAssignments(() => buildDemoAssignments(now))
+  await mutateBulletinDigest(() => buildDemoBulletins(now))
+  await saveAttendanceStats(buildDemoAttendanceStats(now))
+  await saveClassEvents(buildDemoClassEvents(now))
 }
