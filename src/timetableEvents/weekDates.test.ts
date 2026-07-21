@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mondayOf, weekDates, weekRangeLabel, dayHeadLabel } from './weekDates'
+import { mondayOf, weekDates, weekRangeLabel, dayHeadLabel, weekDatesFrom, weekRangeLabelFrom } from './weekDates'
 
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const
 
@@ -52,5 +52,23 @@ describe('weekRangeLabel', () => {
 describe('dayHeadLabel', () => {
   it('M月D日（曜）形式', () => {
     expect(dayHeadLabel(new Date(2026, 6, 13), '月')).toBe('7月13日（月）')
+  })
+})
+
+describe('weekDatesFrom', () => {
+  it('起点月曜 7/13 から月〜日が 13..19', () => {
+    const wd = weekDatesFrom(new Date(2026, 6, 13))
+    expect(wd.mon.getDate()).toBe(13)
+    expect(wd.wed.getDate()).toBe(15)
+    expect(wd.sun.getDate()).toBe(19)
+  })
+})
+
+describe('weekRangeLabelFrom', () => {
+  it('起点月曜 7/13・平日集合で 7月13日〜7月17日', () => {
+    expect(weekRangeLabelFrom(new Date(2026, 6, 13), ['mon', 'tue', 'wed', 'thu', 'fri'])).toBe('7月13日〜7月17日')
+  })
+  it('空配列は空文字', () => {
+    expect(weekRangeLabelFrom(new Date(2026, 6, 13), [])).toBe('')
   })
 })

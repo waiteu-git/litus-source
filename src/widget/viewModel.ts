@@ -9,11 +9,12 @@
 import type { TimetableCollection } from '../collect/timetableMessage'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AttendedRecord } from '../attendance/attendedState'
-import type { DayOfWeek } from '../parsers/timetable'
+import type { DayOfWeek, Quarter } from '../parsers/timetable'
 import { pickFocusClass } from '../home/focusClass'
 import { pickUrgentAssignment, relDue, urgencyTone } from '../assignments/deadline'
 import { isInClassPeriod, attendedClassEndMin } from '../attendance/classPeriod'
 import { isAttendedNow } from '../attendance/attendedState'
+import { representativeClass } from '../timetableEvents/quarter'
 
 const WEEKDAY_JP = ['日', '月', '火', '水', '木', '金', '土']
 const WEEKDAY: Record<DayOfWeek, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
@@ -68,6 +69,7 @@ function todayClasses(
   collections: TimetableCollection[],
   now: Date,
   isOn?: (courseCode: string) => boolean,
+  currentQuarter?: Quarter,
 ): Array<{ startMin: number; cls: WidgetClass }> {
   const weekday = now.getDay()
   const out: Array<{ startMin: number; cls: WidgetClass }> = []
@@ -80,7 +82,8 @@ function todayClasses(
       if (!pt) continue
       const startMin = hhmmToMin(pt.start)
       if (startMin === null) continue
-      const c = slot.classes[0]
+      const c = representativeClass(slot.classes, currentQuarter)
+      if (!c) continue
       if (isOn && !isOn(c.courseCode)) continue
       out.push({
         startMin,
@@ -128,10 +131,11 @@ export function buildWidgetModel(
   attended: AttendedRecord | null,
   /** 隔週で今週休みの授業を除く述語（省略時は常に実施）。 */
   isOn?: (courseCode: string) => boolean,
+  currentQuarter?: Quarter,
 ): WidgetModel {
   const nowMin = now.getHours() * 60 + now.getMinutes()
 
-  const focus = pickFocusClass(timetable, now, isOn)
+  const focus = pickFocusClass(timetable, now, isOn, currentQuarter)
   const nextClass: WidgetNextClass | null = focus
     ? {
         name: focus.name,
@@ -146,7 +150,7 @@ export function buildWidgetModel(
   const focusStartMin = focus ? hhmmToMin(focus.start) : null
   const laterClasses: WidgetClass[] =
     focus && focusStartMin !== null
-      ? todayClasses(timetable, now, isOn)
+      ? todayClasses(timetable, now, isOn, currentQuarter)
           .filter((e) => e.startMin > nowMin && e.startMin > focusStartMin)
           .slice(0, 2)
           .map((e) => e.cls)

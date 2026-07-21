@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Alert, Animated, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
+import { Alert, Animated, AppState, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { Ionicons } from '@expo/vector-icons'
 import ScreenHint from '../tutorial/ScreenHint'
@@ -31,6 +31,9 @@ import { NowPulse } from '../ui/NowPulse'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
+import { loadTimetableOverrides, loadCurrentQuarter, saveCurrentQuarter } from '../storage/timetableOverridesStore'
+import { applyQuarterOverrides, resolveCurrentQuarter, isQuarterSlot, isDimmedForCurrentQuarter, type TimetableOverrides } from '../timetableEvents/quarter'
+import type { Quarter } from '../parsers/timetable'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { useDemo } from '../demo/DemoProvider'
 import { COLORS } from '../theme'
@@ -53,12 +56,13 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
 import { shouldShowTodayPill } from '../timetableEvents/todayPill'
-import { weekDates, dayHeadLabel } from '../timetableEvents/weekDates'
-import { RADIUS, SHADOW } from '../ui/scale'
+import { weekDatesFrom, dayHeadLabel, weekRangeLabelFrom } from '../timetableEvents/weekDates'
+import { viewedWeekMonday, currentWeekOffset, clampOffset, weekOrdinal } from '../timetableEvents/weekNav'
+import { deriveTermBounds } from '../timetableEvents/termBounds'
+import { shouldShowThisWeekChip } from '../timetableEvents/thisWeekPill'
+import { RADIUS, SHADOW, DIM_OPACITY } from '../ui/scale'
 import { DUR, EASE, SHIFT } from '../ui/motion'
 import { Badge } from '../ui/Badge'
-
-const WEEKDAY_KEY: Record<number, DayKey | undefined> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 type DayKey = (typeof DAY_ORDER)[number]
@@ -81,6 +85,9 @@ export default function TimetableScreen() {
   const [events, setEvents] = useState<ClassEvent[]>([])
   const [personalEvents, setPersonalEvents] = useState<PersonalEvent[]>([])
   const [patterns, setPatterns] = useState<WeeklyPatternMap>({})
+  // 半期(1Q/2Q)指定 override と「今が前半/後半か」の手動指定（未指定なら日付から既定値）。
+  const [overrides, setOverrides] = useState<TimetableOverrides>({})
+  const [currentQuarterPref, setCurrentQuarterPref] = useState<Quarter | null>(null)
   const { version: eventsVersion } = useClassEventsVersion()
   // 出欠収集の完了を、開きっぱなしの科目詳細へ伝播させる（同期中に開いて滞在するケースの取りこぼし防止）。
   const { bump: bumpAttendance } = useAttendanceVersion()
@@ -90,6 +97,17 @@ export default function TimetableScreen() {
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000)
     return () => clearInterval(id)
+  }, [])
+  // 表示中の週（既定0＝日曜なら来週・平日なら今週）。フォーカス/フォアグラウンド復帰で0へ戻す。
+  const [weekOffset, setWeekOffset] = useState(0)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') {
+        setWeekOffset(0)
+        setNow(new Date())
+      }
+    })
+    return () => sub.remove()
   }, [])
   const todayKey = TODAY_KEYS[now.getDay()]
   const [selDay, setSelDay] = useState<DayKey>(TODAY_KEYS[new Date().getDay()])
@@ -114,6 +132,8 @@ export default function TimetableScreen() {
   const syncingRef = useRef(false)
   // 出欠危険/警告に該当する科目コード集合（グリッドの赤バッジ用）。
   const [dangerCodes, setDangerCodes] = useState<Set<string>>(new Set())
+  // 週送りクランプ用: 全科目の出欠各回の実日付（学期起点/最終週の導出に使う）。
+  const [termDates, setTermDates] = useState<Date[]>([])
   // 未読掲示のある科目コード集合（グリッド/リストの未読ドット用・保存済み掲示digestから算出）。
   const [unreadCodes, setUnreadCodes] = useState<Set<string>>(new Set())
   // 手動更新をガードでスキップした理由の一時表示（リリースでも出す）。
@@ -140,6 +160,11 @@ export default function TimetableScreen() {
         if (r.trackable && (r.level === 'danger' || r.level === 'warning')) danger.add(c.courseCode)
       }
       setDangerCodes(danger)
+      const allDates: Date[] = []
+      for (const c of data?.courses ?? []) {
+        for (const r of resolveTermDates(c.sessions, now)) allDates.push(r.full)
+      }
+      setTermDates(allDates)
     })().catch(() => undefined)
   }
 
@@ -249,6 +274,7 @@ export default function TimetableScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true
+      setWeekOffset(0)
       loadTimetable().then((c) => {
         if (active) setCollections(c)
       })
@@ -257,6 +283,8 @@ export default function TimetableScreen() {
         if (active) setPersonalEvents(list)
       }).catch(() => undefined)
       loadWeeklyPatterns().then((m) => { if (active) setPatterns(m) }).catch(() => undefined)
+      loadTimetableOverrides().then((o) => { if (active) setOverrides(o) }).catch(() => undefined)
+      loadCurrentQuarter().then((q) => { if (active) setCurrentQuarterPref(q) }).catch(() => undefined)
       loadCollectionHealth().then((m) => { if (active) setHealth(m.timetable ?? null) }).catch(() => undefined)
       reloadAttendance()
       loadTimetableRefreshedAt().then((at) => { if (active) setRefreshedAt(at) }).catch(() => undefined)
@@ -277,8 +305,33 @@ export default function TimetableScreen() {
   )
 
   const col = collections && collections.length > 0 ? collections[Math.min(selCol, collections.length - 1)] : null
+  // 半期指定 override を表示直前にマージ（保存済みcollectionには焼き込まない）。
+  const colQ = useMemo(
+    () => (col ? { ...col, slots: applyQuarterOverrides(col.slots, overrides) } : null),
+    [col, overrides],
+  )
+  const currentQuarter = resolveCurrentQuarter(currentQuarterPref, now)
+  const hasStacked = !!colQ?.slots.some(isQuarterSlot)
   // 今この瞬間が属する時限（当該コマ強調用）。どの時限でもなければ null。
   const curPeriod = currentPeriodNumber(col?.periodTimes ?? null, now)
+  // 表示中の週の月曜（アンカー日）と各曜日の実日付。weekOffset=0 は既定週（日曜のみ来週）。
+  const viewedMonday = viewedWeekMonday(now, weekOffset)
+  const wd = weekDatesFrom(viewedMonday)
+  // 今日を含む週を見ているか（今日ハイライト・現在コマ強調のゲート）。
+  const isCurrentWeek = weekOffset === currentWeekOffset(now)
+  // 週送りの学期内クランプ範囲・第N週・「今週へ戻る」ピルの表示可否。
+  const bounds = deriveTermBounds(termDates, now)
+  const curOffset = currentWeekOffset(now)
+  const clampedOffset = clampOffset(weekOffset, bounds)
+  const atMin = weekOffset <= bounds.min
+  const atMax = weekOffset >= bounds.max
+  const ordinal = weekOrdinal(viewedMonday, bounds.termStartMonday)
+  const showThisWeek = shouldShowThisWeekChip({ weekOffset, currentOffset: curOffset })
+  const goWeek = (delta: number) => setWeekOffset((o) => clampOffset(o + delta, bounds))
+  // クランプで丸められたら state も是正（学期外に居座らせない）。
+  useEffect(() => {
+    if (clampedOffset !== weekOffset) setWeekOffset(clampedOffset)
+  }, [clampedOffset, weekOffset])
   const hasSat = !!col?.slots.some((s) => s.day === 'sat')
   const personalDays = daysWithPersonal(personalEvents)
   const hasSun = personalDays.has('sun')
@@ -333,9 +386,12 @@ export default function TimetableScreen() {
     }),
   ).current
 
-  const daySlots = col ? col.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
-  // 選択曜日に落ちる補講オカレンス（休講内包＋単独）。時間割の通常コマとは別に一回限りで表示。
-  const dayMakeups = upcomingMakeups(events, now).filter((m) => WEEKDAY_KEY[new Date(m.date).getDay()] === selDay)
+  const daySlots = colQ ? colQ.slots.filter((s) => s.day === selDay).sort((a, b) => a.period - b.period) : []
+  // 選択曜日に落ちる補講オカレンス（表示週の selDay 当日に実施されるもののみ・休講内包＋単独）。
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  const ymd = (d: Date) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+  const selDayKey = ymd(wd[selDay])
+  const dayMakeups = upcomingMakeups(events, viewedMonday).filter((m) => m.date === selDayKey)
   const startTime = (period: number) => col?.periodTimes?.periods.find((p) => p.period === period)?.start ?? ''
   const endTime = (period: number) => col?.periodTimes?.periods.find((p) => p.period === period)?.end ?? ''
 
@@ -349,7 +405,7 @@ export default function TimetableScreen() {
   }, [col, personalEvents])
 
   function slotAt(day: DayKey, period: number) {
-    return col?.slots.find((s) => s.day === day && s.period === period) ?? null
+    return colQ?.slots.find((s) => s.day === day && s.period === period) ?? null
   }
 
   function openSubject(cl: ClassEntry, day: DayOfWeek, period: number) {
@@ -384,10 +440,8 @@ export default function TimetableScreen() {
   const cellNowBg = ui.colors.gridCellNowBg
   const cellTextColor = ui.colors.gridCellText
 
-  // 「今日へ戻る」: リストで今日以外を見ているとき、今日へ一発で戻し自動追従も戻す。
-  const showTodayPill = shouldShowTodayPill({ view: timetableView, selDay, todayKey, days })
-  // 今週の日付（曜日バーの日付・日ヘッダ）。時間割はテンプレートだが today 基準で今週を出す。
-  const wd = weekDates(now)
+  // 「今日へ戻る」: リストで今日以外を見ているとき、今日へ一発で戻し自動追従も戻す。今日が表示週になければ出さない。
+  const showTodayPill = isCurrentWeek && shouldShowTodayPill({ view: timetableView, selDay, todayKey, days })
   const campus = col?.periodTimes?.campus ?? ''
   const returnToToday = () => {
     selDayAutoRef.current = true
@@ -425,11 +479,73 @@ export default function TimetableScreen() {
         />
       ) : null}
 
+      {col ? (
+        <>
+          <View style={[styles.weekBar, { backgroundColor: ui.softBoxBg, borderColor: ui.dividerColor }]}>
+            <Pressable
+              onPress={() => goWeek(-1)}
+              disabled={atMin}
+              style={({ pressed }) => [styles.weekArrow, atMin && { opacity: 0.3 }, pressed && !atMin && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="前の週へ"
+            >
+              <Ionicons name="chevron-back" size={18} color={ui.valueColor} />
+            </Pressable>
+            <Text style={[styles.weekLabel, { color: ui.valueColor }]} numberOfLines={1}>
+              {weekRangeLabelFrom(viewedMonday, days)}
+            </Text>
+            {ordinal != null ? (
+              <View style={[styles.weekOrdinal, { backgroundColor: ui.pillBg }]}>
+                <Text style={[styles.weekOrdinalText, { color: ui.pillText }]}>第{ordinal}週</Text>
+              </View>
+            ) : null}
+            <Pressable
+              onPress={() => goWeek(1)}
+              disabled={atMax}
+              style={({ pressed }) => [styles.weekArrow, atMax && { opacity: 0.3 }, pressed && !atMax && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="次の週へ"
+            >
+              <Ionicons name="chevron-forward" size={18} color={ui.valueColor} />
+            </Pressable>
+          </View>
+          {showThisWeek ? (
+            <Pressable
+              onPress={() => setWeekOffset(curOffset)}
+              style={({ pressed }) => [styles.thisWeekChip, { backgroundColor: ui.pillBg }, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="今週へ戻る"
+            >
+              <Ionicons name="today-outline" size={13} color={ui.pillText} />
+              <Text style={[styles.thisWeekText, { color: ui.pillText }]}>今週へ戻る</Text>
+            </Pressable>
+          ) : null}
+        </>
+      ) : null}
+
+      {hasStacked ? (
+        <View style={styles.quarterRow}>
+          <Segmented
+            options={[
+              { key: 'auto', label: '自動' },
+              { key: 'first', label: '前半' },
+              { key: 'second', label: '後半' },
+            ]}
+            value={currentQuarterPref ?? 'auto'}
+            onChange={(k) => {
+              const next = k === 'auto' ? null : (k as Quarter)
+              setCurrentQuarterPref(next)
+              saveCurrentQuarter(next).catch(() => undefined)
+            }}
+          />
+        </View>
+      ) : null}
+
       {timetableView === 'list' && col ? (
         <View style={styles.dayBar}>
           {days.map((d) => {
             const on = d === selDay
-            const isToday = d === todayKey
+            const isToday = isCurrentWeek && d === todayKey
             return (
               <Pressable
                 key={d}
@@ -473,7 +589,7 @@ export default function TimetableScreen() {
             <View style={styles.gridRow}>
               <View style={styles.gridPerCol} />
               {days.map((d) => {
-                const isToday = d === todayKey
+                const isToday = isCurrentWeek && d === todayKey
                 return (
                   <View key={d} style={styles.gridDayHead}>
                     <Text style={{ fontSize: 11, fontWeight: isToday ? '700' : '500', color: isToday ? cellTextColor : ui.labelColor }}>
@@ -495,52 +611,83 @@ export default function TimetableScreen() {
                 </View>
                 {days.map((d) => {
                   const slot = slotAt(d, p)
-                  const cl = slot?.classes[0]
+                  const classes = slot?.classes ?? []
                   const pev = personalEventAt(personalEvents, d as PersonalDayKey, p)
-                  const today = d === todayKey
-                  const isNow = today && !!cl && p === curPeriod
-                  const gev = cl ? pickCellEvent(events, cl.name, p, now) : null
-                  const gCanceled = gev?.type === 'cancel'
-                  // 隔週で今週は休みの授業は薄く（取消線）表示する。
-                  const gOff = !!cl && !isClassOnDate(patterns[cl.courseCode], now)
+                  const today = isCurrentWeek && d === todayKey
+                  const isNow = isCurrentWeek && today && classes.length > 0 && p === curPeriod
+                  // ステータスドットはセル単位（積みコマは科目群を集約）。単一科目なら現状と同一。
+                  const stacked = classes.length >= 2
+                  // イベント/隔週/半期の判定は科目ごとに1回だけ計算し、集約・描画で使い回す。
+                  const perClass = classes.map((cl) => {
+                    const gev = pickCellEvent(events, cl.name, p, wd[d])
+                    const gOff = !isClassOnDate(patterns[cl.courseCode], wd[d])
+                    return {
+                      cl,
+                      gev,
+                      dim: gev?.type === 'cancel' || gOff,
+                      qDim: isDimmedForCurrentQuarter(cl.quarter, currentQuarter, stacked),
+                    }
+                  })
+                  const anyUpdated = classes.some((c) => updatedCodes.has(c.courseCode))
+                  const anyDanger = classes.some((c) => dangerCodes.has(c.courseCode))
+                  const anyUnread = classes.some((c) => unreadCodes.has(c.courseCode))
+                  const anyEvent = perClass.some((pc) => !!pc.gev)
+                  // 単一科目セルは従来通りセル全体を薄表示（旧単一Pressable時代と同一の見た目）。
+                  // 積みコマは科目ごとに薄くする（下）ため、セル全体は薄くしない（二重掛け回避）。
+                  const cellDim = !stacked && perClass.some((pc) => pc.dim)
                   return (
-                    <Pressable
+                    <View
                       key={d}
-                      disabled={false}
-                      onPress={() => {
-                        if (cl) return openSubject(cl, d as DayOfWeek, p)
-                        if (pev) return navigation.navigate('PersonalEventForm', { editId: pev.id })
-                        return navigation.navigate('PersonalEventForm', { day: d as PersonalDayKey, period: p })
-                      }}
                       style={[
                         styles.gridCell,
-                        { backgroundColor: isNow ? cellNowBg : cl ? (today ? cellTodayBg : cellFilledBg) : cellBg },
-                        isNow ? styles.gridCellNow : today && cl ? styles.gridCellToday : null,
-                        gCanceled ? styles.canceledCard : null,
-                        gOff ? styles.offCell : null,
-                        !cl && pev ? [styles.personalCell, { backgroundColor: ui.colors.gridCellPersonalBg }] : null,
+                        { backgroundColor: isNow ? cellNowBg : classes.length ? (today ? cellTodayBg : cellFilledBg) : cellBg },
+                        isNow ? styles.gridCellNow : today && classes.length ? styles.gridCellToday : null,
+                        !classes.length && pev ? [styles.personalCell, { backgroundColor: ui.colors.gridCellPersonalBg }] : null,
+                        cellDim ? styles.offCell : null,
                       ]}
                     >
-                      {cl ? (
-                        <>
-                          <Text numberOfLines={3} style={[styles.gridCellText, { color: cellTextColor }, (gCanceled || gOff) && styles.canceledName]}>
-                            {cl.name}
-                          </Text>
-                          {updatedCodes.has(cl.courseCode) ? <View style={[styles.gridDot, { backgroundColor: ui.colors.updateDot }]} /> : null}
-                          {cl && dangerCodes.has(cl.courseCode) ? <View style={[styles.gridDanger, { backgroundColor: ui.colors.danger }]} /> : null}
-                          {unreadCodes.has(cl.courseCode) ? <View style={[styles.gridUnreadDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
-                          {gev ? <View style={[styles.gridEvDot, { backgroundColor: ui.colors.info }]} /> : null}
-                          {isNow ? (
-                            <View style={styles.nowDot}>
-                              <NowPulse size={7} />
-                            </View>
-                          ) : null}
-                          {pev ? <View style={[styles.personalDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
-                        </>
+                      {classes.length > 0 ? (
+                        perClass.map(({ cl, dim, qDim }, ci) => (
+                          <Pressable
+                            key={`${ci}-${cl.courseCode || cl.name}`}
+                            onPress={() => openSubject(cl, d as DayOfWeek, p)}
+                            style={[
+                              styles.gridClass,
+                              ci > 0 ? [styles.gridClassStacked, { borderTopColor: ui.dividerColor }] : null,
+                              stacked && (dim || qDim) ? styles.offCell : null,
+                            ]}
+                          >
+                            <Text
+                              numberOfLines={classes.length > 1 ? 2 : 3}
+                              style={[styles.gridCellText, { color: cellTextColor }, dim && styles.canceledName]}
+                            >
+                              {cl.name}
+                            </Text>
+                          </Pressable>
+                        ))
                       ) : pev ? (
-                        <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText, ui.dark && { color: COLORS.emeraldLight }]}>{pev.title}</Text>
+                        <Pressable style={styles.gridFill} onPress={() => navigation.navigate('PersonalEventForm', { editId: pev.id })}>
+                          <Text numberOfLines={3} style={[styles.gridCellText, styles.personalCellText, ui.dark && { color: COLORS.emeraldLight }]}>
+                            {pev.title}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          style={styles.gridFill}
+                          onPress={() => navigation.navigate('PersonalEventForm', { day: d as PersonalDayKey, period: p })}
+                        />
+                      )}
+                      {anyUpdated ? <View style={[styles.gridDot, { backgroundColor: ui.colors.updateDot }]} /> : null}
+                      {anyDanger ? <View style={[styles.gridDanger, { backgroundColor: ui.colors.danger }]} /> : null}
+                      {anyUnread ? <View style={[styles.gridUnreadDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
+                      {anyEvent ? <View style={[styles.gridEvDot, { backgroundColor: ui.colors.info }]} /> : null}
+                      {classes.length > 0 && pev ? <View style={[styles.personalDot, { backgroundColor: ui.pick(COLORS.emerald, COLORS.emerald, COLORS.emeraldLight) }]} /> : null}
+                      {isNow ? (
+                        <View style={styles.nowDot}>
+                          <NowPulse size={7} />
+                        </View>
                       ) : null}
-                    </Pressable>
+                    </View>
                   )
                 })}
               </View>
@@ -560,17 +707,19 @@ export default function TimetableScreen() {
             const rows: { key: string; node: ReactElement }[] = []
             for (const lr of listRows) {
               if (lr.kind === 'class') {
-                const rowNow = selDay === todayKey && lr.period === curPeriod
+                const rowNow = isCurrentWeek && selDay === todayKey && lr.period === curPeriod
                 rows.push({
                   key: `c-${lr.period}`,
                   node: (
                     <>
                       {lr.slots.flatMap((s) =>
                         s.classes.map((cl) => {
-                          const ev = pickCellEvent(events, cl.name, s.period, now)
+                          const ev = pickCellEvent(events, cl.name, s.period, wd[selDay])
                           const canceled = ev?.type === 'cancel'
-                          const off = !isClassOnDate(patterns[cl.courseCode], now)
+                          const off = !isClassOnDate(patterns[cl.courseCode], wd[selDay])
                           const strike = canceled || off
+                          // 積みコマで現在の半期と異なる指定の科目は薄く（取消線は休講/隔週休みに予約・§8統一）。
+                          const qDim = isDimmedForCurrentQuarter(cl.quarter, currentQuarter, s.classes.length >= 2)
                           const mainColor = rowNow ? ui.pillText : ui.valueColor
                           return (
                             <Pressable
@@ -579,6 +728,7 @@ export default function TimetableScreen() {
                               style={({ pressed }) => [
                                 styles.cls,
                                 rowNow && { backgroundColor: ui.pillBg, borderLeftWidth: 3, borderLeftColor: ui.pick(COLORS.cta, COLORS.emerald, COLORS.emeraldLight) },
+                                qDim ? styles.offCell : null,
                                 pressed && { opacity: 0.7 },
                               ]}
                             >
@@ -595,7 +745,7 @@ export default function TimetableScreen() {
                                 ) : ev ? (
                                   <View style={[styles.badge, { backgroundColor: ui.colors.infoBg }]}><Text style={[styles.badgeText, { color: ui.colors.info }]} numberOfLines={1}>{cellBadgeText(ev)}</Text></View>
                                 ) : off ? (
-                                  <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>今週休み</Text></View>
+                                  <View style={[styles.badge, { backgroundColor: ui.softBoxBg }]}><Text style={[styles.badgeText, { color: ui.labelColor }]}>休み週</Text></View>
                                 ) : null}
                                 <Text style={[styles.cName, { color: mainColor }, strike && styles.strike]} numberOfLines={2}>
                                   {cl.name}
@@ -691,7 +841,7 @@ export default function TimetableScreen() {
               <>
                 <View style={styles.panelHead}>
                   <Text style={[styles.phDate, { color: ui.valueColor }]}>{dayHeadLabel(wd[selDay], DAY_LABEL[selDay])}</Text>
-                  {selDay === todayKey ? (
+                  {isCurrentWeek && selDay === todayKey ? (
                     <View style={[styles.phTodayPill, { backgroundColor: ui.pillBg }]}>
                       <Text style={[styles.phTodayText, { color: ui.pillText }]}>今日</Text>
                     </View>
@@ -704,7 +854,7 @@ export default function TimetableScreen() {
                     <Text style={[styles.emptyDayText, { color: ui.labelColor }]}>{DAY_LABEL[selDay]}曜日は授業がありません</Text>
                   </View>
                 ) : (
-                  <View style={[styles.dayList, { backgroundColor: ui.colors.cardBg, borderColor: selDay === todayKey ? ui.colors.priorityBorder : ui.colors.cardBorder }]}>
+                  <View style={[styles.dayList, { backgroundColor: ui.colors.cardBg, borderColor: isCurrentWeek && selDay === todayKey ? ui.colors.priorityBorder : ui.colors.cardBorder }]}>
                     {rows.map((r, i) => (
                       <View key={r.key} style={i > 0 ? { borderTopWidth: 1, borderTopColor: ui.dividerColor } : undefined}>
                         {r.node}
@@ -767,6 +917,16 @@ const styles = StyleSheet.create({
   list: { paddingTop: 12, paddingBottom: 12 },
   syncNotice: { fontSize: 11, marginBottom: 8, marginLeft: 2 },
   heroSub: { fontSize: 11, fontWeight: '500', marginTop: 2, marginBottom: 2 },
+  // 週ナビバー（前後週・週レンジ・第N週）＋今週へ戻るピル
+  weekBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingHorizontal: 6, paddingVertical: 6, borderWidth: 1, borderRadius: RADIUS.md },
+  weekArrow: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.pill },
+  weekLabel: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '600' },
+  weekOrdinal: { borderRadius: RADIUS.pill, paddingHorizontal: 8, paddingVertical: 1 },
+  weekOrdinalText: { fontSize: 11, fontWeight: '700' },
+  thisWeekChip: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, borderRadius: RADIUS.pill, paddingHorizontal: 12, paddingVertical: 5 },
+  thisWeekText: { fontSize: 12, fontWeight: '700' },
+  // 現在半期トグル（積みコマ有時のみ表示。Segmented は自前で marginTop を持つため薄く）
+  quarterRow: { marginTop: 4 },
   // 曜日バー（曜日＋日付を1ブロックに）
   dayBar: { flexDirection: 'row', gap: 4, marginTop: 8, marginBottom: 2 },
   dtab: { flex: 1, minWidth: 0, alignItems: 'center', paddingTop: 7, paddingBottom: 10, borderRadius: RADIUS.md, position: 'relative' },
@@ -799,7 +959,6 @@ const styles = StyleSheet.create({
   // 「今日」FAB
   fab: { position: 'absolute', right: 16, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: RADIUS.pill, paddingHorizontal: 16, paddingVertical: 10, ...SHADOW.fab },
   fabText: { fontSize: 13, fontWeight: '700' },
-  canceledCard: { opacity: 0.6 },
   canceledName: { textDecorationLine: 'line-through' },
   // グリッド表示（設定送り・維持）
   gridCard: { padding: 8 },
@@ -807,6 +966,9 @@ const styles = StyleSheet.create({
   gridPerCol: { width: 22, alignItems: 'center', justifyContent: 'center' },
   gridDayHead: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 8 },
   gridCell: { flex: 1, minHeight: 74, borderRadius: 11, padding: 6, justifyContent: 'center' },
+  gridClass: { flex: 1, justifyContent: 'center' },
+  gridClassStacked: { marginTop: 4, borderTopWidth: 1 },
+  gridFill: { flex: 1, justifyContent: 'center' },
   gridCellToday: { borderWidth: 1.5, borderColor: COLORS.emerald },
   gridCellNow: { borderWidth: 2.5, borderColor: COLORS.cta },
   nowDot: { position: 'absolute', top: 6, left: 6 },
@@ -816,7 +978,7 @@ const styles = StyleSheet.create({
   gridUnreadDot: { position: 'absolute', bottom: 6, left: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.emerald },
   gridEvDot: { position: 'absolute', bottom: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   gridHint: { fontSize: 11, textAlign: 'center', marginTop: 6 },
-  offCell: { opacity: 0.45 },
+  offCell: { opacity: DIM_OPACITY },
   personalCell: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.emerald },
   personalCellText: { color: COLORS.emeraldDark, fontStyle: 'italic' },
   // 授業行に内包する個人予定ボックス（授業main列の下に食い込ませる＝同一コマとして見せる）。

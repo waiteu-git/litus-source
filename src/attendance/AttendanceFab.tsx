@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Text } from '../ui/Text'
@@ -7,6 +7,9 @@ import { useAttendanceEngine } from './AttendanceEngineProvider'
 import { computeHomeBanner } from './homeBanner'
 import { navigationRef, requestOpenAttendance } from '../navigation/navigationRef'
 import { COLORS } from '../theme'
+import { loadTimetableOverrides, loadCurrentQuarter } from '../storage/timetableOverridesStore'
+import { applyQuarterOverrides, resolveCurrentQuarter, type TimetableOverrides } from '../timetableEvents/quarter'
+import type { Quarter } from '../parsers/timetable'
 
 // FABを出さない画面: ホーム(HomeHome)=独自の出席バナーを持つ、出席(Attendance)=遷移先自身、
 // 全画面ビューア(Web/PdfViewer/Link)=下部にボタンがありピルが被る（RootTabs の hideOn と同じ集合）。
@@ -29,6 +32,13 @@ export default function AttendanceFab() {
     const id = setInterval(() => setTick(new Date()), 60000)
     return () => clearInterval(id)
   }, [])
+  // 積みコマ（半期科目）の代表選択用。前半/後半の手動指定(override)と「今が前半/後半か」の手動指定。
+  const [ttOverrides, setTtOverrides] = useState<TimetableOverrides>({})
+  const [ttQuarterPref, setTtQuarterPref] = useState<Quarter | null>(null)
+  useEffect(() => {
+    loadTimetableOverrides().then(setTtOverrides).catch(() => undefined)
+    loadCurrentQuarter().then(setTtQuarterPref).catch(() => undefined)
+  }, [])
   // 現在ルート名。ナビ状態変化で追随し、ホーム/出席画面では隠す。
   const [routeName, setRouteName] = useState<string | undefined>(undefined)
   useEffect(() => {
@@ -38,7 +48,9 @@ export default function AttendanceFab() {
     return unsub
   }, [])
 
-  const raw = computeHomeBanner(timetable, running ? reception : null, tick)
+  const ttQ = useMemo(() => timetable.map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) })), [timetable, ttOverrides])
+  const cq = resolveCurrentQuarter(ttQuarterPref, tick)
+  const raw = computeHomeBanner(ttQ, running ? reception : null, tick, cq)
   const active = raw.active && !attendedNow
   if (!active || (routeName != null && HIDDEN_ROUTES.has(routeName))) return null
 

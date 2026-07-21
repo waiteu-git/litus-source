@@ -6,8 +6,12 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
+import { SectionLabel, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
+import { loadTimetable } from '../storage/timetableStore'
+import { loadTimetableOverrides, saveTimetableOverride } from '../storage/timetableOverridesStore'
+import { isQuarterSlot } from '../timetableEvents/quarter'
+import type { Quarter } from '../parsers/timetable'
 import { resolveNextSession, pickAttentionEvent, type NextSession } from '../timetableEvents/nextSession'
 import { COLORS } from '../theme'
 import type { TimetableStackParamList } from '../navigation/types'
@@ -139,6 +143,9 @@ export default function SubjectDetailScreen() {
   const [news, setNews] = useState<CourseNewsItem[]>([])
   const [events, setEvents] = useState<ClassEvent[]>([])
   const [pattern, setPattern] = useState<WeeklyPattern>({})
+  // 積みコマ（同曜限2科目以上）の半期指定（§9E）。積みでない科目では常にfalse/null＝セクション非表示。
+  const [isStacked, setIsStacked] = useState(false)
+  const [quarterPref, setQuarterPref] = useState<Quarter | null>(null)
   const [attStats, setAttStats] = useState<AttendanceCourseStats | null>(null)
   const [attTotal, setAttTotal] = useState<number | null>(null)
   // 出欠データを一度でも収集済みか。未収集だと trackable 判定すらできず従来はセクション自体が消えて
@@ -165,6 +172,22 @@ export default function SubjectDetailScreen() {
     loadWeeklyPatterns()
       .then((m) => setPattern(m[courseCode] ?? {}))
       .catch(() => undefined)
+  }, [courseCode])
+
+  // 積みコマ検出＋現在の半期指定ロード（§9E）。CLASSは前半/後半を公開しないため手動指定のみが情報源。
+  useEffect(() => {
+    ;(async () => {
+      const cols = await loadTimetable()
+      let stacked = false
+      for (const c of cols ?? []) {
+        for (const s of c.slots) {
+          if (isQuarterSlot(s) && s.classes.some((cl) => cl.courseCode === courseCode)) stacked = true
+        }
+      }
+      setIsStacked(stacked)
+      const ov = await loadTimetableOverrides()
+      setQuarterPref(ov[courseCode]?.quarter ?? null)
+    })().catch(() => undefined)
   }, [courseCode])
 
   const updatePattern = (next: WeeklyPattern) => {
@@ -609,6 +632,32 @@ export default function SubjectDetailScreen() {
           .map((s) => (
             <Fragment key={s.key}>{sectionNodes[s.key]}</Fragment>
           ))}
+
+        {/* 半期（クォーター）指定: 積みコマ（同曜限2科目以上）に属する科目のみ表示。並べ替え対象外の固定セクション（YAGNI）。 */}
+        {isStacked ? (
+          <Accordion
+            title="半期（クォーター）"
+            icon="calendar-number-outline"
+            subtitle={quarterPref === 'first' ? '前半' : quarterPref === 'second' ? '後半' : '通期'}
+          >
+            <Text style={[styles.patHint, { color: ui.labelColor, marginBottom: 8, marginTop: 0 }]}>
+              同じ曜限にもう1科目ある半期科目です。この科目が前半／後半どちらの開講かを指定すると、時間割で「今の半期」に該当しない科目を薄く表示します（CLASSは前半/後半を公開しないため手動指定）。
+            </Text>
+            <Segmented
+              options={[
+                { key: 'first', label: '前半' },
+                { key: 'second', label: '後半' },
+                { key: 'none', label: '通期' },
+              ]}
+              value={quarterPref ?? 'none'}
+              onChange={(k) => {
+                const next = k === 'none' ? undefined : (k as Quarter)
+                setQuarterPref(next ?? null)
+                saveTimetableOverride(courseCode, { quarter: next }).catch(() => undefined)
+              }}
+            />
+          </Accordion>
+        ) : null}
       </ScrollView>
     </View>
   )
