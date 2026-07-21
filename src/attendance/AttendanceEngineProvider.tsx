@@ -18,6 +18,7 @@ import { useClassView } from '../collect/classViewArbiter'
 import { evaluateAccess } from '../health/accessGate'
 import { useConnectivity } from '../health/connectivity'
 import { useDemo } from '../demo/DemoProvider'
+import { demoOverrides, DEMO_ATTENDANCE_COURSE, DEMO_ATTENDANCE_WINDOW } from './demoAttendance'
 import {
   CLASS_PC_LOGIN_URL,
   DESKTOP_UA,
@@ -879,6 +880,20 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // 秒間クロック(now)で毎レンダー作り直さないようメモ化する。now は NowCtx へ分離済みなので、
   // ここの依存は「状態が実際に変わった時」だけ変わる（出席カウントダウン中のアプリ全体再レンダー防止）。
   // submit/retry は毎レンダー再生成されるが、可変キャプチャは code のみ（依存に含む）。他は ref/setter/dispatch。
+  // デモ用の出席状態。デモでは running=false でエンジンが動かないため受付状態が出ず、
+  // 送信フローを審査員に見せられない。Apple は "exhibits your app's full features and
+  // functionality" を要求するので、受付中の見た目を作って送信まで通す。
+  // ネットワークには一切出ず、記録先もデモ名前空間（Storage 経由）。
+  const [demoAttended, setDemoAttended] = useState<AttendedRecord | null>(null)
+  const demoSubmit = useCallback(() => {
+    setDemoAttended({
+      date: todayKey(new Date()),
+      courseName: DEMO_ATTENDANCE_COURSE,
+      confirmWindow: DEMO_ATTENDANCE_WINDOW,
+      code: code || '0000',
+    })
+  }, [code])
+
   const value: AttendanceEngineValue = useMemo(
     () => ({
       phase: state.phase,
@@ -903,9 +918,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       setRevealClass,
       timetable,
       setAttendanceFocused,
+      ...(demo ? demoOverrides(demoAttended, demoSubmit) : null),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      demo,
+      demoAttended,
+      demoSubmit,
       state.phase,
       state.reception,
       state.result,
