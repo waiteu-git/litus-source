@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import { isTimetableStale } from './refreshMetaStore'
 
 // 前回 authed（ログイン確認成功）に到達したエポックms。ウォームスタート判定に使う。
@@ -9,13 +9,13 @@ const LAST_AUTHED_KEY = 'boot.lastAuthedAt.v1'
 const OPERATIONAL_DAY_BOUNDARY_HOUR = 4
 
 export async function loadLastAuthedAt(): Promise<number> {
-  const raw = await AsyncStorage.getItem(LAST_AUTHED_KEY)
+  const raw = await Storage.getItem(LAST_AUTHED_KEY)
   const n = raw ? Number(raw) : 0
   return Number.isFinite(n) ? n : 0
 }
 
 export async function saveLastAuthedAt(at: number = Date.now()): Promise<void> {
-  await AsyncStorage.setItem(LAST_AUTHED_KEY, String(at))
+  await Storage.setItem(LAST_AUTHED_KEY, String(at))
 }
 
 /** 4:00始まりの運用日を一意化した整数（等価比較専用・順序比較には使わない）。ローカル時刻ベース。 */
