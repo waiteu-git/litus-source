@@ -192,7 +192,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
       // デモ中は収集エンジンを起動しない（WebViewを作らせない＝通信ゼロ）。
-      if (demoRef.current) return 'skipped'
+      // 無反応だと審査員に「壊れている」と見えるため、ユーザー起点なら理由を出す。
+      if (demoRef.current) {
+        if (source === 'user') showSkip({ feature: 'class', reason: 'demo' })
+        return 'skipped'
+      }
       if (bulletinBusyRef.current) return 'busy'
       if (isKilledRef.current('bulletin')) {
         // 停止中の無反応化を防ぐ（ユーザー起点のみ理由を提示。背景は無音）。
@@ -231,7 +235,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
       // デモ中は収集エンジンを起動しない（WebViewを作らせない＝通信ゼロ）。
-      if (demoRef.current) return 'skipped'
+      // 無反応だと審査員に「壊れている」と見えるため、ユーザー起点なら理由を出す。
+      if (demoRef.current) {
+        if (source === 'user') showSkip({ feature: 'class', reason: 'demo' })
+        return 'skipped'
+      }
       if (attendanceStatsBusyRef.current) return 'busy'
       // 出欠は掲示と同じCLASS収集なので、掲示の停止スイッチに追従する（出欠専用のkillキーは無い）。
       if (isKilledRef.current('bulletin')) {
@@ -274,7 +282,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
       // デモ中は収集エンジンを起動しない（WebViewを作らせない＝通信ゼロ）。
-      if (demoRef.current) return 'skipped'
+      // 無反応だと審査員に「壊れている」と見えるため、ユーザー起点なら理由を出す。
+      if (demoRef.current) {
+        if (source === 'user') showSkip({ feature: 'class', reason: 'demo' })
+        return 'skipped'
+      }
       if (assignmentBusyRef.current) return 'busy'
       if (isKilledRef.current('letus')) {
         if (source === 'user') showSkip({ feature: 'letus', reason: 'stopped' })

@@ -18,7 +18,7 @@ import { useClassView } from '../collect/classViewArbiter'
 import { evaluateAccess } from '../health/accessGate'
 import { useConnectivity } from '../health/connectivity'
 import { useDemo } from '../demo/DemoProvider'
-import { demoOverrides, DEMO_ATTENDANCE_COURSE, DEMO_ATTENDANCE_WINDOW } from './demoAttendance'
+import { demoOverrides, demoWindow, DEMO_ATTENDANCE_COURSE } from './demoAttendance'
 import {
   CLASS_PC_LOGIN_URL,
   DESKTOP_UA,
@@ -889,7 +889,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     setDemoAttended({
       date: todayKey(new Date()),
       courseName: DEMO_ATTENDANCE_COURSE,
-      confirmWindow: DEMO_ATTENDANCE_WINDOW,
+      confirmWindow: demoWindow(new Date()),
       code: code || '0000',
     })
   }, [code])
@@ -918,13 +918,14 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       setRevealClass,
       timetable,
       setAttendanceFocused,
-      ...(demo ? demoOverrides(demoAttended, demoSubmit) : null),
+      ...(demo ? demoOverrides(demoAttended, demoSubmit, now) : null),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       demo,
       demoAttended,
       demoSubmit,
+      now,
       state.phase,
       state.reception,
       state.result,
