@@ -6,6 +6,7 @@ import {
   buildDemoBulletins,
   buildDemoAttendanceStats,
   buildDemoClassEvents,
+  buildDemoBodies,
 } from './demoFixtures'
 import { serializeTimetable, deserializeTimetable } from '../storage/timetableSerialize'
 import { serializeAssignments, deserializeAssignments } from '../storage/assignmentsSerialize'
@@ -17,6 +18,7 @@ import {
 import { serializeClassEvents, deserializeClassEvents } from '../storage/classEventsSerialize'
 import { serializeTermsConsent, deserializeTermsConsent } from '../storage/termsConsentSerialize'
 import { TERMS_VERSION } from '../legal/termsVersion'
+import { isUserManagedUrl } from '../assignments/assignmentOwnership'
 
 const NOW = new Date('2026-09-16T10:00:00+09:00') // 公開目標期（水曜）
 
@@ -65,9 +67,25 @@ describe('デモデータの整合性', () => {
     expect(json).not.toMatch(/東京理科|理科大|tus\.ac\.jp|letus|shibboleth/i)
   })
 
-  it('デモ課題のURLが実在ドメインを指さない', () => {
+  it('デモ課題のURLが実在しないドメイン（RFC2606の .invalid）を指す', () => {
     for (const url of Object.keys(buildDemoAssignments(NOW))) {
-      expect(url).toMatch(/^demo:/)
+      expect(url).toMatch(/^https:\/\/[a-z.]+\.invalid\//)
+    }
+  })
+
+  it('デモ課題が「収集された課題」として扱われる（手動課題に分類されない）', () => {
+    // 独自スキームだと isUserManagedUrl が true になり、詳細画面が
+    // 「このアクティビティは自動収集の対象外です」になって本文も出ない。
+    // アプリの主機能である自動収集が審査員に見えなくなる（実機で確認した事象）。
+    for (const url of Object.keys(buildDemoAssignments(NOW))) {
+      expect(isUserManagedUrl(url)).toBe(false)
+    }
+  })
+
+  it('課題本文が全件シードされている（詳細画面が取得エラーにならない）', () => {
+    const bodies = buildDemoBodies(NOW)
+    for (const url of Object.keys(buildDemoAssignments(NOW))) {
+      expect(bodies[url]?.description).toBeTruthy()
     }
   })
 })

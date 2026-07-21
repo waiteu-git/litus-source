@@ -158,8 +158,24 @@ export const DEMO_TIMETABLE: TimetableCollection[] = [
 ]
 
 /**
- * 課題。URL は `demo:` スキームにして実在ドメインを指さない
- * （タップしても外部へ出ない・テストで強制している）。
+ * デモ課題のURL。
+ *
+ * **架空ドメイン + 実際のMoodleアクティビティ形式**にする必要がある。
+ * `isUserManagedUrl`（= `isTargetActivityUrl` のパス判定）が形式を見ており、
+ * 独自スキーム（demo:）だと「収集対象外＝手動課題」に分類されてしまい、
+ * 詳細画面が「このアクティビティは自動収集の対象外です」になる。アプリの主機能である
+ * 自動収集が審査員に見えなくなるうえ、本文も表示されない（実機で確認）。
+ *
+ * `.invalid` は RFC 2606 で予約された絶対に実在しない TLD。実在の大学ドメインを
+ * バイナリに含めずに済む（5.2.2対策）。なおデモ中は GuardedWebView が null を返すので
+ * 実際に開かれることはない。
+ */
+const demoAssignmentUrl = (id: string) =>
+  `https://lms.demo.invalid/mod/assign/view.php?id=9900${id}`
+
+/**
+ * 課題。URL は架空ドメインにして実在ドメインを指さない
+ * （実在ドメインを指さない・テストで強制している）。
  * 期限切れ/接近/余裕/提出済みを1件ずつ入れ、意味色の出し分けを審査員が見られるようにする。
  * **相対日付**にしているのは、固定日付だと審査時期には全件が期限切れになり
  * 「該当する課題はありません」しか出ないため。
@@ -178,7 +194,7 @@ export function buildDemoAssignments(now: Date): AssignmentMap {
     deadline: Date,
     submitted: boolean,
   ) => ({
-    url: `demo:assignment/${id}`,
+    url: demoAssignmentUrl(id),
     courseCode,
     courseName,
     title,
@@ -360,16 +376,16 @@ export function buildDemoBodies(now: Date): LetusBodyMap {
   const at = new Date(now).toISOString()
   const body = (description: string): LetusBody => ({ description, attachments: [], fetchedAt: at })
   return {
-    'demo:assignment/1': body(
+    [demoAssignmentUrl('1')]: body(
       '配列と繰り返し処理の演習です。テキスト第4章の例題を参考に、指定された3つの関数を実装して提出してください。提出形式はソースコード一式のzipです。',
     ),
-    'demo:assignment/2': body(
+    [demoAssignmentUrl('2')]: body(
       '第3章「行列式」の範囲から出題します。サラスの方法と余因子展開の両方を使えるようにしておいてください。',
     ),
-    'demo:assignment/3': body(
+    [demoAssignmentUrl('3')]: body(
       '情報倫理に関するレポートです。授業で扱った事例のいずれかを取り上げ、2000字程度で論じてください。引用元は明記すること。',
     ),
-    'demo:assignment/4': body('力学の基礎に関するレポートです。提出済みです。'),
+    [demoAssignmentUrl('4')]: body('力学の基礎に関するレポートです。提出済みです。'),
   }
 }
 
