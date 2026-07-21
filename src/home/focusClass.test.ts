@@ -84,6 +84,57 @@ describe('pickFocusClass', () => {
   })
 })
 
+describe('pickFocusClass × 半期', () => {
+  it('積みコマは currentQuarter に一致する科目を代表に選ぶ', () => {
+    // 同一曜限・時刻に first/second の2科目を積む。now は授業時間内。
+    const collections: TimetableCollection[] = [
+      {
+        periodTimes: { campus: '', periods: [{ period: 1, start: '09:00', end: '10:30' }] },
+        slots: [
+          {
+            day: 'wed',
+            period: 1,
+            classes: [
+              { courseCode: 'a', name: '前半科目', teachers: [], room: 'K1', isRemote: false, credits: null, badges: [], quarter: 'first' },
+              { courseCode: 'b', name: '後半科目', teachers: [], room: 'K2', isRemote: false, credits: null, badges: [], quarter: 'second' },
+            ],
+          },
+        ],
+      },
+    ]
+    const now = new Date(2026, 6, 15, 9, 30) // 水 9:30
+    expect(pickFocusClass(collections, now, undefined, 'second')?.name).toBe('後半科目')
+    expect(pickFocusClass(collections, now, undefined, 'first')?.name).toBe('前半科目')
+    // currentQuarter 省略時は先頭（後方互換）
+    expect(pickFocusClass(collections, now)?.name).toBe('前半科目')
+  })
+})
+
+describe('todayRemainingClasses × 半期', () => {
+  it('積みコマは currentQuarter に一致する科目を代表に選ぶ', () => {
+    const collections: TimetableCollection[] = [
+      {
+        periodTimes: { campus: '', periods: [{ period: 1, start: '09:00', end: '10:30' }] },
+        slots: [
+          {
+            day: 'wed',
+            period: 1,
+            classes: [
+              { courseCode: 'a', name: '前半科目', teachers: [], room: 'K1', isRemote: false, credits: null, badges: [], quarter: 'first' },
+              { courseCode: 'b', name: '後半科目', teachers: [], room: 'K2', isRemote: false, credits: null, badges: [], quarter: 'second' },
+            ],
+          },
+        ],
+      },
+    ]
+    const now = new Date(2026, 6, 15, 9, 30) // 水 9:30
+    expect(todayRemainingClasses(collections, now, undefined, 'second').map((c) => c.name)).toEqual(['後半科目'])
+    expect(todayRemainingClasses(collections, now, undefined, 'first').map((c) => c.name)).toEqual(['前半科目'])
+    // currentQuarter 省略時は先頭（後方互換）
+    expect(todayRemainingClasses(collections, now).map((c) => c.name)).toEqual(['前半科目'])
+  })
+})
+
 describe('todayRemainingClasses', () => {
   const cols = collection([
     { day: 'mon', period: 1, classes: [cls('線形代数')] },

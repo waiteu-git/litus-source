@@ -63,6 +63,50 @@ describe('findActiveClass', () => {
   })
 })
 
+describe('findActiveClass × 半期', () => {
+  it('積みコマは currentQuarter に一致する科目を代表に選ぶ', () => {
+    const stacked: TimetableCollection = {
+      slots: [
+        {
+          day: 'mon',
+          period: 1,
+          classes: [
+            { courseCode: 'a', name: '前半科目', teachers: [], room: '', isRemote: false, credits: null, badges: [], quarter: 'first' },
+            { courseCode: 'b', name: '後半科目', teachers: [], room: '', isRemote: false, credits: null, badges: [], quarter: 'second' },
+          ],
+        },
+      ],
+      periodTimes,
+    }
+    expect(findActiveClass([stacked], MON_0930, 5, 'second')?.courseName).toBe('後半科目')
+    expect(findActiveClass([stacked], MON_0930, 5, 'first')?.courseName).toBe('前半科目')
+    // currentQuarter 省略時は先頭（後方互換）
+    expect(findActiveClass([stacked], MON_0930)?.courseName).toBe('前半科目')
+  })
+})
+
+describe('computeHomeBanner × 半期', () => {
+  it('積みコマは currentQuarter に一致する科目のバナー文言を出す', () => {
+    const stacked: TimetableCollection = {
+      slots: [
+        {
+          day: 'mon',
+          period: 1,
+          classes: [
+            { courseCode: 'a', name: '前半科目', teachers: [], room: '', isRemote: false, credits: null, badges: [], quarter: 'first' },
+            { courseCode: 'b', name: '後半科目', teachers: [], room: '', isRemote: false, credits: null, badges: [], quarter: 'second' },
+          ],
+        },
+      ],
+      periodTimes,
+    }
+    expect(computeHomeBanner([stacked], notAccepting, MON_0930, 'second').courseName).toBe('後半科目')
+    expect(computeHomeBanner([stacked], notAccepting, MON_0930, 'first').courseName).toBe('前半科目')
+    // currentQuarter 省略時は先頭（後方互換）
+    expect(computeHomeBanner([stacked], notAccepting, MON_0930).courseName).toBe('前半科目')
+  })
+})
+
 describe('computeHomeBanner', () => {
   it('CLASS受付中なら kind=accepting・受付中文言', () => {
     const b = computeHomeBanner([], accepting('英語ⅠA'), MON_1035)
