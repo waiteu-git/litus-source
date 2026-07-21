@@ -14,6 +14,7 @@ import {
 import { fetchKillSwitchStatus } from './killSwitchFetch'
 import { loadKillSwitchCache, saveKillSwitchCache } from '../storage/killSwitchStore'
 import { subscribeForeground } from '../app/foregroundOrchestrator'
+import { useDemo } from '../demo/DemoProvider'
 import { COLORS } from '../theme'
 
 type KillSwitchValue = {
@@ -58,8 +59,14 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
   const [cacheLoaded, setCacheLoaded] = useState(false)
   const fetchedAtRef = useRef(0)
   const inFlightRef = useRef(false)
+  // refresh は useCallback([]) で固定されるため、デモ状態は ref 経由で読む。
+  const { active: demo } = useDemo()
+  const demoRef = useRef(false)
+  demoRef.current = demo
 
   const refresh = useCallback((force: boolean) => {
+    // デモ中は稼働状況の照会もしない（デモ中はネットワークに一切出ない）。
+    if (demoRef.current) return
     if (!force && !isKillSwitchStale(fetchedAtRef.current, Date.now())) return
     if (inFlightRef.current) return
     inFlightRef.current = true

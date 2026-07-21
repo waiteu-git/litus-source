@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { StyleSheet, View } from 'react-native'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useNavigation } from '@react-navigation/native'
 import { ActionButton, StepList, useUi, type Step } from '../ui/screen'
 import { DESKTOP_UA, MYCOURSES_URL, COLLECT_MYCOURSES_JS } from '../collect/injectedScripts'
@@ -11,7 +11,7 @@ import { saveCourseMap } from '../storage/courseMapStore'
 
 /** コース収集画面。案3bの簡易版（接続→収集・保存の2段）で統一感を持たせる。 */
 export default function CollectCoursesScreen() {
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const navigation = useNavigation()
   const ui = useUi()
   const [loaded, setLoaded] = useState(false)

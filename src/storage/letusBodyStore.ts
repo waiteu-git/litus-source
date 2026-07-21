@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import {
   serializeLetusBodies,
   deserializeLetusBodies,
@@ -14,7 +14,7 @@ const KEY = 'letus.bodyCache.v1'
 const enqueueWrite = createWriteQueue()
 
 export async function loadLetusBody(): Promise<LetusBodyMap> {
-  return deserializeLetusBodies(await AsyncStorage.getItem(KEY))
+  return deserializeLetusBodies(await Storage.getItem(KEY))
 }
 
 /** read-modify-writeを直列キュー内で行う唯一の更新入口。更新後の全件を返す。 */
@@ -23,7 +23,7 @@ export async function mutateLetusBody(
 ): Promise<LetusBodyMap> {
   return enqueueWrite(async () => {
     const next = mutate(await loadLetusBody())
-    await AsyncStorage.setItem(KEY, serializeLetusBodies(next))
+    await Storage.setItem(KEY, serializeLetusBodies(next))
     return next
   })
 }

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import { createWriteQueue } from './writeQueue'
 import {
   deserializeKillSwitchCache,
@@ -15,9 +15,9 @@ const KEY = 'killSwitch.cache.v1'
 const enqueueWrite = createWriteQueue()
 
 export async function loadKillSwitchCache(): Promise<KillSwitchCache | null> {
-  return deserializeKillSwitchCache(await AsyncStorage.getItem(KEY))
+  return deserializeKillSwitchCache(await Storage.getItem(KEY))
 }
 
 export function saveKillSwitchCache(cache: KillSwitchCache): Promise<void> {
-  return enqueueWrite(() => AsyncStorage.setItem(KEY, serializeKillSwitchCache(cache)))
+  return enqueueWrite(() => Storage.setItem(KEY, serializeKillSwitchCache(cache)))
 }

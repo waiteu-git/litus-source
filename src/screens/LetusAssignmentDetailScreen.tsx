@@ -12,6 +12,7 @@ import type { AssignmentsStackParamList } from '../navigation/types'
 import { loadAssignments, mutateAssignments, removeAssignment } from '../storage/assignmentsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
+import { useDemo } from '../demo/DemoProvider'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AssignmentSubmissionStatus } from '../parsers/letus'
 import { loadLetusBody } from '../storage/letusBodyStore'
@@ -72,6 +73,7 @@ export default function LetusAssignmentDetailScreen() {
   const [now, setNow] = useState(() => new Date())
   const [body, setBody] = useState<LetusBody | null>(null)
   const [fetching, setFetching] = useState(false)
+  const { active: demo } = useDemo()
   const [fetchFailed, setFetchFailed] = useState(false)
   const startedRef = useRef(false)
   const { bump } = useAssignmentsVersion()
@@ -100,9 +102,12 @@ export default function LetusAssignmentDetailScreen() {
   // ユーザー所有アクティビティ(PDF/resource等)では起動しない＝自動ダウンロードを回避する。
   useEffect(() => {
     if (!assignment || userManaged || startedRef.current) return
+    // デモ中は取得を起動しない。GuardedWebView が null を返すため onFinished が永久に来ず、
+    // 「更新中…」のまま止まる（本文はシード済みなので取得の必要もない）。
+    if (demo) return
     startedRef.current = true
     setFetching(true)
-  }, [assignment, userManaged])
+  }, [assignment, userManaged, demo])
 
   const onFetched = useCallback(
     async (_r: { ok: boolean }) => {
@@ -243,10 +248,14 @@ export default function LetusAssignmentDetailScreen() {
             ) : null}
           </View>
 
-          <ActionButton
-            label="LETUSで開く ↗"
-            onPress={() => navigation.navigate('Web', { url: assignment.url, title: assignment.title })}
-          />
+          {/* デモでは外部リンクを出さない。URLが demo: スキームでエラーページになるうえ、
+              実サービスへの遷移は「通信ゼロ」の前提とも矛盾する。 */}
+          {demo ? null : (
+            <ActionButton
+              label="LETUSで開く ↗"
+              onPress={() => navigation.navigate('Web', { url: assignment.url, title: assignment.title })}
+            />
+          )}
         </View>
 
         {userManaged ? (

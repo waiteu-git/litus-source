@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import {
   serializeAssignments,
   deserializeAssignments,
@@ -13,7 +13,7 @@ const KEY = 'letus.assignments.v1'
 const enqueueWrite = createWriteQueue()
 
 export async function loadAssignments(): Promise<AssignmentMap> {
-  return deserializeAssignments(await AsyncStorage.getItem(KEY))
+  return deserializeAssignments(await Storage.getItem(KEY))
 }
 
 /**
@@ -25,7 +25,7 @@ export async function mutateAssignments(
 ): Promise<AssignmentMap> {
   return enqueueWrite(async () => {
     const next = mutate(await loadAssignments())
-    await AsyncStorage.setItem(KEY, serializeAssignments(next))
+    await Storage.setItem(KEY, serializeAssignments(next))
     return next
   })
 }

@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 import {
   serializeAttendanceStats,
@@ -9,13 +9,13 @@ import {
 const KEY = 'attendance.stats.v1'
 
 export async function saveAttendanceStats(courses: AttendanceCourseStats[], collectedAt = Date.now()): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeAttendanceStats({ courses, collectedAt }))
+  await Storage.setItem(KEY, serializeAttendanceStats({ courses, collectedAt }))
 }
 
 export async function loadAttendanceStats(): Promise<AttendanceStatsData | null> {
-  return deserializeAttendanceStats(await AsyncStorage.getItem(KEY))
+  return deserializeAttendanceStats(await Storage.getItem(KEY))
 }
 
 export async function clearAttendanceStats(): Promise<void> {
-  await AsyncStorage.removeItem(KEY)
+  await Storage.removeItem(KEY)
 }

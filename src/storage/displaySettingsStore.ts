@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Storage } from './asyncStorage'
 import {
   serializeDisplaySettings,
   deserializeDisplaySettings,
@@ -8,9 +8,9 @@ import {
 const KEY = 'display.settings.v1'
 
 export async function saveDisplaySettings(s: DisplaySettings): Promise<void> {
-  await AsyncStorage.setItem(KEY, serializeDisplaySettings(s))
+  await Storage.setItem(KEY, serializeDisplaySettings(s))
 }
 
 export async function loadDisplaySettings(): Promise<DisplaySettings> {
-  return deserializeDisplaySettings(await AsyncStorage.getItem(KEY))
+  return deserializeDisplaySettings(await Storage.getItem(KEY))
 }

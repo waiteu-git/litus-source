@@ -9,6 +9,7 @@ import { RADIUS } from '../ui/scale'
 import { COLORS } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
 import { loadBulletinDigest, loadBulletinDetailDiag, updateBulletinItem } from '../storage/bulletinDigestStore'
+import { useDemo } from '../demo/DemoProvider'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
 import { evaluateAccess } from '../health/accessGate'
@@ -28,6 +29,7 @@ export default function BulletinDetailScreen() {
   const readAccent = ui.pick(COLORS.emeraldDark, COLORS.emeraldDark, COLORS.emeraldLight)
   const [item, setItem] = useState<BulletinItem | null>(null)
   const [fetching, setFetching] = useState(false)
+  const { active: demo } = useDemo()
   const [fetchFailed, setFetchFailed] = useState(false)
   const [detailDiag, setDetailDiag] = useState('')
   const [flagBusy, setFlagBusy] = useState(false)
@@ -67,11 +69,15 @@ export default function BulletinDetailScreen() {
   // 条件だと既読化がスキップされていた）。1度だけ自動起動する。
   useEffect(() => {
     if (!item || startedRef.current) return
+    // デモ中は起動しない。GuardedWebView が null を返すため onFinished が永久に来ず、
+    // 取得中フラグが立ちっぱなしになる（フラグ操作もその間ブロックされる）。
+    // デモ掲示は body をシード済みなので取得の必要もない。
+    if (demo) return
     if (!item.body || item.unread) {
       startedRef.current = true
       setFetching(true)
     }
-  }, [item])
+  }, [item, demo])
 
   // 取得完了。本文が入っていなければ失敗扱いにして無限スピナーを避ける。
   // 本文が取れた＝CLASS側で既読化済みなので、ローカルも既読に落として再実行と再流入を防ぐ。

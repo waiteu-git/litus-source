@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import { useClassView } from '../collect/classViewArbiter'
 import { isPdfLikeUrl } from '../collect/injectedScripts'
@@ -20,7 +20,7 @@ export default function LinkViewerScreen() {
   const route = useRoute<RouteProp<Params, 'Link'>>()
   const navigation = useNavigation<any>()
   const { url, isClass } = route.params
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const { setCollectActive } = useClassView()
   const [nonce, setNonce] = useState(0)
   const ui = useUi()

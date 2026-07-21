@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { StyleSheet, View } from 'react-native'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useIsFocused, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ActionButton, StepList, useUi, type Step } from '../ui/screen'
@@ -29,7 +29,7 @@ const CLASS_ON_LOAD_JS = `${ENTER_CLASS_PC_JS}\n${DETECT_AUTH_JS}`
  * 接続→ページを開く→抽出・保存の3段を可視化する。WebView駆動のロジックは元実装のまま。
  */
 export default function CollectTimetableScreen() {
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const auth = useAuth()
   const ui = useUi()

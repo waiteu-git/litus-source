@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { COLLECT_MYCOURSES_JS, DESKTOP_UA, MYCOURSES_URL } from './injectedScripts'
 import { parseMyCoursesMessage } from './myCoursesMessage'
 import { buildCourseCodeMap } from '../parsers/letusCourses'
@@ -35,7 +35,7 @@ export default function LetusSyncEngine({
   const stageRef = useRef<Stage>('courses')
   stageRef.current = stage
 
-  const coursesWebviewRef = useRef<WebView>(null)
+  const coursesWebviewRef = useRef<WebViewInstance>(null)
   const [coursesTry, setCoursesTry] = useState(0)
   const finishedRef = useRef(false)
 

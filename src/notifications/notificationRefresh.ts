@@ -5,6 +5,7 @@
  * トリガー: アプリ起動時／時間割・課題の収集完了時／出席アラーム設定変更時。
  */
 import { loadTimetable } from '../storage/timetableStore'
+import { isDemoNamespace } from '../storage/asyncStorage'
 import { loadAttendanceSettings } from '../storage/attendanceSettingsStore'
 import { computeAttendanceAlarms, type CancelledClass } from './attendanceSchedule'
 import { loadAssignments } from '../storage/assignmentsStore'
@@ -37,6 +38,9 @@ function toSchedulable(map: AssignmentMap): SchedulableAssignment[] {
  */
 export const refreshAllNotifications: (now?: Date) => Promise<void> = serializeRuns(
   async (now: Date = new Date()): Promise<void> => {
+    // デモ中は OS の予約通知に触れない。触ると実ユーザーの出席アラーム・課題リマインダを
+    // 全キャンセルして架空科目のものに差し替えてしまう（デモを抜けても再実行まで戻らない）。
+    if (isDemoNamespace()) return
     const collections = await loadTimetable()
     const settings = await loadAttendanceSettings()
     const classEvents = await loadClassEvents()

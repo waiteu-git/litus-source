@@ -11,12 +11,14 @@ import {
 } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useLoginGate } from '../auth/LoginGate'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useClassView } from '../collect/classViewArbiter'
 import { evaluateAccess } from '../health/accessGate'
 import { useConnectivity } from '../health/connectivity'
+import { useDemo } from '../demo/DemoProvider'
+import { demoOverrides, demoWindow, DEMO_ATTENDANCE_COURSE } from './demoAttendance'
 import {
   CLASS_PC_LOGIN_URL,
   DESKTOP_UA,
@@ -156,7 +158,7 @@ export function useAttendanceNow(): Date {
 }
 
 export function AttendanceEngineProvider({ children }: { children: ReactNode }) {
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const portalTriesRef = useRef(0)
   const errorRetryRef = useRef(0)
   // navTimeout の再試行回数（出席ページ到達 or 手動リブートで0に戻す）。
@@ -165,6 +167,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loginGate = useLoginGate()
   const killSwitch = useKillSwitch()
+  // デモ中はCLASSへ一切アクセスしない。Provider 自体は context 供給のため残す
+  // （useAttendanceEngine は Provider 不在で throw し、ホーム/時間割/出席の各画面が使う）。
+  const { active: demo } = useDemo()
   const { collectActive, setAttendanceFocused: arbiterSetFocused } = useClassView()
   const collectActiveRef = useRef(false)
   collectActiveRef.current = collectActive
@@ -240,7 +245,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // CLASSメンテ帯・オフライン中も起動しても失敗するだけなので抑止する。
   const isOnline = useConnectivity()
   const classAccessible = evaluateAccess('class', { now, isOnline }).allowed
-  const running = !killSwitch.isKilled('attendance') && classAccessible && (attendanceFocused || isInClassPeriod(timetable, now))
+  const running =
+    !demo &&
+    !killSwitch.isKilled('attendance') &&
+    classAccessible &&
+    (attendanceFocused || isInClassPeriod(timetable, now))
   const shouldRender = running && !collectActive
   const prevRenderRef = useRef(false)
   const shouldRenderRef = useRef(false)
@@ -918,6 +927,20 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // 秒間クロック(now)で毎レンダー作り直さないようメモ化する。now は NowCtx へ分離済みなので、
   // ここの依存は「状態が実際に変わった時」だけ変わる（出席カウントダウン中のアプリ全体再レンダー防止）。
   // submit/retry は毎レンダー再生成されるが、可変キャプチャは code のみ（依存に含む）。他は ref/setter/dispatch。
+  // デモ用の出席状態。デモでは running=false でエンジンが動かないため受付状態が出ず、
+  // 送信フローを審査員に見せられない。Apple は "exhibits your app's full features and
+  // functionality" を要求するので、受付中の見た目を作って送信まで通す。
+  // ネットワークには一切出ず、記録先もデモ名前空間（Storage 経由）。
+  const [demoAttended, setDemoAttended] = useState<AttendedRecord | null>(null)
+  const demoSubmit = useCallback(() => {
+    setDemoAttended({
+      date: todayKey(new Date()),
+      courseName: DEMO_ATTENDANCE_COURSE,
+      confirmWindow: demoWindow(new Date()),
+      code: code || '0000',
+    })
+  }, [code])
+
   const value: AttendanceEngineValue = useMemo(
     () => ({
       phase: state.phase,
@@ -942,9 +965,14 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       setRevealClass,
       timetable,
       setAttendanceFocused,
+      ...(demo ? demoOverrides(demoAttended, demoSubmit, now) : null),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      demo,
+      demoAttended,
+      demoSubmit,
+      now,
       state.phase,
       state.reception,
       state.result,
