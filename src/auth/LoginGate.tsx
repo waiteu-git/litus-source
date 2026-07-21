@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Animated, Pressable, StyleSheet, useColorScheme, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   CLASS_PC_LOGIN_URL,
@@ -86,7 +86,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets()
   const [state, setState] = useState<GateState>('loading')
   const [nonce, setNonce] = useState(0)
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   // コールバック（onLoadEnd/onMessage/タイマー）から最新stateを読むためのref。
   const stateRef = useRef<GateState>('loading')
   stateRef.current = state

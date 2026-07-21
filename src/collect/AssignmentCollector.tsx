@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseSnapshots } from '../storage/courseSnapshotStore'
 import { loadAllCourses } from '../storage/allCoursesStore'
@@ -36,7 +36,7 @@ export default function AssignmentCollector({
   onProgress?: (done: number, total: number) => void
   onFinished: (r: { checked: number; saved: number }) => void
 }) {
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [index, setIndex] = useState(0)
   const [loaded, setLoaded] = useState(false)

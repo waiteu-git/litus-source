@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { AssignmentsStackParamList } from '../navigation/types'
@@ -41,7 +41,7 @@ export default function WebViewerScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AssignmentsStackParamList>>()
   const { url, title } = route.params
   const ui = useUi()
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const { bump } = useAssignmentsVersion()
   const [currentUrl, setCurrentUrl] = useState(url)
   const [toast, setToast] = useState<string | null>(null)

@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useLoginGate } from '../auth/LoginGate'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useClassView } from '../collect/classViewArbiter'
@@ -157,7 +157,7 @@ export function useAttendanceNow(): Date {
 }
 
 export function AttendanceEngineProvider({ children }: { children: ReactNode }) {
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const portalTriesRef = useRef(0)
   const errorRetryRef = useRef(0)
   // navTimeout の再試行回数（出席ページ到達 or 手動リブートで0に戻す）。

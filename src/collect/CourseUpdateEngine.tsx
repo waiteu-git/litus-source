@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from './injectedScripts'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
 import { selectCoursesToSnapshot } from '../updates/courseSnapshotWindow'
@@ -31,7 +31,7 @@ export default function CourseUpdateEngine({
   onProgress?: (label: string) => void
   onFinished: () => void
 }) {
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const [urls, setUrls] = useState<string[] | null>(null)
   const [index, setIndex] = useState(0)
   const snapshotsRef = useRef<CourseSnapshotMap>({})

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as Sharing from 'expo-sharing'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
@@ -25,7 +25,7 @@ export default function PdfViewerScreen() {
   const route = useRoute<RouteProp<Params, 'PdfViewer'>>()
   const navigation = useNavigation()
   const { url } = route.params
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const [phase, setPhase] = useState<'loading' | 'rendering' | 'done' | 'error'>('loading')
   const [pages, setPages] = useState(0)
   const [nonce, setNonce] = useState(0)

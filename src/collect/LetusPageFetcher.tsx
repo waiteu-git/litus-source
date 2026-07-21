@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { COLLECT_ASSIGNMENT_PAGE_JS, DESKTOP_UA } from './injectedScripts'
 import { hasLetusLoginMarker } from '../health/collectionSignals'
 import { parseAssignBody } from '../parsers/letusBody'
@@ -23,7 +23,7 @@ export default function LetusPageFetcher({
   url: string
   onFinished: (r: { ok: boolean }) => void
 }) {
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const doneRef = useRef(false)
 
   function finish(ok: boolean) {
