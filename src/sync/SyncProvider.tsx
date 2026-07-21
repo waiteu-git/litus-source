@@ -5,6 +5,7 @@ import AttendanceStatsSyncEngine from '../collect/AttendanceStatsSyncEngine'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { useClassView } from '../collect/classViewArbiter'
+import { useDemo } from '../demo/DemoProvider'
 import { planSync } from './syncGuards'
 import { decideClassSync } from './classSyncConfirm'
 import { evaluateAccess } from '../health/accessGate'
@@ -120,6 +121,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const { status: killStatus, isKilled } = useKillSwitch()
   const isKilledRef = useRef(isKilled)
   isKilledRef.current = isKilled
+  // デモ中は収集を一切走らせない。runner は useCallback で固定されるため ref 経由で読む。
+  const { active: demo } = useDemo()
+  const demoRef = useRef(false)
+  demoRef.current = demo
 
   const [bulletinBusy, setBulletinBusy] = useState(false)
   const [assignmentBusy, setAssignmentBusy] = useState(false)
@@ -186,6 +191,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const runBulletinSync = useCallback(
     (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
+      // デモ中は収集エンジンを起動しない（WebViewを作らせない＝通信ゼロ）。
+      if (demoRef.current) return 'skipped'
       if (bulletinBusyRef.current) return 'busy'
       if (isKilledRef.current('bulletin')) {
         // 停止中の無反応化を防ぐ（ユーザー起点のみ理由を提示。背景は無音）。
@@ -223,6 +230,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const runAttendanceStatsSync = useCallback(
     (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
+      // デモ中は収集エンジンを起動しない（WebViewを作らせない＝通信ゼロ）。
+      if (demoRef.current) return 'skipped'
       if (attendanceStatsBusyRef.current) return 'busy'
       // 出欠は掲示と同じCLASS収集なので、掲示の停止スイッチに追従する（出欠専用のkillキーは無い）。
       if (isKilledRef.current('bulletin')) {
@@ -264,6 +273,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const runAssignmentsSync = useCallback(
     (opts?: RunOpts): SyncStartResult => {
       const source = opts?.source ?? 'user'
+      // デモ中は収集エンジンを起動しない（WebViewを作らせない＝通信ゼロ）。
+      if (demoRef.current) return 'skipped'
       if (assignmentBusyRef.current) return 'busy'
       if (isKilledRef.current('letus')) {
         if (source === 'user') showSkip({ feature: 'letus', reason: 'stopped' })

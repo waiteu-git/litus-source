@@ -17,6 +17,7 @@ import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useClassView } from '../collect/classViewArbiter'
 import { evaluateAccess } from '../health/accessGate'
 import { useConnectivity } from '../health/connectivity'
+import { useDemo } from '../demo/DemoProvider'
 import {
   CLASS_PC_LOGIN_URL,
   DESKTOP_UA,
@@ -164,6 +165,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loginGate = useLoginGate()
   const killSwitch = useKillSwitch()
+  // デモ中はCLASSへ一切アクセスしない。Provider 自体は context 供給のため残す
+  // （useAttendanceEngine は Provider 不在で throw し、ホーム/時間割/出席の各画面が使う）。
+  const { active: demo } = useDemo()
   const { collectActive, setAttendanceFocused: arbiterSetFocused } = useClassView()
   const collectActiveRef = useRef(false)
   collectActiveRef.current = collectActive
@@ -235,7 +239,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // CLASSメンテ帯・オフライン中も起動しても失敗するだけなので抑止する。
   const isOnline = useConnectivity()
   const classAccessible = evaluateAccess('class', { now, isOnline }).allowed
-  const running = !killSwitch.isKilled('attendance') && classAccessible && (attendanceFocused || isInClassPeriod(timetable, now))
+  const running =
+    !demo &&
+    !killSwitch.isKilled('attendance') &&
+    classAccessible &&
+    (attendanceFocused || isInClassPeriod(timetable, now))
   const shouldRender = running && !collectActive
   const prevRenderRef = useRef(false)
   const shouldRenderRef = useRef(false)

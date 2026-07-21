@@ -22,6 +22,8 @@ import { AttendanceVersionProvider } from './src/attendance/attendanceVersion'
 import { LoginGate } from './src/auth/LoginGate'
 import { KillSwitchGate, KillSwitchProvider } from './src/health/KillSwitchProvider'
 import { SyncProvider } from './src/sync/SyncProvider'
+import { DemoProvider, useDemo } from './src/demo/DemoProvider'
+import { DemoBanner } from './src/demo/DemoBanner'
 import { ThemeProvider, useThemeVariant, COLORS, DARK } from './src/theme'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
@@ -152,33 +154,14 @@ export default function App() {
           <ThemedContainer>
             {/* KillSwitchProviderはLoginGateの外側: all停止時はログインprobe用WebViewすら
                 マウントさせない（リモート停止指示の設計: docs/2026-07-12-remote-kill-switch-design.md）。 */}
-            <KillSwitchProvider>
-              <LoginGate>
-                <AuthProvider>
-                  <ClassViewProvider>
-                    <AttendanceEngineProvider>
-                      {/* SyncProviderが掲示/課題の収集エンジンを単独所有（マウント・完了処理・kill反映）。
-                          背景2件は runner を呼ぶだけの薄いトリガ（Gateで包む＝停止中はトリガ自体を眠らせる）。 */}
-                      <SyncProvider>
-                        <RootTabs />
-                        {/* 全画面共通の出席フローティングボタン（受付中/授業時間帯・ホーム/出席画面では非表示）。 */}
-                        <AttendanceFab />
-                        <KillSwitchGate feature="letus">
-                          <BackgroundLetusSync />
-                        </KillSwitchGate>
-                        <KillSwitchGate feature="bulletin">
-                          <BackgroundBulletinSync />
-                        </KillSwitchGate>
-                        {/* 出欠もCLASS収集なので掲示のkillキーに追従する（出欠専用キーは無い）。 */}
-                        <KillSwitchGate feature="bulletin">
-                          <BackgroundAttendanceStatsSync />
-                        </KillSwitchGate>
-                      </SyncProvider>
-                    </AttendanceEngineProvider>
-                  </ClassViewProvider>
-                </AuthProvider>
-              </LoginGate>
-            </KillSwitchProvider>
+            {/* DemoProvider は KillSwitchProvider より外側: 停止指示の照会もデモ中は行わない
+                （「デモ中はネットワークに一切出ない」の一部）ため、KillSwitchProvider が
+                useDemo() を読める位置に置く。 */}
+            <DemoProvider>
+              <KillSwitchProvider>
+                <AppShell />
+              </KillSwitchProvider>
+            </DemoProvider>
           </ThemedContainer>
           <ThemedStatusBar />
         </AttendanceVersionProvider>
@@ -188,6 +171,59 @@ export default function App() {
         </BootGate>
       </ThemeProvider>
     </SafeAreaProvider>
+  )
+}
+
+/**
+ * ログインゲートの内側（＝通信を伴う層）。デモモードでは LoginGate を丸ごと外す。
+ *
+ * LoginGate の WebView は showLoginUi に関わらず**常時マウント**されており
+ * （セッション判定 probe を兼ねる）、描画したままではデモ中も大学へ通信する。
+ * したがって「デモ中は通信ゼロ」を満たすには LoginGate をツリーから外すしかない。
+ *
+ * 一方 AttendanceEngineProvider / SyncProvider / ClassViewProvider は**外せない**。
+ * useAttendanceEngine() は Provider 不在で throw し、ホーム・時間割・出席の各画面が
+ * これを使うため、外すとデモのタブが即クラッシュする。これらは context を供給したまま
+ * 各自の内部で WebView と収集を停止する（各ファイルの useDemo() ガードを参照）。
+ * 背景同期3本は runner を呼ぶだけの薄いトリガなので、デモではマウントしない。
+ */
+function AppShell() {
+  const { active: demo } = useDemo()
+
+  const inner = (
+    <ClassViewProvider>
+      <AttendanceEngineProvider>
+        {/* SyncProviderが掲示/課題の収集エンジンを単独所有（マウント・完了処理・kill反映）。
+            背景2件は runner を呼ぶだけの薄いトリガ（Gateで包む＝停止中はトリガ自体を眠らせる）。 */}
+        <SyncProvider>
+          {demo ? <DemoBanner /> : null}
+          <RootTabs />
+          {/* 全画面共通の出席フローティングボタン（受付中/授業時間帯・ホーム/出席画面では非表示）。 */}
+          <AttendanceFab />
+          {demo ? null : (
+            <>
+              <KillSwitchGate feature="letus">
+                <BackgroundLetusSync />
+              </KillSwitchGate>
+              <KillSwitchGate feature="bulletin">
+                <BackgroundBulletinSync />
+              </KillSwitchGate>
+              {/* 出欠もCLASS収集なので掲示のkillキーに追従する（出欠専用キーは無い）。 */}
+              <KillSwitchGate feature="bulletin">
+                <BackgroundAttendanceStatsSync />
+              </KillSwitchGate>
+            </>
+          )}
+        </SyncProvider>
+      </AttendanceEngineProvider>
+    </ClassViewProvider>
+  )
+
+  if (demo) return inner
+  return (
+    <LoginGate>
+      <AuthProvider>{inner}</AuthProvider>
+    </LoginGate>
   )
 }
 
