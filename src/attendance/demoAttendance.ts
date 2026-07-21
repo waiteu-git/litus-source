@@ -7,7 +7,12 @@
  * that exhibit full features and functionality **while using demonstration data**"
  * と書いている。よって受付中の見た目を作り、送信を端末内で完結させる。
  *
- * **ネットワークには一切出ない。**記録先もデモ名前空間（Storage 経由）。
+ * **ネットワークには一切出ない。**
+ *
+ * running は偽らない。SyncProvider が running を「授業中」の判定に使っており、
+ * true にすると時間割の引っ張り更新で「授業中です／出席の自動確認が一時的に
+ * 止まりますが…」という文脈に合わない確認ダイアログが出るため。
+ * デモ出席の記録は React state のみで、永続化はしない（アプリ再起動で消える）。
  */
 import type { AttendanceEngineValue } from './AttendanceEngineProvider'
 import type { AttendedRecord } from './attendedState'
@@ -22,7 +27,6 @@ export function demoOverrides(
 ): Partial<AttendanceEngineValue> {
   return {
     phase: attended ? 'result' : 'ready',
-    running: true,
     reception: {
       status: attended ? 'attended' : 'accepting',
       accepting: !attended,
