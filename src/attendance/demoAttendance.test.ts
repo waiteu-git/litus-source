@@ -45,7 +45,7 @@ describe('demoOverrides', () => {
     expect(o.failCount).toBe(0)
   })
 
-  it('running を true にする（UIが「起動していない」表示に落ちない）', () => {
-    expect(demoOverrides(null, () => {}).running).toBe(true)
+  it('running を偽らない（SyncProviderが「授業中」と誤判定して確認ダイアログを出すため）', () => {
+    expect(demoOverrides(null, () => {}).running).toBeUndefined()
   })
 })

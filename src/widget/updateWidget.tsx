@@ -13,12 +13,17 @@
 import { Platform } from 'react-native'
 import { WIDGET_MAIN, WIDGET_COMPACT } from './constants'
 import { loadWidgetModel } from './widgetData'
+import { isDemoNamespace } from '../storage/asyncStorage'
 
 let inFlight = false
 
 /** 配置済みウィジェットを最新データで描き直す。失敗は握りつぶす（表示更新は必須機能ではない）。 */
 export function notifyWidgetDataChanged(): void {
   if (Platform.OS !== 'android') return
+  // デモ中はウィジェットを更新しない。ストア層はデモ名前空間を向いているため、
+  // 更新すると実ホーム画面のウィジェットが架空データに書き換わり、デモ終了後も
+  // 次の実収集まで残る。
+  if (isDemoNamespace()) return
   if (inFlight) return
   inFlight = true
   ;(async () => {

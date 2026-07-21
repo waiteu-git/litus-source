@@ -14,9 +14,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export const DEMO_PREFIX = 'demo:'
 
-// モジュールレベルの可変状態。ウィジェットのヘッドレスタスクは別プロセス起動で
-// このフラグが false のまま＝実データを読む。デモ中にウィジェットが実データを
-// 表示するだけで、デモデータが実ウィジェットに漏れることはない（安全側）。
+// モジュールレベルの可変状態。ウィジェットのヘッドレスタスク（OSが別プロセスで起動）
+// では false のまま＝実データを読むので、そちら経由の漏れはない。
+// ただし**前景プロセスから notifyWidgetDataChanged を呼ぶ経路は漏れる**ため、
+// updateWidget.tsx 側で isDemoNamespace() を見て止めている。
 let demoActive = false
 
 /** デモ名前空間の ON/OFF。DemoProvider からのみ呼ぶ。 */
