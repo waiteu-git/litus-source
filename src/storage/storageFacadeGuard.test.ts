@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { findStaticImportsOf } from '../nativeModuleGuard'
 
@@ -35,6 +35,17 @@ describe('AsyncStorageファサードのガード（ラチェット）', () => {
       if (findStaticImportsOf(readFileSync(file, 'utf8'), [ASYNC_STORAGE]).length > 0) {
         offenders.push(rel)
       }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('エントリポイント（index.ts / App.tsx）も同様', () => {
+    const root = join(__dirname, '..', '..')
+    const offenders: string[] = []
+    for (const name of ['index.ts', 'App.tsx']) {
+      const p = join(root, name)
+      if (!existsSync(p)) continue
+      if (findStaticImportsOf(readFileSync(p, 'utf8'), [ASYNC_STORAGE]).length > 0) offenders.push(name)
     }
     expect(offenders).toEqual([])
   })

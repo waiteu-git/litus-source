@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { WebView } from 'react-native-webview'
+import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { DESKTOP_UA, DETECT_PAGE_JS, ENTER_CLASS_PC_JS } from './injectedScripts'
 import { collectEarlyAction, type CollectSignal } from './collectFlow'
 import { useClassView } from './classViewArbiter'
@@ -73,7 +73,7 @@ export default function ClassHeadlessCollector({
    *  終了する（遅い実機で顕在化）。ページ遷移が重い面（出欠統計等）は大きめを渡して着地まで生かす。 */
   maxTries?: number
 }) {
-  const webviewRef = useRef<WebView>(null)
+  const webviewRef = useRef<WebViewInstance>(null)
   const { setCollectActive, attendanceFocused } = useClassView()
   const triesRef = useRef(0)
   const rebootsRef = useRef(0)
