@@ -38,6 +38,8 @@ export function syncBarSkipText(feature: 'class' | 'letus', reason: SyncSkipReas
       // feature単位で表現する: 掲示だけ停止中でも課題フェーズは走り得る（「同期は停止中」と
       // 言い切ると直後の「課題を同期中…」と矛盾する）。
       return feature === 'letus' ? '課題の同期は一時停止中です' : '掲示の同期は一時停止中です'
+    case 'demo':
+      return 'デモ表示中・サンプルデータです'
   }
 }
 
@@ -68,6 +70,8 @@ function syncHeaderSkipText(reason: SyncSkipReason): string {
       return '授業中'
     case 'stopped':
       return '停止中'
+    case 'demo':
+      return 'デモ'
   }
 }
 

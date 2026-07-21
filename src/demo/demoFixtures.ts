@@ -19,6 +19,7 @@ import type { AssignmentMap } from '../storage/assignmentsSerialize'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 import type { ClassEvent } from '../timetableEvents/classEvent'
+import type { LetusBody, LetusBodyMap } from '../storage/letusBodySerialize'
 import { TERMS_VERSION } from '../legal/termsVersion'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -347,6 +348,29 @@ export function buildDemoClassEvents(now: Date): ClassEvent[] {
       createdAt: created,
     },
   ]
+}
+
+
+/**
+ * 課題本文。これが無いと課題詳細を開いた瞬間に LetusPageFetcher が立ち、
+ * デモでは WebView が null を返すので「本文を取得できませんでした」で止まる
+ * （審査員が最初に開く画面なので conspicuously broken に見える）。
+ */
+export function buildDemoBodies(now: Date): LetusBodyMap {
+  const at = new Date(now).toISOString()
+  const body = (description: string): LetusBody => ({ description, attachments: [], fetchedAt: at })
+  return {
+    'demo:assignment/1': body(
+      '配列と繰り返し処理の演習です。テキスト第4章の例題を参考に、指定された3つの関数を実装して提出してください。提出形式はソースコード一式のzipです。',
+    ),
+    'demo:assignment/2': body(
+      '第3章「行列式」の範囲から出題します。サラスの方法と余因子展開の両方を使えるようにしておいてください。',
+    ),
+    'demo:assignment/3': body(
+      '情報倫理に関するレポートです。授業で扱った事例のいずれかを取り上げ、2000字程度で論じてください。引用元は明記すること。',
+    ),
+    'demo:assignment/4': body('力学の基礎に関するレポートです。提出済みです。'),
+  }
 }
 
 /** デモ起動時に同意画面へ戻らないよう、現行版に同意済みとして入れる。 */

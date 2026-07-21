@@ -17,13 +17,27 @@
 import type { AttendanceEngineValue } from './AttendanceEngineProvider'
 import type { AttendedRecord } from './attendedState'
 
-/** デモの出席で見せる科目と受付時間（demoFixtures の月1と揃える）。 */
+/** デモの出席で見せる科目。 */
 export const DEMO_ATTENDANCE_COURSE = '情報リテラシー演習'
-export const DEMO_ATTENDANCE_WINDOW = '09:00〜10:30'
+
+const pad = (n: number) => String(n).padStart(2, '0')
+const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+/**
+ * 受付時間は now 基準で作る。固定値にすると、その時刻を外れた瞬間に
+ * 「受付中」ピルと「受付終了」カウントダウンが同時に出て矛盾する（画面は
+ * confirmWindow から残り時間を計算するため）。now を跨ぐ窓にすれば整合する。
+ */
+export function demoWindow(now: Date): string {
+  const from = new Date(now.getTime() - 5 * 60000)
+  const to = new Date(now.getTime() + 25 * 60000)
+  return `${hhmm(from)}〜${hhmm(to)}`
+}
 
 export function demoOverrides(
   attended: AttendedRecord | null,
   submit: () => void,
+  now: Date = new Date(),
 ): Partial<AttendanceEngineValue> {
   return {
     phase: attended ? 'result' : 'ready',
@@ -31,8 +45,8 @@ export function demoOverrides(
       status: attended ? 'attended' : 'accepting',
       accepting: !attended,
       courseName: DEMO_ATTENDANCE_COURSE,
-      confirmWindow: DEMO_ATTENDANCE_WINDOW,
-      remaining: attended ? null : '残り 12 分',
+      confirmWindow: demoWindow(now),
+      remaining: null,
       error: null,
       network: 'on',
       reactionAvailable: false,

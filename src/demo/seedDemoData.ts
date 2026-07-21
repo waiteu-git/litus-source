@@ -12,6 +12,7 @@ import { mutateAssignments } from '../storage/assignmentsStore'
 import { mutateBulletinDigest } from '../storage/bulletinDigestStore'
 import { saveAttendanceStats } from '../storage/attendanceStatsStore'
 import { saveClassEvents } from '../storage/classEventsStore'
+import { mutateLetusBody } from '../storage/letusBodyStore'
 import { saveTermsConsent } from '../storage/termsConsentStore'
 import { saveOnboardingDone } from '../storage/onboardingStore'
 import {
@@ -21,6 +22,7 @@ import {
   buildDemoBulletins,
   buildDemoAttendanceStats,
   buildDemoClassEvents,
+  buildDemoBodies,
 } from './demoFixtures'
 
 export async function seedDemoData(now: Date = new Date()): Promise<void> {
@@ -34,4 +36,7 @@ export async function seedDemoData(now: Date = new Date()): Promise<void> {
   await mutateBulletinDigest(() => buildDemoBulletins(now))
   await saveAttendanceStats(buildDemoAttendanceStats(now))
   await saveClassEvents(buildDemoClassEvents(now))
+  // 本文もシードする。無いと課題詳細で取得エンジンが立ち、デモでは取得できず
+  // 「本文を取得できませんでした」で止まる（審査員が最初に開く画面）。
+  await mutateLetusBody(() => buildDemoBodies(now))
 }
