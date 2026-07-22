@@ -15,6 +15,7 @@
       "package": "dev.waiteu.litus",
       "versionCode": 99,
       "predictiveBackGestureEnabled": false,
+      "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -76,7 +77,8 @@
           ]
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "./plugins/withNoSupportsRtl.js"
     ],
     "extra": {
       "eas": {

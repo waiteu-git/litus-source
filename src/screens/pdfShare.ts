@@ -7,6 +7,31 @@ export function isWithinShareLimit(bytes: number): boolean {
   return bytes > 0 && bytes <= PDF_SHARE_LIMIT_BYTES
 }
 
+// ファイル名に使えない文字だけを落とす（許可リストにすると日本語が丸ごと消える）。
+// 制御文字 / Windows禁止文字 <>:"/\|?* / URIで意味を持つ %#
+// （Android は Uri.getPath が %エスケープを復号し、iOS は URL 変換失敗時に自動 %エンコードして
+//  %25 を % に戻すため、生の % を残すと file:// URI が壊れる）。
+const UNSAFE_FILENAME_CHARS = /[\u0000-\u001f<>:"/\\|?*%#]/g
+// Windows 予約名（共有先がPCの場合に備える）
+const RESERVED_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
+// ext4/APFS の1要素255バイト制限に対する余裕。日本語はUTF-8で3バイト/字なので文字数では足りない。
+const MAX_BASENAME_BYTES = 180
+
+/** UTF-8バイト長で切り詰める（サロゲートペアを割らない）。 */
+function truncateBytes(s: string, max: number): string {
+  const enc = new TextEncoder()
+  if (enc.encode(s).length <= max) return s
+  let out = ''
+  let n = 0
+  for (const ch of s) {
+    const b = enc.encode(ch).length
+    if (n + b > max) break
+    out += ch
+    n += b
+  }
+  return out
+}
+
 /** URLからダウンロード保存用の安全なファイル名を作る。拡張子.pdfを保証。 */
 export function sanitizePdfFilename(url: string): string {
   let last = ''
@@ -23,11 +48,19 @@ export function sanitizePdfFilename(url: string): string {
   }
   // クエリ等が残っていたら落とす
   last = last.split(/[?#]/)[0]
-  // 危険文字を_へ
-  let name = last.replace(/[^\w.\-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+  // 使えない文字だけを_へ（日本語などはそのまま残す）
+  let name = last
+    .replace(UNSAFE_FILENAME_CHARS, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    // 先頭の . を落として隠しファイル化と ../ を封じる
+    .replace(/^[_.\s]+|[_.\s]+$/g, '')
+  if (/\.pdf$/i.test(name)) name = name.slice(0, -4).replace(/[_.\s]+$/g, '')
   if (!name) return 'document.pdf'
-  if (!/\.pdf$/i.test(name)) name += '.pdf'
-  return name
+  if (RESERVED_NAMES.test(name)) name = '_' + name
+  name = truncateBytes(name, MAX_BASENAME_BYTES).replace(/[_.\s]+$/g, '')
+  if (!name) return 'document.pdf'
+  return name + '.pdf'
 }
 
 /**

@@ -6,14 +6,15 @@ import { useUi, useTabBarClearance } from '../ui/screen'
 import { useAttendanceEngine } from './AttendanceEngineProvider'
 import { computeHomeBanner } from './homeBanner'
 import { navigationRef, requestOpenAttendance } from '../navigation/navigationRef'
+import { HIDE_ATTENDANCE_FAB_ROUTES } from '../navigation/fullscreenRoutes'
 import { COLORS } from '../theme'
 import { loadTimetableOverrides, loadCurrentQuarter } from '../storage/timetableOverridesStore'
 import { applyQuarterOverrides, resolveCurrentQuarter, type TimetableOverrides } from '../timetableEvents/quarter'
 import type { Quarter } from '../parsers/timetable'
 
-// FABを出さない画面: ホーム(HomeHome)=独自の出席バナーを持つ、出席(Attendance)=遷移先自身、
-// 全画面ビューア(Web/PdfViewer/Link)=下部にボタンがありピルが被る（RootTabs の hideOn と同じ集合）。
-const HIDDEN_ROUTES: ReadonlySet<string> = new Set(['HomeHome', 'Attendance', 'Web', 'PdfViewer', 'Link'])
+// FABを出さない画面の集合は navigation/fullscreenRoutes.ts が正典（RootTabs のタブバー抑止と共用）。
+// ホーム(HomeHome)=独自の出席バナーを持つ、出席(Attendance)=遷移先自身、
+// 全画面ビューア(Web/PdfViewer/Link/BulletinWeb)=下部にボタンがありピルが被る。
 
 /**
  * 全画面共通の出席フローティングボタン。受付中／授業時間帯にタブバー上へ小さなピルを出し、
@@ -52,7 +53,7 @@ export default function AttendanceFab() {
   const cq = resolveCurrentQuarter(ttQuarterPref, tick)
   const raw = computeHomeBanner(ttQ, running ? reception : null, tick, cq)
   const active = raw.active && !attendedNow
-  if (!active || (routeName != null && HIDDEN_ROUTES.has(routeName))) return null
+  if (!active || (routeName != null && HIDE_ATTENDANCE_FAB_ROUTES.has(routeName))) return null
 
   const accepting = raw.kind === 'accepting'
   const bg = accepting

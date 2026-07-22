@@ -12,21 +12,27 @@ import type { AssignmentMap } from '../storage/assignmentsSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
 import { loadTimetableOverrides, loadCurrentQuarter } from '../storage/timetableOverridesStore'
 import { applyQuarterOverrides, resolveCurrentQuarter } from '../timetableEvents/quarter'
-import { buildWidgetModel, type WidgetModel } from './viewModel'
+import { loadTimetableRefreshedAt, loadAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
+import { buildWidgetModel, pickDataAt, type WidgetModel } from './viewModel'
 
 /** 現在時刻でウィジェット表示モデルを組み立てる。読み取り失敗は空データにフォールバック。 */
 export async function loadWidgetModel(now: Date = new Date()): Promise<WidgetModel> {
-  const [timetable, assignmentMap, attended, weeklyPatterns, ttOverrides, ttQuarterPref] = await Promise.all([
-    loadTimetable().catch(() => null),
-    loadAssignments().catch((): AssignmentMap => ({})),
-    loadAttendedRecord().catch(() => null),
-    loadWeeklyPatterns().catch((): WeeklyPatternMap => ({})),
-    loadTimetableOverrides().catch(() => ({})),
-    loadCurrentQuarter().catch(() => null),
-  ])
+  const [timetable, assignmentMap, attended, weeklyPatterns, ttOverrides, ttQuarterPref, ttAt, asgAt] =
+    await Promise.all([
+      loadTimetable().catch(() => null),
+      loadAssignments().catch((): AssignmentMap => ({})),
+      loadAttendedRecord().catch(() => null),
+      loadWeeklyPatterns().catch((): WeeklyPatternMap => ({})),
+      loadTimetableOverrides().catch(() => ({})),
+      loadCurrentQuarter().catch(() => null),
+      // 鮮度ラベルは描画時刻ではなく「最後にLETUS/CLASSへ触った時刻」で出す（OSが30分ごとに
+      // 起こす再描画では通信していないため、now を使うと存在しない鮮度を詐称する）。
+      loadTimetableRefreshedAt().catch(() => 0),
+      loadAssignmentsRefreshedAt().catch(() => 0),
+    ])
   const isOn = (code: string) => isClassOnDate(weeklyPatterns[code], now)
   // 積みコマ（半期科目）の代表選択用に override をマージし、現在半期（手動指定優先・無ければ日付既定）を算出。
   const ttQ = (timetable ?? []).map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) }))
   const cq = resolveCurrentQuarter(ttQuarterPref, now)
-  return buildWidgetModel(now, ttQ, Object.values(assignmentMap), attended, isOn, cq)
+  return buildWidgetModel(now, ttQ, Object.values(assignmentMap), attended, isOn, cq, pickDataAt(ttAt, asgAt))
 }
