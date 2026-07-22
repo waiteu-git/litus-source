@@ -7,6 +7,7 @@ import HomeStack from './HomeStack'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, DARK, useThemeVariant } from '../theme'
 import { FONT } from '../ui/fontFamily'
+import { TAB_ROUTE_NAMES, INITIAL_TAB, TAB_BACK_BEHAVIOR } from './tabConfig'
 
 const Tab = createBottomTabNavigator()
 
@@ -54,7 +55,9 @@ export default function RootTabs() {
   return (
     <Tab.Navigator
       // 通常起動は常にホーム着地。出席通知タップ時のみ App 層が Attendance へ遷移させる。
-      initialRouteName="ホーム"
+      initialRouteName={INITIAL_TAB}
+      // 既定('firstRoute')は先頭タブ=時間割に戻るため、ホームで戻ってもアプリが終了しない。
+      backBehavior={TAB_BACK_BEHAVIOR}
       screenOptions={{
         headerShown: false,
         sceneStyle: { backgroundColor: 'transparent' },
@@ -70,17 +73,17 @@ export default function RootTabs() {
       }}
     >
       <Tab.Screen
-        name="時間割"
+        name={TAB_ROUTE_NAMES[0]}
         component={TimetableStack}
         options={({ route }) => ({ tabBarIcon: icon('calendar-outline'), tabBarStyle: barFor(route) })}
       />
       <Tab.Screen
-        name="ホーム"
+        name={TAB_ROUTE_NAMES[1]}
         component={HomeStack}
         options={({ route }) => ({ tabBarIcon: icon('home-outline'), tabBarStyle: barFor(route) })}
       />
       <Tab.Screen
-        name="課題"
+        name={TAB_ROUTE_NAMES[2]}
         component={AssignmentsStack}
         options={({ route }) => ({ tabBarIcon: icon('checkbox-outline'), tabBarStyle: barFor(route) })}
       />
