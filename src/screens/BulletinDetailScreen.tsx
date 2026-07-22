@@ -219,13 +219,22 @@ export default function BulletinDetailScreen() {
           )}
         </View>
 
-        {/* 副ボタン: 元ページで開く（添付DL/原本確認はCLASS本物ページで完結）。全幅・読書面の下。 */}
+        {/* 副ボタン: 元ページで開く（添付DL/原本確認はCLASS本物ページで完結）。全幅・読書面の下。
+            本文取得中は押させない。裏で走っている収集WebViewがCLASSを掴んでいる最中に
+            可視WebViewで再入場すると、排他リースの奪い合いでエラーになる（実機報告 2026-07-22）。 */}
         <Pressable
           onPress={openInClass}
-          style={[styles.btnSecondary, { backgroundColor: ui.colors.readingSurface, borderColor: ui.colors.readingBorder }]}
+          disabled={fetching}
+          style={[
+            styles.btnSecondary,
+            { backgroundColor: ui.colors.readingSurface, borderColor: ui.colors.readingBorder },
+            fetching ? styles.btnDisabled : null,
+          ]}
         >
           <Ionicons name="open-outline" size={15} color={readAccent} />
-          <Text style={[styles.btnSecondaryText, { color: readAccent }]}>元ページで開く</Text>
+          <Text style={[styles.btnSecondaryText, { color: readAccent }]}>
+            {fetching ? '本文を取得しています…' : '元ページで開く'}
+          </Text>
         </Pressable>
       </ScrollView>
 
@@ -267,5 +276,7 @@ const styles = StyleSheet.create({
   failRow: { flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: 12 },
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   btnSecondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: RADIUS.md, paddingVertical: 12, marginTop: 16 },
+  // 押せないことを見た目でも示す（disabled だけだと反応が無いのか壊れたのか区別できない）。
+  btnDisabled: { opacity: 0.5 },
   btnSecondaryText: { fontSize: 14, fontWeight: '500' },
 })
