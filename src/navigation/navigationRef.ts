@@ -1,4 +1,5 @@
 import { createNavigationContainerRef } from '@react-navigation/native'
+import { assignmentScreenFor } from '../assignments/manualAssignment'
 
 /**
  * NavigationContainer外（App層の通知応答ハンドラ）から遷移するための参照。
@@ -44,7 +45,10 @@ function tryOpenAssignment() {
   if (pendingAssignmentUrl && navigationRef.isReady()) {
     const url = pendingAssignmentUrl
     pendingAssignmentUrl = null
-    nav('課題', { screen: 'LetusAssignmentDetail', params: { url } })
+    // initial:false でタブ未訪問時も一覧を下に敷く。通知タップはコールドスタートが主経路で、
+    // これが無いと詳細だけがスタックに積まれ、戻るボタンが出ず課題一覧へ到達できなくなる
+    // （HomeScreen.tsx の同種の遷移は元から initial:false を明示していた）。
+    nav('課題', { screen: assignmentScreenFor(url), params: { url }, initial: false })
   }
 }
 

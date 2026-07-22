@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MANUAL_PREFIX,
   isManualUrl,
+  assignmentScreenFor,
   parseDeadlineInput,
   formatDeadlineText,
   splitDeadline,
@@ -98,5 +99,16 @@ describe('makeUserManagedActivity', () => {
     expect(a.deadline).toBeNull()
     expect(a.deadlineText).toBe('締切なし')
     expect(a.courseName).toBe('追加')
+  })
+})
+
+describe('assignmentScreenFor', () => {
+  // 通知タップ経路が isManualUrl を見ておらず、手動課題のリマインドをタップすると
+  // LETUS用の画面へ飛んでいた（HomeScreen だけが出し分けていた＝判定の二重定義）。
+  it('手動課題は ManualAssignment へ', () => {
+    expect(assignmentScreenFor('manual://abc')).toBe('ManualAssignment')
+  })
+  it('LETUSの課題は LetusAssignmentDetail へ', () => {
+    expect(assignmentScreenFor('https://letus.ed.tus.ac.jp/mod/assign/view.php?id=1')).toBe('LetusAssignmentDetail')
   })
 })

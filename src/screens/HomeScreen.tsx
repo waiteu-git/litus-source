@@ -24,7 +24,7 @@ import Constants from 'expo-constants'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
 import { formatBuildTag } from '../appVersion'
 import { RELEASE_STAGE, shouldShowBuildTag } from '../releaseStage'
-import { isManualUrl } from '../assignments/manualAssignment'
+import { assignmentScreenFor, isManualUrl } from '../assignments/manualAssignment'
 import { Tag } from '../ui/Tag'
 import { Badge } from '../ui/Badge'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
@@ -302,7 +302,7 @@ export default function HomeScreen() {
   }
   // 「今やること」の課題カードから、その課題の詳細（課題タブ内）へ直接飛ぶ。
   function openAssignment(url: string) {
-    const screen = isManualUrl(url) ? 'ManualAssignment' : 'LetusAssignmentDetail'
+    const screen = assignmentScreenFor(url)
     // initial:false でタブ未訪問時も一覧を下に敷き、詳細から戻れるようにする（stuck防止）。
     navigation.navigate('課題', { screen, params: { url }, initial: false })
   }
