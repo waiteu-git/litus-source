@@ -140,7 +140,10 @@ export default function SettingsScreen() {
     }
   }
 
-  // すべてのデータ（Cookie含む）をリセット。破壊的なので二段階で確認する。
+  // 端末内の保存データをリセット。破壊的なので二段階で確認する。
+  // **Cookie（SSOログイン状態）は消えない**（resetAll.ts のコメント参照＝消去手段が現状ない）。
+  // ここで「Cookie含む」「ログインからやり直し」と書くと、実装で裏の取れない主張になり、
+  // ストアのデータセーフティ申告へ転記した時点で虚偽記載になる。文言は実装に合わせること。
   function onResetAll() {
     Alert.alert(
       'すべてのデータをリセット',
@@ -152,10 +155,16 @@ export default function SettingsScreen() {
     )
   }
   function confirmResetAll() {
-    Alert.alert('本当にリセットしますか？', '消去後はアプリを終了します。次回起動時はログインからやり直しになります。', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: 'リセットして終了', style: 'destructive', onPress: doResetAll },
-    ])
+    Alert.alert(
+      '本当にリセットしますか？',
+      '消去後はアプリを終了します。次回起動時は規約の同意からやり直しになります。\n\n' +
+        'なお、LETUS・CLASSへのログイン状態（Cookie）はこの操作では消えません。' +
+        'ログインも解除したい場合は、端末の「設定 → アプリ → リタス → ストレージ → データを削除」を実行してください。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: 'リセットして終了', style: 'destructive', onPress: doResetAll },
+      ],
+    )
   }
   async function doResetAll() {
     try {
