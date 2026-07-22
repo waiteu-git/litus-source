@@ -18,6 +18,15 @@ import { loadClassEvents } from '../storage/classEventsStore'
 // 引き込むため vitest から読めず、ここに変換を書くとテストの穴になる（実際にそれで文面が壊れていた）。
 import { classEventNotifications } from './classEventNotify'
 import { serializeRuns } from './serializeRuns'
+import { staggerSameInstant, DEFAULT_STAGGER_STEP_MS } from './staggerFireAt'
+import type { ScheduledNotification } from './schedule'
+
+/** 同一時刻グループ内の並び順を決めるキー（決定論のため種別ごとに安定した識別子を使う）。 */
+function assignmentStaggerKey(n: ScheduledNotification): string {
+  if (n.kind === 'morning-digest') return `dig:${n.fireAt}`
+  if (n.kind === 'class-event') return `evt:${n.eventId}`
+  return `asg:${n.assignmentId}:${n.kind}`
+}
 
 function toSchedulable(map: AssignmentMap): SchedulableAssignment[] {
   return Object.values(map)
@@ -64,7 +73,18 @@ export const refreshAllNotifications: (now?: Date) => Promise<void> = serializeR
     const eventNotifications = classEventNotifications(classEvents, now)
 
     const plan = planNotifications(attendanceAlarms, [...assignmentNotifications, ...eventNotifications], now)
-    await syncAttendanceAlarms(plan.attendance)
-    await syncAssignmentReminders(plan.assignments)
+    // 優先度配分の後にずらす（配分の判断は元の時刻で行うのが正しい）。
+    // 当日イベントは全て8:00固定、同一締切の課題、同一曜限に積まれた別科目の出席開始が
+    // ミリ秒まで一致するため、そのまま貼るとヘッドアップと音が重なって読めない。
+    await syncAttendanceAlarms(
+      staggerSameInstant(
+        plan.attendance,
+        DEFAULT_STAGGER_STEP_MS,
+        (a) => `${a.courseCode}:${a.kind}`,
+      ),
+    )
+    await syncAssignmentReminders(
+      staggerSameInstant(plan.assignments, DEFAULT_STAGGER_STEP_MS, assignmentStaggerKey),
+    )
   },
 )
