@@ -25,6 +25,7 @@ import { HOME_LAYOUT_OPS, HOME_SECTION_META } from '../home/homeSections'
 import { SUBJECT_LAYOUT_OPS, SUBJECT_SECTION_META } from '../subject/subjectSections'
 import Constants from 'expo-constants'
 import { formatVersionLabel } from '../appVersion'
+import { RELEASE_STAGE, devBadgeSuffix } from '../releaseStage'
 import { formatSubmitDiag, type SubmitDiag } from '../attendance/submitDiag'
 import { clearSubmitDiags, loadSubmitDiags } from '../storage/submitDiagStore'
 import { useSync } from '../sync/SyncProvider'
@@ -403,7 +404,8 @@ export default function SettingsScreen() {
         <Accordion title="アプリ情報" icon="information-circle-outline">
           <View style={ui.card}>
             <Text style={{ color: ui.valueColor, fontWeight: '500' }}>
-              リタス {formatVersionLabel(Constants.nativeAppVersion, Constants.nativeBuildVersion)}（開発版）
+              リタス {formatVersionLabel(Constants.nativeAppVersion, Constants.nativeBuildVersion)}
+              {devBadgeSuffix(RELEASE_STAGE)}
             </Text>
             <Pressable onPress={() => Linking.openURL('https://litus.waiteu.dev/')}>
               <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
