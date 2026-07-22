@@ -18,26 +18,45 @@ import type { ScheduledNotification } from './schedule'
 import { buildAssignmentNotificationContent } from './assignmentContent'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { buildBulletinNotificationContent } from './bulletinNotify'
+import {
+  CHANNEL_SPECS,
+  toChannelInput,
+  ATTENDANCE_CHANNEL_ID,
+  ASSIGNMENT_CHANNEL_ID,
+  BULLETIN_CHANNEL_ID,
+  LETUS_NEWS_CHANNEL_ID,
+  CLASS_EVENT_CHANNEL_ID,
+} from './channelSpec'
 
-const TAG = 'attendance-alarm'
-const ASSIGNMENT_TAG = 'assignment-reminder'
-/** 各回イベント（休講/補講/小テスト等）。予約枠は課題と共有するが分類とタップ先が別。 */
-export const CLASS_EVENT_TAG = 'class-event'
-export const BULLETIN_TAG = 'bulletin-new'
-export const ATTENDANCE_OPEN_TAG = 'attendance-open'
-export const LETUS_NEWS_TAG = 'letus-news'
+// タグの定義は純粋層 notificationTags.ts が正典（notificationRoute.ts と共有する）。
+import {
+  ATTENDANCE_TAG,
+  ASSIGNMENT_TAG,
+  CLASS_EVENT_TAG,
+  BULLETIN_TAG,
+  ATTENDANCE_OPEN_TAG,
+  LETUS_NEWS_TAG,
+} from './notificationTags'
+import type { NotificationPayload } from './notificationRoute'
+import type { NotifPermission } from './permissionState'
 
-export const ATTENDANCE_CHANNEL_ID = 'attendance'
-export const ASSIGNMENT_CHANNEL_ID = 'assignments'
-export const BULLETIN_CHANNEL_ID = 'bulletins'
-export const LETUS_NEWS_CHANNEL_ID = 'letus-updates'
-/**
- * 各回イベント（休講/補講/小テスト/教室変更）専用チャンネル。
- * 予約枠は課題と共有するが、**通知の性質が別物**なので OS 上の分類は分ける。
- * 同居していた頃は「休講」がOS設定で『課題リマインド』に属し、課題通知を切ると休講も消え、
- * 逆に休講だけ切ることもできなかった（2026-07-17修正）。
- */
-export const CLASS_EVENT_CHANNEL_ID = 'class-events'
+export {
+  ATTENDANCE_TAG,
+  ASSIGNMENT_TAG,
+  CLASS_EVENT_TAG,
+  BULLETIN_TAG,
+  ATTENDANCE_OPEN_TAG,
+  LETUS_NEWS_TAG,
+} from './notificationTags'
+
+// チャンネルの定義（ID・名称・属性）は純粋層 channelSpec.ts が正典。ここは re-export のみ。
+export {
+  ATTENDANCE_CHANNEL_ID,
+  ASSIGNMENT_CHANNEL_ID,
+  BULLETIN_CHANNEL_ID,
+  LETUS_NEWS_CHANNEL_ID,
+  CLASS_EVENT_CHANNEL_ID,
+} from './channelSpec'
 
 /** Expo Go では expo-notifications を読み込めない（読むと落ちる）。 */
 const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
@@ -64,10 +83,11 @@ async function loadNotifications(): Promise<NotificationsModule | null> {
 }
 
 /**
- * 通知の表示方針とAndroidチャンネルを設定する。App起動時に権限要求より先に1回呼ぶ。
+ * 通知の表示方針とAndroidチャンネルを設定する。App起動時に1回呼ぶ。
  * ハンドラ未設定だとフォアグラウンド中の通知が一切表示されない（授業直前にアプリを
- * 開いていると出席ナッジが消える）ため必須。チャンネルは出席=MAX（音＋ヘッドアップ）、
- * 課題=HIGH。Expo Go では loadNotifications が null を返し no-op。
+ * 開いていると出席ナッジが消える）ため必須。
+ * 権限の要求はここでは行わない（オンボーディング完了時＝LoginGate の onSlidesDone）。
+ * チャンネルの属性は channelSpec.ts が正典。Expo Go では loadNotifications が null を返し no-op。
  */
 export async function configureNotifications(): Promise<void> {
   const Notifications = await loadNotifications()
@@ -81,63 +101,99 @@ export async function configureNotifications(): Promise<void> {
     }),
   })
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(ATTENDANCE_CHANNEL_ID, {
-      name: '出席リマインド',
-      importance: Notifications.AndroidImportance.MAX,
-    })
-    await Notifications.setNotificationChannelAsync(ASSIGNMENT_CHANNEL_ID, {
-      name: '課題リマインド',
-      importance: Notifications.AndroidImportance.HIGH,
-    })
-    await Notifications.setNotificationChannelAsync(CLASS_EVENT_CHANNEL_ID, {
-      name: '休講・補講・小テスト',
-      importance: Notifications.AndroidImportance.HIGH,
-    })
-    await Notifications.setNotificationChannelAsync(BULLETIN_CHANNEL_ID, {
-      name: '新着掲示',
-      importance: Notifications.AndroidImportance.HIGH,
-    })
-    await Notifications.setNotificationChannelAsync(LETUS_NEWS_CHANNEL_ID, {
-      name: 'LETUS更新',
-      importance: Notifications.AndroidImportance.HIGH,
-    })
+    // 属性の内容は channelSpec.ts が正典（そこにテストとラチェットがある）。
+    // ここは enum を注入して流し込むだけ。
+    const enums = {
+      importance: Notifications.AndroidImportance,
+      visibility: Notifications.AndroidNotificationVisibility,
+    }
+    for (const spec of CHANNEL_SPECS) {
+      await Notifications.setNotificationChannelAsync(
+        spec.id,
+        toChannelInput(spec, enums) as Parameters<typeof Notifications.setNotificationChannelAsync>[1],
+      )
+    }
   }
 }
 
-type NotifResponseData = { tag?: string; courseCode?: string; kind?: string }
+type NotifResponseData = NotificationPayload
 
-function tagOf(resp: { notification: { request: { content: { data?: unknown } } } } | null | undefined): string | null {
-  const data = resp?.notification.request.content.data as NotifResponseData | undefined
-  return typeof data?.tag === 'string' ? data.tag : null
+function payloadOf(
+  resp: { notification: { request: { content: { data?: unknown } } } } | null | undefined,
+): NotificationPayload | null {
+  const data = resp?.notification.request.content.data as NotificationPayload | undefined
+  return typeof data?.tag === 'string' ? data : null
 }
 
 /**
- * アプリを起動した通知タップ（cold start）の tag を返す。無ければ null。
+ * アプリを起動した通知タップ（cold start）の payload を返す。無ければ null。
  * Expo Go では通知モジュールを読み込めないため null。
+ * tag だけでなく data 全体を返す（課題リマインドは assignmentId で対象へ着地するため）。
  */
-export async function getInitialNotificationTag(): Promise<string | null> {
+export async function getInitialNotificationPayload(): Promise<NotificationPayload | null> {
   const Notifications = await loadNotifications()
   if (!Notifications) return null
-  return tagOf(await Notifications.getLastNotificationResponseAsync())
+  return payloadOf(await Notifications.getLastNotificationResponseAsync())
 }
 
 /**
- * 通知タップ（warm）を購読する。コールバックにはタップされた通知の tag を渡す。
+ * 消費済みの通知応答を破棄する。cold start の着地を処理した直後に呼ぶ。
+ * 呼ばないと getLastNotificationResponseAsync が同じ応答を返し続け、以後の通常起動でも
+ * 毎回「前回タップした通知の画面」へ飛ぶ。
+ * 古い実装には存在しないので optional call にする。
+ */
+export async function clearConsumedNotificationResponse(): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  Notifications.clearLastNotificationResponse?.()
+}
+
+/**
+ * 通知タップ（warm）を購読する。コールバックにはタップされた通知の payload を渡す。
  * Expo Go では no-op（null を返す）。
  */
 export async function addNotificationResponseListener(
-  cb: (tag: string | null) => void,
+  cb: (payload: NotificationPayload | null) => void,
 ): Promise<{ remove: () => void } | null> {
   const Notifications = await loadNotifications()
   if (!Notifications) return null
-  return Notifications.addNotificationResponseReceivedListener((resp) => cb(tagOf(resp)))
+  return Notifications.addNotificationResponseReceivedListener((resp) => cb(payloadOf(resp)))
 }
 
-export async function requestNotificationPermission(): Promise<boolean> {
+/**
+ * 現在の通知権限を読む。Expo Go / モジュール不在では null（回復導線を出さない）。
+ *
+ * **画面表示時／フォアグラウンド確定後に呼ぶこと**。canAskAgain は Activity が前面に
+ * ある時しか信用できず（PermissionsService.kt は currentActivity が null なら false）、
+ * 起動直後に読むと「恒久拒否」と誤判定してまだ聞けるユーザーを設定アプリへ送ってしまう。
+ */
+export async function getNotificationPermission(): Promise<NotifPermission | null> {
   const Notifications = await loadNotifications()
-  if (!Notifications) return false
-  const { status } = await Notifications.requestPermissionsAsync()
-  return status === 'granted'
+  if (!Notifications) return null
+  const r = await Notifications.getPermissionsAsync()
+  return {
+    status: r.status as NotifPermission['status'],
+    granted: r.granted,
+    canAskAgain: r.canAskAgain,
+  }
+}
+
+/**
+ * 通知権限を要求する。Expo Go / モジュール不在では null。
+ *
+ * **Android は同一インストール内で2回拒否されると以後ダイアログが出ない**（無音で denied が返る）。
+ * iOS は1回きり。＝要求は「ユーザーが価値を理解した後」に1回だけ出すこと。
+ * 戻り値は要求後の状態そのもの（呼び出し側が canAskAgain を見て回復導線を切り替えられるように）。
+ */
+export async function requestNotificationPermission(): Promise<NotifPermission | null> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return null
+  const r = await Notifications.requestPermissionsAsync()
+  return {
+    status: r.status as NotifPermission['status'],
+    granted: r.granted,
+    canAskAgain: r.canAskAgain,
+  }
 }
 
 export async function syncAttendanceAlarms(alarms: AttendanceAlarm[]): Promise<void> {
@@ -147,14 +203,14 @@ export async function syncAttendanceAlarms(alarms: AttendanceAlarm[]): Promise<v
   const scheduled = await Notifications.getAllScheduledNotificationsAsync()
   for (const n of scheduled) {
     const data = n.content.data as { tag?: string } | null
-    if (data?.tag === TAG) {
+    if (data?.tag === ATTENDANCE_TAG) {
       await Notifications.cancelScheduledNotificationAsync(n.identifier)
     }
   }
   for (const alarm of alarms) {
     const { title, body } = buildAttendanceNotificationContent(alarm)
     await Notifications.scheduleNotificationAsync({
-      content: { title, body, data: { tag: TAG, courseCode: alarm.courseCode, kind: alarm.kind } },
+      content: { title, body, data: { tag: ATTENDANCE_TAG, courseCode: alarm.courseCode, kind: alarm.kind } },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(alarm.fireAt),
@@ -181,12 +237,15 @@ export async function syncAssignmentReminders(notifications: ScheduledNotificati
   for (const n of notifications) {
     const { title, body } = buildAssignmentNotificationContent(n)
     const isEvent = n.kind === 'class-event'
+    // **対象の識別子を必ず載せる**。載せないとタップされても「どの課題か」が分からず、
+    // 課題リマインドは一覧までしか着地できない（assignmentId は課題ページURLそのもの）。
+    const data: NotificationPayload = isEvent
+      ? { tag: CLASS_EVENT_TAG, kind: n.kind, eventId: n.eventId }
+      : n.kind === 'morning-digest'
+        ? { tag: ASSIGNMENT_TAG, kind: n.kind }
+        : { tag: ASSIGNMENT_TAG, kind: n.kind, assignmentId: n.assignmentId }
     await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: { tag: isEvent ? CLASS_EVENT_TAG : ASSIGNMENT_TAG, kind: n.kind },
-      },
+      content: { title, body, data },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(n.fireAt),
@@ -267,7 +326,7 @@ export async function clearDeliveredAttendanceOpenNotifications(): Promise<void>
  */
 export async function clearDeliveredAttendanceStartNotifications(courseCode?: string | null): Promise<void> {
   await clearDelivered(
-    [TAG],
+    [ATTENDANCE_TAG],
     (d) => d.kind === 'attendance-start' && (!courseCode || d.courseCode === courseCode),
   )
 }

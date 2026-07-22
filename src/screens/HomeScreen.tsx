@@ -24,7 +24,7 @@ import Constants from 'expo-constants'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
 import { formatBuildTag } from '../appVersion'
 import { RELEASE_STAGE, shouldShowBuildTag } from '../releaseStage'
-import { isManualUrl } from '../assignments/manualAssignment'
+import { assignmentScreenFor, isManualUrl } from '../assignments/manualAssignment'
 import { Tag } from '../ui/Tag'
 import { Badge } from '../ui/Badge'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
@@ -40,6 +40,7 @@ import HomeSyncButton from '../home/HomeSyncButton'
 import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
 import { markCourseSeen, type CourseNewsMap } from '../updates/courseNews'
 import ScreenHint from '../tutorial/ScreenHint'
+import NotificationPermissionNotice from '../notifications/NotificationPermissionNotice'
 import { COLORS } from '../theme'
 import { SPACE } from '../ui/scale'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
@@ -301,7 +302,7 @@ export default function HomeScreen() {
   }
   // 「今やること」の課題カードから、その課題の詳細（課題タブ内）へ直接飛ぶ。
   function openAssignment(url: string) {
-    const screen = isManualUrl(url) ? 'ManualAssignment' : 'LetusAssignmentDetail'
+    const screen = assignmentScreenFor(url)
     // initial:false でタブ未訪問時も一覧を下に敷き、詳細から戻れるようにする（stuck防止）。
     navigation.navigate('課題', { screen, params: { url }, initial: false })
   }
@@ -356,6 +357,10 @@ export default function HomeScreen() {
           {/* 同期の状況＋操作はヘッダー右の HomeSyncButton へ集約（鮮度・スキップ理由・ヘルス注意）。 */}
           {/* 初回ヒント（×で永続的に消える・設定から再表示可）。 */}
           <ScreenHint hintKey="home" />
+          {/* OS で通知が塞がれている間の回復導線。拒否した人は設定画面に来ないのでここにも出す。
+              ただし常駐させない: 時間割も課題も無い＝通知が仕事をしていない状態では出さない
+              （通知を意図的に切っている人に常駐広告を出さないため）。 */}
+          <NotificationPermissionNotice active={hero != null || assignments.length > 0} />
           {banner.active && bannerMounted ? (
             // 絶対配置で本文の上に重ねる＝展開/格納で下の内容をreflowさせない（配置固定）。
             <View style={styles.overlayAnchor}>
