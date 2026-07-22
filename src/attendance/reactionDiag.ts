@@ -67,6 +67,10 @@ export type ReactionDiagInput = {
   ajaxDone?: boolean
   ajaxStatus?: number
   ajaxError?: string
+  /** サーバ側の検証失敗（200 + validationFailed）。 */
+  ajaxInvalid?: boolean
+  /** サーバ側の例外（200 + partial-response の `<error>`）。 */
+  ajaxServerError?: string
 }
 
 /** リアペ提出の診断を、出席送信と同じ器（SubmitDiag）へ変換する（純粋・nowIso は注入）。 */
@@ -89,5 +93,7 @@ export function toReactionDiag(
     ajaxDone: r.ajaxDone,
     ajaxStatus: r.ajaxStatus,
     ajaxError: r.ajaxError,
+    ajaxInvalid: r.ajaxInvalid,
+    ajaxServerError: r.ajaxServerError,
   }
 }

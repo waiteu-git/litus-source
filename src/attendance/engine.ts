@@ -33,6 +33,13 @@ export interface SubmitResult {
   ajaxDone?: boolean
   ajaxError?: string
   ajaxStatus?: number
+  /**
+   * サーバ側の検証が落ちたか（PrimeFaces は **200 + args.validationFailed** で返す）。
+   * 従来 onco は xhr しか受け取っておらず args を捨てていた＝この失敗を観測できていなかった。
+   */
+  ajaxInvalid?: boolean
+  /** サーバ側の例外（partial-response の `<error>`。ViewExpired 等）。これも **200 で来る**。 */
+  ajaxServerError?: string
   /** CLASSの応答本文から関連しそうな行を抜いたもの（未知の応答の正体を掴む）。保存はしない。 */
   hint?: string
   /**

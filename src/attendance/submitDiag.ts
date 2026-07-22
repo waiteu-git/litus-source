@@ -34,6 +34,10 @@ export type SubmitDiag = {
   ajaxDone?: boolean
   ajaxStatus?: number
   ajaxError?: string
+  /** サーバ側の検証失敗（200 + validationFailed）。「200なのに保存されていない」の証拠。 */
+  ajaxInvalid?: boolean
+  /** サーバ側の例外（200 + partial-response の `<error>`。ViewExpired 等）。 */
+  ajaxServerError?: string
   hint?: string
   /** ok=true を出した根拠（一致文言＋前後）。誤報の再現時にこれだけで原因が確定できる。 */
   okBy?: string
@@ -72,6 +76,8 @@ export function toSubmitDiag(
     ajaxDone: r.ajaxDone,
     ajaxStatus: r.ajaxStatus,
     ajaxError: r.ajaxError,
+    ajaxInvalid: r.ajaxInvalid,
+    ajaxServerError: r.ajaxServerError,
     hint: r.hint,
     okBy: r.okBy,
     noneNow: r.noneNow,
@@ -111,7 +117,9 @@ export function formatSubmitDiag(d: SubmitDiag): string {
   const label = isReaction ? '[リアペ] ' : ''
   const head = `${label}${d.at}${d.courseName ? ` ${d.courseName}` : ''}${d.note ? `（${d.note}）` : ''}`
   const verdict = d.ok ? 'OK' : d.wrong ? 'コード誤り' : d.err ? 'エラー' : '未確定'
-  const ajax = `発火=${String(d.ajaxFired)} 応答=${String(d.ajaxDone)} status=${d.ajaxStatus ?? '-'}${d.ajaxError ? ` err=${d.ajaxError}` : ''}`
+  // サーバ側の失敗は **200 で来る**ので、status と並べて必ず見えるようにする（2026-07-22）。
+  const server = `${d.ajaxInvalid ? ' 検証NG' : ''}${d.ajaxServerError ? ` サーバ例外=${d.ajaxServerError}` : ''}`
+  const ajax = `発火=${String(d.ajaxFired)} 応答=${String(d.ajaxDone)} status=${d.ajaxStatus ?? '-'}${d.ajaxError ? ` err=${d.ajaxError}` : ''}${server}`
   // リアペは「入力=N桁」ではなく本文の文字数。ボタン/method は出席送信側の観測項目なので出さない。
   const meta = isReaction
     ? `本文=${d.filled ?? '-'}文字`
