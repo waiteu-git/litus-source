@@ -1,0 +1,20 @@
+diff --git a/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt b/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
+index f83033b3597a425da159555233bacce250ccfce0..a1e76fc5e5345498f41bec49ae944c54294cb82b 100644
+--- a/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
++++ b/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
+@@ -110,8 +110,13 @@ class RNCWebViewManagerImpl(private val newArch: Boolean = false) {
+             var urlObj: URL? = null
+             try {
+                 urlObj = URL(url)
+-                val baseUrl = urlObj.protocol + "://" + urlObj.host
+-                val cookie = CookieManager.getInstance().getCookie(baseUrl)
++                // litus patch: cookie lookup must use the FULL url, not a host-only one.
++                // CookieManager honours the Path attribute, so "https://host" silently drops every
++                // cookie scoped to a deeper path. TUS CLASS (JSF + Shibboleth) issues 26 cookies of
++                // which only ONE has Path=/ ; the session lives under /uprx and /Shibboleth.sso/SAML2.
++                // The symptom was DownloadManager re-fetching the attachment unauthenticated and
++                // saving the login page (a constant 14.20 KB of HTML) under the correct filename.
++                val cookie = CookieManager.getInstance().getCookie(url)
+                 request.addRequestHeader("Cookie", cookie)
+             } catch (e: MalformedURLException) {
+                 Log.w(TAG, "Error getting cookie for DownloadManager", e)
