@@ -25,6 +25,7 @@ import { SyncProvider } from './src/sync/SyncProvider'
 import { DemoProvider, useDemo } from './src/demo/DemoProvider'
 import { DemoBanner } from './src/demo/DemoBanner'
 import { ThemeProvider, useThemeVariant, COLORS, DARK } from './src/theme'
+import { statusBarStyleFor } from './src/theme.tokens'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
   addNotificationResponseListener,
@@ -65,10 +66,13 @@ function navTheme(variant: 'green' | 'white' | 'dark'): Theme {
   return { ...DefaultTheme, colors: { ...DefaultTheme.colors, background } }
 }
 
-/** ダーク地では白飛びしないよう明色アイコンにする（翠/白は従来どおり auto）。 */
+/**
+ * バーアイコン色はアプリの variant から決める。'auto' は expo-status-bar が OS の外観だけで
+ * 解決するため、OSダーク × アプリ「白」で白アイコンが白地に乗り不可視になっていた。
+ */
 function ThemedStatusBar() {
   const { variant } = useThemeVariant()
-  return <StatusBar style={variant === 'dark' ? 'light' : 'auto'} />
+  return <StatusBar style={statusBarStyleFor(variant)} />
 }
 
 /** ThemeProvider配下でvariantを読み、NavigationContainerの地色をテーマ連動させるラッパ。 */

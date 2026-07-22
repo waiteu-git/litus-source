@@ -730,7 +730,8 @@ export const COLLECT_MYCOURSES_JS = `(function(){
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'mycourses',
       html: document.body ? document.body.innerHTML : '',
-      origin: location.origin
+      origin: location.origin,
+      url: location.href
     }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildWidgetModel } from './viewModel'
+import { buildWidgetModel, pickDataAt } from './viewModel'
 import type { TimetableCollection } from '../collect/timetableMessage'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AttendedRecord } from '../attendance/attendedState'
@@ -53,10 +53,28 @@ describe('buildWidgetModel', () => {
     expect(m.attendance).toEqual({ state: 'idle', targetCourse: null })
   })
 
-  it('todayLabel と updatedAtLabel を整形する', () => {
+  it('todayLabel は描画時刻から整形する', () => {
     const m = buildWidgetModel(MON(8, 5), [], [], null)
     expect(m.todayLabel).toBe('7/6（月）')
-    expect(m.updatedAtLabel).toBe('8:05時点')
+  })
+
+  it('updatedAtLabel は描画時刻ではなくデータ取得時刻を出す', () => {
+    // 旧実装は now だけから作っていたため、OSが30分ごとに起こす再描画のたびに
+    // 現在時刻へ書き換わり、通信していないのに「たった今の情報」を詐称していた。
+    const m = buildWidgetModel(MON(8, 5), [], [], null, undefined, undefined, MON(7, 10).getTime())
+    expect(m.updatedAtLabel).toBe('07:10時点')
+    expect(m.todayLabel).toBe('7/6（月）')
+  })
+
+  it('前日以前の取得時刻は月日付きで出す', () => {
+    const at = new Date(2026, 6, 5, 22, 0, 0).getTime()
+    const m = buildWidgetModel(MON(8, 5), [], [], null, undefined, undefined, at)
+    expect(m.updatedAtLabel).toBe('7/5 22:00時点')
+  })
+
+  it('未取得なら鮮度ラベルを出さない（嘘の時刻より無表示）', () => {
+    expect(buildWidgetModel(MON(8, 5), [], [], null).updatedAtLabel).toBeNull()
+    expect(buildWidgetModel(MON(8, 5), [], [], null, undefined, undefined, 0).updatedAtLabel).toBeNull()
   })
 
   it('開始前は次の授業を minutesUntil 付きで返す（進行中でないので分数あり）', () => {
@@ -177,5 +195,14 @@ describe('buildWidgetModel', () => {
     const m = buildWidgetModel(MON(13, 30), cols, [], attended)
     expect(m.attendance.state).toBe('done')
     expect(m.attendance.targetCourse).toBe('情報理論')
+  })
+})
+
+describe('pickDataAt', () => {
+  it('未取得(0/無効)は無視し、残りの最古を採る', () => {
+    expect(pickDataAt(0, 0)).toBe(0)
+    expect(pickDataAt(0, 100)).toBe(100)
+    expect(pickDataAt(500, 100)).toBe(100)
+    expect(pickDataAt(Number.NaN, -5, 300)).toBe(300)
   })
 })
