@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system/legacy'
 import * as Sharing from 'expo-sharing'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import { PDF_VIEWER_HTML } from './pdfViewerHtml'
-import { buildSharePdfJs, sanitizePdfFilename } from './pdfShare'
+import { buildSharePdfJs, classifySharePayload, sanitizePdfFilename } from './pdfShare'
 import { COLORS } from '../theme'
 
 type Params = { PdfViewer: { url: string; title?: string } }
@@ -87,7 +87,19 @@ export default function PdfViewerScreen() {
     webviewRef.current?.injectJavaScript(buildSharePdfJs())
   }
 
-  async function shareBase64(dataBase64: string) {
+  async function shareBase64(dataBase64: string, contentType: string | null) {
+    // **HTTP 200 だから中身がPDFとは限らない**。ログインページは200で返るため、
+    // 検算せずに渡すと CLASS のログインHTMLが .pdf として端末に保存される（実機報告 2026-07-22）。
+    const kind = classifySharePayload({ dataBase64, contentType })
+    if (kind !== 'ok') {
+      setSharing(false)
+      flash(
+        kind === 'login'
+          ? 'ログインが切れているようです。ホームで同期し直してから、もう一度お試しください'
+          : 'PDFを取得できませんでした（受け取ったファイルがPDFではありません）',
+      )
+      return
+    }
     try {
       const available = await Sharing.isAvailableAsync()
       if (!available) {
@@ -105,7 +117,7 @@ export default function PdfViewerScreen() {
   }
 
   function onMessage(data: string) {
-    let p: { type?: string; stage?: string; pages?: number; dataBase64?: string; reason?: string }
+    let p: { type?: string; stage?: string; pages?: number; dataBase64?: string; reason?: string; contentType?: string | null }
     try {
       p = JSON.parse(data)
     } catch {
@@ -127,7 +139,7 @@ export default function PdfViewerScreen() {
       setPhase('error')
     } else if (p.stage === 'share' && typeof p.dataBase64 === 'string') {
       clearShareTimer()
-      shareBase64(p.dataBase64)
+      shareBase64(p.dataBase64, p.contentType ?? null)
     } else if (p.stage === 'shareError') {
       clearShareTimer()
       setSharing(false)
