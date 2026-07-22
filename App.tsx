@@ -29,28 +29,18 @@ import { statusBarStyleFor } from './src/theme.tokens'
 import { DisplaySettingsProvider } from './src/displaySettings'
 import {
   addNotificationResponseListener,
-  ATTENDANCE_OPEN_TAG,
-  BULLETIN_TAG,
-  LETUS_NEWS_TAG,
+  clearConsumedNotificationResponse,
   clearDeliveredBulletinNotifications,
   clearDeliveredLetusNewsNotifications,
   configureNotifications,
-  getInitialNotificationTag,
-  requestNotificationPermission,
+  getInitialNotificationPayload,
 } from './src/notifications/notifier'
+import { routeForNotification } from './src/notifications/notificationRoute'
+import { dispatchNotificationRoute } from './src/navigation/notificationDispatch'
 import { refreshAllNotifications } from './src/notifications/notificationRefresh'
 import { subscribeForeground } from './src/app/foregroundOrchestrator'
-import {
-  navigationRef,
-  flushPendingNavigation,
-  requestOpenAttendance,
-  requestOpenBulletins,
-  requestOpenLetusCourses,
-} from './src/navigation/navigationRef'
+import { navigationRef, flushPendingNavigation } from './src/navigation/navigationRef'
 import { subscribeWidgetLinks } from './src/widget/widgetLinking'
-
-// 出席アラーム通知の data.tag（notifier.ts の予約と一致させる）。
-const ATTENDANCE_TAG = 'attendance-alarm'
 
 // フォントロードがまれに解決も棄却もしない端末があっても、この時間で強制的に起動を続行する
 // （バンドル同梱アセットのため通常は即時。スプラッシュに永久に留まる事故を防ぐ保険）。
@@ -107,7 +97,11 @@ export default function App() {
         await configureNotifications()
         await clearDeliveredBulletinNotifications()
         await clearDeliveredLetusNewsNotifications()
-        await requestNotificationPermission()
+        // 通知権限の要求はここでは行わない。ここはブート最初のフレームで走るため、
+        // 規約同意画面やオンボーディング1枚目の上にOSダイアログが被さっていた
+        // （通知の価値を説明するスライド3枚目より前にダイアログが出る＝事前説明ゼロ）。
+        // Android は2回拒否されると以後ダイアログを出せないので、この1回は無駄にできない。
+        // 要求は LoginGate のオンボーディング完了時に移した。
         await refreshAllNotifications()
       } catch (e) {
         console.warn('起動時の通知同期に失敗しました', e)
@@ -117,20 +111,18 @@ export default function App() {
     return subscribeForeground('notifications', () => refreshAllNotifications().catch(() => undefined))
   }, [])
 
-  // 通知タップで対応画面を即開く。出席通知は出席画面、掲示通知は掲示一覧を開く。
+  // 通知タップで対応画面を即開く。着地先の判断は純粋層 routeForNotification が持つ。
   // cold start（起動時タップ）＋ warm（起動中タップ）の両対応。
   useEffect(() => {
     let sub: { remove: () => void } | null = null
     ;(async () => {
       try {
-        const initialTag = await getInitialNotificationTag()
-        if (initialTag === ATTENDANCE_TAG || initialTag === ATTENDANCE_OPEN_TAG) requestOpenAttendance()
-        else if (initialTag === BULLETIN_TAG) requestOpenBulletins()
-        else if (initialTag === LETUS_NEWS_TAG) requestOpenLetusCourses()
-        sub = await addNotificationResponseListener((tag) => {
-          if (tag === ATTENDANCE_TAG || tag === ATTENDANCE_OPEN_TAG) requestOpenAttendance()
-          else if (tag === BULLETIN_TAG) requestOpenBulletins()
-          else if (tag === LETUS_NEWS_TAG) requestOpenLetusCourses()
+        const initial = await getInitialNotificationPayload()
+        dispatchNotificationRoute(routeForNotification(initial))
+        // 消費した応答は破棄する。残すと以後の通常起動でも毎回同じ画面へ飛ぶ。
+        if (initial) await clearConsumedNotificationResponse()
+        sub = await addNotificationResponseListener((p) => {
+          dispatchNotificationRoute(routeForNotification(p))
         })
       } catch (e) {
         console.warn('通知応答の購読に失敗しました', e)

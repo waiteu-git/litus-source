@@ -104,3 +104,14 @@ export function makeUserManagedActivity(
     lastCheckedAt: nowIso,
   }
 }
+
+/**
+ * 課題URLから開くべき画面を決める。
+ *
+ * 手動追加の課題は LETUS 上に実体が無いので LetusAssignmentDetail では開けない。
+ * この判定が HomeScreen と通知タップ経路で二重に書かれていて、通知側だけ抜けていた
+ * （手動課題のリマインドをタップすると LETUS 用の画面へ飛んでいた）。共有して二度と割れないようにする。
+ */
+export function assignmentScreenFor(url: string): 'ManualAssignment' | 'LetusAssignmentDetail' {
+  return isManualUrl(url) ? 'ManualAssignment' : 'LetusAssignmentDetail'
+}
