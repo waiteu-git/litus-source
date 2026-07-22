@@ -47,8 +47,11 @@ export function submitOutcome(opts: {
   if (attended) return 'ok'
   // 受付が無い＝出席は成立していない。文言一致の成功(result.ok)をここで打ち消す。
   if (receptionStatus === 'none') return 'failed'
+  // **保存されていない確定信号は、応答文言の一致より強い。** ok と err が両立したら失敗を採る。
+  // actuator 側でも ok から引いているが、公開スタブ・旧保存データ・将来の actuator でも
+  // 同じ穴が開かないよう純粋層でも見る（ok を先に見ていた頃は緑チェックが勝っていた）。
+  if (result.wrong || result.err || result.ajaxInvalid === true || !!result.ajaxServerError) return 'failed'
   if (result.ok) return 'ok'
-  if (result.wrong || result.err) return 'failed'
   // 送信ボタンが無い＝JSFへ送信されていない。待っても出席済みにはならないので即失敗。
   if (result.btnFound === false) return 'failed'
   if (elapsedMs >= VERIFY_TIMEOUT_MS) return 'failed'
@@ -67,6 +70,14 @@ export function submitFailureText(opts: {
   receptionStatus?: AttendanceStatus | null
 }): string {
   const { result, receptionStatus } = opts
-  if (receptionStatus === 'none' && result?.ok) return '出席確認中の授業がありません（登録されていません）'
-  return result?.result ?? '送信できませんでした'
+  if (!result) return '送信できませんでした'
+  if (receptionStatus === 'none' && result.ok) return '出席確認中の授業がありません（登録されていません）'
+  // actuator が ok と失敗信号の両方を返した（文言は一致したが保存されていない）。
+  if (result.ok && (result.err || result.ajaxInvalid || result.ajaxServerError))
+    return 'CLASSに登録されていません。もう一度お試しください'
+  // 中立文言（「送信しました」「応答を待っています」）を赤枠に出すと判定と矛盾する。
+  // ただし btnFound===false の具体的な理由（ボタン未検出・公開スタブ）は潰さない。
+  if (result.btnFound !== false && !result.ok && !result.wrong && !result.err)
+    return '登録できたか確認できませんでした。CLASSの画面で確認してください'
+  return result.result
 }

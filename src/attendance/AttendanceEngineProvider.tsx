@@ -211,13 +211,21 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const reactionWasSubmittedRef = useRef(false)
   // 提出ajaxが完走したか（reactionSubmit actuator の観測結果）。再提出の確定点。
   const reactionAjaxOkRef = useRef(false)
-  // 提出ajaxの観測値（診断に残すため保持。reactionAjaxOkRef は成否の判定用で値を持たない）。
-  const reactionAjaxDoneRef = useRef<boolean | undefined>(undefined)
-  const reactionAjaxStatusRef = useRef<number | undefined>(undefined)
-  const reactionAjaxErrorRef = useRef<string | undefined>(undefined)
-  // サーバ側の検証失敗／例外（どちらも **HTTP 200 で来る**）。再提出の確定点から除外するために持つ。
-  const reactionAjaxInvalidRef = useRef<boolean | undefined>(undefined)
-  const reactionAjaxServerErrorRef = useRef<string | undefined>(undefined)
+  /**
+   * 提出ajaxの観測値（診断に残すため保持。判定は reactionAjaxOkRef）。
+   *
+   * **1本のオブジェクトで持つ**。以前は項目ごとに ref を分けていたため、観測項目を足したとき
+   * 提出開始時のリセットに書き足し忘れ、前回の失敗理由（サーバ例外など）が次回の診断に
+   * 貼り付く欠陥が入った。1本なら初期化は `= {}` の一撃で済み、同じ取りこぼしが起きない。
+   */
+  const reactionAjaxRef = useRef<{
+    done?: boolean
+    status?: number
+    error?: string
+    /** サーバ側の検証失敗／例外（どちらも **HTTP 200 で来る**）。確定点から除外するために持つ。 */
+    invalid?: boolean
+    serverError?: string
+  }>({})
   const reactionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   // 上限到達で自動再試行を打ち切った状態。UIの案内文を切り替えるため state で持つ。
   const [conflictExhausted, setConflictExhausted] = useState(false)
@@ -518,11 +526,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
           required: reactionRequiredRef.current,
           resubmit: reactionWasSubmittedRef.current,
           length: reactionTextRef.current.length,
-          ajaxDone: reactionAjaxDoneRef.current,
-          ajaxStatus: reactionAjaxStatusRef.current,
-          ajaxError: reactionAjaxErrorRef.current,
-          ajaxInvalid: reactionAjaxInvalidRef.current,
-          ajaxServerError: reactionAjaxServerErrorRef.current,
+          ajaxDone: reactionAjaxRef.current.done,
+          ajaxStatus: reactionAjaxRef.current.status,
+          ajaxError: reactionAjaxRef.current.error,
+          ajaxInvalid: reactionAjaxRef.current.invalid,
+          ajaxServerError: reactionAjaxRef.current.serverError,
         },
         {
           nowIso: new Date().toISOString(),
@@ -562,9 +570,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     reactionRequiredRef.current = receptionStatusRef.current === 'reaction_pending'
     reactionWasSubmittedRef.current = reactionSubmittedRef.current
     reactionAjaxOkRef.current = false
-    reactionAjaxDoneRef.current = undefined
-    reactionAjaxStatusRef.current = undefined
-    reactionAjaxErrorRef.current = undefined
+    // 観測値は1回の提出に閉じる（前回の失敗理由を次の記録へ持ち越さない）。
+    reactionAjaxRef.current = {}
     reactionBusyRef.current = true
     setReactionSubmitState({ status: 'sending', message: null })
     inject(OPEN_REACTION_FORM_JS)
@@ -662,11 +669,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         // 提出ajaxがサーバに受理されたか（再提出の確定点）。観測できない古い経路では false のまま。
         // **200 だけでは判定しない**（検証失敗・ViewExpired も 200 で来る）＝reactionSubmitAccepted。
         reactionAjaxOkRef.current = reactionSubmitAccepted(m)
-        reactionAjaxDoneRef.current = m.ajaxDone
-        reactionAjaxStatusRef.current = m.ajaxStatus
-        reactionAjaxErrorRef.current = m.ajaxError
-        reactionAjaxInvalidRef.current = m.ajaxInvalid
-        reactionAjaxServerErrorRef.current = m.ajaxServerError
+        reactionAjaxRef.current = {
+          done: m.ajaxDone,
+          status: m.ajaxStatus,
+          error: m.ajaxError,
+          invalid: m.ajaxInvalid,
+          serverError: m.ajaxServerError,
+        }
         // 提出発火済み。応答テキストに頼らず、出席ページを取り直して**確定マーカー**で判定する。
         // 確定マーカーは提出の種類で違う:
         //  ・必須(reaction_pending由来): .attendSuc（提出して初めて「出席」になる）

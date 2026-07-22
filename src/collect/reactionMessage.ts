@@ -44,11 +44,17 @@ const FILL_FAIL_REASONS: readonly ReactionFillFailReason[] = ['form-missing', 'v
 export function reactionSubmitAccepted(m: {
   ajaxDone?: boolean
   ajaxStatus?: number
+  ajaxError?: string
   ajaxInvalid?: boolean
   ajaxServerError?: string
 }): boolean {
   if (m.ajaxDone !== true) return false
-  if ((m.ajaxStatus ?? 200) >= 400) return false
+  // PrimeFaces は `.always()` で oncomplete を呼ぶ＝**通信断/中断でも ajaxDone は true になる**。
+  // そのとき xhr.status は 0 なので「<400 だからOK」では素通りする（Wi-Fi切断や画面遷移で
+  // XHRが中断した再提出が、届いていないのに成功になる）。2xx/3xx を積極的に要求する。
+  if (m.ajaxError) return false
+  if (typeof m.ajaxStatus !== 'number') return false
+  if (m.ajaxStatus < 200 || m.ajaxStatus >= 400) return false
   if (m.ajaxInvalid === true) return false
   if (m.ajaxServerError) return false
   return true

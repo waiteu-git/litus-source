@@ -67,6 +67,36 @@ describe('submitOutcome', () => {
         ).toBe('ok')
       }
     })
+  })
+
+  // actuator が ok と失敗信号の両方を返すことがある（応答文言は一致したが、保存されていない）。
+  // ok を先に見ていた頃は緑チェックが勝ち、しかも手動でやり直す導線が出なかった。
+  describe('保存されていない確定信号は ok より強い', () => {
+    it('ok=true でも err=true なら failed', () => {
+      expect(submitOutcome({ result: { ...base, ok: true, err: true }, attended: false, elapsedMs: 0 })).toBe('failed')
+    })
+
+    it('ok=true でも検証NG（200 + validationFailed）なら failed', () => {
+      expect(
+        submitOutcome({ result: { ...base, ok: true, ajaxInvalid: true }, attended: false, elapsedMs: 0 }),
+      ).toBe('failed')
+    })
+
+    it('ok=true でもサーバ例外なら failed', () => {
+      expect(
+        submitOutcome({ result: { ...base, ok: true, ajaxServerError: 'ViewExpired' }, attended: false, elapsedMs: 0 }),
+      ).toBe('failed')
+    })
+
+    it('CLASSが出席済みを示していれば、どの失敗信号より優先して ok', () => {
+      expect(
+        submitOutcome({
+          result: { ...base, ok: true, err: true, ajaxServerError: 'ViewExpired' },
+          attended: true,
+          elapsedMs: 0,
+        }),
+      ).toBe('ok')
+    })
 
     it('受付状態が未取得（旧呼び出し）なら従来どおり', () => {
       expect(submitOutcome({ result: { ...base, ok: true }, attended: false, elapsedMs: 0 })).toBe('ok')
@@ -90,6 +120,27 @@ describe('submitFailureText', () => {
     expect(submitFailureText({ result: r, receptionStatus: 'accepting' })).toBe(
       '認証コードが違います（コードを確認してください）',
     )
+  })
+
+  it('ok と失敗信号が両立したときも「登録しました」を出さない', () => {
+    const r = { ...base, ok: true, err: true, result: '出席登録しました' }
+    expect(submitFailureText({ result: r, receptionStatus: 'accepting' })).toBe(
+      'CLASSに登録されていません。もう一度お試しください',
+    )
+  })
+
+  // 中立文言をそのまま赤枠に出すと「送信しました」と「登録されていません」が並んで矛盾する。
+  it('中立文言（送信しました／応答待ち）は言い換える', () => {
+    for (const t of ['送信しました（下の画面で結果をご確認ください）', '送信の応答を待っています（通信が遅い可能性があります）']) {
+      expect(submitFailureText({ result: { ...base, btnFound: true, result: t } })).toBe(
+        '登録できたか確認できませんでした。CLASSの画面で確認してください',
+      )
+    }
+  })
+
+  it('ボタン未検出・公開スタブの具体的な理由は潰さない', () => {
+    const r = { ...base, btnFound: false, result: '「出席登録する」ボタンが見つかりません' }
+    expect(submitFailureText({ result: r })).toBe('「出席登録する」ボタンが見つかりません')
   })
 
   it('結果が無いときも空にしない', () => {
