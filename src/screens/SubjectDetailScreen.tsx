@@ -21,6 +21,7 @@ import { markCourseSeen, type CourseNewsItem } from '../updates/courseNews'
 import { buildSyllabusUrl } from '../links/syllabus'
 import { useDisplaySettings } from '../displaySettings'
 import type { SubjectSectionKey } from '../subject/subjectSections'
+import { subjectEventsHeaderSlots } from '../subject/eventsHeader'
 import { loadClassEvents, upsertClassEvent } from '../storage/classEventsStore'
 import type { ClassEvent } from '../timetableEvents/classEvent'
 import { cellBadgeText } from '../timetableEvents/eventLabels'
@@ -281,6 +282,7 @@ export default function SubjectDetailScreen() {
     [dayKey, period, room, pattern, events],
   )
   const attention = useMemo(() => pickAttentionEvent(events, now), [events]) // eslint-disable-line react-hooks/exhaustive-deps
+  const eventsSlots = subjectEventsHeaderSlots(attention)
 
   const fmtNext = (n: NextSession): string => {
     const [y, mo, d] = n.date.split('-').map(Number)
@@ -344,23 +346,26 @@ export default function SubjectDetailScreen() {
         icon="list-outline"
         subtitle={attention ? `直近: ${Number(attention.date.split('-')[1])}/${Number(attention.date.split('-')[2])} ${attention.type === 'cancel' ? '休講' : '教室変更'}` : events.length ? `${events.length}件` : undefined}
         right={
-          attention && attention.type === 'cancel' && attention.makeupStatus === 'undecided' ? (
-            <View style={styles.makeupPill}>
-              <Text style={styles.makeupPillText}>要対応</Text>
-            </View>
-          ) : undefined
+          <>
+            {eventsSlots.attentionPill ? (
+              <View style={styles.makeupPill}>
+                <Text style={styles.makeupPillText}>要対応</Text>
+              </View>
+            ) : null}
+            <Pressable
+              style={[styles.addBtn, { backgroundColor: ui.softBoxBg }]}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="予定を追加"
+              onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })}
+            >
+              <Ionicons name="add" size={16} color={ui.accent} />
+              <Text style={[styles.addBtnText, { color: ui.accent }]}>追加</Text>
+            </Pressable>
+          </>
         }
       >
-        <View style={styles.eventsHead}>
-          <Text style={{ color: ui.labelColor, fontSize: 12 }}>休講・補講・教室変更・小テスト等</Text>
-          <Pressable
-            style={[styles.addBtn, { backgroundColor: ui.softBoxBg }]}
-            onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })}
-          >
-            <Ionicons name="add" size={16} color={ui.accent} />
-            <Text style={[styles.addBtnText, { color: ui.accent }]}>予定を追加</Text>
-          </Pressable>
-        </View>
+        <Text style={{ color: ui.labelColor, fontSize: 12 }}>休講・補講・教室変更・小テスト等</Text>
         {candidates.map((v) => (
           <View key={`cand-${v.candidate.sourceBulletinId}`} style={[ui.card, styles.candRow]}>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -687,7 +692,6 @@ const styles = StyleSheet.create({
   updatesHint: { fontSize: 11, marginTop: 2 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   summaryText: { flex: 1, fontSize: 13, fontWeight: '500' },
-  eventsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
   addBtnText: { fontSize: 13, fontWeight: '600' },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
