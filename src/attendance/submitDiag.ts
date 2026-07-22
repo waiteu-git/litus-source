@@ -105,7 +105,10 @@ export function shouldAutoRetrySubmit(opts: {
   const { result, tries, attended, hasCode } = opts
   const max = opts.max ?? SUBMIT_MAX_RETRY
   if (attended || !hasCode) return false
-  if (result.ok || result.wrong) return false // 成功・コード誤りは再送しても無意味
+  if (result.wrong) return false // コード誤りは再送しても無意味
+  // **result.ok では止めない。** ok は応答文言の一致でしかなく誤爆する（2026-07-22）。
+  // 一方 ajaxError は「CLASSに届いていない」確定証拠で、届いていない以上は二重登録に
+  // ならない＝ここで再送を封じると、誤一致のせいで唯一の安全な自動回復を失う。
   if (!result.ajaxError) return false // 到達したかもしれない＝再送しない
   return tries < max
 }

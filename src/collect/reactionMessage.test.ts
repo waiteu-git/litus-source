@@ -45,8 +45,19 @@ describe('reactionSubmitAccepted（再提出の確定点）', () => {
     expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 200 })).toBe(true)
   })
 
-  it('status未取得（旧経路）は200とみなす', () => {
-    expect(reactionSubmitAccepted({ ajaxDone: true })).toBe(true)
+  it('statusを観測できていなければ受理しない（旧経路は成功と断定できない）', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: true })).toBe(false)
+  })
+
+  // PrimeFaces は .always() で oncomplete を呼ぶため、通信断でも ajaxDone は true になる。
+  // そのとき status は 0。ここを通すと「届いていない再提出」が成功になる。
+  it('通信断・中断（status 0）は受理しない', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 0 })).toBe(false)
+    expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 0, ajaxError: 'error' })).toBe(false)
+  })
+
+  it('onerrorが来ていたら受理しない', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 200, ajaxError: 'timeout' })).toBe(false)
   })
 
   it('完走していなければ受理しない', () => {

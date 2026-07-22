@@ -96,3 +96,29 @@ describe('formatSubmitDiag はリアペの記録も読める形で出す', () =>
     expect(s).not.toContain('リアペ')
   })
 })
+
+// 200 で返るサーバ側の失敗を診断へ通すこと（レビュー指摘: 伝播テストが無かった）。
+describe('リアペ診断もサーバ側の失敗を落とさない', () => {
+  it('ajaxInvalid / ajaxServerError を SubmitDiag へ運ぶ', () => {
+    const d = toReactionDiag(
+      {
+        outcome: 'unconfirmed',
+        required: false,
+        resubmit: true,
+        length: 120,
+        ajaxDone: true,
+        ajaxStatus: 200,
+        ajaxInvalid: true,
+        ajaxServerError: 'ViewExpired',
+      },
+      ctx,
+    )
+    expect(d).toMatchObject({ ajaxInvalid: true, ajaxServerError: 'ViewExpired' })
+    const s = formatSubmitDiag(d)
+    expect(s).toContain('検証NG')
+    expect(s).toContain('サーバ例外=ViewExpired')
+    expect(s).toContain('（任意・再提出）')
+    // 本文そのものは残さない（長さのみ）。
+    expect(s).toContain('本文=120文字')
+  })
+})

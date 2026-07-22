@@ -40,9 +40,14 @@ describe('shouldAutoRetrySubmit', () => {
     expect(shouldAutoRetrySubmit({ ...ctx, result: base })).toBe(false)
     expect(shouldAutoRetrySubmit({ ...ctx, result: { ...base, ajaxFired: true, ajaxDone: false } })).toBe(false)
   })
-  it('成功・コード誤りは再送しない', () => {
-    expect(shouldAutoRetrySubmit({ ...ctx, result: { ...base, ok: true, ajaxError: 'error' } })).toBe(false)
+  it('コード誤りは再送しない（送っても無意味）', () => {
     expect(shouldAutoRetrySubmit({ ...ctx, result: { ...base, wrong: true, ajaxError: 'error' } })).toBe(false)
+  })
+  // ok は応答文言の一致でしかなく誤爆する（2026-07-22）。一方 ajaxError は「届いていない」
+  // 確定証拠で、届いていない以上は二重登録にならない。ここで止めると誤一致のせいで
+  // 唯一の安全な自動回復を失う（＝出席が落ちる）。
+  it('ok=true でも ajaxError なら再送する（届いていない確定が優先）', () => {
+    expect(shouldAutoRetrySubmit({ ...ctx, result: { ...base, ok: true, ajaxError: 'error' } })).toBe(true)
   })
   it('出席済みなら再送しない', () => {
     expect(shouldAutoRetrySubmit({ ...ctx, attended: true, result: { ...base, ajaxError: 'error' } })).toBe(false)
@@ -76,5 +81,64 @@ describe('toSubmitDiag / formatSubmitDiag', () => {
     expect(s).toContain('法学')
     expect(s).toContain('status=200')
     expect(s).toContain('method=onclick')
+  })
+})
+
+// 診断の表示・伝播にテストが無く、フィールドを落としても全テストが緑のままだった（レビュー指摘）。
+describe('診断に「200なのに失敗」の証拠が出る', () => {
+  const d: SubmitDiag = {
+    at: '2026-07-22T07:48:21.976Z',
+    courseName: '基礎電気工学',
+    ok: false,
+    wrong: false,
+    err: true,
+    result: 'CLASSが入力を受け付けませんでした（登録されていません）',
+    ajaxFired: true,
+    ajaxDone: true,
+    ajaxStatus: 200,
+    ajaxInvalid: true,
+    ajaxServerError: 'ViewExpired',
+    okBy: '登録しました :: 出席登録しました',
+    noneNow: true,
+  }
+
+  it('検証NG・サーバ例外を status と並べて出す', () => {
+    const s = formatSubmitDiag(d)
+    expect(s).toContain('status=200')
+    expect(s).toContain('検証NG')
+    expect(s).toContain('サーバ例外=ViewExpired')
+  })
+
+  it('成功判定の根拠と受付なしの注記を出す', () => {
+    const s = formatSubmitDiag(d)
+    expect(s).toContain('成功判定の根拠: 登録しました :: 出席登録しました')
+    expect(s).toContain('受付中の授業なし')
+  })
+
+  it('観測できていない項目は出さない（毎行に空欄を並べない）', () => {
+    const s = formatSubmitDiag({ ...d, ajaxInvalid: false, ajaxServerError: undefined, okBy: undefined, noneNow: false })
+    expect(s).not.toContain('検証NG')
+    expect(s).not.toContain('サーバ例外')
+    expect(s).not.toContain('成功判定の根拠')
+    expect(s).not.toContain('受付中の授業なし')
+  })
+
+  it('toSubmitDiag が新しい観測項目を落とさない', () => {
+    const r: SubmitResult = {
+      result: 'x',
+      ok: false,
+      wrong: false,
+      err: true,
+      ajaxInvalid: true,
+      ajaxServerError: 'server-error',
+      okBy: '出席済 :: …',
+      noneNow: true,
+    }
+    expect(toSubmitDiag(r, { nowIso: 'now', courseName: null })).toMatchObject({
+      ajaxInvalid: true,
+      ajaxServerError: 'server-error',
+      okBy: '出席済 :: …',
+      noneNow: true,
+    })
   })
 })
