@@ -241,3 +241,12 @@ export function resolveUiColors(variant: ResolvedVariant): UiColors {
   if (variant === 'dark') return DARK_TOKENS
   return WHITE
 }
+
+/**
+ * ステータスバーのアイコン色。expo-status-bar の 'auto' は **OSの外観**（useColorScheme）だけで
+ * 解決されアプリのテーマを見ないため、OSダーク×白テーマで白アイコンが白地に乗り不可視になる。
+ * したがって variant から明示する。翠/白は明地なので dark、ダークのみ light。
+ */
+export function statusBarStyleFor(variant: ResolvedVariant): 'light' | 'dark' {
+  return variant === 'dark' ? 'light' : 'dark'
+}
