@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
+import { useWebViewBack } from '../ui/useWebViewBack'
 import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native'
 import { useClassView } from '../collect/classViewArbiter'
 import {
@@ -38,6 +39,7 @@ const REPROBE_MS = 1400
 export default function BulletinWebScreen() {
   const route = useRoute<RouteProp<HomeStackParamList, 'BulletinWeb'>>()
   const webviewRef = useRef<WebViewInstance>(null)
+  const { setCanGoBack } = useWebViewBack(webviewRef)
   const { setCollectActive } = useClassView()
   const [nonce, setNonce] = useState(0)
   const dark = useThemeVariant().variant === 'dark'
@@ -183,6 +185,7 @@ export default function BulletinWebScreen() {
         key={nonce}
         ref={webviewRef}
         source={{ uri: CLASS_TOP_URL }}
+        onNavigationStateChange={(s) => setCanGoBack(s.canGoBack)}
         userAgent={DESKTOP_UA}
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
