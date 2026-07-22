@@ -165,7 +165,11 @@ export function TodayWidget({ model }: { model: WidgetModel }) {
       <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', width: 'match_parent', marginBottom: 8 }}>
         <TextWidget text={model.todayLabel} style={{ fontSize: 13, color: C.onDark, fontWeight: '700' }} />
         <FlexWidget style={{ flex: 1 }} />
-        <TextWidget text={model.updatedAtLabel} style={{ fontSize: 10, color: C.onDarkDim }} />
+        {model.updatedAtLabel ? (
+          <TextWidget text={model.updatedAtLabel} style={{ fontSize: 10, color: C.onDarkDim }} />
+        ) : (
+          <FlexWidget />
+        )}
       </FlexWidget>
       <NextClassCard model={model} />
       <LaterClasses model={model} />

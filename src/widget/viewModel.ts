@@ -15,6 +15,7 @@ import { pickUrgentAssignment, relDue, urgencyTone } from '../assignments/deadli
 import { isInClassPeriod, attendedClassEndMin } from '../attendance/classPeriod'
 import { isAttendedNow } from '../attendance/attendedState'
 import { representativeClass } from '../timetableEvents/quarter'
+import { formatFreshnessTime } from '../health/freshnessText'
 
 const WEEKDAY_JP = ['日', '月', '火', '水', '木', '金', '土']
 const WEEKDAY: Record<DayOfWeek, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
@@ -51,7 +52,8 @@ export type WidgetAttendance = {
 
 export type WidgetModel = {
   todayLabel: string
-  updatedAtLabel: string
+  /** データ取得時刻の鮮度ラベル。未取得は null（描画時刻ではないので再描画では動かない）。 */
+  updatedAtLabel: string | null
   nextClass: WidgetNextClass | null
   laterClasses: WidgetClass[]
   nearestAssignment: WidgetAssignment | null
@@ -104,8 +106,14 @@ function fmtTodayLabel(now: Date): string {
   return `${now.getMonth() + 1}/${now.getDate()}（${WEEKDAY_JP[now.getDay()]}）`
 }
 
-function fmtUpdatedLabel(now: Date): string {
-  return `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}時点`
+/**
+ * 表示中の各データ源の取得時刻のうち、未取得(0/無効)を除いた最古を返す。全て未取得なら0。
+ * ウィジェットは時間割由来と課題由来を同じカードに混ぜて出すため、鮮度は保守的（古い方）に寄せる。
+ * ＝時間割だけ新しくても「課題は数日前の情報」であることを隠さない。
+ */
+export function pickDataAt(...ats: number[]): number {
+  const valid = ats.filter((n) => Number.isFinite(n) && n > 0)
+  return valid.length === 0 ? 0 : Math.min(...valid)
 }
 
 function buildAttendance(
@@ -132,6 +140,8 @@ export function buildWidgetModel(
   /** 隔週で今週休みの授業を除く述語（省略時は常に実施）。 */
   isOn?: (courseCode: string) => boolean,
   currentQuarter?: Quarter,
+  /** データを最後に取得した時刻(ms)。0/未指定は未取得＝鮮度ラベルを出さない。 */
+  dataAt: number = 0,
 ): WidgetModel {
   const nowMin = now.getHours() * 60 + now.getMinutes()
 
@@ -169,7 +179,7 @@ export function buildWidgetModel(
 
   return {
     todayLabel: fmtTodayLabel(now),
-    updatedAtLabel: fmtUpdatedLabel(now),
+    updatedAtLabel: formatFreshnessTime(dataAt, now),
     nextClass,
     laterClasses,
     nearestAssignment,
