@@ -5,6 +5,7 @@ import {
   PDF_SHARE_LIMIT_BYTES,
   buildSharePdfJs,
   classifySharePayload,
+  sanitizeDownloadFilename,
 } from './pdfShare'
 
 describe('sanitizePdfFilename', () => {
@@ -119,5 +120,24 @@ describe('buildSharePdfJs は content-type を持ち帰る', () => {
     const js = buildSharePdfJs()
     expect(js).toContain("res.headers.get('content-type')")
     expect(js).toContain('contentType')
+  })
+})
+
+describe('sanitizeDownloadFilename', () => {
+  it('日本語のファイル名を保つ（Androidのサニタイズは "=-1" のようなゴミにしていた）', () => {
+    expect(sanitizeDownloadFilename('2026年度前期試験期間における大学院科目の教室変更について.pdf'))
+      .toBe('2026年度前期試験期間における大学院科目の教室変更について.pdf')
+  })
+  it('パス区切りを剥がす（../ を封じる）', () => {
+    expect(sanitizeDownloadFilename('../../etc/passwd.txt')).toBe('passwd.txt')
+  })
+  it('禁止文字を落とし拡張子は残す', () => {
+    expect(sanitizeDownloadFilename('a<b>c:d.pdf')).toBe('a_b_c_d.pdf')
+  })
+  it('拡張子が無ければ付けない', () => {
+    expect(sanitizeDownloadFilename('report')).toBe('report')
+  })
+  it('空なら fallback', () => {
+    expect(sanitizeDownloadFilename('///')).toBe('download')
   })
 })
