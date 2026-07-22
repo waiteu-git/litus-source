@@ -35,6 +35,14 @@ export interface SubmitResult {
   ajaxStatus?: number
   /** CLASSの応答本文から関連しそうな行を抜いたもの（未知の応答の正体を掴む）。保存はしない。 */
   hint?: string
+  /**
+   * ok=true を出した根拠（一致した文言＋前後40字）。
+   * 受付なしの画面で ok=true が返った実機ログ(2026-07-22)を、判定結果しか残していなかったせいで
+   * 追えなかった。**判定だけでなく判定の根拠を残す**ための計器。
+   */
+  okBy?: string
+  /** 応答本文が「出席確認中の履修授業はありません」を含んでいたか（成功と両立しない否定シグナル）。 */
+  noneNow?: boolean
 }
 
 export interface EngineState {

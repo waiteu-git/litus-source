@@ -832,6 +832,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         ajaxError: typeof parsed.ajaxError === 'string' && parsed.ajaxError ? parsed.ajaxError : undefined,
         ajaxStatus: typeof parsed.ajaxStatus === 'number' ? parsed.ajaxStatus : undefined,
         hint: typeof parsed.hint === 'string' && parsed.hint ? parsed.hint : undefined,
+        // ok=true の根拠。判定だけ残して根拠を捨てていたため誤報の原因を追えなかった（2026-07-22）。
+        okBy: typeof parsed.okBy === 'string' && parsed.okBy ? parsed.okBy : undefined,
+        noneNow: typeof parsed.noneNow === 'boolean' ? parsed.noneNow : undefined,
       }
       // 診断を端末に貯める（成功も失敗も）。真因未特定の間欠バグの証拠を、ユーザーが
       // その瞬間を捕まえなくても後から設定画面で見返せるようにする。失敗は無視。

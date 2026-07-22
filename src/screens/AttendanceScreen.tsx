@@ -11,7 +11,7 @@ import { REACTION_MAX_LEN, canSubmitReaction, reactionDraftApplies, reactionLeng
 import { todayKey } from '../attendance/attendedState'
 import { loadReactionDraft, saveReactionDraft } from '../storage/reactionDraftStore'
 import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceEngineProvider'
-import { submitOutcome } from '../attendance/submitOutcome'
+import { submitFailureText, submitOutcome } from '../attendance/submitOutcome'
 import ScreenHint from '../tutorial/ScreenHint'
 import { PressableRow } from '../ui/Pressable'
 import { COLORS } from '../theme'
@@ -166,6 +166,8 @@ export default function AttendanceScreen() {
     result,
     attended: attendedNow || reception?.status === 'attended',
     elapsedMs: submitAt ? now.getTime() - submitAt : 0,
+    // 受付が無いのに成功と見せない（2026-07-22の誤報）。reception は送信後も更新され続ける。
+    receptionStatus: reception?.status ?? null,
   })
   const submitFailed = outcome === 'failed'
   const verifying = outcome === 'verifying'
@@ -541,7 +543,9 @@ export default function AttendanceScreen() {
               // （自動送信が効かない端末でも出席を落とさないため）。
               <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
                 <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
-                  <Text style={[styles.resultText, { color: ui.colors.danger }]}>{result?.result}</Text>
+                  <Text style={[styles.resultText, { color: ui.colors.danger }]}>
+                    {submitFailureText({ result, receptionStatus: reception?.status ?? null })}
+                  </Text>
                 </View>
                 <Text style={[styles.status, { color: labelColor, fontSize: 13, fontWeight: '400', marginTop: 8 }]}>
                   出席は登録されていません。CLASSの画面を開いて「出席登録する」を押してください。
