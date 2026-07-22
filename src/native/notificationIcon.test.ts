@@ -71,28 +71,43 @@ describe('app.json の expo-notifications プラグイン設定', () => {
   const entry = findPluginEntry(plugins, 'expo-notifications')
 
   /**
-   * 設定が無いと expo-notifications は prebuild 時に props 無しで自動適用され、
-   * meta-data と各 dpi の notification_icon.png を**削除する**（withNotificationsAndroid.js）。
-   * その結果 small icon は applicationInfo.icon（＝@mipmap/ic_launcher）へフォールバックする。
+   * **現在このエントリは意図的に置いていない。**
+   *
+   * expo-notifications の config plugin はルートで Android と iOS の両方に適用され、
+   * withNotificationsIOS.js:11-12 が `aps-environment` を entitlements へ**無条件で**書き込む。
+   * 本製品はプッシュを一切使わない（FCMなし・google-services.jsonなし・プッシュトークン取得0件）ので、
+   * Push Notifications capability を宣言するとストアのデータセーフティ申告と食い違う。
+   *
+   * 自動適用はされない（expo-module.config.json に plugin フィールドが無く、
+   * プラグイン未記載でビルドした v101 の merged manifest に通知 meta-data が0件であることを実測）。
+   * したがって「書かない」で iOS 側の副作用を確実に避けられる。
+   *
+   * 白抜きアイコン素材（assets/notification-icon.png）が用意できた時点で、
+   * **iOS への波及の手当てとセットで**エントリを足すこと。
    */
-  it('エントリが存在する', () => {
-    expect(entry).not.toBeNull()
+  it('素材が無いうちはエントリを置かない（iOSにaps-environmentを書き込むため）', () => {
+    if (existsSync(join(ROOT, NOTIFICATION_ICON_PATH))) return // 素材があるなら下の条件群で検証する
+    expect(entry).toBeNull()
   })
 
-  it('tint 色がパレットの emerald と一致する（トークンからの乖離を防ぐ）', () => {
-    expect(String(entry?.props.color).toLowerCase()).toBe(COLORS.emerald.toLowerCase())
+  it('エントリを置くなら tint 色はパレットの emerald と一致する（トークンからの乖離を防ぐ）', () => {
+    if (!entry) return
+    expect(String(entry.props.color).toLowerCase()).toBe(COLORS.emerald.toLowerCase())
   })
 
   /**
    * defaultChannel は FCM 用の meta-data を焼くだけで、本製品には FCM が存在しない
-   * （google-services.json なし・firebase 依存ゼロ）＝完全に不活性。書かない。
+   * （google-services.json なし・firebase 依存ゼロ）＝完全に不活性。
+   * しかもチャンネルは作成後に属性を変更できないので、不活性なゴミチャンネルが恒久的に残る。書かない。
    */
   it('defaultChannel を持たない', () => {
-    expect(entry?.props).not.toHaveProperty('defaultChannel')
+    if (!entry) return
+    expect(entry.props).not.toHaveProperty('defaultChannel')
   })
 
   it('sounds を持たない（カスタム音は入れない）', () => {
-    expect(entry?.props).not.toHaveProperty('sounds')
+    if (!entry) return
+    expect(entry.props).not.toHaveProperty('sounds')
   })
 
   /**
@@ -112,12 +127,11 @@ describe('app.json の expo-notifications プラグイン設定', () => {
   })
 
   /**
-   * ラチェット: 白抜きアイコンを置いたのに app.json へ配線し忘れると、
-   * prebuild が meta-data ごと消して**何も変わらない**（手で drawable を置く回避策も消される）。
+   * ラチェット: 白抜きアイコンを置いたのに app.json へ配線し忘れると何も変わらない。
    * 素材が現れた瞬間に配線を強制する。
    */
   it('assets/notification-icon.png を置いたら app.json の icon がそれを指す', () => {
     if (!existsSync(join(ROOT, NOTIFICATION_ICON_PATH))) return
-    expect(entry?.props.icon).toBe(`./${NOTIFICATION_ICON_PATH.replace(/\\/g, '/')}`)
+    expect(entry?.props.icon).toBe('./' + NOTIFICATION_ICON_PATH)
   })
 })
