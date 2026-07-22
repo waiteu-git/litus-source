@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
+import { useWebViewBack } from '../ui/useWebViewBack'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { AssignmentsStackParamList } from '../navigation/types'
@@ -42,6 +43,7 @@ export default function WebViewerScreen() {
   const { url, title } = route.params
   const ui = useUi()
   const webviewRef = useRef<WebViewInstance>(null)
+  const { setCanGoBack } = useWebViewBack(webviewRef)
   const { bump } = useAssignmentsVersion()
   const [currentUrl, setCurrentUrl] = useState(url)
   const [toast, setToast] = useState<string | null>(null)
@@ -188,7 +190,7 @@ export default function WebViewerScreen() {
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
         setSupportMultipleWindows={false}
-        onNavigationStateChange={(s) => setCurrentUrl(s.url)}
+        onNavigationStateChange={(s) => { setCurrentUrl(s.url); setCanGoBack(s.canGoBack) }}
         onLoadEnd={onLoadEnd}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
         onShouldStartLoadWithRequest={(req) => {
