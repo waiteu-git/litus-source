@@ -28,13 +28,25 @@ import {
   CLASS_EVENT_CHANNEL_ID,
 } from './channelSpec'
 
-const TAG = 'attendance-alarm'
-const ASSIGNMENT_TAG = 'assignment-reminder'
-/** 各回イベント（休講/補講/小テスト等）。予約枠は課題と共有するが分類とタップ先が別。 */
-export const CLASS_EVENT_TAG = 'class-event'
-export const BULLETIN_TAG = 'bulletin-new'
-export const ATTENDANCE_OPEN_TAG = 'attendance-open'
-export const LETUS_NEWS_TAG = 'letus-news'
+// タグの定義は純粋層 notificationTags.ts が正典（notificationRoute.ts と共有する）。
+import {
+  ATTENDANCE_TAG,
+  ASSIGNMENT_TAG,
+  CLASS_EVENT_TAG,
+  BULLETIN_TAG,
+  ATTENDANCE_OPEN_TAG,
+  LETUS_NEWS_TAG,
+} from './notificationTags'
+import type { NotificationPayload } from './notificationRoute'
+
+export {
+  ATTENDANCE_TAG,
+  ASSIGNMENT_TAG,
+  CLASS_EVENT_TAG,
+  BULLETIN_TAG,
+  ATTENDANCE_OPEN_TAG,
+  LETUS_NEWS_TAG,
+} from './notificationTags'
 
 // チャンネルの定義（ID・名称・属性）は純粋層 channelSpec.ts が正典。ここは re-export のみ。
 export {
@@ -102,33 +114,48 @@ export async function configureNotifications(): Promise<void> {
   }
 }
 
-type NotifResponseData = { tag?: string; courseCode?: string; kind?: string }
+type NotifResponseData = NotificationPayload
 
-function tagOf(resp: { notification: { request: { content: { data?: unknown } } } } | null | undefined): string | null {
-  const data = resp?.notification.request.content.data as NotifResponseData | undefined
-  return typeof data?.tag === 'string' ? data.tag : null
+function payloadOf(
+  resp: { notification: { request: { content: { data?: unknown } } } } | null | undefined,
+): NotificationPayload | null {
+  const data = resp?.notification.request.content.data as NotificationPayload | undefined
+  return typeof data?.tag === 'string' ? data : null
 }
 
 /**
- * アプリを起動した通知タップ（cold start）の tag を返す。無ければ null。
+ * アプリを起動した通知タップ（cold start）の payload を返す。無ければ null。
  * Expo Go では通知モジュールを読み込めないため null。
+ * tag だけでなく data 全体を返す（課題リマインドは assignmentId で対象へ着地するため）。
  */
-export async function getInitialNotificationTag(): Promise<string | null> {
+export async function getInitialNotificationPayload(): Promise<NotificationPayload | null> {
   const Notifications = await loadNotifications()
   if (!Notifications) return null
-  return tagOf(await Notifications.getLastNotificationResponseAsync())
+  return payloadOf(await Notifications.getLastNotificationResponseAsync())
 }
 
 /**
- * 通知タップ（warm）を購読する。コールバックにはタップされた通知の tag を渡す。
+ * 消費済みの通知応答を破棄する。cold start の着地を処理した直後に呼ぶ。
+ * 呼ばないと getLastNotificationResponseAsync が同じ応答を返し続け、以後の通常起動でも
+ * 毎回「前回タップした通知の画面」へ飛ぶ。
+ * 古い実装には存在しないので optional call にする。
+ */
+export async function clearConsumedNotificationResponse(): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  Notifications.clearLastNotificationResponse?.()
+}
+
+/**
+ * 通知タップ（warm）を購読する。コールバックにはタップされた通知の payload を渡す。
  * Expo Go では no-op（null を返す）。
  */
 export async function addNotificationResponseListener(
-  cb: (tag: string | null) => void,
+  cb: (payload: NotificationPayload | null) => void,
 ): Promise<{ remove: () => void } | null> {
   const Notifications = await loadNotifications()
   if (!Notifications) return null
-  return Notifications.addNotificationResponseReceivedListener((resp) => cb(tagOf(resp)))
+  return Notifications.addNotificationResponseReceivedListener((resp) => cb(payloadOf(resp)))
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
@@ -145,14 +172,14 @@ export async function syncAttendanceAlarms(alarms: AttendanceAlarm[]): Promise<v
   const scheduled = await Notifications.getAllScheduledNotificationsAsync()
   for (const n of scheduled) {
     const data = n.content.data as { tag?: string } | null
-    if (data?.tag === TAG) {
+    if (data?.tag === ATTENDANCE_TAG) {
       await Notifications.cancelScheduledNotificationAsync(n.identifier)
     }
   }
   for (const alarm of alarms) {
     const { title, body } = buildAttendanceNotificationContent(alarm)
     await Notifications.scheduleNotificationAsync({
-      content: { title, body, data: { tag: TAG, courseCode: alarm.courseCode, kind: alarm.kind } },
+      content: { title, body, data: { tag: ATTENDANCE_TAG, courseCode: alarm.courseCode, kind: alarm.kind } },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(alarm.fireAt),
@@ -179,12 +206,15 @@ export async function syncAssignmentReminders(notifications: ScheduledNotificati
   for (const n of notifications) {
     const { title, body } = buildAssignmentNotificationContent(n)
     const isEvent = n.kind === 'class-event'
+    // **対象の識別子を必ず載せる**。載せないとタップされても「どの課題か」が分からず、
+    // 課題リマインドは一覧までしか着地できない（assignmentId は課題ページURLそのもの）。
+    const data: NotificationPayload = isEvent
+      ? { tag: CLASS_EVENT_TAG, kind: n.kind, eventId: n.eventId }
+      : n.kind === 'morning-digest'
+        ? { tag: ASSIGNMENT_TAG, kind: n.kind }
+        : { tag: ASSIGNMENT_TAG, kind: n.kind, assignmentId: n.assignmentId }
     await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: { tag: isEvent ? CLASS_EVENT_TAG : ASSIGNMENT_TAG, kind: n.kind },
-      },
+      content: { title, body, data },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(n.fireAt),
@@ -265,7 +295,7 @@ export async function clearDeliveredAttendanceOpenNotifications(): Promise<void>
  */
 export async function clearDeliveredAttendanceStartNotifications(courseCode?: string | null): Promise<void> {
   await clearDelivered(
-    [TAG],
+    [ATTENDANCE_TAG],
     (d) => d.kind === 'attendance-start' && (!courseCode || d.courseCode === courseCode),
   )
 }
