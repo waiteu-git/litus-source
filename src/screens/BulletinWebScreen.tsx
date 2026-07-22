@@ -13,6 +13,10 @@ import {
   openBulletinDetailJs,
 } from '../collect/injectedScripts'
 import { nextBulletinWebStep, type BulletinWebSignal } from '../collect/bulletinWebFlow'
+import { CLASS_DOWNLOAD_CAPTURE_JS, filenameFromContentDisposition } from '../collect/classDownload'
+import { classifySharePayload, sanitizeDownloadFilename } from './pdfShare'
+import * as FileSystem from 'expo-file-system/legacy'
+import * as Sharing from 'expo-sharing'
 import { loadBulletinDigest, updateBulletinItem } from '../storage/bulletinDigestStore'
 import { COLORS, DARK, useThemeVariant } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
@@ -38,6 +42,7 @@ export default function BulletinWebScreen() {
   const [nonce, setNonce] = useState(0)
   const dark = useThemeVariant().variant === 'dark'
   const [target, setTarget] = useState<{ title: string; date: string } | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   // 対象掲示を開く操作（openDetail）を撃ったか。掲示ページに再着地しても二重に開かない（多重postback防止の要）。
   const detailFiredRef = useRef(false)
   const modalOpenRef = useRef(false)
@@ -77,7 +82,35 @@ export default function BulletinWebScreen() {
 
   // ページ読込のたびに現在ページを判定する（無条件注入はしない）。判定結果は onMessage で受ける。
   function onLoadEnd() {
+    // 添付DLの横取りフックを先に入れる（冪等）。CLASSの添付は ViewState 付きPOSTで流れるが、
+    // RNW は URL だけを DownloadManager へ渡し、素のGETで取り直すためログインページが保存される。
+    inject(CLASS_DOWNLOAD_CAPTURE_JS)
     inject(DETECT_PAGE_JS)
+  }
+
+  async function shareDownloaded(dataBase64: string, contentType: string | null, contentDisposition: string | null) {
+    const kind = classifySharePayload({ dataBase64, contentType })
+    if (kind !== 'ok') {
+      setNotice(
+        kind === 'login'
+          ? 'ログインが切れているようです。「やり直す」を押してから、もう一度お試しください'
+          : 'ファイルを取得できませんでした（受け取ったものがPDFではありません）',
+      )
+      return
+    }
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        setNotice('この端末では共有が利用できません')
+        return
+      }
+      const name = sanitizeDownloadFilename(filenameFromContentDisposition(contentDisposition) ?? '', 'download.pdf')
+      const uri = FileSystem.cacheDirectory + name
+      await FileSystem.writeAsStringAsync(uri, dataBase64, { encoding: FileSystem.EncodingType.Base64 })
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' })
+      setNotice(null)
+    } catch {
+      setNotice('ファイルを開けませんでした')
+    }
   }
 
   function onMessage(data: string) {
@@ -89,6 +122,19 @@ export default function BulletinWebScreen() {
     }
     if (!p) return
     // 対象掲示のモーダルが開いた/既に開いていたら、以後は何も注入しない（ユーザーが読む）。
+    if (p.type === 'classDownload') {
+      if (p.stage === 'start') setNotice('ファイルを取得しています…')
+      else if (p.stage === 'done' && typeof p.dataBase64 === 'string') {
+        shareDownloaded(
+          p.dataBase64,
+          typeof p.contentType === 'string' ? p.contentType : null,
+          typeof p.contentDisposition === 'string' ? p.contentDisposition : null,
+        )
+      } else if (p.stage === 'error') {
+        setNotice(p.reason === 'size' ? 'ファイルが大きすぎます（25MB超）' : 'ファイルを取得できませんでした')
+      }
+      return
+    }
     if (p.type === 'bulletindetail') {
       if (p.stage === 'opened' || p.stage === 'already-open') modalOpenRef.current = true
       return
@@ -145,6 +191,9 @@ export default function BulletinWebScreen() {
         onMessage={(e) => onMessage(e.nativeEvent.data)}
         style={styles.web}
       />
+      {notice ? (
+        <View style={styles.notice}><Text style={styles.noticeText}>{notice}</Text></View>
+      ) : null}
       <Pressable style={styles.refresh} onPress={retry}>
         <Text style={styles.refreshText}>やり直す</Text>
       </Pressable>
@@ -167,4 +216,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   refreshText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
+  notice: { position: 'absolute', left: 14, right: 100, bottom: 22, backgroundColor: COLORS.emeraldDark, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  noticeText: { color: COLORS.white, fontSize: 12.5, fontWeight: '600' },
 })

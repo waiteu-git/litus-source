@@ -63,6 +63,26 @@ export function sanitizePdfFilename(url: string): string {
   return name + '.pdf'
 }
 
+/**
+ * Content-Disposition 由来のファイル名を端末で安全な形にする（拡張子はそのまま保つ）。
+ * sanitizePdfFilename と**同じ文字方針を共有**する（別実装にすると必ずズレる）。
+ */
+export function sanitizeDownloadFilename(name: string, fallback = 'download'): string {
+  const raw = (name || '').split(/[\\/]/).pop() ?? ''
+  const dot = raw.lastIndexOf('.')
+  const hasExt = dot > 0 && dot < raw.length - 1
+  const ext = hasExt ? raw.slice(dot + 1).replace(UNSAFE_FILENAME_CHARS, '').slice(0, 10) : ''
+  const base = (hasExt ? raw.slice(0, dot) : raw)
+    .replace(UNSAFE_FILENAME_CHARS, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[_.\s]+|[_.\s]+$/g, '')
+  let name2 = truncateBytes(base, MAX_BASENAME_BYTES).replace(/[_.\s]+$/g, '')
+  if (!name2) name2 = fallback
+  if (RESERVED_NAMES.test(name2)) name2 = '_' + name2
+  return ext ? `${name2}.${ext}` : name2
+}
+
 /** 取得したものの正体。ok 以外は端末アプリへ渡してはいけない。 */
 export type SharePayloadKind = 'ok' | 'login' | 'notPdf'
 
