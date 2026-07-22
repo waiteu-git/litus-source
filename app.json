@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "dev.waiteu.litus",
-      "versionCode": 101,
+      "versionCode": 102,
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
       "adaptiveIcon": {
