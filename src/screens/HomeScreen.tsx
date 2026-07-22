@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
@@ -26,6 +26,7 @@ import { formatBuildTag } from '../appVersion'
 import { RELEASE_STAGE, shouldShowBuildTag } from '../releaseStage'
 import { assignmentScreenFor, isManualUrl } from '../assignments/manualAssignment'
 import { Tag } from '../ui/Tag'
+import { reservedLineBoxHeight } from '../ui/reservedLineBox'
 import { Badge } from '../ui/Badge'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
@@ -50,6 +51,11 @@ import type { HomeSectionKey } from '../home/homeSections'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
+
+// CLASS掲示カルーセルのタイトル。行数が変わるとカード高さ＝以降のセクション位置が動くので、
+// 常に BULLETIN_TITLE_LINES 行分を確保する。値の正典はここだけ（styles と minHeight が同じ数を見る）。
+const BULLETIN_TITLE_LINE_HEIGHT = 21
+const BULLETIN_TITLE_LINES = 2
 
 // 今日の予定タグの色（タイプ別）。
 const EVENT_TONE: Record<string, string> = {
@@ -78,6 +84,9 @@ export default function HomeScreen() {
   const clearance = useTabBarClearance()
   const { homeLayout } = useDisplaySettings()
   const { reception, timetable, running, attendedNow, receptionWindow } = useAttendanceEngine()
+  // 掲示タイトルの確保高さを端末の文字サイズ設定に追随させる。PixelRatio.getFontScale() は
+  // 同じ値を読むが変更時に再レンダーしないので、useWindowDimensions を使う。
+  const { fontScale } = useWindowDimensions()
 
   // 「今やること」・出席バナー用の現在時刻。分単位で更新して次の授業/締切を追随させる
   // （秒精度のエンジンクロックは購読しない＝出席カウントダウン中にホームが毎秒再レンダーされない。
@@ -612,7 +621,18 @@ export default function HomeScreen() {
                     <View style={{ marginBottom: 6 }}>
                       <Tag label={b.category} size="sm" />
                     </View>
-                    <Text style={[styles.bulletinTitle, { color: ui.valueColor }]} numberOfLines={2}>
+                    <Text
+                      style={[styles.bulletinTitle, {
+                        color: ui.valueColor,
+                        minHeight: reservedLineBoxHeight({
+                          lineHeight: BULLETIN_TITLE_LINE_HEIGHT,
+                          lines: BULLETIN_TITLE_LINES,
+                          fontScale,
+                          itemCount: unreadBulletin.length,
+                        }),
+                      }]}
+                      numberOfLines={BULLETIN_TITLE_LINES}
+                    >
                       {b.title}
                     </Text>
                     <Text style={[styles.bulletinMeta, { color: ui.labelColor }]}>{b.meta}</Text>
@@ -809,8 +829,10 @@ const styles = StyleSheet.create({
   bulletinCard: { paddingBottom: 12 },
   bulletinHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   bulletinHeadText: { fontSize: 15, fontWeight: '600', flex: 1 },
+  // タイトルが常に2行分を確保するので内容高さは常にこれを上回る＝この minHeight は現状非拘束。
+  // 文字サイズ設定を極端に小さくした場合の下限としてだけ残す。
   bulletinSlide: { minHeight: 76 },
-  bulletinTitle: { fontSize: 15, fontWeight: '600', lineHeight: 21 },
+  bulletinTitle: { fontSize: 15, fontWeight: '600', lineHeight: BULLETIN_TITLE_LINE_HEIGHT },
   bulletinMeta: { fontSize: 11, marginTop: 5 },
   bulletinMore: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 4 },
   bulletinCta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
