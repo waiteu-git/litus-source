@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { sanitizePdfFilename, isWithinShareLimit, PDF_SHARE_LIMIT_BYTES, buildSharePdfJs } from './pdfShare'
+import {
+  sanitizePdfFilename,
+  isWithinShareLimit,
+  PDF_SHARE_LIMIT_BYTES,
+  buildSharePdfJs,
+  classifySharePayload,
+} from './pdfShare'
 
 describe('sanitizePdfFilename', () => {
   it('URL末尾のファイル名を使い.pdfを保証する', () => {
@@ -76,5 +82,42 @@ describe('buildSharePdfJs', () => {
     expect(js).toContain('window.__PDF_URL')
     expect(js).toContain('credentials')
     expect(js).toContain("stage:'share'")
+  })
+})
+
+describe('classifySharePayload — 取得したものが本当にPDFか', () => {
+  // 実機報告(2026-07-22): PDFを共有すると CLASS のログインページHTMLが .pdf として保存された。
+  // 原因は buildSharePdfJs が res.ok とサイズしか見ておらず、**ログインページは HTTP 200 で返る**ため
+  // 素通りしていたこと。「認証が切れた」という回復可能な状態が、黙ってファイルを壊す形で出ていた。
+  const PDF_B64 = 'JVBERi0xLjcKJeLjz9M='            // '%PDF-1.7\n%âãÏÓ'
+  const HTML_B64 = 'PCFET0NUWVBFIGh0bWw+'          // '<!DOCTYPE html>'
+  const HTML_LOWER_B64 = 'PCFkb2N0eXBlIGh0bWw+'    // '<!doctype html>'
+
+  it('PDFのマジックバイトがあれば ok', () => {
+    expect(classifySharePayload({ dataBase64: PDF_B64, contentType: 'application/pdf' })).toBe('ok')
+  })
+  it('content-type が無くても中身がPDFなら ok（CLASSは型を返さないことがある）', () => {
+    expect(classifySharePayload({ dataBase64: PDF_B64, contentType: null })).toBe('ok')
+  })
+  it('HTMLが返ってきたら login とみなす（本件の再現）', () => {
+    expect(classifySharePayload({ dataBase64: HTML_B64, contentType: 'text/html; charset=utf-8' })).toBe('login')
+    expect(classifySharePayload({ dataBase64: HTML_LOWER_B64, contentType: 'text/html' })).toBe('login')
+  })
+  it('content-type が html ならマジックバイトを待たず login', () => {
+    expect(classifySharePayload({ dataBase64: 'AAAA', contentType: 'text/html' })).toBe('login')
+  })
+  it('PDFでもHTMLでもなければ notPdf（壊れたファイルを黙って渡さない）', () => {
+    expect(classifySharePayload({ dataBase64: 'AAAAAAAA', contentType: 'image/png' })).toBe('notPdf')
+  })
+  it('空なら notPdf', () => {
+    expect(classifySharePayload({ dataBase64: '', contentType: null })).toBe('notPdf')
+  })
+})
+
+describe('buildSharePdfJs は content-type を持ち帰る', () => {
+  it('res.headers から content-type を読んで postMessage に載せる', () => {
+    const js = buildSharePdfJs()
+    expect(js).toContain("res.headers.get('content-type')")
+    expect(js).toContain('contentType')
   })
 })
