@@ -49,6 +49,12 @@
       ],
       "expo-font",
       [
+        "expo-notifications",
+        {
+          "color": "#0f9e75"
+        }
+      ],
+      [
         "react-native-android-widget",
         {
           "widgets": [
