@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { computeHomeBanner } from '../attendance/homeBanner'
+import { useCourseActive } from '../attendance/useCourseActive'
 import { homeRemaining } from '../attendance/receptionWindow'
 import { todayKey } from '../attendance/attendedState'
 import { todayRemainingClasses, type FocusClass } from '../home/focusClass'
@@ -99,6 +100,8 @@ export default function HomeScreen() {
     const id = setInterval(() => setTick(new Date()), 60000)
     return () => clearInterval(id)
   }, [])
+  // 学期の授業回が終わった科目に出席案内を出し続けないための述語（FABにも同じものを渡す）。
+  const courseActive = useCourseActive(tick)
 
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [bulletin, setBulletin] = useState<BulletinItem[]>([])
@@ -213,7 +216,7 @@ export default function HomeScreen() {
 
   // エンジン停止中は reception が陳腐化するため信頼しない（授業時間帯の時間割判定のみに委ねる）。
   // 出席済みのときは「出席登録受付中/出席を確認」バナーは出さない（案内が不要・紛らわしい）。
-  const rawBanner = computeHomeBanner(ttQ, running ? reception : null, tick, cq)
+  const rawBanner = computeHomeBanner(ttQ, running ? reception : null, tick, cq, courseActive)
   const banner = attendedNow ? { ...rawBanner, active: false } : rawBanner
 
   const classes = todayRemainingClasses(ttQ, tick, (code) => isClassOnDate(weeklyPatterns[code], tick), cq)

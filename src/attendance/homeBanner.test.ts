@@ -149,3 +149,53 @@ describe('computeHomeBanner', () => {
     expect(b.courseName).toBe('英語ⅠA')
   })
 })
+
+describe('computeHomeBanner × 学期終了（isOn 述語）', () => {
+  const stacked: TimetableCollection = {
+    slots: [
+      {
+        day: 'mon',
+        period: 1,
+        classes: [
+          { courseCode: 'a', name: '前半科目', teachers: [], room: '', isRemote: false, credits: null, badges: [], quarter: 'first' },
+          { courseCode: 'b', name: '後半科目', teachers: [], room: '', isRemote: false, credits: null, badges: [], quarter: 'second' },
+        ],
+      },
+    ],
+    periodTimes,
+  }
+
+  it('isOn が false を返す科目は class-time を出さない', () => {
+    const b = computeHomeBanner([col('mon', 1, '解析学')], notAccepting, MON_0930, undefined, () => false)
+    expect(b.active).toBe(false)
+    expect(b.kind).toBe('none')
+  })
+
+  it('isOn が true なら従来どおり class-time', () => {
+    const b = computeHomeBanner([col('mon', 1, '解析学')], notAccepting, MON_0930, undefined, () => true)
+    expect(b.kind).toBe('class-time')
+    expect(b.courseName).toBe('解析学')
+  })
+
+  it('CLASS受付中は isOn が false でも accepting のまま（追試・補講の実測を塞がない）', () => {
+    const b = computeHomeBanner([col('mon', 1, '解析学')], accepting('英語ⅠA'), MON_0930, undefined, () => false)
+    expect(b.active).toBe(true)
+    expect(b.kind).toBe('accepting')
+  })
+
+  it('積みコマで片方だけ終了済みなら、生きている方が代表になる', () => {
+    // 代表選択より前に絞らないと、終了した科目が代表に選ばれて生きている方を巻き添えにする
+    const b = computeHomeBanner([stacked], notAccepting, MON_0930, 'first', (code) => code !== 'a')
+    expect(b.kind).toBe('class-time')
+    expect(b.courseName).toBe('後半科目')
+  })
+
+  it('findActiveClass は科目名も述語に渡す（コードで引けない経路のため）', () => {
+    const seen: string[] = []
+    findActiveClass([col('mon', 1, '解析学')], MON_0930, 5, undefined, (_code, name) => {
+      seen.push(name)
+      return true
+    })
+    expect(seen).toEqual(['解析学'])
+  })
+})

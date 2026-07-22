@@ -19,6 +19,8 @@ import { serializeClassEvents, deserializeClassEvents } from '../storage/classEv
 import { serializeTermsConsent, deserializeTermsConsent } from '../storage/termsConsentSerialize'
 import { TERMS_VERSION } from '../legal/termsVersion'
 import { isUserManagedUrl } from '../assignments/assignmentOwnership'
+import { courseTermEnds, isCourseActiveOn } from '../attendance/courseOver'
+import { dateToYmd } from '../timetableEvents/eventDateValue'
 
 const NOW = new Date('2026-09-16T10:00:00+09:00') // 公開目標期（水曜）
 
@@ -160,5 +162,27 @@ describe('デモデータの時期非依存性', () => {
     expect(buildDemoBulletins(now).length).toBeGreaterThan(0)
     expect(buildDemoAttendanceStats(now).length).toBeGreaterThan(0)
     expect(buildDemoClassEvents(now).length).toBeGreaterThan(0)
+  })
+})
+
+describe('デモモードと学期終了判定', () => {
+  // ストア審査用デモから出席バナー/FAB/送信フローが消えると審査ブロッカーになる。
+  // デモの出欠は全回が過去日なので、学期終了判定に拾われないことを機械的に固定する。
+  it('デモの科目は「学期終了」と判定されない（案内が消えない）', () => {
+    const now = new Date('2026-09-16T10:00:00+09:00')
+    const courses = buildDemoAttendanceStats(now)
+    const termEnds = courseTermEnds(courses, now)
+    const dateKey = dateToYmd(now)
+    for (const c of courses) {
+      expect(
+        isCourseActiveOn({
+          courseCode: c.courseCode ?? '',
+          courseName: c.courseName,
+          dateKey,
+          termEnds,
+          extraPlans: [],
+        }),
+      ).toBe(true)
+    }
   })
 })

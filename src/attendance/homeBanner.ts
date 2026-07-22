@@ -22,15 +22,22 @@ function hhmmToMin(hhmm: string): number | null {
 
 export type ActiveClass = { courseCode: string; courseName: string }
 
+/** その科目に今日まだ授業案内を出すか（学期終了・隔週の休み週などの除外判定）。省略時は全て出す。 */
+export type ClassActivePredicate = (courseCode: string, courseName: string) => boolean
+
 /**
  * now が「登録授業のある時限の時間帯内（開始 preMinutes 前〜終了）」なら、その科目を返す。
  * isInClassPeriod と同じ判定だが、バナー文言のため科目名も返す点が異なる。複数該当時は先勝ち。
+ *
+ * isOn は代表科目を選ぶ**前**に適用する。積みコマ（半期科目2件）で終了済みの方が代表に選ばれると、
+ * 同じコマで生きている科目まで巻き添えで消えるため。
  */
 export function findActiveClass(
   collections: TimetableCollection[],
   now: Date,
   preMinutes = 5,
   currentQuarter?: Quarter,
+  isOn?: ClassActivePredicate,
 ): ActiveClass | null {
   const weekday = now.getDay()
   const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -45,7 +52,9 @@ export function findActiveClass(
       const end = hhmmToMin(pt.end)
       if (start === null || end === null) continue
       if (nowMin >= start - preMinutes && nowMin <= end) {
-        const c = representativeClass(slot.classes, currentQuarter)
+        const live = isOn ? slot.classes.filter((k) => isOn(k.courseCode, k.name)) : slot.classes
+        if (live.length === 0) continue
+        const c = representativeClass(live, currentQuarter)
         if (!c) continue
         return { courseCode: c.courseCode, courseName: c.name }
       }
@@ -70,6 +79,7 @@ export function computeHomeBanner(
   reception: AttendanceReception | null,
   now: Date,
   currentQuarter?: Quarter,
+  isOn?: ClassActivePredicate,
 ): HomeBanner {
   // 受付確定が最優先（時間割に無い補講等も拾える）。
   if (reception?.accepting) {
@@ -77,7 +87,7 @@ export function computeHomeBanner(
     return { active: true, kind: 'accepting', courseName: reception.courseName, text: `${name} 出席登録受付中` }
   }
   // 次に時間割上の授業時間帯。受付は未確認だが「出席を確認」ナッジを出す。
-  const active = findActiveClass(collections, now, 5, currentQuarter)
+  const active = findActiveClass(collections, now, 5, currentQuarter, isOn)
   if (active) {
     return {
       active: true,

@@ -5,6 +5,7 @@ import { Text } from '../ui/Text'
 import { useUi, useTabBarClearance } from '../ui/screen'
 import { useAttendanceEngine } from './AttendanceEngineProvider'
 import { computeHomeBanner } from './homeBanner'
+import { useCourseActive } from './useCourseActive'
 import { navigationRef, requestOpenAttendance } from '../navigation/navigationRef'
 import { HIDE_ATTENDANCE_FAB_ROUTES } from '../navigation/fullscreenRoutes'
 import { COLORS } from '../theme'
@@ -33,6 +34,8 @@ export default function AttendanceFab() {
     const id = setInterval(() => setTick(new Date()), 60000)
     return () => clearInterval(id)
   }, [])
+  // ホームのバナーと同じ述語（学期終了の科目には出さない）。片方だけに渡すと表示が食い違う。
+  const courseActive = useCourseActive(tick)
   // 積みコマ（半期科目）の代表選択用。前半/後半の手動指定(override)と「今が前半/後半か」の手動指定。
   const [ttOverrides, setTtOverrides] = useState<TimetableOverrides>({})
   const [ttQuarterPref, setTtQuarterPref] = useState<Quarter | null>(null)
@@ -51,7 +54,7 @@ export default function AttendanceFab() {
 
   const ttQ = useMemo(() => timetable.map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, ttOverrides) })), [timetable, ttOverrides])
   const cq = resolveCurrentQuarter(ttQuarterPref, tick)
-  const raw = computeHomeBanner(ttQ, running ? reception : null, tick, cq)
+  const raw = computeHomeBanner(ttQ, running ? reception : null, tick, cq, courseActive)
   const active = raw.active && !attendedNow
   if (!active || (routeName != null && HIDE_ATTENDANCE_FAB_ROUTES.has(routeName))) return null
 
