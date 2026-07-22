@@ -221,6 +221,9 @@ export default function ClassEventFormScreen() {
             boxStyle={inputStyle}
             a11yLabel={type === 'makeup' ? '補講日を選択' : '日付を選択'}
           />
+          {picker === 'date' ? (
+            <DateTimePicker value={ymdToDate(date, new Date())} mode="date" onChange={onPicked} />
+          ) : null}
         </View>
 
         <View style={[ui.card, styles.card]}>
@@ -274,6 +277,9 @@ export default function ClassEventFormScreen() {
                   boxStyle={inputStyle}
                   a11yLabel="補講日を選択"
                 />
+                {picker === 'mkDate' ? (
+                  <DateTimePicker value={ymdToDate(mkDate, new Date())} mode="date" onChange={onPicked} />
+                ) : null}
                 {label('補講の時限')}
                 <PeriodChips sel={mkPeriods} onToggle={(p) => setMkPeriods((v) => toggle(v, p))} />
                 {label('補講の教室（任意）')}
@@ -312,13 +318,6 @@ export default function ClassEventFormScreen() {
           >
             <Text style={[styles.deleteText, { color: ui.colors.danger }]}>削除</Text>
           </Pressable>
-        ) : null}
-        {picker ? (
-          <DateTimePicker
-            value={ymdToDate(picker === 'date' ? date : mkDate, new Date())}
-            mode="date"
-            onChange={onPicked}
-          />
         ) : null}
       </ScrollView>
     </ScreenBg>
