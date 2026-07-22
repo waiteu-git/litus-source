@@ -35,6 +35,10 @@ export type SubmitDiag = {
   ajaxStatus?: number
   ajaxError?: string
   hint?: string
+  /** ok=true を出した根拠（一致文言＋前後）。誤報の再現時にこれだけで原因が確定できる。 */
+  okBy?: string
+  /** 応答本文が「受付中の授業なし」を示していたか。ok と両立しない＝誤報検知の決め手。 */
+  noneNow?: boolean
 }
 
 /** 保持する件数（直近ぶんだけ。無制限に貯めない）。 */
@@ -69,6 +73,8 @@ export function toSubmitDiag(
     ajaxStatus: r.ajaxStatus,
     ajaxError: r.ajaxError,
     hint: r.hint,
+    okBy: r.okBy,
+    noneNow: r.noneNow,
   }
 }
 
@@ -110,7 +116,10 @@ export function formatSubmitDiag(d: SubmitDiag): string {
   const meta = isReaction
     ? `本文=${d.filled ?? '-'}文字`
     : `btn=${String(d.btnFound)} method=${d.method ?? '-'} 入力=${d.filled ?? '-'}桁`
-  return [head, `${verdict}: ${d.result}`, ajax, meta, d.hint ? `CLASS: ${d.hint}` : '']
+  // 成功判定の根拠は**必ず添える**。verdict だけでは誤報の原因を追えない（2026-07-22）。
+  const why = d.okBy ? `成功判定の根拠: ${d.okBy}` : ''
+  const none = d.noneNow ? '※CLASSは「受付中の授業なし」を表示していました' : ''
+  return [head, `${verdict}: ${d.result}`, ajax, meta, why, none, d.hint ? `CLASS: ${d.hint}` : '']
     .filter(Boolean)
     .join('\n')
 }
