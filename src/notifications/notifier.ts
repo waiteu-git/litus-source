@@ -18,6 +18,15 @@ import type { ScheduledNotification } from './schedule'
 import { buildAssignmentNotificationContent } from './assignmentContent'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { buildBulletinNotificationContent } from './bulletinNotify'
+import {
+  CHANNEL_SPECS,
+  toChannelInput,
+  ATTENDANCE_CHANNEL_ID,
+  ASSIGNMENT_CHANNEL_ID,
+  BULLETIN_CHANNEL_ID,
+  LETUS_NEWS_CHANNEL_ID,
+  CLASS_EVENT_CHANNEL_ID,
+} from './channelSpec'
 
 const TAG = 'attendance-alarm'
 const ASSIGNMENT_TAG = 'assignment-reminder'
@@ -27,17 +36,14 @@ export const BULLETIN_TAG = 'bulletin-new'
 export const ATTENDANCE_OPEN_TAG = 'attendance-open'
 export const LETUS_NEWS_TAG = 'letus-news'
 
-export const ATTENDANCE_CHANNEL_ID = 'attendance'
-export const ASSIGNMENT_CHANNEL_ID = 'assignments'
-export const BULLETIN_CHANNEL_ID = 'bulletins'
-export const LETUS_NEWS_CHANNEL_ID = 'letus-updates'
-/**
- * 各回イベント（休講/補講/小テスト/教室変更）専用チャンネル。
- * 予約枠は課題と共有するが、**通知の性質が別物**なので OS 上の分類は分ける。
- * 同居していた頃は「休講」がOS設定で『課題リマインド』に属し、課題通知を切ると休講も消え、
- * 逆に休講だけ切ることもできなかった（2026-07-17修正）。
- */
-export const CLASS_EVENT_CHANNEL_ID = 'class-events'
+// チャンネルの定義（ID・名称・属性）は純粋層 channelSpec.ts が正典。ここは re-export のみ。
+export {
+  ATTENDANCE_CHANNEL_ID,
+  ASSIGNMENT_CHANNEL_ID,
+  BULLETIN_CHANNEL_ID,
+  LETUS_NEWS_CHANNEL_ID,
+  CLASS_EVENT_CHANNEL_ID,
+} from './channelSpec'
 
 /** Expo Go では expo-notifications を読み込めない（読むと落ちる）。 */
 const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient
@@ -81,26 +87,18 @@ export async function configureNotifications(): Promise<void> {
     }),
   })
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(ATTENDANCE_CHANNEL_ID, {
-      name: '出席リマインド',
-      importance: Notifications.AndroidImportance.MAX,
-    })
-    await Notifications.setNotificationChannelAsync(ASSIGNMENT_CHANNEL_ID, {
-      name: '課題リマインド',
-      importance: Notifications.AndroidImportance.HIGH,
-    })
-    await Notifications.setNotificationChannelAsync(CLASS_EVENT_CHANNEL_ID, {
-      name: '休講・補講・小テスト',
-      importance: Notifications.AndroidImportance.HIGH,
-    })
-    await Notifications.setNotificationChannelAsync(BULLETIN_CHANNEL_ID, {
-      name: '新着掲示',
-      importance: Notifications.AndroidImportance.HIGH,
-    })
-    await Notifications.setNotificationChannelAsync(LETUS_NEWS_CHANNEL_ID, {
-      name: 'LETUS更新',
-      importance: Notifications.AndroidImportance.HIGH,
-    })
+    // 属性の内容は channelSpec.ts が正典（そこにテストとラチェットがある）。
+    // ここは enum を注入して流し込むだけ。
+    const enums = {
+      importance: Notifications.AndroidImportance,
+      visibility: Notifications.AndroidNotificationVisibility,
+    }
+    for (const spec of CHANNEL_SPECS) {
+      await Notifications.setNotificationChannelAsync(
+        spec.id,
+        toChannelInput(spec, enums) as Parameters<typeof Notifications.setNotificationChannelAsync>[1],
+      )
+    }
   }
 }
 
