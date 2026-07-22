@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseReactionMessage } from './reactionMessage'
+import { parseReactionMessage, reactionSubmitAccepted } from './reactionMessage'
 
 const msg = (o: Record<string, unknown>) => JSON.stringify({ type: 'reaction', ...o })
 
@@ -37,5 +37,58 @@ describe('parseReactionMessage（リアペ提出フローの注入JS応答）', 
     expect(parseReactionMessage('not-json')).toBeNull()
     expect(parseReactionMessage('null')).toBeNull()
     expect(parseReactionMessage(msg({ stage: 'unknown' }))).toBeNull()
+  })
+})
+
+describe('reactionSubmitAccepted（再提出の確定点）', () => {
+  it('完走・200・サーバ側の失敗なしなら受理', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 200 })).toBe(true)
+  })
+
+  it('status未取得（旧経路）は200とみなす', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: true })).toBe(true)
+  })
+
+  it('完走していなければ受理しない', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: false, ajaxStatus: 200 })).toBe(false)
+    expect(reactionSubmitAccepted({})).toBe(false)
+  })
+
+  // ここが本題: 200 でも保存されていないケースを成功にしない。
+  it('検証NG（200 + validationFailed）は受理しない', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 200, ajaxInvalid: true })).toBe(false)
+  })
+
+  it('サーバ例外（200 + partial-responseの<error>）は受理しない', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 200, ajaxServerError: 'ViewExpired' })).toBe(false)
+    expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 200, ajaxServerError: 'server-error' })).toBe(false)
+  })
+
+  it('4xx/5xxは受理しない', () => {
+    expect(reactionSubmitAccepted({ ajaxDone: true, ajaxStatus: 500 })).toBe(false)
+  })
+})
+
+describe('parseReactionMessage（サーバ側失敗の取り込み）', () => {
+  it('ajaxInvalid / ajaxServerError を拾う', () => {
+    const m = parseReactionMessage(
+      JSON.stringify({
+        type: 'reaction',
+        stage: 'fill',
+        ok: true,
+        ajaxDone: true,
+        ajaxStatus: 200,
+        ajaxInvalid: true,
+        ajaxServerError: 'ViewExpired',
+      }),
+    )
+    expect(m).toMatchObject({ kind: 'fill', ok: true, ajaxInvalid: true, ajaxServerError: 'ViewExpired' })
+  })
+
+  it('空文字のサーバ例外は「無し」として落とす', () => {
+    const m = parseReactionMessage(
+      JSON.stringify({ type: 'reaction', stage: 'fill', ok: true, ajaxDone: true, ajaxServerError: '' }),
+    )
+    expect(m).toMatchObject({ ajaxServerError: undefined })
   })
 })

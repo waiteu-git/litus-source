@@ -31,7 +31,7 @@ import {
 import { buildSubmitAttendanceJs } from '../collect/attendanceSubmit.private'
 import { buildSubmitReactionJs } from '../collect/reactionSubmit.private'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
-import { parseReactionMessage } from '../collect/reactionMessage'
+import { parseReactionMessage, reactionSubmitAccepted } from '../collect/reactionMessage'
 import { canSubmitReaction, REACTION_FILL_MAX_TRIES, REACTION_FILL_RETRY_MS } from './reactionPaper'
 import { toReactionDiag, type ReactionOutcome } from './reactionDiag'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
@@ -215,6 +215,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const reactionAjaxDoneRef = useRef<boolean | undefined>(undefined)
   const reactionAjaxStatusRef = useRef<number | undefined>(undefined)
   const reactionAjaxErrorRef = useRef<string | undefined>(undefined)
+  // サーバ側の検証失敗／例外（どちらも **HTTP 200 で来る**）。再提出の確定点から除外するために持つ。
+  const reactionAjaxInvalidRef = useRef<boolean | undefined>(undefined)
+  const reactionAjaxServerErrorRef = useRef<string | undefined>(undefined)
   const reactionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   // 上限到達で自動再試行を打ち切った状態。UIの案内文を切り替えるため state で持つ。
   const [conflictExhausted, setConflictExhausted] = useState(false)
@@ -518,6 +521,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
           ajaxDone: reactionAjaxDoneRef.current,
           ajaxStatus: reactionAjaxStatusRef.current,
           ajaxError: reactionAjaxErrorRef.current,
+          ajaxInvalid: reactionAjaxInvalidRef.current,
+          ajaxServerError: reactionAjaxServerErrorRef.current,
         },
         {
           nowIso: new Date().toISOString(),
@@ -654,11 +659,14 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       }
       // m.kind === 'fill'
       if (m.ok) {
-        // 提出ajaxが完走したか（再提出の確定点）。観測できない古い経路では undefined → false のまま。
-        reactionAjaxOkRef.current = m.ajaxDone === true && (m.ajaxStatus ?? 200) < 400
+        // 提出ajaxがサーバに受理されたか（再提出の確定点）。観測できない古い経路では false のまま。
+        // **200 だけでは判定しない**（検証失敗・ViewExpired も 200 で来る）＝reactionSubmitAccepted。
+        reactionAjaxOkRef.current = reactionSubmitAccepted(m)
         reactionAjaxDoneRef.current = m.ajaxDone
         reactionAjaxStatusRef.current = m.ajaxStatus
         reactionAjaxErrorRef.current = m.ajaxError
+        reactionAjaxInvalidRef.current = m.ajaxInvalid
+        reactionAjaxServerErrorRef.current = m.ajaxServerError
         // 提出発火済み。応答テキストに頼らず、出席ページを取り直して**確定マーカー**で判定する。
         // 確定マーカーは提出の種類で違う:
         //  ・必須(reaction_pending由来): .attendSuc（提出して初めて「出席」になる）
@@ -831,6 +839,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         ajaxDone: typeof parsed.ajaxDone === 'boolean' ? parsed.ajaxDone : undefined,
         ajaxError: typeof parsed.ajaxError === 'string' && parsed.ajaxError ? parsed.ajaxError : undefined,
         ajaxStatus: typeof parsed.ajaxStatus === 'number' ? parsed.ajaxStatus : undefined,
+        // 200 で返るサーバ側の失敗（検証NG／ViewExpired）。成功と両立しない。
+        ajaxInvalid: typeof parsed.ajaxInvalid === 'boolean' ? parsed.ajaxInvalid : undefined,
+        ajaxServerError:
+          typeof parsed.ajaxServerError === 'string' && parsed.ajaxServerError ? parsed.ajaxServerError : undefined,
         hint: typeof parsed.hint === 'string' && parsed.hint ? parsed.hint : undefined,
         // ok=true の根拠。判定だけ残して根拠を捨てていたため誤報の原因を追えなかった（2026-07-22）。
         okBy: typeof parsed.okBy === 'string' && parsed.okBy ? parsed.okBy : undefined,

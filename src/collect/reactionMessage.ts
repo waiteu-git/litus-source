@@ -17,10 +17,42 @@ export type ReactionScriptMessage =
       ajaxDone?: boolean
       ajaxStatus?: number
       ajaxError?: string
+      /**
+       * サーバ側の検証が落ちたか（PrimeFaces は 200 + args.validationFailed で返す）。
+       * status<400 だけを確定点にすると保存されていないのに「提出しました」になる。
+       */
+      ajaxInvalid?: boolean
+      /**
+       * サーバ側の例外（partial-response の `<error>`。ViewExpired 等）。これも **200 で来る**。
+       * 空文字は「無し」。
+       */
+      ajaxServerError?: string
     }
   | { kind: 'fill'; ok: false; reason: ReactionFillFailReason }
 
 const FILL_FAIL_REASONS: readonly ReactionFillFailReason[] = ['form-missing', 'verify-failed', 'button-missing', 'stub']
+
+/**
+ * 提出ajaxが「サーバに受理された」と言えるか。**再提出の唯一の確定点**なので厳しく判定する。
+ *
+ * HTTP 200 は保存を意味しない。JSF/PrimeFaces は
+ *  ・サーバ側の検証失敗を 200 + `args.validationFailed`
+ *  ・例外（ViewExpiredException 等）を 200 + partial-response の `<error>`
+ * で返す。status だけを見ていた頃は、セッションが切れて何も保存されていなくても
+ * 「提出しました」と表示していた（出席側で見つけた偽の成功と同型・2026-07-22）。
+ */
+export function reactionSubmitAccepted(m: {
+  ajaxDone?: boolean
+  ajaxStatus?: number
+  ajaxInvalid?: boolean
+  ajaxServerError?: string
+}): boolean {
+  if (m.ajaxDone !== true) return false
+  if ((m.ajaxStatus ?? 200) >= 400) return false
+  if (m.ajaxInvalid === true) return false
+  if (m.ajaxServerError) return false
+  return true
+}
 
 export function parseReactionMessage(raw: string): ReactionScriptMessage | null {
   let payload: unknown
@@ -35,7 +67,13 @@ export function parseReactionMessage(raw: string): ReactionScriptMessage | null 
   if (p.stage === 'open') return { kind: 'open', ok: p.ok === true }
   if (p.stage === 'fill') {
     if (p.ok === true) {
-      const q = payload as { ajaxDone?: unknown; ajaxStatus?: unknown; ajaxError?: unknown }
+      const q = payload as {
+        ajaxDone?: unknown
+        ajaxStatus?: unknown
+        ajaxError?: unknown
+        ajaxInvalid?: unknown
+        ajaxServerError?: unknown
+      }
       return {
         kind: 'fill',
         ok: true,
@@ -43,6 +81,9 @@ export function parseReactionMessage(raw: string): ReactionScriptMessage | null 
         ajaxDone: typeof q.ajaxDone === 'boolean' ? q.ajaxDone : undefined,
         ajaxStatus: typeof q.ajaxStatus === 'number' ? q.ajaxStatus : undefined,
         ajaxError: typeof q.ajaxError === 'string' && q.ajaxError ? q.ajaxError : undefined,
+        ajaxInvalid: typeof q.ajaxInvalid === 'boolean' ? q.ajaxInvalid : undefined,
+        ajaxServerError:
+          typeof q.ajaxServerError === 'string' && q.ajaxServerError ? q.ajaxServerError : undefined,
       }
     }
     const reason = FILL_FAIL_REASONS.find((r) => r === p.reason) ?? 'error'

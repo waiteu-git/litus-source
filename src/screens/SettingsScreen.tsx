@@ -189,7 +189,9 @@ export default function SettingsScreen() {
     <ScreenBg>
       <ScreenHeader title="設定" icon="settings-outline" />
       <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} scrollEnabled={!reordering}>
-        <Accordion title="表示" icon="grid-outline" defaultOpen>
+        {/* 設定は初期状態ですべて閉じる（ユーザー指定 2026-07-22）。開いた状態が既定だと
+            画面を開いた瞬間に長い並べ替えUIが占有し、下のカードが見えない。 */}
+        <Accordion title="表示" icon="grid-outline">
           <Text style={[styles.subHead, { color: ui.valueColor }]}>テーマ</Text>
           <Segmented
             options={[
