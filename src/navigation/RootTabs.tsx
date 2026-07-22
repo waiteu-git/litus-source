@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, DARK, useThemeVariant } from '../theme'
 import { FONT } from '../ui/fontFamily'
 import { TAB_ROUTE_NAMES, INITIAL_TAB, TAB_BACK_BEHAVIOR } from './tabConfig'
+import { HIDE_TAB_BAR_ROUTES } from './fullscreenRoutes'
 
 const Tab = createBottomTabNavigator()
 
@@ -47,10 +48,11 @@ export default function RootTabs() {
     paddingBottom: 8,
     paddingTop: 8,
   }
-  // 全画面のWeb/PDF/Linkビューア（下部にボタンを持つ）ではピルが被るのでタブバーを隠す。
-  const hideOn = new Set(['Web', 'PdfViewer', 'Link'])
+  // 全画面ビューア（下部に自前のボタンを持つ）ではピルが被るのでタブバーを隠す。
   const barFor = (route: RouteProp<Record<string, object | undefined>, string>) =>
-    hideOn.has(getFocusedRouteNameFromRoute(route) ?? '') ? ({ display: 'none' as const }) : tabBarStyle
+    HIDE_TAB_BAR_ROUTES.has(getFocusedRouteNameFromRoute(route) ?? '')
+      ? ({ display: 'none' as const })
+      : tabBarStyle
 
   return (
     <Tab.Navigator
