@@ -83,10 +83,11 @@ async function loadNotifications(): Promise<NotificationsModule | null> {
 }
 
 /**
- * 通知の表示方針とAndroidチャンネルを設定する。App起動時に権限要求より先に1回呼ぶ。
+ * 通知の表示方針とAndroidチャンネルを設定する。App起動時に1回呼ぶ。
  * ハンドラ未設定だとフォアグラウンド中の通知が一切表示されない（授業直前にアプリを
- * 開いていると出席ナッジが消える）ため必須。チャンネルは出席=MAX（音＋ヘッドアップ）、
- * 課題=HIGH。Expo Go では loadNotifications が null を返し no-op。
+ * 開いていると出席ナッジが消える）ため必須。
+ * 権限の要求はここでは行わない（オンボーディング完了時＝LoginGate の onSlidesDone）。
+ * チャンネルの属性は channelSpec.ts が正典。Expo Go では loadNotifications が null を返し no-op。
  */
 export async function configureNotifications(): Promise<void> {
   const Notifications = await loadNotifications()
