@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Alert, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { Text, TextInput } from '../ui/Text'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -8,6 +9,7 @@ import { COLORS, DARK } from '../theme'
 import type { TimetableStackParamList } from '../navigation/types'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { classBlockPeriods, nextDateForWeekday } from '../timetableEvents/classBlock'
+import { dateToYmd, isValidYmd, ymdToDate } from '../timetableEvents/eventDateValue'
 import { makeClassEventId, type ClassEvent, type ClassEventType, type MakeupStatus } from '../timetableEvents/classEvent'
 import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { loadClassEvents, upsertClassEvent, removeClassEvent } from '../storage/classEventsStore'
@@ -19,10 +21,33 @@ type Rt = RouteProp<TimetableStackParamList, 'ClassEventForm'>
 
 const TYPES: ClassEventType[] = ['cancel', 'roomChange', 'quiz', 'midterm', 'final', 'makeup', 'other']
 const PERIOD_CANDIDATES = [1, 2, 3, 4, 5, 6]
-const isValidYmd = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(s).getTime())
 
 function toggle(arr: number[], p: number): number[] {
   return (arr.includes(p) ? arr.filter((x) => x !== p) : [...arr, p]).sort((a, b) => a - b)
+}
+
+/** 日付欄。TextInput ではなくネイティブ日付ピッカーを開くボタンとして振る舞う。 */
+function DateField({ value, placeholder, onPress, valueColor, placeholderColor, boxStyle, a11yLabel }: {
+  value: string
+  placeholder: string
+  onPress: () => void
+  valueColor: string
+  placeholderColor: string
+  boxStyle: StyleProp<ViewStyle>
+  a11yLabel: string
+}) {
+  return (
+    <Pressable
+      style={[styles.dateField, boxStyle]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+    >
+      <Text style={[styles.dateFieldText, { color: value ? valueColor : placeholderColor }]}>
+        {value || placeholder}
+      </Text>
+    </Pressable>
+  )
 }
 
 export default function ClassEventFormScreen() {
@@ -53,6 +78,7 @@ export default function ClassEventFormScreen() {
   const [mkPeriods, setMkPeriods] = useState<number[]>(initialMakeup?.periods ?? [])
   const [mkRoom, setMkRoom] = useState(initialMakeup?.room ?? '')
   const [error, setError] = useState<string | null>(null)
+  const [picker, setPicker] = useState<null | 'date' | 'mkDate'>(null)
 
   useEffect(() => {
     if (!editId) return
@@ -70,6 +96,15 @@ export default function ClassEventFormScreen() {
       setMkRoom(e.makeup?.room ?? '')
     })
   }, [editId])
+
+  function onPicked(event: DateTimePickerEvent, d: Date | undefined) {
+    const which = picker
+    // Androidはダイアログを閉じるたびにonChangeが来る。先に閉じてから反映（再表示ループ防止）。
+    setPicker(null)
+    if (event.type !== 'set' || !d || !which) return
+    if (which === 'date') setDate(dateToYmd(d))
+    else setMkDate(dateToYmd(d))
+  }
 
   async function onSave() {
     if (!isValidYmd(date)) {
@@ -177,14 +212,18 @@ export default function ClassEventFormScreen() {
 
         <View style={[ui.card, styles.card]}>
           {label(type === 'makeup' ? '補講日' : '日付')}
-          <TextInput
-            style={[styles.input, inputStyle, { color: ui.valueColor }]}
+          <DateField
             value={date}
-            onChangeText={setDate}
-            placeholder="2026-07-15"
-            placeholderTextColor={phColor}
-            keyboardType="numbers-and-punctuation"
+            placeholder="日付を選択"
+            onPress={() => setPicker('date')}
+            valueColor={ui.valueColor}
+            placeholderColor={phColor}
+            boxStyle={inputStyle}
+            a11yLabel={type === 'makeup' ? '補講日を選択' : '日付を選択'}
           />
+          {picker === 'date' ? (
+            <DateTimePicker value={ymdToDate(date, new Date())} mode="date" onChange={onPicked} />
+          ) : null}
         </View>
 
         <View style={[ui.card, styles.card]}>
@@ -229,14 +268,18 @@ export default function ClassEventFormScreen() {
             {makeupStatus === 'has' ? (
               <View style={{ gap: 8, marginTop: 4 }}>
                 {label('補講日')}
-                <TextInput
-                  style={[styles.input, inputStyle, { color: ui.valueColor }]}
+                <DateField
                   value={mkDate}
-                  onChangeText={setMkDate}
-                  placeholder="2026-07-22"
-                  placeholderTextColor={phColor}
-                  keyboardType="numbers-and-punctuation"
+                  placeholder="日付を選択"
+                  onPress={() => setPicker('mkDate')}
+                  valueColor={ui.valueColor}
+                  placeholderColor={phColor}
+                  boxStyle={inputStyle}
+                  a11yLabel="補講日を選択"
                 />
+                {picker === 'mkDate' ? (
+                  <DateTimePicker value={ymdToDate(mkDate, new Date())} mode="date" onChange={onPicked} />
+                ) : null}
                 {label('補講の時限')}
                 <PeriodChips sel={mkPeriods} onToggle={(p) => setMkPeriods((v) => toggle(v, p))} />
                 {label('補講の教室（任意）')}
@@ -287,6 +330,9 @@ const styles = StyleSheet.create({
   course: { fontSize: 17, fontWeight: '700' },
   label: { fontSize: 13, fontWeight: '600' },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15 },
+  // 日付欄（Pressable）。TextInput の枠と同じ寸法にして行の高さを揃える。
+  dateField: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, justifyContent: 'center' },
+  dateFieldText: { fontSize: 15 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tchip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999, backgroundColor: COLORS.tint, borderWidth: 1 },
   tchipOn: { backgroundColor: COLORS.cta, borderColor: COLORS.cta },
