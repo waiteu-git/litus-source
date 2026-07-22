@@ -11,6 +11,7 @@ let pendingAttendance = false
 let pendingBulletin = false
 let pendingTimetable = false
 let pendingLetusCourses = false
+let pendingAssignmentsList = false
 /** 保留中に開くべき課題URL（null=なし）。 */
 let pendingAssignmentUrl: string | null = null
 
@@ -47,6 +48,13 @@ function tryOpenAssignment() {
   }
 }
 
+function tryOpenAssignmentsList() {
+  if (navigationRef.isReady()) {
+    pendingAssignmentsList = false
+    nav('課題', { screen: 'AssignmentsHome' })
+  }
+}
+
 function tryOpenLetusCourses() {
   if (navigationRef.isReady()) {
     pendingLetusCourses = false
@@ -78,6 +86,16 @@ export function requestOpenAssignment(url: string) {
   tryOpenAssignment()
 }
 
+/**
+ * 課題一覧を即開く（未準備なら onReady まで保留）。
+ * 朝まとめ通知（対象が1件に定まらない）と、旧payload で assignmentId を持たない
+ * 課題リマインドのフォールバック着地に使う。
+ */
+export function requestOpenAssignmentsList() {
+  pendingAssignmentsList = true
+  tryOpenAssignmentsList()
+}
+
 /** LETUSコース一覧を即開く（未準備なら onReady まで保留）。LETUS新着通知タップ用。 */
 export function requestOpenLetusCourses() {
   pendingLetusCourses = true
@@ -90,5 +108,6 @@ export function flushPendingNavigation() {
   if (pendingBulletin) tryOpenBulletin()
   if (pendingTimetable) tryOpenTimetable()
   if (pendingLetusCourses) tryOpenLetusCourses()
+  if (pendingAssignmentsList) tryOpenAssignmentsList()
   if (pendingAssignmentUrl) tryOpenAssignment()
 }
