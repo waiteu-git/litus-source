@@ -18,6 +18,8 @@ import {
   saveTimetableRefreshedAt,
 } from '../storage/refreshMetaStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
+import { getNotificationPermission, requestNotificationPermission } from '../notifications/notifier'
+import { notificationPermissionAction } from '../notifications/permissionState'
 import { loadOnboardingDone, saveOnboardingDone } from '../storage/onboardingStore'
 import { classifyGatePage, type GateVerdict } from './classifyGatePage'
 import { isRecoverPreserved, recoverPlan } from './gateRecovery'
@@ -332,6 +334,21 @@ export function LoginGate({ children }: { children: ReactNode }) {
   }
 
   function onSlidesDone() {
+    // 通知権限はここで初めて要求する。スライド3枚目が「授業前に出席ナッジが届きます」と
+    // 価値を説明済みで、規約同意も終わっている＝事前説明のある1回になる。
+    // 起動直後（App.tsx のブート effect）で要求していた頃は、規約同意画面やスライド1枚目の
+    // 上にOSダイアログが被さっていた。Android は2回拒否されると以後ダイアログを出せず、
+    // インストールし直すまで回復できないため、この1回は無駄にできない。
+    // スキップ操作でも onSlidesDone は通るので取りこぼさない。デモモードは LoginGate 自体が
+    // ツリーから外れるためここに到達しない（＝デモ体験からは要求しない）。
+    ;(async () => {
+      try {
+        const current = await getNotificationPermission()
+        if (notificationPermissionAction(current) === 'request') await requestNotificationPermission()
+      } catch {
+        // 権限要求の失敗で入場を止めない（設定画面の回復導線から復帰できる）。
+      }
+    })()
     if (lastResultRef.current === 'authed') proceedToEntry()
     else if (lastResultRef.current === 'needsLogin') setState('needsLogin')
     else setState('checking')

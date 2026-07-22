@@ -34,7 +34,6 @@ import {
   clearDeliveredLetusNewsNotifications,
   configureNotifications,
   getInitialNotificationPayload,
-  requestNotificationPermission,
 } from './src/notifications/notifier'
 import { routeForNotification } from './src/notifications/notificationRoute'
 import { dispatchNotificationRoute } from './src/navigation/notificationDispatch'
@@ -98,7 +97,11 @@ export default function App() {
         await configureNotifications()
         await clearDeliveredBulletinNotifications()
         await clearDeliveredLetusNewsNotifications()
-        await requestNotificationPermission()
+        // 通知権限の要求はここでは行わない。ここはブート最初のフレームで走るため、
+        // 規約同意画面やオンボーディング1枚目の上にOSダイアログが被さっていた
+        // （通知の価値を説明するスライド3枚目より前にダイアログが出る＝事前説明ゼロ）。
+        // Android は2回拒否されると以後ダイアログを出せないので、この1回は無駄にできない。
+        // 要求は LoginGate のオンボーディング完了時に移した。
         await refreshAllNotifications()
       } catch (e) {
         console.warn('起動時の通知同期に失敗しました', e)

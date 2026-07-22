@@ -38,6 +38,7 @@ import {
   LETUS_NEWS_TAG,
 } from './notificationTags'
 import type { NotificationPayload } from './notificationRoute'
+import type { NotifPermission } from './permissionState'
 
 export {
   ATTENDANCE_TAG,
@@ -158,11 +159,40 @@ export async function addNotificationResponseListener(
   return Notifications.addNotificationResponseReceivedListener((resp) => cb(payloadOf(resp)))
 }
 
-export async function requestNotificationPermission(): Promise<boolean> {
+/**
+ * 現在の通知権限を読む。Expo Go / モジュール不在では null（回復導線を出さない）。
+ *
+ * **画面表示時／フォアグラウンド確定後に呼ぶこと**。canAskAgain は Activity が前面に
+ * ある時しか信用できず（PermissionsService.kt は currentActivity が null なら false）、
+ * 起動直後に読むと「恒久拒否」と誤判定してまだ聞けるユーザーを設定アプリへ送ってしまう。
+ */
+export async function getNotificationPermission(): Promise<NotifPermission | null> {
   const Notifications = await loadNotifications()
-  if (!Notifications) return false
-  const { status } = await Notifications.requestPermissionsAsync()
-  return status === 'granted'
+  if (!Notifications) return null
+  const r = await Notifications.getPermissionsAsync()
+  return {
+    status: r.status as NotifPermission['status'],
+    granted: r.granted,
+    canAskAgain: r.canAskAgain,
+  }
+}
+
+/**
+ * 通知権限を要求する。Expo Go / モジュール不在では null。
+ *
+ * **Android は同一インストール内で2回拒否されると以後ダイアログが出ない**（無音で denied が返る）。
+ * iOS は1回きり。＝要求は「ユーザーが価値を理解した後」に1回だけ出すこと。
+ * 戻り値は要求後の状態そのもの（呼び出し側が canAskAgain を見て回復導線を切り替えられるように）。
+ */
+export async function requestNotificationPermission(): Promise<NotifPermission | null> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return null
+  const r = await Notifications.requestPermissionsAsync()
+  return {
+    status: r.status as NotifPermission['status'],
+    granted: r.granted,
+    canAskAgain: r.canAskAgain,
+  }
 }
 
 export async function syncAttendanceAlarms(alarms: AttendanceAlarm[]): Promise<void> {

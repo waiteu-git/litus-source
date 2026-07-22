@@ -5,6 +5,7 @@ import { Text } from '../ui/Text'
 import { clearTimetable, loadTimetable } from '../storage/timetableStore'
 import { loadAttendanceSettings, saveAttendanceSettings } from '../storage/attendanceSettingsStore'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
+import NotificationPermissionNotice from '../notifications/NotificationPermissionNotice'
 import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
 import { loadBulletinNotifySettings, saveBulletinNotifySettings } from '../storage/bulletinNotifySettingsStore'
 import type { BulletinNotifySettings } from '../notifications/bulletinNotify'
@@ -244,6 +245,9 @@ export default function SettingsScreen() {
         </Accordion>
 
         <Accordion title="通知" icon="notifications-outline">
+          {/* OS側で通知が塞がれている間、以下のトグルは全部空振りする。
+              アプリ内トグルだけを出していた頃は「設定はONなのに何も来ない」としか観測できなかった。 */}
+          <NotificationPermissionNotice />
           <Text style={[styles.subHead, { color: ui.valueColor }]}>新着掲示</Text>
           <View style={styles.row}>
             <Text style={[styles.rowLabel, { color: ui.valueColor }]}>新着掲示を通知</Text>
