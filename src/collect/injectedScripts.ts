@@ -724,17 +724,76 @@ export function setBulletinFlagJs(title: string, date: string, desired: boolean)
 /** LETUSマイコース。全履修コースの名前(コード入り)＋course/view.php URL が並ぶ。 */
 export const MYCOURSES_URL = 'https://letus.ed.tus.ac.jp/my/courses.php'
 
-/** マイコース本文HTMLを抽出して postMessage（抽出のみ）。 */
+/**
+ * LETUS(Moodle) ハイドレーション待ちヘルパー（spec§6・T5）。各 COLLECT_* 注入JSの冒頭に展開して使う。
+ *
+ * 現状の LETUS 収集は onLoadEnd で単発同期注入し、その後 XHR で描画される内容を待つ機構がゼロ
+ * （MutationObserver 不在）。Moodle 5.x の block_myoverview 等が非同期描画へ寄せると、静かに 0 件/
+ * 部分取得になる（現行 4.5.8 でも block_myoverview は非同期XHR＝潜在バグ）。本ヘルパーは:
+ *
+ *   1. 同期スキャン isReady() が真なら即 collect（＝現行 4.5.8 では常に即時＝挙動ゼロ変更の高速パス）。
+ *   2. 偽なら MutationObserver(documentElement,{childList,subtree}) を張り、変異ごとに debounce(300ms)
+ *      で再スキャン。ready になった時点で collect。
+ *   3. どちらにせよ budget(3000ms) 到達で必ず打ち切り、最後に collect を1回だけ呼ぶ（両方/ゼロ発火にしない）。
+ *
+ * 検知(isReady)は URL 方式（/course/view.php・/mod/<name>/view.php 等）で行い CSS クラスに非依存にすること
+ * （原則1）。ready 判定を静的 fixture で満たせない破損（全面クライアント描画）は budget 到達で最終状態を
+ * collect し、RN 側の自己診断（diagnose）が 0 件を DASHBOARD_UNREADABLE 等として捕捉する。
+ *
+ * ⚠純粋な加算的耐性層: 高速パスを保つため、同期で ready なら Observer を作らない。
+ */
+export const LETUS_HYDRATION_PRELUDE = `
+  function litusWaitForHydration(isReady, collect){
+    var DEBOUNCE_MS = 300, BUDGET_MS = 3000;
+    var done = false, obs = null, debounceTimer = null, budgetTimer = null;
+    function finish(){
+      if (done) return; done = true;
+      if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+      if (budgetTimer) { clearTimeout(budgetTimer); budgetTimer = null; }
+      if (obs) { try { obs.disconnect(); } catch (e) {} obs = null; }
+      collect();
+    }
+    var readySync = false;
+    try { readySync = !!isReady(); } catch (e) { readySync = false; }
+    if (readySync) { finish(); return; }                                  // 高速パス（現行挙動を完全保存）
+    if (typeof MutationObserver !== 'function' || !document.documentElement) { finish(); return; }
+    function rescan(){
+      debounceTimer = null;
+      var ok = false;
+      try { ok = !!isReady(); } catch (e) { ok = false; }
+      if (ok) finish();
+    }
+    try {
+      obs = new MutationObserver(function(){
+        if (done) return;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(rescan, DEBOUNCE_MS);
+      });
+      obs.observe(document.documentElement, { childList: true, subtree: true });
+    } catch (e) { finish(); return; }
+    budgetTimer = setTimeout(finish, BUDGET_MS);                          // 総額予算で必ず打ち切り
+  }
+`
+
+/** マイコース本文HTMLを抽出して postMessage（抽出のみ）。ハイドレーション待ち込み（§6）。 */
 export const COLLECT_MYCOURSES_JS = `(function(){
-  try {
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'mycourses',
-      html: document.body ? document.body.innerHTML : '',
-      origin: location.origin,
-      url: location.href
-    }));
-  } catch (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  ${LETUS_HYDRATION_PRELUDE}
+  // 準備完了 = コース発見面に /course/view.php?id= アンカーが1つでも描画された（URL方式・テーマ非依存）。
+  function isReady(){ return !!document.querySelector('a[href*="/course/view.php?id="]'); }
+  function collect(){
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'mycourses',
+        html: document.body ? document.body.innerHTML : '',
+        origin: location.origin,
+        url: location.href
+      }));
+    } catch (e) {
+      try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) })); } catch (e2) {}
+    }
+  }
+  try { litusWaitForHydration(isReady, collect); } catch (e) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) })); } catch (e2) {}
   }
   true;
 })();`
@@ -744,19 +803,29 @@ export const COLLECT_MYCOURSES_JS = `(function(){
  * 科目名は Moodle パンくず（.breadcrumb 内の course/view.php リンク）から best-effort で取る。
  */
 export const COLLECT_ASSIGNMENT_PAGE_JS = `(function(){
-  try {
-    var courseName = '';
-    var crumbs = Array.prototype.slice.call(document.querySelectorAll('.breadcrumb a, nav[aria-label] a, #page-navbar a'));
-    var courseLink = crumbs.filter(function(a){ return /\\/course\\/view\\.php/.test(a.getAttribute('href') || ''); }).pop();
-    if (courseLink) courseName = (courseLink.textContent || '').trim();
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'assignmentpage',
-      html: document.body ? document.body.innerHTML : '',
-      url: location.href,
-      courseName: courseName
-    }));
-  } catch (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  ${LETUS_HYDRATION_PRELUDE}
+  // 準備完了 = パンくずに course/view.php リンクが描画された（活動ページ着地の URL 方式マーカー・
+  // テーマ非依存）。SSO 中間ページ/ポータルには無いので早期 collect しない。activity 本文は Moodle で
+  // SSR だが、将来 XHR 描画へ寄っても budget 到達までは待てる純粋な加算的耐性。
+  function isReady(){ return !!document.querySelector('a[href*="/course/view.php"]'); }
+  function collect(){
+    try {
+      var courseName = '';
+      var crumbs = Array.prototype.slice.call(document.querySelectorAll('.breadcrumb a, nav[aria-label] a, #page-navbar a'));
+      var courseLink = crumbs.filter(function(a){ return /\\/course\\/view\\.php/.test(a.getAttribute('href') || ''); }).pop();
+      if (courseLink) courseName = (courseLink.textContent || '').trim();
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'assignmentpage',
+        html: document.body ? document.body.innerHTML : '',
+        url: location.href,
+        courseName: courseName
+      }));
+    } catch (e) {
+      try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) })); } catch (e2) {}
+    }
+  }
+  try { litusWaitForHydration(isReady, collect); } catch (e) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) })); } catch (e2) {}
   }
   true;
 })();`
@@ -857,17 +926,26 @@ export function markActivityAddedJs(url: string): string {
 true;`
 }
 
-/** コースページ本文HTMLを抽出して postMessage（抽出のみ）。 */
+/** コースページ本文HTMLを抽出して postMessage（抽出のみ）。ハイドレーション待ち込み（§6）。 */
 export const COLLECT_COURSE_PAGE_JS = `(function(){
-  try {
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'coursepage',
-      html: document.body ? document.body.innerHTML : '',
-      origin: location.origin,
-      url: location.href
-    }));
-  } catch (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  ${LETUS_HYDRATION_PRELUDE}
+  // 準備完了 = 活動一覧に /mod/<type>/view.php アンカーが1つでも描画された（URL方式・テーマ非依存＝
+  // BS5 の course-index クラス改名に非依存）。course-index のクライアント描画化で 0/部分取得になるのを防ぐ。
+  function isReady(){ return !!document.querySelector('a[href*="/mod/"][href*="view.php"]'); }
+  function collect(){
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'coursepage',
+        html: document.body ? document.body.innerHTML : '',
+        origin: location.origin,
+        url: location.href
+      }));
+    } catch (e) {
+      try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) })); } catch (e2) {}
+    }
+  }
+  try { litusWaitForHydration(isReady, collect); } catch (e) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) })); } catch (e2) {}
   }
   true;
 })();`

@@ -20,9 +20,11 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 import {
   loadDiagnosticsState,
   recordScanOutcome,
+  recordScanCycleOutcome,
   DIAGNOSTICS_STATE_KEY,
 } from './diagnosticsStateStore'
 import { setDemoNamespace, DEMO_PREFIX } from './asyncStorage'
+import { createScanAccumulator, type ScanDiagnosticsAccumulator } from '../health/scanDiagnostics'
 
 const T0 = '2026-07-23T00:00:00.000Z'
 const T1 = '2026-07-23T01:00:00.000Z'
@@ -80,5 +82,35 @@ describe('diagnosticsStateStore', () => {
     const restored = await loadDiagnosticsState()
     expect(restored?.lastGoodAt).toBe(T0)
     expect(restored?.activeCodes).toEqual([])
+  })
+
+  describe('recordScanCycleOutcome（不完全サイクルの中立スキップ）', () => {
+    it('reachedLetus=false は記録せず null を返す（lastGoodAt を誤更新しない）', async () => {
+      const acc: ScanDiagnosticsAccumulator = createScanAccumulator() // reachedLetus=false
+      const r = await recordScanCycleOutcome(acc, T0)
+      expect(r).toBe(null)
+      expect(await loadDiagnosticsState()).toBe(null) // 何も書かれていない
+    })
+
+    it('reachedLetus=true・hardコード無しは成功として lastGoodAt を更新する', async () => {
+      const acc: ScanDiagnosticsAccumulator = { ...createScanAccumulator(), reachedLetus: true }
+      const r = await recordScanCycleOutcome(acc, T0)
+      expect(r?.lastGoodAt).toBe(T0)
+      expect(r?.activeCodes).toEqual([])
+      expect((await loadDiagnosticsState())?.lastGoodAt).toBe(T0)
+    })
+
+    it('reachedLetus=true・hardコード有りは失敗として畳み込む（横断集計込み）', async () => {
+      const acc: ScanDiagnosticsAccumulator = {
+        codes: ['DASHBOARD_UNREADABLE'],
+        lostCourseCount: 2,
+        trackedCourseCount: 3,
+        reachedLetus: true,
+      }
+      const r = await recordScanCycleOutcome(acc, T0)
+      // finalize が横断集計 COURSES_MAJORITY_LOST を加える。
+      expect(r?.consecutiveFailures).toBe(1)
+      expect(r?.lastCodes).toEqual(expect.arrayContaining(['DASHBOARD_UNREADABLE', 'COURSES_MAJORITY_LOST']))
+    })
   })
 })

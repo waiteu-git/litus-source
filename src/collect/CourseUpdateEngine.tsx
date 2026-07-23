@@ -12,6 +12,7 @@ import { loadTrackedCourses } from '../storage/trackedCoursesStore'
 import { trackedCourseInfos } from '../updates/courseTracking'
 import { publishCourseNews } from './publishCourseNews'
 import type { CourseRunDiff } from '../updates/courseNews'
+import type { CoursePageObservation } from '../health/scanDiagnostics'
 
 // 各コースページの読込がハングした場合の保険。
 const PAGE_TIMEOUT_MS = 15000
@@ -27,9 +28,15 @@ const PAGE_TIMEOUT_MS = 15000
 export default function CourseUpdateEngine({
   onProgress,
   onFinished,
+  onCourseDiag,
 }: {
   onProgress?: (label: string) => void
   onFinished: () => void
+  /**
+   * 各コースページの収集シグナルを自己診断（scanDiagnostics）へ流す任意フック。フル同期
+   * （LetusSyncEngine）からのみ渡り、単独利用（時間割の引っ張り更新）では未指定＝無挙動。
+   */
+  onCourseDiag?: (obs: CoursePageObservation) => void
 }) {
   const webviewRef = useRef<WebViewInstance>(null)
   const [urls, setUrls] = useState<string[] | null>(null)
@@ -100,6 +107,12 @@ export default function CourseUpdateEngine({
     if (payload.type === 'coursepage' && typeof payload.html === 'string' && currentUrl) {
       const nextSig = computeCourseSignature(payload.html, currentUrl)
       const prev = snapshotsRef.current[currentUrl]
+      // 自己診断へ観測を流す（既知コースの 0 件化＝レイアウト破損/内容喪失の検知）。prev 無し=初回は null。
+      onCourseDiag?.({
+        html: payload.html,
+        modAnchorCount: nextSig.length,
+        prevSignatureLen: prev ? prev.activities.length : null,
+      })
       const diff = prev ? diffCourseSignature(prev.activities, nextSig) : { added: [], removed: [] }
       snapshotsRef.current[currentUrl] = {
         activities: nextSig,

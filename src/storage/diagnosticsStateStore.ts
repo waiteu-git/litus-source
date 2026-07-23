@@ -11,6 +11,10 @@
 import { Storage } from './asyncStorage'
 import { applyScanOutcome, type DiagnosticsState, type ScanOutcome } from '../health/diagnosticsState'
 import {
+  finalizeScanCodes,
+  type ScanDiagnosticsAccumulator,
+} from '../health/scanDiagnostics'
+import {
   deserializeDiagnosticsState,
   serializeDiagnosticsState,
 } from './diagnosticsStateSerialize'
@@ -32,4 +36,19 @@ export async function recordScanOutcome(outcome: ScanOutcome): Promise<Diagnosti
   const next = applyScanOutcome(prev, outcome)
   await Storage.setItem(DIAGNOSTICS_STATE_KEY, serializeDiagnosticsState(next))
   return next
+}
+
+/**
+ * 1スキャンサイクルの診断集約器を確定して永続化する（配線側の記録エントリ・§5.3 の呼び出し側契約）。
+ *
+ * reachedLetus が false のサイクル（WebView がロードに至らない・全ページ unknown）は「不完全サイクル」
+ * として **記録せず null を返す**。記録すると hard コード無し＝成功扱いで lastGoodAt を誤って更新し、
+ * 「実は一度も読めていない」のに直近成功と表示してしまうため。到達できたサイクルだけを畳み込む。
+ */
+export async function recordScanCycleOutcome(
+  acc: ScanDiagnosticsAccumulator,
+  at: string,
+): Promise<DiagnosticsState | null> {
+  if (!acc.reachedLetus) return null
+  return recordScanOutcome({ codes: finalizeScanCodes(acc), at })
 }
