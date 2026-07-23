@@ -45,12 +45,6 @@ import { normalizeText, htmlToPlainText } from './text'
 export { htmlToPlainText }
 
 // ===== 締切パース =====
-/** 英語ロケール Moodle 日付書式（`%B`）の月名。index+1 が月番号。 */
-const ENGLISH_MONTHS = [
-  'january', 'february', 'march', 'april', 'may', 'june',
-  'july', 'august', 'september', 'october', 'november', 'december',
-]
-
 function toIsoStringFromParts(
   year: string,
   month: string,
@@ -137,33 +131,6 @@ export function parseDeadline(deadlineText: string): string | null {
     )
   }
 
-  // 英語ロケールの Moodle 日付書式（`%A, %d %B %Y, %I:%M %p`）:
-  //   "Tuesday, 12 December 2023, 12:00 AM" のように 日 月名 西暦 + 12時間制AM/PM。
-  //   TUS は日本語運用だが、5.x で言語パックが英語のコース/ページを踏んでも締切を落とさない保険。
-  //   曜日は任意、時刻(12時間 AM/PM または 24時間)も任意。年欠落は英語 assign では想定しない。
-  const englishDateMatch = text.match(
-    /(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})(?:,?\s*(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?/i,
-  )
-  if (englishDateMatch) {
-    const monthIndex = ENGLISH_MONTHS.indexOf(englishDateMatch[2].toLowerCase())
-    if (monthIndex >= 0) {
-      const hasTime = englishDateMatch[4] !== undefined
-      let hour = hasTime ? Number(englishDateMatch[4]) : 23
-      const minute = hasTime ? englishDateMatch[5] : '59'
-      // AM/PM があれば 12時間→24時間へ補正（12:00 AM=00:00 / 12:00 PM=12:00）。無ければ 24時間として扱う。
-      const meridiem = (englishDateMatch[6] || '').toUpperCase()
-      if (meridiem === 'PM' && hour < 12) hour += 12
-      if (meridiem === 'AM' && hour === 12) hour = 0
-      return toIsoStringFromParts(
-        englishDateMatch[3],
-        String(monthIndex + 1),
-        englishDateMatch[1],
-        String(hour),
-        minute,
-      )
-    }
-  }
-
   return null
 }
 
@@ -218,10 +185,7 @@ export function extractSubmissionStatus(
     text.includes('提出がありません') ||
     text.includes('not submitted') ||
     text.includes('no attempt') ||
-    text.includes('nothing has been submitted') ||
-    // 英語課題ページの未提出値（5.2 EN 実採取）: "No submissions have been made yet"。
-    text.includes('no submissions have been made') ||
-    text.includes('no submission has been made')
+    text.includes('nothing has been submitted')
   ) {
     return 'not_submitted'
   }

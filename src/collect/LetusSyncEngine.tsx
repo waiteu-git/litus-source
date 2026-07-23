@@ -15,6 +15,7 @@ import {
   observeDashboard,
 } from '../health/scanDiagnostics'
 import { recordScanCycleOutcome } from '../storage/diagnosticsStateStore'
+import type { DiagnosticsState } from '../health/diagnosticsState'
 
 // コース収集の読込がハングした場合の保険。
 const COURSES_TIMEOUT_MS = 25000
@@ -34,9 +35,16 @@ type Stage = 'courses' | 'snapshots' | 'assignments' | 'done'
 export default function LetusSyncEngine({
   onProgress,
   onFinished,
+  onDiagnostics,
 }: {
   onProgress?: (label: string) => void
   onFinished: () => void
+  /**
+   * このサイクルの診断台帳が確定したら呼ぶ（recordScanCycleOutcome の解決値）。
+   * reachedLetus=false（不完全サイクル）で記録されなかった場合は呼ばれない（state は不変）。
+   * アプリ内の診断バナー（DiagnosticsProvider）を live 更新するための配線。
+   */
+  onDiagnostics?: (state: DiagnosticsState) => void
 }) {
   const [stage, setStage] = useState<Stage>('courses')
   const stageRef = useRef<Stage>('courses')
@@ -64,7 +72,12 @@ export default function LetusSyncEngine({
     finishedRef.current = true
     setStage('done')
     // 到達できたサイクルだけを畳み込む（reachedLetus=false の不完全サイクルは記録側で中立スキップ）。
-    recordScanCycleOutcome(scanAccRef.current, new Date().toISOString()).catch(() => undefined)
+    // 確定した診断台帳は診断バナー（DiagnosticsProvider）へ push して live 更新する。
+    recordScanCycleOutcome(scanAccRef.current, new Date().toISOString())
+      .then((state) => {
+        if (state) onDiagnostics?.(state)
+      })
+      .catch(() => undefined)
     onFinished()
   }
 
