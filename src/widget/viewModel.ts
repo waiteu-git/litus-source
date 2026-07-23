@@ -4,14 +4,14 @@
  *
  * 描画層（react-native-android-widget の FlexWidget 群 / 将来 iOS の updateSnapshot）は
  * この出力をマッピングするだけにして、「何を表示するか」の判断を 100% ここへ寄せる（CLAUDE.md のロジック層分離）。
- * 既存の純関数（pickFocusClass / pickUpcomingAssignments / isInClassPeriod / isAttendedNow 等）を再利用する。
+ * 既存の純関数（pickFocusClass / pickUrgentAssignment / isInClassPeriod / isAttendedNow 等）を再利用する。
  */
 import type { TimetableCollection } from '../collect/timetableMessage'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import type { AttendedRecord } from '../attendance/attendedState'
 import type { DayOfWeek, Quarter } from '../parsers/timetable'
 import { pickFocusClass } from '../home/focusClass'
-import { pickUpcomingAssignments, relDue, urgencyTone } from '../assignments/deadline'
+import { pickUrgentAssignment, relDue, urgencyTone } from '../assignments/deadline'
 import { isInClassPeriod, attendedClassEndMin } from '../attendance/classPeriod'
 import { isAttendedNow } from '../attendance/attendedState'
 import { representativeClass } from '../timetableEvents/quarter'
@@ -55,13 +55,8 @@ export type WidgetModel = {
   /** データ取得時刻の鮮度ラベル。未取得は null（描画時刻ではないので再描画では動かない）。 */
   updatedAtLabel: string | null
   nextClass: WidgetNextClass | null
-  /** focus より後の本日コマ、最大2件（4x2 TodayWidget 用）。 */
   laterClasses: WidgetClass[]
-  /** focus より後の本日コマ、最大4件（大ウィジェット用。上位互換で laterClasses を内包）。 */
-  laterClassesExtended: WidgetClass[]
   nearestAssignment: WidgetAssignment | null
-  /** 直近の未提出課題、最大3件（大ウィジェット用。upcomingAssignments[0] は nearestAssignment に一致）。 */
-  upcomingAssignments: WidgetAssignment[]
   attendance: WidgetAttendance
 }
 
@@ -163,35 +158,31 @@ export function buildWidgetModel(
     : null
 
   const focusStartMin = focus ? hhmmToMin(focus.start) : null
-  const laterClassesAll: WidgetClass[] =
+  const laterClasses: WidgetClass[] =
     focus && focusStartMin !== null
       ? todayClasses(timetable, now, isOn, currentQuarter)
           .filter((e) => e.startMin > nowMin && e.startMin > focusStartMin)
+          .slice(0, 2)
           .map((e) => e.cls)
       : []
 
-  const upcoming = pickUpcomingAssignments(assignments, now, 3).map(toWidgetAssignment(now))
-  const nearestAssignment: WidgetAssignment | null = upcoming[0] ?? null
+  const urgent = pickUrgentAssignment(assignments, now)
+  const nearestAssignment: WidgetAssignment | null = urgent
+    ? {
+        courseName: urgent.courseName,
+        title: urgent.title,
+        deadlineText: relDue(urgent.deadline, now),
+        urgent: urgencyTone(urgent, now) === 'red',
+        url: urgent.url,
+      }
+    : null
 
   return {
     todayLabel: fmtTodayLabel(now),
     updatedAtLabel: formatFreshnessTime(dataAt, now),
     nextClass,
-    laterClasses: laterClassesAll.slice(0, 2),
-    laterClassesExtended: laterClassesAll.slice(0, 4),
+    laterClasses,
     nearestAssignment,
-    upcomingAssignments: upcoming,
     attendance: buildAttendance(timetable, now, attended, focus?.name ?? null),
   }
-}
-
-/** Assignment → WidgetAssignment（大ウィジェットの複数表示と直近1件で共有する写像）。 */
-function toWidgetAssignment(now: Date) {
-  return (a: Assignment): WidgetAssignment => ({
-    courseName: a.courseName,
-    title: a.title,
-    deadlineText: relDue(a.deadline, now),
-    urgent: urgencyTone(a, now) === 'red',
-    url: a.url,
-  })
 }

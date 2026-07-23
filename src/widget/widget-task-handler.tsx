@@ -8,26 +8,18 @@
  */
 import * as React from 'react'
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget'
-import { WIDGET_COMPACT, WIDGET_SMALL, WIDGET_LARGE } from './constants'
+import { WIDGET_COMPACT } from './constants'
 import { loadWidgetModel } from './widgetData'
-import { TodayWidget, NextWidget, SmallWidget, LargeWidget } from './LitusWidget'
+import { TodayWidget, NextWidget } from './LitusWidget'
 
 export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<void> {
   const { widgetInfo, widgetAction, renderWidget } = props
   if (widgetAction === 'WIDGET_DELETED') return
 
   const model = await loadWidgetModel(new Date())
-  switch (widgetInfo.widgetName) {
-    case WIDGET_COMPACT:
-      renderWidget(<NextWidget model={model} />)
-      break
-    case WIDGET_SMALL:
-      renderWidget(<SmallWidget model={model} />)
-      break
-    case WIDGET_LARGE:
-      renderWidget(<LargeWidget model={model} />)
-      break
-    default:
-      renderWidget(<TodayWidget model={model} />)
+  if (widgetInfo.widgetName === WIDGET_COMPACT) {
+    renderWidget(<NextWidget model={model} />)
+  } else {
+    renderWidget(<TodayWidget model={model} />)
   }
 }
