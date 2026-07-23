@@ -73,6 +73,28 @@
               "targetCellHeight": 2,
               "resizeMode": "none",
               "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "LitusSmall",
+              "label": "リタス: 次の授業（小）",
+              "description": "次の授業だけを最小サイズで",
+              "minWidth": "110dp",
+              "minHeight": "40dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 1,
+              "resizeMode": "horizontal",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "LitusLarge",
+              "label": "リタス: 今日の予定（大）",
+              "description": "次の授業・本日の後続コマ・締切間近の課題",
+              "minWidth": "250dp",
+              "minHeight": "250dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 4,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
             }
           ]
         }
