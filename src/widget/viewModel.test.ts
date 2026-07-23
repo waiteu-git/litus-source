@@ -116,6 +116,39 @@ describe('buildWidgetModel', () => {
     expect(m.laterClasses.map((c) => c.name)).toEqual(['B', 'C'])
   })
 
+  it('laterClassesExtended は最大4件・laterClasses(2件)を内包する（大ウィジェット用）', () => {
+    const cols = collection([
+      { day: 'mon', period: 1, classes: [cls('A')] },
+      { day: 'mon', period: 2, classes: [cls('B')] },
+      { day: 'mon', period: 3, classes: [cls('C')] },
+      { day: 'mon', period: 4, classes: [cls('D')] },
+      { day: 'mon', period: 5, classes: [cls('E')] },
+    ])
+    // 8:00 = 全て開始前。focus は period1(A)。extended は B,C,D,E（最大4）。
+    const m = buildWidgetModel(MON(8, 0), cols, [], null)
+    expect(m.nextClass!.name).toBe('A')
+    expect(m.laterClassesExtended.map((c) => c.name)).toEqual(['B', 'C', 'D', 'E'])
+    expect(m.laterClasses.map((c) => c.name)).toEqual(['B', 'C'])
+  })
+
+  it('upcomingAssignments は締切の近い順に最大3件・先頭は nearestAssignment に一致', () => {
+    const list = [
+      assignment({ url: 'u3', title: '三', deadline: new Date(2026, 6, 9, 12, 0).toISOString() }),
+      assignment({ url: 'u1', title: '一', deadline: new Date(2026, 6, 6, 20, 0).toISOString() }),
+      assignment({ url: 'u2', title: '二', deadline: new Date(2026, 6, 7, 12, 0).toISOString() }),
+      assignment({ url: 'u4', title: '四', deadline: new Date(2026, 6, 10, 12, 0).toISOString() }),
+    ]
+    const m = buildWidgetModel(MON(12, 0), [], list, null)
+    expect(m.upcomingAssignments.map((a) => a.title)).toEqual(['一', '二', '三'])
+    expect(m.upcomingAssignments[0]).toEqual(m.nearestAssignment)
+  })
+
+  it('課題が無ければ upcomingAssignments は空・nearestAssignment は null', () => {
+    const m = buildWidgetModel(MON(12, 0), [], [], null)
+    expect(m.upcomingAssignments).toEqual([])
+    expect(m.nearestAssignment).toBeNull()
+  })
+
   it('隔週で今週休みの授業(isOn=false)は次の授業判定から除外', () => {
     const cols = collection([
       { day: 'mon', period: 2, classes: [cls('隔週ゼミ')] },
