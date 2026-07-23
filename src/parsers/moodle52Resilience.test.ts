@@ -35,6 +35,7 @@ const BASE = 'https://letus.ed.tus.ac.jp'
 
 const course52 = read('./__fixtures__/moodle52/course52_raw.html')
 const my52 = read('./__fixtures__/moodle52/my52_raw.html')
+const my52Hydrated = read('./__fixtures__/moodle52/my52_hydrated.html')
 const assign52Ja = read('./__fixtures__/moodle52/assign52_ja.html')
 const assign52En = read('./__fixtures__/moodle52/assign52_en.html')
 const courseBs4 = read('./__fixtures__/course-bs4-representative.html')
@@ -133,6 +134,16 @@ describe('T2: 5.2 で壊れる箇所（expected failure・ラチェット）', (
   it.fails('破損①: parseMyCourses は 5.2 RAW Dashboard でコースを拾えるべき（現状 0 件）', () => {
     const courses = parseMyCourses(my52, BASE)
     expect(courses.length).toBeGreaterThan(0)
+  })
+
+  // 破損①の対極（T5 の到達点）: 同じ 5.2 Dashboard でも「ハイドレーション後」の実DOM
+  // （2026-07-24 に school.moodledemo.net で実採取・student=19コース中 In progress 10件表示）なら
+  // parseMyCourses は全カードを拾える。T5 の待ち機構が待っているのはこの状態＝
+  // RAW=0件 と合わせて「待てば取れる・待てなければ診断が鳴る」の両端を fixture で固定する。
+  it('破損①の解: ハイドレーション後 Dashboard（my52_hydrated）からはコースを拾える', () => {
+    const courses = parseMyCourses(my52Hydrated, BASE)
+    expect(courses.length).toBe(10)
+    for (const c of courses) expect(c.url).toMatch(/\/course\/view\.php\?id=\d+/)
   })
 
   // 破損②【T7で解決済み】: 英語課題ページの日付書式 "Tuesday, 12 December 2023, 12:00 AM"。
