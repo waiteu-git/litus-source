@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  pickUrgentAssignment,
-  pickUpcomingAssignments,
-  relDue,
-  urgencyTone,
-  formatDeadlineRich,
-  deadlineMagnitude,
-} from './deadline'
+import { pickUrgentAssignment, relDue, urgencyTone, formatDeadlineRich, deadlineMagnitude } from './deadline'
 import type { Assignment } from '../storage/assignmentsSerialize'
 
 const NOW = new Date(2026, 6, 9, 12, 0) // 2026-07-09 12:00
@@ -59,29 +52,6 @@ describe('pickUrgentAssignment', () => {
   it('有効な候補が無ければ null', () => {
     const overdue = assignment({ url: 'o', deadline: iso(8) })
     expect(pickUrgentAssignment([overdue], NOW)).toBeNull()
-  })
-})
-
-describe('pickUpcomingAssignments', () => {
-  it('締切の近い順に最大 limit 件返す（除外条件は pickUrgentAssignment と同一）', () => {
-    const a = assignment({ url: 'a', title: '一番近い', deadline: iso(15) })
-    const b = assignment({ url: 'b', title: '次', deadline: iso(15, 1) })
-    const c = assignment({ url: 'c', title: '三番目', deadline: iso(15, 3) })
-    const submitted = assignment({ url: 's', deadline: iso(14), submissionStatus: 'submitted' })
-    const overdue = assignment({ url: 'o', deadline: iso(8) })
-    const got = pickUpcomingAssignments([c, submitted, a, overdue, b], NOW, 3)
-    expect(got.map((x) => x.title)).toEqual(['一番近い', '次', '三番目'])
-  })
-
-  it('先頭は pickUrgentAssignment と一致する', () => {
-    const a = assignment({ url: 'a', title: '近い', deadline: iso(15) })
-    const b = assignment({ url: 'b', title: '遠い', deadline: iso(15, 3) })
-    expect(pickUpcomingAssignments([b, a], NOW, 3)[0].title).toBe(pickUrgentAssignment([b, a], NOW)!.title)
-  })
-
-  it('limit<=0 は空配列', () => {
-    const a = assignment({ url: 'a', deadline: iso(15) })
-    expect(pickUpcomingAssignments([a], NOW, 0)).toEqual([])
   })
 })
 

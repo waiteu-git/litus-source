@@ -11,7 +11,7 @@
  * （src/notifications/notifier.ts）。
  */
 import { Platform } from 'react-native'
-import { WIDGET_MAIN, WIDGET_COMPACT, WIDGET_SMALL, WIDGET_LARGE } from './constants'
+import { WIDGET_MAIN, WIDGET_COMPACT } from './constants'
 import { loadWidgetModel } from './widgetData'
 import { isDemoNamespace } from '../storage/asyncStorage'
 
@@ -29,7 +29,7 @@ export function notifyWidgetDataChanged(): void {
   ;(async () => {
     try {
       const { requestWidgetUpdate } = await import('react-native-android-widget')
-      const { TodayWidget, NextWidget, SmallWidget, LargeWidget } = await import('./LitusWidget')
+      const { TodayWidget, NextWidget } = await import('./LitusWidget')
       const model = await loadWidgetModel(new Date())
       await requestWidgetUpdate({
         widgetName: WIDGET_MAIN,
@@ -38,14 +38,6 @@ export function notifyWidgetDataChanged(): void {
       await requestWidgetUpdate({
         widgetName: WIDGET_COMPACT,
         renderWidget: () => <NextWidget model={model} />,
-      })
-      await requestWidgetUpdate({
-        widgetName: WIDGET_SMALL,
-        renderWidget: () => <SmallWidget model={model} />,
-      })
-      await requestWidgetUpdate({
-        widgetName: WIDGET_LARGE,
-        renderWidget: () => <LargeWidget model={model} />,
       })
     } catch {
       // ネイティブモジュール未搭載/ウィジェット未配置などは無視。

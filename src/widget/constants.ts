@@ -1,9 +1,7 @@
 /** ウィジェット名（app.json の widgets 定義・タスクハンドラ・更新要求で共有する唯一の定義）。 */
 export const WIDGET_MAIN = 'LitusToday'
 export const WIDGET_COMPACT = 'LitusNext'
-export const WIDGET_SMALL = 'LitusSmall'
-export const WIDGET_LARGE = 'LitusLarge'
-export const WIDGET_NAMES = [WIDGET_MAIN, WIDGET_COMPACT, WIDGET_SMALL, WIDGET_LARGE] as const
+export const WIDGET_NAMES = [WIDGET_MAIN, WIDGET_COMPACT] as const
 
 /**
  * ウィジェット配色（デザインシステムのトークンに整合。theme.tsx を import すると RN の

@@ -5,7 +5,7 @@
  */
 import * as React from 'react'
 import { FlexWidget, TextWidget } from 'react-native-android-widget'
-import type { WidgetModel, WidgetClass, WidgetAssignment } from './viewModel'
+import type { WidgetModel } from './viewModel'
 import { WIDGET_COLORS as C } from './constants'
 
 /** litus:// ディープリンク（OPEN_URI）。タップで OS がアプリを起動→widgetLinking が遷移。 */
@@ -93,11 +93,11 @@ function NextClassCard({ model }: { model: WidgetModel }) {
   )
 }
 
-function LaterClasses({ classes }: { classes: WidgetClass[] }) {
-  if (classes.length === 0) return <FlexWidget />
+function LaterClasses({ model }: { model: WidgetModel }) {
+  if (model.laterClasses.length === 0) return <FlexWidget />
   return (
     <FlexWidget style={{ marginTop: 8, width: 'match_parent' }} {...uri(TIMETABLE_URI)}>
-      {classes.map((c, i) => (
+      {model.laterClasses.map((c, i) => (
         <FlexWidget
           key={i}
           style={{ flexDirection: 'row', alignItems: 'center', marginTop: i === 0 ? 0 : 2, width: 'match_parent' }}
@@ -117,7 +117,9 @@ function LaterClasses({ classes }: { classes: WidgetClass[] }) {
   )
 }
 
-function AssignmentPill({ a }: { a: WidgetAssignment }) {
+function AssignmentPill({ model }: { model: WidgetModel }) {
+  const a = model.nearestAssignment
+  if (!a) return <FlexWidget />
   return (
     <FlexWidget
       style={{
@@ -170,105 +172,8 @@ export function TodayWidget({ model }: { model: WidgetModel }) {
         )}
       </FlexWidget>
       <NextClassCard model={model} />
-      <LaterClasses classes={model.laterClasses} />
-      {model.nearestAssignment ? <AssignmentPill a={model.nearestAssignment} /> : <FlexWidget />}
-    </FlexWidget>
-  )
-}
-
-/** 短い出席/残り時間の合図（コンパクト表示用）。 */
-function shortStatus(model: WidgetModel, nc: WidgetModel['nextClass']): string {
-  if (model.attendance.state === 'done') return '出席済み'
-  if (model.attendance.state === 'open') return '受付中かも'
-  if (!nc) return ''
-  return nc.minutesUntil === null ? '進行中' : `あと${nc.minutesUntil}分`
-}
-
-/**
- * 2x1 最小ウィジェット: 次の授業1件だけを最小面積で。名前＋時限＋短い合図。
- * タップは NextWidget と同じ導線（授業中/出席済みは出席画面、そうでなければ時間割）。
- */
-export function SmallWidget({ model }: { model: WidgetModel }) {
-  const nc = model.nextClass
-  const target = model.attendance.state !== 'idle' ? ATTENDANCE_URI : TIMETABLE_URI
-  return (
-    <FlexWidget
-      style={{
-        height: 'match_parent',
-        width: 'match_parent',
-        backgroundColor: C.bgBottom,
-        borderRadius: 14,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        flexDirection: 'column',
-        justifyContent: 'center',
-      }}
-      {...uri(nc ? target : HOME_URI)}
-    >
-      {nc ? (
-        <FlexWidget style={{ width: 'match_parent' }}>
-          <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', width: 'match_parent' }}>
-            <TextWidget
-              text={`${nc.period}限 ${nc.startText}`}
-              style={{ fontSize: 11, color: C.onDarkDim, fontWeight: '700' }}
-            />
-            <FlexWidget style={{ flex: 1 }} />
-            <TextWidget text={shortStatus(model, nc)} style={{ fontSize: 11, color: C.onDarkDim, fontWeight: '600' }} />
-          </FlexWidget>
-          <TextWidget
-            text={nc.name}
-            maxLines={1}
-            truncate="END"
-            style={{ fontSize: 15, color: C.onDark, fontWeight: '700', marginTop: 2 }}
-          />
-        </FlexWidget>
-      ) : (
-        <TextWidget text="今日の授業は終わりました" maxLines={1} truncate="END" style={{ fontSize: 12, color: C.onDarkDim }} />
-      )}
-    </FlexWidget>
-  )
-}
-
-/** 大ウィジェット内の小見出し（無彩の区切りラベル）。 */
-function SectionLabel({ text }: { text: string }) {
-  return <TextWidget text={text} style={{ fontSize: 11, color: C.onDarkDim, fontWeight: '700', marginTop: 12 }} />
-}
-
-/** 4x4 大ウィジェット: 次の授業・本日の後続コマ（最大4）・締切間近の課題（最大3）。 */
-export function LargeWidget({ model }: { model: WidgetModel }) {
-  return (
-    <FlexWidget
-      style={{
-        height: 'match_parent',
-        width: 'match_parent',
-        backgroundColor: C.bgBottom,
-        borderRadius: 16,
-        padding: 14,
-        flexDirection: 'column',
-      }}
-      {...uri(HOME_URI)}
-    >
-      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', width: 'match_parent', marginBottom: 8 }}>
-        <TextWidget text={model.todayLabel} style={{ fontSize: 13, color: C.onDark, fontWeight: '700' }} />
-        <FlexWidget style={{ flex: 1 }} />
-        {model.updatedAtLabel ? (
-          <TextWidget text={model.updatedAtLabel} style={{ fontSize: 10, color: C.onDarkDim }} />
-        ) : (
-          <FlexWidget />
-        )}
-      </FlexWidget>
-      <NextClassCard model={model} />
-      <LaterClasses classes={model.laterClassesExtended} />
-      {model.upcomingAssignments.length > 0 ? (
-        <FlexWidget style={{ width: 'match_parent' }}>
-          <SectionLabel text="締切間近の課題" />
-          {model.upcomingAssignments.map((a, i) => (
-            <AssignmentPill key={i} a={a} />
-          ))}
-        </FlexWidget>
-      ) : (
-        <FlexWidget />
-      )}
+      <LaterClasses model={model} />
+      <AssignmentPill model={model} />
     </FlexWidget>
   )
 }
