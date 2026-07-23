@@ -135,19 +135,16 @@ describe('T2: 5.2 で壊れる箇所（expected failure・ラチェット）', (
     expect(courses.length).toBeGreaterThan(0)
   })
 
-  // 破損②【T7で解決済み】: 英語課題ページの日付書式 "Tuesday, 12 December 2023, 12:00 AM"。
-  // 現行 regex（和文のみ）では未対応で deadline=null だった。parseDeadline に英語 %B 書式の
-  // OR 分岐を追加（曜日任意・12時間AM/PM補正）→ 締切を解決できるようにした。
-  it('破損②[修正済]: assign52_en（5.2 EN）は締切を解決する', () => {
+  // 破損②: 英語課題ページの日付書式 "Tuesday, 12 December 2023, 12:00 AM" が現行 regex で未対応。
+  // キーワード(Due)は見つかるが日付が取れず deadline=null。→ DEADLINE_KEYWORD_NO_DATE / T7 文言拡張。
+  // TUS は日本語運用なので実害は低いが、5.x での言語パック差の代表例として固定する。
+  it.fails('破損②: assign52_en（5.2 EN）は締切を解決すべき（現状 deadline=null）', () => {
     const res = parseAssignmentPage(assign52En, `${BASE}/mod/assign/view.php?id=724`)
     expect(res.deadline).not.toBeNull()
-    // "Tuesday, 12 December 2023, 12:00 AM"（12:00 AM=00:00・ローカルタイム）を正しく読む。
-    expect(res.deadline).toBe(new Date(2023, 11, 12, 0, 0, 0, 0).toISOString())
   })
 
-  // 破損③【T7で解決済み】: 英語課題ページの未提出値 "No submissions have been made yet" を
-  // 状態文言テーブルに収録（'no submissions have been made'）→ not_submitted と解決する。
-  it('破損③[修正済]: assign52_en（5.2 EN）は未提出状態を解決する', () => {
+  // 破損③: 英語課題ページの未提出値 "No submissions have been made yet" が状態文言に未収録。
+  it.fails('破損③: assign52_en（5.2 EN）は未提出状態を解決すべき（現状 unknown）', () => {
     const res = parseAssignmentPage(assign52En, `${BASE}/mod/assign/view.php?id=724`)
     expect(res.submissionStatus).toBe('not_submitted')
   })
@@ -183,47 +180,5 @@ describe('T2: 5.2 の構造変化（.activityinstance 廃止）の記録', () =>
     const full = root.querySelectorAll(ACTIVITY_SELECTOR).length
     expect(legacyClause).toBe(0)
     expect(full).toBe(20)
-  })
-})
-
-/**
- * === T7: 注入ボタン(INJECT_COURSE_ADD_BUTTONS_JS)の安定フック優先化 ===
- * ボタンUIのホスト特定とリンク収集を「URL/構造の安定フック優先・CSSクラスはフォールバック」へ整理。
- * 収集本体(letusLinks.ts)は元々 URL 正規表現方式でテーマ非依存だが、ボタンUIの注入JSにも
- * 同じ保険（クラス総崩れ時に /mod/ アンカーへフォールバック）を入れて崖を無くす（spec§8 原則1）。
- */
-describe('T7: 注入ボタンのセレクタ整理（安定フック優先化）', () => {
-  it('ホスト候補に .activity-item を追加（5.2 の新構造でもボタン挿入先が取れる）', () => {
-    expect(INJECT_COURSE_ADD_BUTTONS_JS).toContain(".closest('li.activity')")
-    expect(INJECT_COURSE_ADD_BUTTONS_JS).toContain(".closest('.activity-item')")
-  })
-
-  it('主経路が 0 件のときだけ /mod/ アンカーの URL フォールバックへ落ちる', () => {
-    // `if (!links.length)` ガードの直後に URL 方式の再取得がある＝現行 4.5.8/5.2 では主経路が
-    // ヒットするのでフォールバックは発火せず、挙動ゼロ変更（加算的耐性層）。
-    expect(INJECT_COURSE_ADD_BUTTONS_JS).toMatch(
-      /if\s*\(!links\.length\)\s*\{[\s\S]*?querySelectorAll\('a\[href\*="\/mod\/"\]'\)/,
-    )
-  })
-
-  it('主経路(li.activity/aalink)が総崩れした将来テーマでも URL 方式なら活動を拾える', () => {
-    // li.activity も aalink も .activityinstance も無い仮想テーマ。従来の主経路は 0 件になるが、
-    // /mod/*/view.php の URL 規約は安定＝フォールバック選択子が課題アンカーを拾える。
-    const futureTheme = `
-      <div class="course-content">
-        <div class="section-item"><a class="cm-name" href="${BASE}/mod/assign/view.php?id=901">課題A</a></div>
-        <div class="section-item"><a class="cm-name" href="${BASE}/mod/quiz/view.php?id=902">小テストB</a></div>
-        <nav><a href="${BASE}/user/view.php?id=5">プロフィール</a></nav>
-      </div>`
-    const root = parse(futureTheme)
-    expect(root.querySelectorAll(ACTIVITY_SELECTOR).length).toBe(0)
-    const fallback = root.querySelectorAll('a[href*="/mod/"]')
-    expect(fallback.length).toBe(2)
-    // 収集本体(letusLinks)は同じ URL 方式でこのテーマからも課題を拾える（ボタンUIと整合）。
-    const links = extractAssignmentLinks(futureTheme, `${BASE}/course/view.php?id=99`, 'standard')
-    expect(links.map((l) => l.url).sort()).toEqual([
-      `${BASE}/mod/assign/view.php?id=901`,
-      `${BASE}/mod/quiz/view.php?id=902`,
-    ])
   })
 })

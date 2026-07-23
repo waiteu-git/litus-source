@@ -1,0 +1,162 @@
+/**
+ * 正直な「読めませんでした」表示の内容決定（spec§7・T6）。純関数のみ。
+ *
+ * LTW `src/core/diagnosticsBanner.ts` を Litus（RN）へ 1:1 移植したもの。DiagnosticsState
+ * （自己診断台帳・T4）だけを入力に、UI が描くべきテキスト/種別を決める。react-native /
+ * AsyncStorage / DOM に一切触れない＝そのまま vitest でテストでき、UI（DiagnosticsBanner.tsx）は
+ * この関数の戻り値をトークンへ流すだけになる。
+ *
+ * 2層の出力を持つ:
+ * 1. buildBannerContent（警告バナー）: activeCodes（エスカレーション済み hard コード）から
+ *    「読めていない」警告を導出。再試行導線・最終取得時刻つき。
+ * 2. buildInfoNotes（情報ノート）: infoCodes（カバレッジ情報）から「未対応と正直に示す」注記を
+ *    導出。hard/info 区分（diagnosticsState）により UNSUPPORTED_MODULE 等の info コードは
+ *    activeCodes に決して載らないため、警告バナーだけでは spec§7 の unsupported 表示・
+ *    「未対応と正直に示す」に UI 経路が無い。infoCodes を警告でないトーンで出すこの層がその実配線。
+ *    健全な LETUS でも恒常発火し得るコードなので、警告色・再試行ボタンを持たない小さなノートに留める。
+ *
+ * バナーの表示規則（LTW から不変）:
+ * - 表示トリガは activeCodes が非空のときのみ。infoCodes / lastCodes に何が残っていても
+ *   activeCodes が空ならバナーは出さない（単発の一過性失敗で警告しない debounce を UI でも尊重）。
+ * - 複数コード該当時は原因を1つだけ示す。優先順位:
+ *   logged_out（ユーザーが確実に対処できる）> unreadable（レイアウト変更の可能性）
+ *   > unsupported（カバレッジ注記・旧形式データ等の防御枝）。
+ * - 未知の将来 hard コードは unreadable へ倒す（黙って none にしない＝「静かに壊れない」）。
+ * - 文言は非技術的な日本語のみ。診断コード名や技術用語をユーザーに見せない。
+ * - lastGoodAt は state の値をそのまま返す（「最終取得: M/D HH:mm」への整形は UI 側 formatLastGoodAt）。
+ *
+ * 情報ノートの表示規則:
+ * - activeCodes が非空（警告バナー表示中）の間はノートを出さない（spec§7 の重複排除。
+ *   読めていない時のカバレッジ注記は不確かな観測でもある）。
+ * - 既知の info コードは固定順（INFO_NOTE_ORDER）で1コード1ノート。未知の info コードは
+ *   汎用文へ倒し、同文は1つに束ねる（黙って落とさない）。
+ *
+ * LTW との差: LTW は passive 版フィンガープリント（moodleFingerprint.ts・BS5世代観測）の
+ * 情報ノートも buildInfoNotes に混ぜるが、Litus はまだ T8（フィンガープリント）が無いため
+ * その層は移植しない。T8 が入ったら fingerprint 引数を追加する（LTW の該当分岐を参照）。
+ */
+
+import type { DiagnosticCode } from './diagnose'
+import type { DiagnosticsState } from './diagnosticsState'
+
+export type BannerKind = 'none' | 'logged_out' | 'unreadable' | 'unsupported'
+
+export interface BannerContent {
+  kind: BannerKind
+  title: string
+  body: string
+  /** 最後に正常取得できた時刻（ISO）。未成功なら null。整形は UI 側 formatLastGoodAt */
+  lastGoodAt: string | null
+}
+
+/**
+ * kind ごとの文言。UNSUPPORTED_MODULE の詳細なモジュール型名は DiagnosticsState に
+ * 永続されていない（コードのみ）ため、一般化した文とする。
+ */
+const BANNER_TEXTS: Record<Exclude<BannerKind, 'none'>, { title: string; body: string }> = {
+  logged_out: {
+    title: 'LETUSからログアウトされています',
+    body: 'LETUSにログインし直すと、課題や締切の自動取得を再開します。',
+  },
+  unreadable: {
+    title: 'LETUSの情報を読み取れませんでした',
+    body: 'LETUSの画面構成が変わった可能性があり、一部の情報を読み取れませんでした。表示中のデータは最後に取得できた時点のものです。',
+  },
+  unsupported: {
+    title: '一部の活動は自動取得に未対応です',
+    body: '一部の活動（投票・アンケートなど）は、提出状況の自動判定にまだ対応していません。',
+  },
+}
+
+/**
+ * activeCodes から表示種別を決める（優先順位: logged_out > unreadable > unsupported）。
+ * UNSUPPORTED_MODULE 以外の全コード（将来の未知コード含む）は unreadable として扱う。
+ */
+function resolveKind(activeCodes: DiagnosticCode[]): Exclude<BannerKind, 'none'> {
+  if (activeCodes.includes('LOGGED_OUT')) return 'logged_out'
+  if (activeCodes.some((code) => code !== 'UNSUPPORTED_MODULE')) return 'unreadable'
+  return 'unsupported'
+}
+
+/** diagnosticsState からバナー内容を導出する。表示不要なら kind: 'none' */
+export function buildBannerContent(state: DiagnosticsState | null): BannerContent {
+  if (state === null || state.activeCodes.length === 0) {
+    return { kind: 'none', title: '', body: '', lastGoodAt: null }
+  }
+  const kind = resolveKind(state.activeCodes)
+  const { title, body } = BANNER_TEXTS[kind]
+  return { kind, title, body, lastGoodAt: state.lastGoodAt }
+}
+
+/** カバレッジ情報ノート1件。code は React key 等の識別用（UI に表示しない） */
+export interface InfoNote {
+  code: DiagnosticCode
+  text: string
+}
+
+/** 既知 info コードの表示順（spec の約束である unsupported を先頭に固定） */
+const INFO_NOTE_ORDER: readonly DiagnosticCode[] = [
+  'UNSUPPORTED_MODULE',
+  'DEADLINE_KEYWORD_NO_DATE',
+  'COURSE_LOST_ALL_ASSIGNMENTS',
+]
+
+/**
+ * 既知 info コードの文言。unsupported はバナー防御枝と同一文を単一情報源で共有。
+ * COURSE_LOST_ALL_ASSIGNMENTS は正当な非表示化でも発火するため断定せず、
+ * last-good データを保持していることだけを伝える。
+ */
+const INFO_NOTE_TEXTS: Partial<Record<DiagnosticCode, string>> = {
+  UNSUPPORTED_MODULE: BANNER_TEXTS.unsupported.body,
+  DEADLINE_KEYWORD_NO_DATE:
+    '一部の活動で締切らしい記載を見つけましたが、日時を読み取れませんでした。',
+  COURSE_LOST_ALL_ASSIGNMENTS:
+    '一部のコースで課題が見つからなくなりました。以前に取得した課題は引き続き表示しています。',
+}
+
+/** 未知の info コード（将来の階級再分類等）を黙って落とさないための汎用文 */
+const FALLBACK_INFO_NOTE_TEXT = '一部の情報を自動取得できていない可能性があります。'
+
+/**
+ * diagnosticsState からカバレッジ情報ノート（警告でない注記）を導出する。
+ * 表示不要なら空配列。activeCodes 非空（警告バナー表示中）の間は常に空配列
+ * （unreadable バナーが「画面構成が変わった可能性」を既に伝えているため重ねない）。
+ */
+export function buildInfoNotes(state: DiagnosticsState | null): InfoNote[] {
+  if (state === null || state.activeCodes.length > 0) {
+    return []
+  }
+  const infoCodes = state.infoCodes
+  const known = INFO_NOTE_ORDER.filter((code) => infoCodes.includes(code))
+  const unknown = infoCodes.filter((code) => !INFO_NOTE_ORDER.includes(code))
+  const notes: InfoNote[] = []
+  const seenTexts = new Set<string>()
+  for (const code of [...known, ...unknown]) {
+    const text = INFO_NOTE_TEXTS[code] ?? FALLBACK_INFO_NOTE_TEXT
+    if (seenTexts.has(text)) continue
+    seenTexts.add(text)
+    notes.push({ code, text })
+  }
+  return notes
+}
+
+/**
+ * バナー下部の「最終取得: …」表記。lastGoodAt（ISO or null）を端末ローカル時刻へ整形する。
+ * 一度も成功していない（null / 不正 ISO）なら null＝行を出さない。当日は時分のみ、別日は月日も付す。
+ * 将来時刻（端末の時計ずれ）はそのまま整形する（相対でなく絶対表記なので破綻しない）。
+ * freshnessText.ts と同型の整形だが、あちらは epoch ms・こちらは ISO 文字列を入力に取る。
+ */
+export function formatLastGoodAt(lastGoodAt: string | null, now: Date): string | null {
+  if (!lastGoodAt) return null
+  const t = new Date(lastGoodAt)
+  const ms = t.getTime()
+  if (!Number.isFinite(ms)) return null
+  const hh = String(t.getHours()).padStart(2, '0')
+  const mm = String(t.getMinutes()).padStart(2, '0')
+  const sameDay =
+    t.getFullYear() === now.getFullYear() &&
+    t.getMonth() === now.getMonth() &&
+    t.getDate() === now.getDate()
+  const stamp = sameDay ? `${hh}:${mm}` : `${t.getMonth() + 1}/${t.getDate()} ${hh}:${mm}`
+  return `最終取得: ${stamp}`
+}

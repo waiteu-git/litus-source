@@ -6,6 +6,7 @@ import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { useClassView } from '../collect/classViewArbiter'
 import { useDemo } from '../demo/DemoProvider'
+import { useDiagnostics } from '../health/DiagnosticsProvider'
 import { planSync } from './syncGuards'
 import { decideClassSync } from './classSyncConfirm'
 import { evaluateAccess } from '../health/accessGate'
@@ -125,6 +126,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const { active: demo } = useDemo()
   const demoRef = useRef(false)
   demoRef.current = demo
+  // 自己診断台帳の live 更新配線。LetusSyncEngine が確定した state をここへ push する。
+  const { applyState: applyDiagnostics } = useDiagnostics()
 
   const [bulletinBusy, setBulletinBusy] = useState(false)
   const [assignmentBusy, setAssignmentBusy] = useState(false)
@@ -461,7 +464,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
             二重マウント厳禁（CLASS収集が二重に走る）。 */}
         {attendanceStatsBusy ? <AttendanceStatsSyncEngine onFinished={onAttendanceStatsFinished} /> : null}
         {assignmentBusy ? (
-          <LetusSyncEngine onProgress={(label) => setAssignmentProgress(label)} onFinished={onAssignmentsFinished} />
+          <LetusSyncEngine
+            onProgress={(label) => setAssignmentProgress(label)}
+            onFinished={onAssignmentsFinished}
+            onDiagnostics={applyDiagnostics}
+          />
         ) : null}
       </ProgressCtx.Provider>
     </Ctx.Provider>
