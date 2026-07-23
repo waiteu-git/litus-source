@@ -105,6 +105,15 @@ export function byDeadlineAsc(a: Assignment, b: Assignment): number {
  * 除外: 非表示 / 提出済み / 開始前(まだ受験できない) / 締切未設定 / 締切超過（アクション不能なものは出さない）。
  */
 export function pickUrgentAssignment(list: Assignment[], now: Date): Assignment | null {
+  return pickUpcomingAssignments(list, now, 1)[0] ?? null
+}
+
+/**
+ * pickUrgentAssignment と同じ除外条件で、締切の近い順に最大 limit 件返す（大ウィジェット等の複数表示用）。
+ * 先頭は pickUrgentAssignment と一致する。limit<=0 は空配列。
+ */
+export function pickUpcomingAssignments(list: Assignment[], now: Date, limit: number): Assignment[] {
+  if (limit <= 0) return []
   const candidates = list.filter(
     (a) =>
       !a.ignored &&
@@ -113,6 +122,5 @@ export function pickUrgentAssignment(list: Assignment[], now: Date): Assignment 
       a.deadline !== null &&
       new Date(a.deadline).getTime() >= now.getTime(),
   )
-  if (candidates.length === 0) return null
-  return [...candidates].sort(byDeadlineAsc)[0]
+  return [...candidates].sort(byDeadlineAsc).slice(0, limit)
 }
