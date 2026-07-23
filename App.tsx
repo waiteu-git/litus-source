@@ -23,7 +23,6 @@ import { LoginGate } from './src/auth/LoginGate'
 import { KillSwitchGate, KillSwitchProvider } from './src/health/KillSwitchProvider'
 import { SyncProvider } from './src/sync/SyncProvider'
 import { DemoProvider, useDemo } from './src/demo/DemoProvider'
-import { DiagnosticsProvider } from './src/health/DiagnosticsProvider'
 import { DemoBanner } from './src/demo/DemoBanner'
 import { ThemeProvider, useThemeVariant, COLORS, DARK } from './src/theme'
 import { statusBarStyleFor } from './src/theme.tokens'
@@ -155,13 +154,9 @@ export default function App() {
                 （「デモ中はネットワークに一切出ない」の一部）ため、KillSwitchProvider が
                 useDemo() を読める位置に置く。 */}
             <DemoProvider>
-              {/* DiagnosticsProvider は DemoProvider の内側（デモ名前空間の切替を購読して読み直す）・
-                  KillSwitchProvider/SyncProvider の外側（スキャン完了で SyncProvider が applyState を push）。 */}
-              <DiagnosticsProvider>
-                <KillSwitchProvider>
-                  <AppShell />
-                </KillSwitchProvider>
-              </DiagnosticsProvider>
+              <KillSwitchProvider>
+                <AppShell />
+              </KillSwitchProvider>
             </DemoProvider>
           </ThemedContainer>
           <ThemedStatusBar />

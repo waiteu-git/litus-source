@@ -22,7 +22,6 @@ import { formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone, formatDea
 import { assignmentsEmptyState } from '../assignments/emptyState'
 import { RADIUS } from '../ui/scale'
 import HealthBanner from '../ui/HealthBanner'
-import DiagnosticsBanner from '../health/DiagnosticsBanner'
 import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { syncSkipMessage } from '../health/syncSkipNotice'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
@@ -606,9 +605,6 @@ export default function AssignmentsScreen() {
 
       <KillSwitchBanner feature="letus" />
       <HealthBanner health={health?.health} source="letus" />
-      {/* LETUS 自己診断バナー（読み取り不調/ログアウト/未対応を正直に示す＋再取得導線）。
-          HealthBanner（収集ヘルスの成否）とは別レイヤ＝スクレイプの整合破綻を診断台帳から表示する。 */}
-      <DiagnosticsBanner compact />
       <FreshnessLabel at={refreshedAt} />
       {syncNotice ? (
         <Text style={[styles.syncNotice, { color: ui.labelColor }]}>{syncNotice}</Text>

@@ -902,10 +902,20 @@ export const INJECT_COURSE_ADD_BUTTONS_JS = `(function(){
       // （ボタン上からスクロールを始めただけで追加が走る誤タップの原因だった）。
       b.addEventListener('click', onAdd, true);
       // 行(li.activity)の先頭に入れると float:right で右端に回り、左のリンクと重ならない。
-      var host = (a.closest && (a.closest('li.activity') || a.closest('.activityinstance'))) || a.parentNode;
+      // ホスト候補: li.activity(4.x〜5.x で安定) → .activity-item(Moodle4.4+ の新構造・5.2で採用) →
+      // .activityinstance(旧テーマ後方互換)。どれも無ければ親ノードへ挿す。
+      var host = (a.closest && (a.closest('li.activity') || a.closest('.activity-item') || a.closest('.activityinstance'))) || a.parentNode;
       if (host) host.insertBefore(b, host.firstChild); else a.parentNode.appendChild(b);
     }
+    // 主経路: 活動行(li.activity)配下のリンク。第3節(.activityinstance)は BS4 後方互換だが、
+    // li.activity 配下に包含されるため実質冗長（BS4/5.2 とも同数）。5.2 では .activityinstance=0。
     var links = document.querySelectorAll('li.activity a.aalink, li.activity a[href*="/mod/"], .activityinstance a[href*="/mod/"]');
+    if (!links.length) {
+      // フォールバック(spec§8 原則1): テーマがクラスを改名しても /mod/*/view.php の URL 規約は安定。
+      // 主経路(li.activity/aalink)が総崩れした将来テーマでだけ、全アンカーを URL で拾い直す
+      // （課題「収集」自体は letusLinks.ts の URL 正規表現方式で別途担保済み・ここはボタンUIの保険）。
+      links = document.querySelectorAll('a[href*="/mod/"]');
+    }
     Array.prototype.forEach.call(links, mk);
     window.ReactNativeWebView.postMessage(JSON.stringify({ type:'courseButtons', count: links.length }));
   } catch (e) {
