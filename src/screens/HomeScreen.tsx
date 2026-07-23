@@ -42,7 +42,6 @@ import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
 import { markCourseSeen, type CourseNewsMap } from '../updates/courseNews'
 import ScreenHint from '../tutorial/ScreenHint'
 import NotificationPermissionNotice from '../notifications/NotificationPermissionNotice'
-import DiagnosticsBanner from '../health/DiagnosticsBanner'
 import { COLORS } from '../theme'
 import { SPACE } from '../ui/scale'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
@@ -371,9 +370,6 @@ export default function HomeScreen() {
               ただし常駐させない: 時間割も課題も無い＝通知が仕事をしていない状態では出さない
               （通知を意図的に切っている人に常駐広告を出さないため）。 */}
           <NotificationPermissionNotice active={hero != null || assignments.length > 0} />
-          {/* LETUS 自己診断バナー（読み取り不調/ログアウト/未対応を正直に示す＋再取得導線）。
-              表示要否は診断台帳が握る（activeCodes 空なら何も描かない）。デモ中は自身で null を返す。 */}
-          <DiagnosticsBanner />
           {banner.active && bannerMounted ? (
             // 絶対配置で本文の上に重ねる＝展開/格納で下の内容をreflowさせない（配置固定）。
             <View style={styles.overlayAnchor}>
