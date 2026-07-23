@@ -27,6 +27,17 @@ export type ParsedAssignmentPage = {
   deadline: string | null
   submissionStatus: AssignmentSubmissionStatus
   lifecycleStatus: AssignmentLifecycleStatus
+  /**
+   * 自己診断（diagnose.ts §4.3 diagnoseActivityPage）用の抽出フラグ。パース本体のロジックは
+   * 変えず、「見つかった/パースできた」の可否だけを併せて返す（spec§4.4 の「唯一の侵襲＝戻り値を
+   * 値だけから値＋抽出フラグへ広げる」に対応）。
+   */
+  /** 締切キーワード（extractDeadlineText 相当）が本文から見つかったか。 */
+  keywordFound: boolean
+  /** parseDeadline が日付を返したか（キーワードは在るが日付が取れない＝書式変更の兆候の判別用）。 */
+  dateParsed: boolean
+  /** 提出状態が unknown 以外に解決したか。 */
+  statusResolved: boolean
 }
 
 import { normalizeText, htmlToPlainText } from './text'
@@ -212,10 +223,19 @@ export function resolveLifecycleStatus(
 /** 課題/小テストページのHTMLと自身のURLから、締切・提出状態・ライフサイクルをまとめて返す。 */
 export function parseAssignmentPage(html: string, url: string): ParsedAssignmentPage {
   const plainText = htmlToPlainText(html)
-  const deadline = parseDeadline(extractDeadlineText(plainText))
+  const deadlineText = extractDeadlineText(plainText)
+  const deadline = parseDeadline(deadlineText)
   const submissionStatus = extractSubmissionStatus(plainText, url)
   const lifecycleStatus = resolveLifecycleStatus(plainText, submissionStatus, deadline)
-  return { deadline, submissionStatus, lifecycleStatus }
+  return {
+    deadline,
+    submissionStatus,
+    lifecycleStatus,
+    // extractDeadlineText は締切キーワードが無い（開始のみ含む）と '' を返す＝keywordFound=false。
+    keywordFound: deadlineText !== '',
+    dateParsed: deadline !== null,
+    statusResolved: submissionStatus !== 'unknown',
+  }
 }
 
 /**

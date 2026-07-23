@@ -18,6 +18,7 @@ import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { hasLetusLoginMarker, letusAssignmentsHealth, type LetusRunStats } from '../health/collectionSignals'
 import { saveCollectionHealth } from '../storage/collectionHealthStore'
 import { saveAssignmentsRefreshedAt } from '../storage/refreshMetaStore'
+import type { ActivityPageObservation } from '../health/scanDiagnostics'
 
 type Candidate = { url: string; title: string; courseName: string; courseCode: string | null }
 
@@ -32,9 +33,15 @@ const PAGE_TIMEOUT_MS = 15000
 export default function AssignmentCollector({
   onProgress,
   onFinished,
+  onActivityDiag,
 }: {
   onProgress?: (done: number, total: number) => void
   onFinished: (r: { checked: number; saved: number }) => void
+  /**
+   * 各課題ページの抽出フラグを自己診断（scanDiagnostics）へ流す任意フック。フル同期
+   * （LetusSyncEngine）からのみ渡り、単独利用では未指定＝無挙動。
+   */
+  onActivityDiag?: (obs: ActivityPageObservation) => void
 }) {
   const webviewRef = useRef<WebViewInstance>(null)
   const [candidates, setCandidates] = useState<Candidate[]>([])
@@ -116,6 +123,14 @@ export default function AssignmentCollector({
       statsRef.current.visited += 1
       if (hasLetusLoginMarker(payload.html)) statsRef.current.loginSeen = true
       if (parsed.submissionStatus !== 'unknown' || parsed.deadline != null) statsRef.current.parsedOk += 1
+      // 自己診断へ抽出フラグを流す（締切キーワード在で日付欠落・未対応モジュール型の検知）。
+      onActivityDiag?.({
+        html: payload.html,
+        url: current.url,
+        keywordFound: parsed.keywordFound,
+        dateParsed: parsed.dateParsed,
+        statusResolved: parsed.statusResolved,
+      })
       collectedRef.current.push({
         url: current.url,
         courseCode: current.courseCode,
