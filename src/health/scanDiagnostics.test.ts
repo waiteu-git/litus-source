@@ -139,28 +139,38 @@ describe('コースページ診断（既知コースの喪失と横断集計）'
 })
 
 describe('活動ページ診断（抽出フラグ経路）', () => {
-  it('parseAssignmentPage が抽出フラグを返す（JA=全解決 / EN=キーワード有だが日付欠落）', () => {
+  it('parseAssignmentPage が抽出フラグを返す（JA/EN とも全解決＝T7 で英語書式に対応済み）', () => {
     const ja = parseAssignmentPage(assign52Ja, `${BASE}/mod/assign/view.php?id=724`)
     expect(ja.keywordFound).toBe(true)
     expect(ja.dateParsed).toBe(true)
     expect(ja.statusResolved).toBe(true)
 
+    // T7 で英語 %B 書式("Tuesday, 12 December 2023, 12:00 AM")と "No submissions have been made"
+    // に対応したため、EN も JA 同様に締切・状態とも解決する（旧: dateParsed/statusResolved=false）。
     const en = parseAssignmentPage(assign52En, `${BASE}/mod/assign/view.php?id=724`)
     expect(en.keywordFound).toBe(true)
-    expect(en.dateParsed).toBe(false)
-    expect(en.statusResolved).toBe(false)
+    expect(en.dateParsed).toBe(true)
+    expect(en.statusResolved).toBe(true)
   })
 
-  it('EN 課題（Due有・日付書式非対応）→ DEADLINE_KEYWORD_NO_DATE', () => {
+  it('締切キーワード有・日付パース不能 → DEADLINE_KEYWORD_NO_DATE（真の書式破損の代表）', () => {
+    // 実 EN fixture は T7 で解決できるようになったため、この診断コードは「本当に日付が読めない」
+    // 合成ページ（キーワードは在るが日付が数値化不能）で固定する＝将来の日付書式破損の検出保証。
     const url = `${BASE}/mod/assign/view.php?id=724`
-    const en = parseAssignmentPage(assign52En, url)
+    const brokenDateHtml =
+      '<html><head><script>var M={};M.cfg={wwwroot:"https://letus.ed.tus.ac.jp"};</script></head>' +
+      '<body><div id="intro">提出期限：追って連絡します（日時未定）</div>' +
+      '<div>まだ提出されていません。</div></body></html>'
+    const parsed = parseAssignmentPage(brokenDateHtml, url)
+    expect(parsed.keywordFound).toBe(true)
+    expect(parsed.dateParsed).toBe(false)
     const acc = createScanAccumulator()
     observeActivityPage(acc, {
-      html: assign52En,
+      html: brokenDateHtml,
       url,
-      keywordFound: en.keywordFound,
-      dateParsed: en.dateParsed,
-      statusResolved: en.statusResolved,
+      keywordFound: parsed.keywordFound,
+      dateParsed: parsed.dateParsed,
+      statusResolved: parsed.statusResolved,
     })
     expect(finalizeScanCodes(acc)).toContain('DEADLINE_KEYWORD_NO_DATE')
   })
