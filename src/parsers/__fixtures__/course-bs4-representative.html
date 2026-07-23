@@ -1,0 +1,56 @@
+<!--
+  代表フィクスチャ（合成・非実採取）: Moodle 3.x〜4.3 系 Bootstrap4 コースページの
+  「レガシー活動マークアップ」を再現したもの。
+
+  ⚠ これは TUS LETUS からの実採取ではない。`.activityinstance > a.aalink > span.instancename >
+     span.accesshide` という旧構造（Moodle 4.4 で `.activity-item` へ再設計される前の形）を、
+     INJECT_COURSE_ADD_BUTTONS_JS のセレクタ第3節 `.activityinstance a[href*="/mod/"]` と
+     `.closest('.activityinstance')` フォールバックが後方互換で拾えることを固定する目的で置く。
+
+  現行 TUS LETUS(4.5.8) の実コースページ DOM は本リポ未採取（ユーザーの LETUS ログイン
+  セッションが必要）＝T2 の残ギャップ。実 5.2 側の物証は __fixtures__/moodle52/course52_raw.html。
+-->
+<div id="region-main">
+  <div class="course-content">
+    <ul class="topics">
+      <li id="section-1" class="section main clearfix">
+        <ul class="section img-text">
+          <li class="activity assign modtype_assign" id="module-101">
+            <div class="mod-indent-outer">
+              <div class="activityinstance">
+                <a class="aalink" href="/mod/assign/view.php?id=101">
+                  <span class="instancename">第1回レポート課題<span class="accesshide"> 課題</span></span>
+                </a>
+              </div>
+            </div>
+          </li>
+          <li class="activity quiz modtype_quiz" id="module-102">
+            <div class="mod-indent-outer">
+              <div class="activityinstance">
+                <a class="aalink" href="/mod/quiz/view.php?id=102">
+                  <span class="instancename">第1回確認テスト<span class="accesshide"> 小テスト</span></span>
+                </a>
+              </div>
+            </div>
+          </li>
+          <li class="activity resource modtype_resource" id="module-103">
+            <div class="mod-indent-outer">
+              <div class="activityinstance">
+                <a class="aalink" href="/mod/resource/view.php?id=103">
+                  <span class="instancename">講義スライド 第1回<span class="accesshide"> ファイル</span></span>
+                </a>
+              </div>
+            </div>
+          </li>
+          <li class="activity label modtype_label" id="module-104">
+            <div class="mod-indent-outer">
+              <div class="contentwithoutlink">
+                <div class="no-overflow"><p>ここに教材の説明が入ります（活動リンクなし）。</p></div>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+</div>
