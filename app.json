@@ -48,6 +48,14 @@
         }
       ],
       "expo-font",
+      "./plugins/withNoApsEnvironment.js",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0f9e75"
+        }
+      ],
       [
         "react-native-android-widget",
         {

@@ -20,24 +20,32 @@
 /** 通知用白抜きアイコンの置き場所（リポジトリルートからの相対パス）。 */
 export const NOTIFICATION_ICON_PATH = 'assets/notification-icon.png'
 
+/**
+ * iOS の `aps-environment` を落とす自前 config plugin。
+ * expo-notifications を app.json に記載すると iOS 側の副作用が必ず付いてくるので、
+ * **記載するならこれを「前」に置く**のが恒久の対（mod は登録の逆順に走る。
+ * 理由と実測は plugins/apsEnvironment.js）。
+ */
+export const APS_STRIPPER_PLUGIN = './plugins/withNoApsEnvironment.js'
+
 export type PluginEntry = { name: string; props: Record<string, unknown> }
+
+/** plugins 配列での位置。無ければ -1。順序（＝mod の実行順）の検証に使う。 */
+export function findPluginIndex(plugins: unknown[], name: string): number {
+  return plugins.findIndex((p) => (typeof p === 'string' ? p === name : Array.isArray(p) && p[0] === name))
+}
 
 /**
  * app.json の plugins（文字列 or [名前, props] タプルが混在）から該当エントリを取り出す。
  * 見つからなければ null。props 無しの文字列エントリは空 props を返す。
  */
 export function findPluginEntry(plugins: unknown[], name: string): PluginEntry | null {
-  for (const p of plugins) {
-    if (typeof p === 'string') {
-      if (p === name) return { name, props: {} }
-      continue
-    }
-    if (Array.isArray(p) && p[0] === name) {
-      const props = typeof p[1] === 'object' && p[1] !== null ? (p[1] as Record<string, unknown>) : {}
-      return { name, props }
-    }
-  }
-  return null
+  const i = findPluginIndex(plugins, name)
+  if (i < 0) return null
+  const p = plugins[i]
+  if (typeof p === 'string') return { name, props: {} }
+  const raw = (p as unknown[])[1]
+  return { name, props: typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {} }
 }
 
 export type PngHeader = {

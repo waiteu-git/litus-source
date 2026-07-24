@@ -187,7 +187,13 @@ export default function ClassEventFormScreen() {
 
   return (
     <ScreenBg>
-      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]} keyboardShouldPersistTaps="handled">
+      {/* automaticallyAdjustKeyboardInsets は iOS のみ有効。iOS は キーボードで window が
+          縮まないため、これが無いと入力欄より下の保存ボタンがスクロールしても出てこない。 */}
+      <ScrollView
+        contentContainerStyle={[styles.list, { paddingBottom: clearance }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         <View style={[ui.card, styles.card]}>
           <Text style={[styles.course, { color: ui.valueColor }]}>{courseName}</Text>
         </View>

@@ -88,12 +88,19 @@ export default function LetusCoursesScreen() {
           style={[styles.searchInput, { color: ui.valueColor }]}
         />
       </View>
+      {/* 検索欄はこの下の ScrollView の外（常時上部）にある。キーボード表示中でも一覧の行を
+          1タップで押せるよう keyboardShouldPersistTaps、iOS でキーボードに隠れた行へ届くよう
+          automaticallyAdjustKeyboardInsets（Android では無視される）。 */}
       {rows.length === 0 ? (
         <View style={[ui.card, { marginTop: 12 }]}>
           <Text style={{ color: ui.valueColor }}>まだコースがありません。右上の「更新」から収集してください。</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: clearance }]}>
+        <ScrollView
+          contentContainerStyle={[styles.list, { paddingBottom: clearance }]}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
           <View style={ui.card}>
             {filtered.map((r, i) => (
               <PressableRow

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Keyboard, Pressable, StyleSheet, View, type TextInput as RNTextInput } from 'react-native'
+import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, View, type TextInput as RNTextInput } from 'react-native'
 import { Text, TextInput } from '../ui/Text'
 import { useIsFocused } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
@@ -189,410 +189,105 @@ export default function AttendanceScreen() {
   return (
     <View style={styles.wrap}>
       <ScreenBg>
-        <View style={styles.header}>
-          <View style={styles.hLeft}>
-            <Ionicons name="flash-outline" size={22} color={ui.heading} />
-            <Text style={[styles.hTitle, { color: ui.heading }]}>出席</Text>
-          </View>
-          <Text style={[styles.pill, { backgroundColor: ui.colors.chipBg, color: ui.colors.chipText }]}>
-            {conflict
-              ? 'PC等で確認中'
-              : attendedNow
-                ? '出席済み'
-                : phase === 'needsLogin'
-                  ? 'ログインが必要'
-                  : reception
-                    ? 'ログイン済み'
-                    : '確認中…'}
-          </Text>
-        </View>
-
-        <KillSwitchBanner feature="attendance" />
-        <ScreenHint hintKey="attendance" />
-
-        {/* 学外ネットワーク警告: 出席ページ自身の文言（学外ネットワークからのアクセス）を検知した時だけ出す。
-            学内Wi-Fiへ切り替えてもWebView側の表示が自動では追随しないため「再確認」で再取得する。
-            進行表示はバー内テキストの差し替えのみ（取得系と同じ・大きなアニメは出さない方針）。
-            出席済み（案内が無意味）と競合中（conflictカードの再確認と衝突・非出席ページへの検出注入を防ぐ）
-            では出さない。「再確認」はエンジン稼働中のみ提示する（停止中は取得できず偽の確認中になる）。 */}
-        {!conflict && !attendedNow && reception?.network === 'off' ? (
-          <View style={[styles.netWarn, { backgroundColor: ui.colors.warnBg }]}>
-            <Ionicons name="wifi-outline" size={16} color={ui.colors.warn} />
-            <Text style={[styles.netWarnText, { color: ui.colors.warn }]}>
-              {netChecking
-                ? 'ネットワーク状態を確認中…'
-                : '学外ネットワークです。出席登録には学内Wi-Fiが必要な場合があります'}
-            </Text>
-            {!netChecking && engine.running ? (
-              <PressableRow onPress={recheckNetwork} hitSlop={8} accessibilityRole="button">
-                <Text style={[styles.netWarnAction, { color: ui.colors.warn }]}>再確認</Text>
-              </PressableRow>
-            ) : null}
-          </View>
-        ) : null}
-
-        {conflict ? (
-          <View style={[styles.card, cardStyle, styles.hero]}>
-            <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
-              <Ionicons name="desktop-outline" size={30} color={ui.accent} />
+        {/* 出席は受付時間に追われる動線で、認証コード入力欄の**下**に送信CTAがある。
+            スクロールが無いとキーボードが出た瞬間にCTAへ到達する手段が消える
+            （Android は window が縮んではみ出した分が切れ、iOS は被さったまま動かない）。
+            - keyboardShouldPersistTaps="handled": キーボード表示中でも1タップでCTAを押せる。
+              既定だと最初のタップが dismiss に食われ、受付終了間際に1タップ分を損する。
+            - automaticallyAdjustKeyboardInsets: iOS は window が縮まないため、これが無いと
+              キーボードに隠れたCTAはスクロールしても出てこない（＝完全に詰む経路）。
+            - keyboardDismissMode="on-drag": number-pad には Return が無く、背景タップの
+              dismiss も無いので、閉じる導線はドラッグに持たせる。 */}
+        <ScrollView
+          contentContainerStyle={[styles.list, { paddingBottom: clearance }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
+        >
+          <View style={styles.header}>
+            <View style={styles.hLeft}>
+              <Ionicons name="flash-outline" size={22} color={ui.heading} />
+              <Text style={[styles.hTitle, { color: ui.heading }]}>出席</Text>
             </View>
-            <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
-              PCなど他の画面でCLASSを開いていると確認できません
+            <Text style={[styles.pill, { backgroundColor: ui.colors.chipBg, color: ui.colors.chipText }]}>
+              {conflict
+                ? 'PC等で確認中'
+                : attendedNow
+                  ? '出席済み'
+                  : phase === 'needsLogin'
+                    ? 'ログインが必要'
+                    : reception
+                      ? 'ログイン済み'
+                      : '確認中…'}
             </Text>
-            <Text style={[styles.conflictSub, { color: labelColor }]}>
-              {conflictExhausted
-                ? '他のCLASSを閉じてから「再確認」を押してください。'
-                : '他のCLASSを閉じるとこの画面が自動で復帰します。すぐ試すには「再確認」。'}
-            </Text>
-            <Pressable style={[styles.cta, styles.conflictBtn, { backgroundColor: c.cta }]} onPress={retry}>
-              <Text style={styles.ctaText}>再確認</Text>
-            </Pressable>
           </View>
-        ) : attendedNow && !reactionOpen ? (
-          <>
-          <View style={[styles.card, cardStyle, styles.hero]}>
-            <View style={styles.liveBadgeRow}>
-              <Ionicons name="checkmark-circle" size={16} color={ui.colors.success} />
-              <Text style={[styles.liveBadgeText, { color: ui.colors.success }]}>出席済み</Text>
-            </View>
-            <Text style={[styles.heroCourse, { color: valueColor }]} numberOfLines={2}>
-              {attended?.courseName || reception?.courseName || '（科目名不明）'}
-            </Text>
-            <View style={styles.ringWrap}>
-              {/* 残り時間の代わりに、満円のリング中央へ「出席」を表示する。 */}
-              <CountdownRing centerText="出席" size={176} progress={1} />
-            </View>
-            {attended?.code ? (
-              <>
-                <Text style={[styles.doneCodeLabel, styles.doneCodeCenter, { color: labelColor }]}>入力した出席コード</Text>
-                <Text style={[styles.doneCode, { color: valueColor }]}>{attended.code}</Text>
-              </>
-            ) : (
-              // コード未保持＝このアプリで送信していない（PC等の他端末で出席）。混乱しないよう明示する。
-              <Text style={[styles.doneOther, { color: labelColor }]}>他の端末で出席登録済み</Text>
-            )}
-          </View>
-          {/* 出席済みでも、リアペを出せる授業なら書ける（任意提出・ユーザー要望 2026-07-17）。 */}
-          {canOpenReaction ? (
-            <Pressable
-              style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
-              onPress={() => setReactionOpen(true)}
-            >
-              <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
-                {reactionSubmitted ? 'リアクションペーパーを編集（提出済み）' : 'リアクションペーパーを書く'}
+
+          <KillSwitchBanner feature="attendance" />
+          <ScreenHint hintKey="attendance" />
+
+          {/* 学外ネットワーク警告: 出席ページ自身の文言（学外ネットワークからのアクセス）を検知した時だけ出す。
+              学内Wi-Fiへ切り替えてもWebView側の表示が自動では追随しないため「再確認」で再取得する。
+              進行表示はバー内テキストの差し替えのみ（取得系と同じ・大きなアニメは出さない方針）。
+              出席済み（案内が無意味）と競合中（conflictカードの再確認と衝突・非出席ページへの検出注入を防ぐ）
+              では出さない。「再確認」はエンジン稼働中のみ提示する（停止中は取得できず偽の確認中になる）。 */}
+          {!conflict && !attendedNow && reception?.network === 'off' ? (
+            <View style={[styles.netWarn, { backgroundColor: ui.colors.warnBg }]}>
+              <Ionicons name="wifi-outline" size={16} color={ui.colors.warn} />
+              <Text style={[styles.netWarnText, { color: ui.colors.warn }]}>
+                {netChecking
+                  ? 'ネットワーク状態を確認中…'
+                  : '学外ネットワークです。出席登録には学内Wi-Fiが必要な場合があります'}
               </Text>
-            </Pressable>
+              {!netChecking && engine.running ? (
+                <PressableRow onPress={recheckNetwork} hitSlop={8} accessibilityRole="button">
+                  <Text style={[styles.netWarnAction, { color: ui.colors.warn }]}>再確認</Text>
+                </PressableRow>
+              ) : null}
+            </View>
           ) : null}
-          </>
-        ) : showReactionForm ? (
-          // リアペ入力。2通り:
-          //  ・必須(reactionPending): 出席コードは受理済みだが提出しないと出席にならない＝常に出す。
-          //  ・任意(reactionOpen): CLASSに提出ボタンが出ている授業で、ユーザーが「書く」で開いたとき。
-          // 提出後は既存の .attendSuc 検知が attended に切り替える。CLASS画面での手動提出も常に併設
-          // （actuatorスタブ環境・DOM変化時の逃げ道）。
-          <>
+
+          {conflict ? (
             <View style={[styles.card, cardStyle, styles.hero]}>
               <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
-                <Ionicons name="create-outline" size={30} color={ui.accent} />
+                <Ionicons name="desktop-outline" size={30} color={ui.accent} />
               </View>
               <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
-                {reactionPending
-                  ? '出席コードは受理されました。リアクションペーパーを提出すると出席になります'
-                  : reactionSubmitted
-                    ? '提出済みのリアクションペーパーです。編集して再提出できます'
-                    : 'リアクションペーパーを提出できます（この授業では出席の条件ではありません）'}
+                PCなど他の画面でCLASSを開いていると確認できません
               </Text>
-              {reception?.courseName || reception?.confirmWindow ? (
-                <Text style={[styles.conflictSub, { color: labelColor }]}>
-                  {reception?.courseName ?? ''}
-                  {reception?.confirmWindow ? `${reception?.courseName ? ' ・ ' : ''}${reception.confirmWindow}` : ''}
-                </Text>
-              ) : null}
-              {/* 必須リアペは**受付が閉じると出席にならない**＝ここが最も時間に追われる局面なのに、
-                  従来はカウントダウンが受付中(accepting)のリングにしか無く、この画面では静的な
-                  受付時間しか見えなかった。締切までの実残りを出す。任意提出は出席と無関係なので出さない。
-                  受付が閉じた後は残りではなく**閉じた事実**を出す（リアペ必須の status は受付終了後も
-                  reaction_pending のまま居座るので、ここに来る）。 */}
-              {reactionPending && clock ? (
-                <Text style={[styles.conflictSub, { color: ui.colors.warn, fontWeight: '600' }]}>
-                  提出の受付終了まで {clock}
-                </Text>
-              ) : reactionPending && windowEnded ? (
-                <Text style={[styles.conflictSub, { color: ui.colors.danger, fontWeight: '600' }]}>
-                  受付は終了しました。いま提出しても出席にならない可能性があります
-                </Text>
-              ) : null}
-            </View>
-
-            <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
-              <Text style={[styles.inputLabel, { color: labelColor }]}>本文（600文字以内・全角は2文字換算）</Text>
-              <TextInput
-                style={[
-                  styles.reactionInput,
-                  { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder, color: valueColor },
-                ]}
-                value={reactionText}
-                onChangeText={onChangeReactionText}
-                editable={!reactionSending}
-                multiline
-                textAlignVertical="top"
-                placeholder="ここに本文を入力（自動で下書き保存されます）"
-                placeholderTextColor={labelColor}
-              />
-              <Text style={[styles.reactionCount, { color: reactionOver ? ui.colors.danger : labelColor }]}>
-                {reactionLen}/{REACTION_MAX_LEN}
-              </Text>
-            </View>
-
-            <Pressable
-              style={[
-                styles.cta,
-                { backgroundColor: c.cta },
-                (reactionSending || !canSubmitReaction(reactionText)) && styles.ctaBusy,
-              ]}
-              disabled={reactionSending || !canSubmitReaction(reactionText)}
-              onPress={confirmReactionSubmit}
-            >
-              {reactionSending ? (
-                <Text style={styles.ctaText}>提出中…</Text>
-              ) : (
-                <Text style={styles.ctaText}>{reactionSubmitted ? 'リアクションペーパーを再提出' : 'リアクションペーパーを提出'}</Text>
-              )}
-            </Pressable>
-
-            {reactionSending ? (
-              <View style={[styles.card, cardStyle, styles.verifyCard]}>
-                <View style={styles.verifyRow}>
-                  <Text style={[styles.verifyText, { color: valueColor }]}>提出しています。出席への反映を確認中…</Text>
-                </View>
-                <IndeterminateBar
-                  color={ui.accent}
-                  trackColor={ui.colors.softBoxBg}
-                />
-              </View>
-            ) : reactionSubmit.status === 'failed' ? (
-              <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
-                <Text style={[styles.resultText, { color: ui.colors.danger }]}>{reactionSubmit.message}</Text>
-              </View>
-            ) : null}
-
-            <Pressable
-              style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
-              disabled={reactionSending}
-              onPress={() => setRevealClass(true)}
-            >
-              <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
-                CLASSの画面で書く
-              </Text>
-            </Pressable>
-
-            {/* 任意提出は閉じられる（必須は出席の条件なので閉じさせない）。下書きは保持したまま。 */}
-            {!reactionPending ? (
-              <Pressable
-                style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
-                disabled={reactionSending}
-                onPress={() => setReactionOpen(false)}
-              >
-                <Text style={[styles.reactionGhostText, { color: labelColor }]}>閉じる（下書きは残ります）</Text>
-              </Pressable>
-            ) : null}
-          </>
-        ) : closed ? (
-          <View style={[styles.card, cardStyle, styles.hero]}>
-            <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
-              <Ionicons name="time-outline" size={30} color={ui.accent} />
-            </View>
-            <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>この授業の受付は終了しました</Text>
-            {reception?.courseName ? (
               <Text style={[styles.conflictSub, { color: labelColor }]}>
-                {reception.courseName}
-                {reception.confirmWindow ? ` ・ ${reception.confirmWindow}` : ''}
+                {conflictExhausted
+                  ? '他のCLASSを閉じてから「再確認」を押してください。'
+                  : '他のCLASSを閉じるとこの画面が自動で復帰します。すぐ試すには「再確認」。'}
               </Text>
-            ) : null}
-          </View>
-        ) : (
-          <>
-            <View style={[styles.card, cardStyle, styles.hero]}>
-              {accepting ? (
-                <>
-                  <View style={styles.liveBadgeRow}>
-                    <View style={[styles.liveDot, { backgroundColor: ui.pick(COLORS.cta, COLORS.cta, COLORS.emeraldLight) }]} />
-                    <Text style={[styles.liveBadgeText, { color: ui.pick(COLORS.cta, COLORS.cta, COLORS.emeraldLight) }]}>受付中</Text>
-                  </View>
-                  <Text style={[styles.heroCourse, { color: valueColor }]} numberOfLines={2}>
-                    {reception?.courseName ?? '（科目名不明）'}
-                    {updating ? '（更新中…）' : ''}
-                  </Text>
-                  <View style={styles.ringWrap}>
-                    {/* 受付時間から now で毎秒引いた実カウントダウン。**reception.remaining へは落とさない**:
-                        あれは取得時点で固定された静止値で、「残り時間」の下に置くと減らない数字が居座る
-                        （＝嘘をつく）。取得できないときは '—' と明示し、静止値は下に出典付きで添える。 */}
-                    <CountdownRing
-                      centerText={clock ?? '—'}
-                      subText={clock ? '残り時間' : windowEnded ? '受付終了' : '受付時間 不明'}
-                      size={176}
-                      progress={countdownFraction(reception?.confirmWindow ?? null, now) ?? undefined}
-                    />
-                  </View>
-                  <Text style={[styles.heroWindow, { color: labelColor }]}>
-                    出席確認時間 {reception?.confirmWindow ?? '—'}
-                  </Text>
-                  {!clock && reception?.remaining ? (
-                    // remaining はパーサ側で既に「あと〜」の形（attendanceMessage の extractRemaining /
-                    // remainingFromSec）。「残り」を足すと「残り あと12分34秒」と二重表現になる。
-                    <Text style={[styles.heroWindow, { color: labelColor }]}>
-                      CLASSの表示（取得時点）: {reception.remaining}
-                    </Text>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
-                    <Ionicons name="time-outline" size={30} color={ui.accent} />
-                  </View>
-                  <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>{statusLine}</Text>
-                  {phase === 'booting' ? (
-                    <View style={styles.statusBarWrap}>
-                      <IndeterminateBar
-                        color={ui.accent}
-                        trackColor={ui.colors.softBoxBg}
-                      />
-                    </View>
-                  ) : null}
-                </>
-              )}
-            </View>
-
-            {phase === 'navFailed' && !revealClass ? (
-              <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
-                <Text style={[styles.status, { color: valueColor, fontSize: 14, fontWeight: '500' }]}>
-                  受付状況を取得できませんでした。「更新」で開き直します。
-                </Text>
-                <View style={styles.failRow}>
-                  <Pressable style={[styles.failBtn, { backgroundColor: c.cta }]} onPress={retry}>
-                    <Text style={styles.failBtnText}>更新</Text>
-                  </Pressable>
-                  {failCount >= 2 ? (
-                    <Pressable
-                      style={[
-                        styles.failBtn,
-                        styles.failBtnGhost,
-                        { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder },
-                      ]}
-                      onPress={() => setRevealClass(true)}
-                    >
-                      <Text style={[styles.failBtnText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>CLASSの画面を表示</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            ) : null}
-
-            <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
-              <Text style={[styles.inputLabel, { color: labelColor }]}>認証コード（半角数字）</Text>
-              <Pressable style={styles.segRow} onPress={() => inputRef.current?.focus()}>
-                {digits.map((d, i) => (
-                  <View key={i} style={[styles.seg, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}>
-                    <Text style={[styles.segText, { color: valueColor }]}>{d}</Text>
-                  </View>
-                ))}
+              <Pressable style={[styles.cta, styles.conflictBtn, { backgroundColor: c.cta }]} onPress={retry}>
+                <Text style={styles.ctaText}>再確認</Text>
               </Pressable>
-              <TextInput
-                ref={inputRef}
-                style={styles.hiddenInput}
-                value={code}
-                onChangeText={(t) => setCode(normalizeAttendanceCode(t).slice(0, 4))}
-                keyboardType="number-pad"
-                maxLength={4}
-                autoFocus={false}
-              />
             </View>
-
-            <Pressable
-              style={[styles.cta, { backgroundColor: c.cta }, phase === 'submitting' && styles.ctaBusy]}
-              disabled={phase === 'submitting'}
-              onPress={() => {
-                // 送信時にキーボードを閉じ、結果メッセージ（成功/失敗）がすぐ見えるようにする。
-                Keyboard.dismiss()
-                submit()
-              }}
-            >
-              {phase === 'submitting' ? (
-                <Text style={styles.ctaText}>送信中…</Text>
+          ) : attendedNow && !reactionOpen ? (
+            <>
+            <View style={[styles.card, cardStyle, styles.hero]}>
+              <View style={styles.liveBadgeRow}>
+                <Ionicons name="checkmark-circle" size={16} color={ui.colors.success} />
+                <Text style={[styles.liveBadgeText, { color: ui.colors.success }]}>出席済み</Text>
+              </View>
+              <Text style={[styles.heroCourse, { color: valueColor }]} numberOfLines={2}>
+                {attended?.courseName || reception?.courseName || '（科目名不明）'}
+              </Text>
+              <View style={styles.ringWrap}>
+                {/* 残り時間の代わりに、満円のリング中央へ「出席」を表示する。 */}
+                <CountdownRing centerText="出席" size={176} progress={1} />
+              </View>
+              {attended?.code ? (
+                <>
+                  <Text style={[styles.doneCodeLabel, styles.doneCodeCenter, { color: labelColor }]}>入力した出席コード</Text>
+                  <Text style={[styles.doneCode, { color: valueColor }]}>{attended.code}</Text>
+                </>
               ) : (
-                <Text style={styles.ctaText}>出席する</Text>
+                // コード未保持＝このアプリで送信していない（PC等の他端末で出席）。混乱しないよう明示する。
+                <Text style={[styles.doneOther, { color: labelColor }]}>他の端末で出席登録済み</Text>
               )}
-            </Pressable>
-
-            {outcome === 'ok' ? (
-              <View style={[styles.card, cardStyle, styles.doneCard]}>
-                <View style={styles.doneCheck}>
-                  <Ionicons name="checkmark" size={38} color={c.white} />
-                </View>
-                <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
-                {/* 成功時も診断を出す: 自動送信は元々「未検証」の経路で、間欠的に登録されない事象を
-                    追っている。どの経路(method)で通ったかが分かって初めて再発を潰せる。 */}
-                <Text selectable style={[styles.diag, styles.diagCenter, { color: labelColor }]}>
-                  診断: method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁 / 送信応答=
-                  {String(result?.ajaxDone)} / status={result?.ajaxStatus ?? '-'}
-                  {result?.ok ? ' / 検出=応答テキスト' : ' / 検出=CLASS出席済み'}
-                </Text>
-              </View>
-            ) : submitFailed ? (
-              // 失敗時は actuator の理由をそのまま出し、CLASSの画面で手動登録できる逃げ道を必ず添える
-              // （自動送信が効かない端末でも出席を落とさないため）。
-              <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
-                <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
-                  <Text style={[styles.resultText, { color: ui.colors.danger }]}>
-                    {submitFailureText({ result, receptionStatus: reception?.status ?? null })}
-                  </Text>
-                </View>
-                <Text style={[styles.status, { color: labelColor, fontSize: 13, fontWeight: '400', marginTop: 8 }]}>
-                  出席は登録されていません。CLASSの画面を開いて「出席登録する」を押してください。
-                </Text>
-                {/* 送信診断: 「発火しているのに登録されない」原因（process範囲など）の特定に要る。
-                    失敗時だけ・折りたたまず小さく出す（作者が実機で読める唯一の経路）。 */}
-                <Text selectable style={[styles.diag, { color: labelColor }]}>
-                  診断: btn={String(result?.btnFound)} / method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁
-                  {'\n'}送信: 発火={String(result?.ajaxFired)} / 応答={String(result?.ajaxDone)} / status=
-                  {result?.ajaxStatus ?? '-'}
-                  {result?.ajaxError ? ` / err=${result.ajaxError}` : ''}
-                  {result?.hint ? `\nCLASSの応答: ${result.hint}` : ''}
-                  {result?.onclick ? `\n${result.onclick}` : ''}
-                </Text>
-                <View style={styles.failRow}>
-                  <Pressable style={[styles.failBtn, { backgroundColor: c.cta }]} onPress={() => setRevealClass(true)}>
-                    <Text style={styles.failBtnText}>CLASSの画面を表示</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.failBtn,
-                      styles.failBtnGhost,
-                      { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder },
-                    ]}
-                    onPress={retry}
-                  >
-                    <Text style={[styles.failBtnText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>最初から</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : phase === 'submitting' || verifying ? (
-              // 送信タップ〜出席確定までの待機窓。スイープする不定進捗バーで「処理中」を明示する。
-              <View style={[styles.card, cardStyle, styles.verifyCard]}>
-                <View style={styles.verifyRow}>
-                  <Text style={[styles.verifyText, { color: valueColor }]}>
-                    {phase === 'submitting' ? '出席を送信しています…' : '送信しました。出席を確認しています…'}
-                  </Text>
-                </View>
-                <IndeterminateBar
-                  color={ui.accent}
-                  trackColor={ui.colors.softBoxBg}
-                />
-              </View>
-            ) : null}
-
-            {/* 受付中でも、リアペを出せる授業なら書ける（任意提出・ユーザー要望 2026-07-17）。
-                必須(reaction_pending)ではないので、出席登録の邪魔をしないよう控えめな導線にする。 */}
+            </View>
+            {/* 出席済みでも、リアペを出せる授業なら書ける（任意提出・ユーザー要望 2026-07-17）。 */}
             {canOpenReaction ? (
               <Pressable
                 style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
@@ -603,9 +298,329 @@ export default function AttendanceScreen() {
                 </Text>
               </Pressable>
             ) : null}
-          </>
-        )}
-        <View style={{ height: clearance }} />
+            </>
+          ) : showReactionForm ? (
+            // リアペ入力。2通り:
+            //  ・必須(reactionPending): 出席コードは受理済みだが提出しないと出席にならない＝常に出す。
+            //  ・任意(reactionOpen): CLASSに提出ボタンが出ている授業で、ユーザーが「書く」で開いたとき。
+            // 提出後は既存の .attendSuc 検知が attended に切り替える。CLASS画面での手動提出も常に併設
+            // （actuatorスタブ環境・DOM変化時の逃げ道）。
+            <>
+              <View style={[styles.card, cardStyle, styles.hero]}>
+                <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
+                  <Ionicons name="create-outline" size={30} color={ui.accent} />
+                </View>
+                <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>
+                  {reactionPending
+                    ? '出席コードは受理されました。リアクションペーパーを提出すると出席になります'
+                    : reactionSubmitted
+                      ? '提出済みのリアクションペーパーです。編集して再提出できます'
+                      : 'リアクションペーパーを提出できます（この授業では出席の条件ではありません）'}
+                </Text>
+                {reception?.courseName || reception?.confirmWindow ? (
+                  <Text style={[styles.conflictSub, { color: labelColor }]}>
+                    {reception?.courseName ?? ''}
+                    {reception?.confirmWindow ? `${reception?.courseName ? ' ・ ' : ''}${reception.confirmWindow}` : ''}
+                  </Text>
+                ) : null}
+                {/* 必須リアペは**受付が閉じると出席にならない**＝ここが最も時間に追われる局面なのに、
+                    従来はカウントダウンが受付中(accepting)のリングにしか無く、この画面では静的な
+                    受付時間しか見えなかった。締切までの実残りを出す。任意提出は出席と無関係なので出さない。
+                    受付が閉じた後は残りではなく**閉じた事実**を出す（リアペ必須の status は受付終了後も
+                    reaction_pending のまま居座るので、ここに来る）。 */}
+                {reactionPending && clock ? (
+                  <Text style={[styles.conflictSub, { color: ui.colors.warn, fontWeight: '600' }]}>
+                    提出の受付終了まで {clock}
+                  </Text>
+                ) : reactionPending && windowEnded ? (
+                  <Text style={[styles.conflictSub, { color: ui.colors.danger, fontWeight: '600' }]}>
+                    受付は終了しました。いま提出しても出席にならない可能性があります
+                  </Text>
+                ) : null}
+              </View>
+
+              <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
+                <Text style={[styles.inputLabel, { color: labelColor }]}>本文（600文字以内・全角は2文字換算）</Text>
+                <TextInput
+                  style={[
+                    styles.reactionInput,
+                    { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder, color: valueColor },
+                  ]}
+                  value={reactionText}
+                  onChangeText={onChangeReactionText}
+                  editable={!reactionSending}
+                  multiline
+                  textAlignVertical="top"
+                  placeholder="ここに本文を入力（自動で下書き保存されます）"
+                  placeholderTextColor={labelColor}
+                />
+                <Text style={[styles.reactionCount, { color: reactionOver ? ui.colors.danger : labelColor }]}>
+                  {reactionLen}/{REACTION_MAX_LEN}
+                </Text>
+              </View>
+
+              <Pressable
+                style={[
+                  styles.cta,
+                  { backgroundColor: c.cta },
+                  (reactionSending || !canSubmitReaction(reactionText)) && styles.ctaBusy,
+                ]}
+                disabled={reactionSending || !canSubmitReaction(reactionText)}
+                onPress={confirmReactionSubmit}
+              >
+                {reactionSending ? (
+                  <Text style={styles.ctaText}>提出中…</Text>
+                ) : (
+                  <Text style={styles.ctaText}>{reactionSubmitted ? 'リアクションペーパーを再提出' : 'リアクションペーパーを提出'}</Text>
+                )}
+              </Pressable>
+
+              {reactionSending ? (
+                <View style={[styles.card, cardStyle, styles.verifyCard]}>
+                  <View style={styles.verifyRow}>
+                    <Text style={[styles.verifyText, { color: valueColor }]}>提出しています。出席への反映を確認中…</Text>
+                  </View>
+                  <IndeterminateBar
+                    color={ui.accent}
+                    trackColor={ui.colors.softBoxBg}
+                  />
+                </View>
+              ) : reactionSubmit.status === 'failed' ? (
+                <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
+                  <Text style={[styles.resultText, { color: ui.colors.danger }]}>{reactionSubmit.message}</Text>
+                </View>
+              ) : null}
+
+              <Pressable
+                style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
+                disabled={reactionSending}
+                onPress={() => setRevealClass(true)}
+              >
+                <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
+                  CLASSの画面で書く
+                </Text>
+              </Pressable>
+
+              {/* 任意提出は閉じられる（必須は出席の条件なので閉じさせない）。下書きは保持したまま。 */}
+              {!reactionPending ? (
+                <Pressable
+                  style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
+                  disabled={reactionSending}
+                  onPress={() => setReactionOpen(false)}
+                >
+                  <Text style={[styles.reactionGhostText, { color: labelColor }]}>閉じる（下書きは残ります）</Text>
+                </Pressable>
+              ) : null}
+            </>
+          ) : closed ? (
+            <View style={[styles.card, cardStyle, styles.hero]}>
+              <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
+                <Ionicons name="time-outline" size={30} color={ui.accent} />
+              </View>
+              <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>この授業の受付は終了しました</Text>
+              {reception?.courseName ? (
+                <Text style={[styles.conflictSub, { color: labelColor }]}>
+                  {reception.courseName}
+                  {reception.confirmWindow ? ` ・ ${reception.confirmWindow}` : ''}
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <>
+              <View style={[styles.card, cardStyle, styles.hero]}>
+                {accepting ? (
+                  <>
+                    <View style={styles.liveBadgeRow}>
+                      <View style={[styles.liveDot, { backgroundColor: ui.pick(COLORS.cta, COLORS.cta, COLORS.emeraldLight) }]} />
+                      <Text style={[styles.liveBadgeText, { color: ui.pick(COLORS.cta, COLORS.cta, COLORS.emeraldLight) }]}>受付中</Text>
+                    </View>
+                    <Text style={[styles.heroCourse, { color: valueColor }]} numberOfLines={2}>
+                      {reception?.courseName ?? '（科目名不明）'}
+                      {updating ? '（更新中…）' : ''}
+                    </Text>
+                    <View style={styles.ringWrap}>
+                      {/* 受付時間から now で毎秒引いた実カウントダウン。**reception.remaining へは落とさない**:
+                          あれは取得時点で固定された静止値で、「残り時間」の下に置くと減らない数字が居座る
+                          （＝嘘をつく）。取得できないときは '—' と明示し、静止値は下に出典付きで添える。 */}
+                      <CountdownRing
+                        centerText={clock ?? '—'}
+                        subText={clock ? '残り時間' : windowEnded ? '受付終了' : '受付時間 不明'}
+                        size={176}
+                        progress={countdownFraction(reception?.confirmWindow ?? null, now) ?? undefined}
+                      />
+                    </View>
+                    <Text style={[styles.heroWindow, { color: labelColor }]}>
+                      出席確認時間 {reception?.confirmWindow ?? '—'}
+                    </Text>
+                    {!clock && reception?.remaining ? (
+                      // remaining はパーサ側で既に「あと〜」の形（attendanceMessage の extractRemaining /
+                      // remainingFromSec）。「残り」を足すと「残り あと12分34秒」と二重表現になる。
+                      <Text style={[styles.heroWindow, { color: labelColor }]}>
+                        CLASSの表示（取得時点）: {reception.remaining}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <View style={[styles.preIconWrap, { backgroundColor: ui.colors.softBoxBg }]}>
+                      <Ionicons name="time-outline" size={30} color={ui.accent} />
+                    </View>
+                    <Text style={[styles.status, styles.statusCenter, { color: valueColor }]}>{statusLine}</Text>
+                    {phase === 'booting' ? (
+                      <View style={styles.statusBarWrap}>
+                        <IndeterminateBar
+                          color={ui.accent}
+                          trackColor={ui.colors.softBoxBg}
+                        />
+                      </View>
+                    ) : null}
+                  </>
+                )}
+              </View>
+
+              {phase === 'navFailed' && !revealClass ? (
+                <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
+                  <Text style={[styles.status, { color: valueColor, fontSize: 14, fontWeight: '500' }]}>
+                    受付状況を取得できませんでした。「更新」で開き直します。
+                  </Text>
+                  <View style={styles.failRow}>
+                    <Pressable style={[styles.failBtn, { backgroundColor: c.cta }]} onPress={retry}>
+                      <Text style={styles.failBtnText}>更新</Text>
+                    </Pressable>
+                    {failCount >= 2 ? (
+                      <Pressable
+                        style={[
+                          styles.failBtn,
+                          styles.failBtnGhost,
+                          { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder },
+                        ]}
+                        onPress={() => setRevealClass(true)}
+                      >
+                        <Text style={[styles.failBtnText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>CLASSの画面を表示</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
+                <Text style={[styles.inputLabel, { color: labelColor }]}>認証コード（半角数字）</Text>
+                <Pressable style={styles.segRow} onPress={() => inputRef.current?.focus()}>
+                  {digits.map((d, i) => (
+                    <View key={i} style={[styles.seg, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}>
+                      <Text style={[styles.segText, { color: valueColor }]}>{d}</Text>
+                    </View>
+                  ))}
+                </Pressable>
+                <TextInput
+                  ref={inputRef}
+                  style={styles.hiddenInput}
+                  value={code}
+                  onChangeText={(t) => setCode(normalizeAttendanceCode(t).slice(0, 4))}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  autoFocus={false}
+                />
+              </View>
+
+              <Pressable
+                style={[styles.cta, { backgroundColor: c.cta }, phase === 'submitting' && styles.ctaBusy]}
+                disabled={phase === 'submitting'}
+                onPress={() => {
+                  // 送信時にキーボードを閉じ、結果メッセージ（成功/失敗）がすぐ見えるようにする。
+                  Keyboard.dismiss()
+                  submit()
+                }}
+              >
+                {phase === 'submitting' ? (
+                  <Text style={styles.ctaText}>送信中…</Text>
+                ) : (
+                  <Text style={styles.ctaText}>出席する</Text>
+                )}
+              </Pressable>
+
+              {outcome === 'ok' ? (
+                <View style={[styles.card, cardStyle, styles.doneCard]}>
+                  <View style={styles.doneCheck}>
+                    <Ionicons name="checkmark" size={38} color={c.white} />
+                  </View>
+                  <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
+                  {/* 成功時も診断を出す: 自動送信は元々「未検証」の経路で、間欠的に登録されない事象を
+                      追っている。どの経路(method)で通ったかが分かって初めて再発を潰せる。 */}
+                  <Text selectable style={[styles.diag, styles.diagCenter, { color: labelColor }]}>
+                    診断: method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁 / 送信応答=
+                    {String(result?.ajaxDone)} / status={result?.ajaxStatus ?? '-'}
+                    {result?.ok ? ' / 検出=応答テキスト' : ' / 検出=CLASS出席済み'}
+                  </Text>
+                </View>
+              ) : submitFailed ? (
+                // 失敗時は actuator の理由をそのまま出し、CLASSの画面で手動登録できる逃げ道を必ず添える
+                // （自動送信が効かない端末でも出席を落とさないため）。
+                <View style={[styles.card, cardStyle, { marginTop: 12 }]}>
+                  <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
+                    <Text style={[styles.resultText, { color: ui.colors.danger }]}>
+                      {submitFailureText({ result, receptionStatus: reception?.status ?? null })}
+                    </Text>
+                  </View>
+                  <Text style={[styles.status, { color: labelColor, fontSize: 13, fontWeight: '400', marginTop: 8 }]}>
+                    出席は登録されていません。CLASSの画面を開いて「出席登録する」を押してください。
+                  </Text>
+                  {/* 送信診断: 「発火しているのに登録されない」原因（process範囲など）の特定に要る。
+                      失敗時だけ・折りたたまず小さく出す（作者が実機で読める唯一の経路）。 */}
+                  <Text selectable style={[styles.diag, { color: labelColor }]}>
+                    診断: btn={String(result?.btnFound)} / method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁
+                    {'\n'}送信: 発火={String(result?.ajaxFired)} / 応答={String(result?.ajaxDone)} / status=
+                    {result?.ajaxStatus ?? '-'}
+                    {result?.ajaxError ? ` / err=${result.ajaxError}` : ''}
+                    {result?.hint ? `\nCLASSの応答: ${result.hint}` : ''}
+                    {result?.onclick ? `\n${result.onclick}` : ''}
+                  </Text>
+                  <View style={styles.failRow}>
+                    <Pressable style={[styles.failBtn, { backgroundColor: c.cta }]} onPress={() => setRevealClass(true)}>
+                      <Text style={styles.failBtnText}>CLASSの画面を表示</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.failBtn,
+                        styles.failBtnGhost,
+                        { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder },
+                      ]}
+                      onPress={retry}
+                    >
+                      <Text style={[styles.failBtnText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>最初から</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : phase === 'submitting' || verifying ? (
+                // 送信タップ〜出席確定までの待機窓。スイープする不定進捗バーで「処理中」を明示する。
+                <View style={[styles.card, cardStyle, styles.verifyCard]}>
+                  <View style={styles.verifyRow}>
+                    <Text style={[styles.verifyText, { color: valueColor }]}>
+                      {phase === 'submitting' ? '出席を送信しています…' : '送信しました。出席を確認しています…'}
+                    </Text>
+                  </View>
+                  <IndeterminateBar
+                    color={ui.accent}
+                    trackColor={ui.colors.softBoxBg}
+                  />
+                </View>
+              ) : null}
+
+              {/* 受付中でも、リアペを出せる授業なら書ける（任意提出・ユーザー要望 2026-07-17）。
+                  必須(reaction_pending)ではないので、出席登録の邪魔をしないよう控えめな導線にする。 */}
+              {canOpenReaction ? (
+                <Pressable
+                  style={[styles.reactionGhost, { backgroundColor: ui.colors.inputBg, borderColor: ui.colors.inputBorder }]}
+                  onPress={() => setReactionOpen(true)}
+                >
+                  <Text style={[styles.reactionGhostText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>
+                    {reactionSubmitted ? 'リアクションペーパーを編集（提出済み）' : 'リアクションペーパーを書く'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
+          )}
+        </ScrollView>
       </ScreenBg>
     </View>
   )
@@ -613,6 +628,8 @@ export default function AttendanceScreen() {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
+  // paddingBottom は呼び出し側で clearance に上書きされる（浮遊タブバーの背後へ本文を潜らせない）。
+  list: { paddingBottom: 40 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   hTitle: { fontSize: 20, fontWeight: '600' },
