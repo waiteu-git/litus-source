@@ -31,13 +31,15 @@
  * - 既知の info コードは固定順（INFO_NOTE_ORDER）で1コード1ノート。未知の info コードは
  *   汎用文へ倒し、同文は1つに束ねる（黙って落とさない）。
  *
- * LTW との差: LTW は passive 版フィンガープリント（moodleFingerprint.ts・BS5世代観測）の
- * 情報ノートも buildInfoNotes に混ぜるが、Litus はまだ T8（フィンガープリント）が無いため
- * その層は移植しない。T8 が入ったら fingerprint 引数を追加する（LTW の該当分岐を参照）。
+ * 受動版フィンガープリント（moodleFingerprint.ts・T8）の BS5 世代観測も、この情報ノート層の
+ * 1行として出す（buildInfoNotes の第2引数）。**フィンガープリントは診断台帳と独立した観測**なので、
+ * 台帳が無い（state=null）だけの状態でも出す。逆に bs5=true を根拠にパース挙動を変える
+ * （lenient parse 等）ことはしない＝spec§8 の「自動lenient切替は当面やらない」を踏襲する。
  */
 
 import type { DiagnosticCode } from './diagnose'
 import type { DiagnosticsState } from './diagnosticsState'
+import type { StoredMoodleFingerprint } from './moodleFingerprint'
 
 export type BannerKind = 'none' | 'logged_out' | 'unreadable' | 'unsupported'
 
@@ -88,9 +90,18 @@ export function buildBannerContent(state: DiagnosticsState | null): BannerConten
   return { kind, title, body, lastGoodAt: state.lastGoodAt }
 }
 
+/**
+ * BS5世代観測ノートの識別コード。DiagnosticCode ではない（診断台帳でなく受動版
+ * フィンガープリント由来の独立した観測）ため専用の値を持つ。
+ */
+export const BS5_LAYOUT_NOTE_CODE = 'MOODLE_BS5_LAYOUT' as const
+
+/** InfoNote の識別子: 診断コード or BS5観測ノート */
+export type InfoNoteCode = DiagnosticCode | typeof BS5_LAYOUT_NOTE_CODE
+
 /** カバレッジ情報ノート1件。code は React key 等の識別用（UI に表示しない） */
 export interface InfoNote {
-  code: DiagnosticCode
+  code: InfoNoteCode
   text: string
 }
 
@@ -118,15 +129,30 @@ const INFO_NOTE_TEXTS: Partial<Record<DiagnosticCode, string>> = {
 const FALLBACK_INFO_NOTE_TEXT = '一部の情報を自動取得できていない可能性があります。'
 
 /**
+ * BS5世代（Moodle 5.x）観測時の情報ノート文言。観測は事実（docs リンクの版セグメント）だが
+ * 影響は未確定なので、断定せず「可能性」のトーンに留める（§7 の非技術的な一文）。
+ */
+const BS5_LAYOUT_NOTE_TEXT =
+  'LETUSの画面構成が新しくなった可能性を検出しました。課題の読み取りに影響が出る場合があります。'
+
+/**
  * diagnosticsState からカバレッジ情報ノート（警告でない注記）を導出する。
  * 表示不要なら空配列。activeCodes 非空（警告バナー表示中）の間は常に空配列
  * （unreadable バナーが「画面構成が変わった可能性」を既に伝えているため重ねない）。
+ *
+ * fingerprint（受動版フィンガープリントの最新観測・§9）が BS5世代（bs5=true）を示す場合、
+ * 診断台帳と独立に BS5 観測ノートを1行追記する。台帳が無い（state=null）だけの状態でも出す
+ * ＝フィンガープリントは台帳とは別系統の観測。既知 info コードの固定順（unsupported 先頭）の
+ * 約束を崩さないよう末尾に置く。
  */
-export function buildInfoNotes(state: DiagnosticsState | null): InfoNote[] {
-  if (state === null || state.activeCodes.length > 0) {
+export function buildInfoNotes(
+  state: DiagnosticsState | null,
+  fingerprint?: Pick<StoredMoodleFingerprint, 'bs5'> | null,
+): InfoNote[] {
+  if (state !== null && state.activeCodes.length > 0) {
     return []
   }
-  const infoCodes = state.infoCodes
+  const infoCodes = state?.infoCodes ?? []
   const known = INFO_NOTE_ORDER.filter((code) => infoCodes.includes(code))
   const unknown = infoCodes.filter((code) => !INFO_NOTE_ORDER.includes(code))
   const notes: InfoNote[] = []
@@ -136,6 +162,9 @@ export function buildInfoNotes(state: DiagnosticsState | null): InfoNote[] {
     if (seenTexts.has(text)) continue
     seenTexts.add(text)
     notes.push({ code, text })
+  }
+  if (fingerprint?.bs5 === true) {
+    notes.push({ code: BS5_LAYOUT_NOTE_CODE, text: BS5_LAYOUT_NOTE_TEXT })
   }
   return notes
 }

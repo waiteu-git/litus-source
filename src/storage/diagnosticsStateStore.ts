@@ -18,6 +18,7 @@ import {
   deserializeDiagnosticsState,
   serializeDiagnosticsState,
 } from './diagnosticsStateSerialize'
+import { saveMoodleFingerprint } from './moodleFingerprintStore'
 
 /** AsyncStorage の保存キー（配線・UI側が共有する単一情報源・spec§5.1）。 */
 export const DIAGNOSTICS_STATE_KEY = 'litus.diagnosticsState'
@@ -49,6 +50,17 @@ export async function recordScanCycleOutcome(
   acc: ScanDiagnosticsAccumulator,
   at: string,
 ): Promise<DiagnosticsState | null> {
+  // 受動版フィンガープリント（§9・T8）は診断台帳とは独立した観測なので、診断の記録可否ゲートより
+  // 先に保存する。版が読めなかったサイクル（fingerprint=null）では既存の記録に触れない（last-good 維持）。
+  // 保存失敗はスキャン本体を壊さない（診断台帳の保存と同じ方針）。
+  const fp = acc.fingerprint
+  if (fp !== null && fp.version !== null) {
+    try {
+      await saveMoodleFingerprint({ version: fp.version, bs5: fp.bs5, observedAt: at })
+    } catch {
+      // 観測の保存失敗は無視（次サイクルで再観測できる補助信号）
+    }
+  }
   if (!acc.reachedLetus) return null
   return recordScanOutcome({ codes: finalizeScanCodes(acc), at })
 }

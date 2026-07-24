@@ -29,12 +29,16 @@ import {
   type ReactNode,
 } from 'react'
 import type { DiagnosticsState } from './diagnosticsState'
+import type { StoredMoodleFingerprint } from './moodleFingerprint'
 import { loadDiagnosticsState } from '../storage/diagnosticsStateStore'
+import { loadMoodleFingerprint } from '../storage/moodleFingerprintStore'
 import { useDemo } from '../demo/DemoProvider'
 
 type DiagnosticsValue = {
   /** 現在の診断台帳（未スキャン/未ロードは null）。 */
   state: DiagnosticsState | null
+  /** 受動版フィンガープリントの最新観測（未観測は null・§9/T8）。 */
+  fingerprint: StoredMoodleFingerprint | null
   /** スキャン確定時に収集エンジンが呼ぶ。解決済み state をそのまま反映する。 */
   applyState: (next: DiagnosticsState | null) => void
   /** storage から読み直す（デモ出入り・フォアグラウンド復帰など）。 */
@@ -44,6 +48,7 @@ type DiagnosticsValue = {
 // Provider 外（テスト等）は中立: state=null・push/refresh は no-op。
 const Ctx = createContext<DiagnosticsValue>({
   state: null,
+  fingerprint: null,
   applyState: () => {},
   refresh: () => {},
 })
@@ -54,10 +59,25 @@ export function useDiagnostics(): DiagnosticsValue {
 
 export function DiagnosticsProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DiagnosticsState | null>(null)
+  const [fingerprint, setFingerprint] = useState<StoredMoodleFingerprint | null>(null)
   const { active: demo } = useDemo()
 
   // 最新の非同期 load だけを反映するためのガード（デモ連打で古い読みが後着しても捨てる）。
   const loadSeq = useRef(0)
+  // フィンガープリントは台帳と別キーだが、読み直す契機（マウント・デモ切替・スキャン確定）は同じ。
+  // 台帳と同じ seq でガードすると push（applyState）が seq を進めた直後の読みが捨てられてしまうため、
+  // 専用の seq を持つ（フィンガープリントには push 経路が無く、常に storage が真実）。
+  const fpSeq = useRef(0)
+  const refreshFingerprint = useCallback(() => {
+    const seq = ++fpSeq.current
+    loadMoodleFingerprint()
+      .then((fp) => {
+        if (seq === fpSeq.current) setFingerprint(fp)
+      })
+      .catch(() => {
+        if (seq === fpSeq.current) setFingerprint(null)
+      })
+  }, [])
   const refresh = useCallback(() => {
     const seq = ++loadSeq.current
     loadDiagnosticsState()
@@ -67,7 +87,8 @@ export function DiagnosticsProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         if (seq === loadSeq.current) setState(null)
       })
-  }, [])
+    refreshFingerprint()
+  }, [refreshFingerprint])
 
   // マウント時＋デモ名前空間の切り替え時に読み直す。demo 変化時は asyncStorage 側の
   // setDemoNamespace が先に走っている（DemoProvider は名前空間切替→active 反映の順）ので、
@@ -76,15 +97,22 @@ export function DiagnosticsProvider({ children }: { children: ReactNode }) {
     refresh()
   }, [refresh, demo])
 
-  const applyState = useCallback((next: DiagnosticsState | null) => {
-    // load の後着で上書きされないよう、push も seq を進める（push が最新の真実）。
-    loadSeq.current++
-    setState(next)
-  }, [])
+  const applyState = useCallback(
+    (next: DiagnosticsState | null) => {
+      // load の後着で上書きされないよう、push も seq を進める（push が最新の真実）。
+      loadSeq.current++
+      setState(next)
+      // フィンガープリントには push 経路が無い（収集エンジンは台帳しか返さない）が、同じサイクルの
+      // 記録エントリ（recordScanCycleOutcome）が台帳より先に保存を終えている。ここで読み直せば
+      // 版が変わったスキャンの直後にノートが live 反映される（LTW の storage.onChanged 相当）。
+      refreshFingerprint()
+    },
+    [refreshFingerprint],
+  )
 
   const value = useMemo<DiagnosticsValue>(
-    () => ({ state, applyState, refresh }),
-    [state, applyState, refresh],
+    () => ({ state, fingerprint, applyState, refresh }),
+    [state, fingerprint, applyState, refresh],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

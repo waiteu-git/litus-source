@@ -25,6 +25,11 @@ import {
 } from './diagnosticsStateStore'
 import { setDemoNamespace, DEMO_PREFIX } from './asyncStorage'
 import { createScanAccumulator, type ScanDiagnosticsAccumulator } from '../health/scanDiagnostics'
+import {
+  MOODLE_FINGERPRINT_KEY,
+  loadMoodleFingerprint,
+  saveMoodleFingerprint,
+} from './moodleFingerprintStore'
 
 const T0 = '2026-07-23T00:00:00.000Z'
 const T1 = '2026-07-23T01:00:00.000Z'
@@ -106,11 +111,54 @@ describe('diagnosticsStateStore', () => {
         lostCourseCount: 2,
         trackedCourseCount: 3,
         reachedLetus: true,
+        fingerprint: null,
       }
       const r = await recordScanCycleOutcome(acc, T0)
       // finalize が横断集計 COURSES_MAJORITY_LOST を加える。
       expect(r?.consecutiveFailures).toBe(1)
       expect(r?.lastCodes).toEqual(expect.arrayContaining(['DASHBOARD_UNREADABLE', 'COURSES_MAJORITY_LOST']))
+    })
+  })
+
+  describe('受動版フィンガープリント（§9・T8）の相乗り保存', () => {
+    it('版が読めたサイクルは観測を保存する（診断台帳の記録と同じエントリで1回だけ）', async () => {
+      const acc: ScanDiagnosticsAccumulator = {
+        ...createScanAccumulator(),
+        reachedLetus: true,
+        fingerprint: { version: { major: 5, minor: 2 }, bodyClasses: ['format-topics'], bs5: true },
+      }
+      await recordScanCycleOutcome(acc, T0)
+      expect(await loadMoodleFingerprint()).toEqual({
+        version: { major: 5, minor: 2 },
+        bs5: true,
+        observedAt: T0,
+      })
+    })
+
+    it('版が読めなかったサイクルは既存の観測を消さない（last-good 維持）', async () => {
+      await saveMoodleFingerprint({ version: { major: 4, minor: 5 }, bs5: false, observedAt: T0 })
+      const acc: ScanDiagnosticsAccumulator = { ...createScanAccumulator(), reachedLetus: true }
+      await recordScanCycleOutcome(acc, T1)
+      expect((await loadMoodleFingerprint())?.version).toEqual({ major: 4, minor: 5 })
+    })
+
+    it('不完全サイクル（reachedLetus=false）でも、読めた観測は保存する（診断ゲートとは独立）', async () => {
+      const acc: ScanDiagnosticsAccumulator = {
+        ...createScanAccumulator(),
+        fingerprint: { version: { major: 4, minor: 5 }, bodyClasses: [], bs5: false },
+      }
+      expect(await recordScanCycleOutcome(acc, T0)).toBe(null) // 台帳は記録しない
+      expect((await loadMoodleFingerprint())?.version).toEqual({ major: 4, minor: 5 })
+    })
+
+    it('bodyClasses は永続しない（ページ毎に揺れる一時情報）', async () => {
+      const acc: ScanDiagnosticsAccumulator = {
+        ...createScanAccumulator(),
+        reachedLetus: true,
+        fingerprint: { version: { major: 5, minor: 0 }, bodyClasses: ['page-mycourses'], bs5: true },
+      }
+      await recordScanCycleOutcome(acc, T0)
+      expect(mockStore[MOODLE_FINGERPRINT_KEY]).not.toContain('page-mycourses')
     })
   })
 })

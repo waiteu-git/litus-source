@@ -741,10 +741,28 @@ export const MYCOURSES_URL = 'https://letus.ed.tus.ac.jp/my/courses.php'
  * collect し、RN 側の自己診断（diagnose）が 0 件を DASHBOARD_UNREADABLE 等として捕捉する。
  *
  * ⚠純粋な加算的耐性層: 高速パスを保つため、同期で ready なら Observer を作らない。
+ *
+ * budget は面ごとに変える（T9 の妥当性判定・`docs/2026-07-24-moodle5-canary-crosscheck.md`）。
+ * 既定 3000ms は SSR が生きている面（コース／活動ページ＝5.2 実 fixture で SSR 維持を実測）向けで、
+ * これらは1ページ15秒の逐次巡回を数十ページ行うため budget を伸ばすとサイクル全体が伸びる。
+ * 一方 Dashboard は 5.x で**全面クライアント描画**（my52_raw のアンカー0件が物証）であり、
+ * 実採取時に描画完了まで4秒超を実測したので `LETUS_DASHBOARD_HYDRATION_BUDGET_MS` を使う。
  */
+/** 既定の総額予算（SSR が生きている面）。 */
+export const LETUS_HYDRATION_BUDGET_MS = 3000
+/**
+ * Dashboard（my/courses.php）の総額予算。5.x はこの面だけがクライアント描画で、2026-07-24 の
+ * 実採取で描画完了まで**4秒超**の場面があった（`src/parsers/__fixtures__/moodle52/README.md`）。
+ * 既定 3000ms のままだと初回サイクルで取り逃し、初回セットアップのユーザーは
+ * 「既知コース0＝正当な空」と区別できず診断も鳴らない（＝空のアプリのまま無言）。
+ * 伸ばしても現行 4.5.8 は同期 ready の高速パスで即 collect＝挙動ゼロ変更、
+ * 5.x でも ready 化した時点で debounce(300ms) 後に即 collect するため、
+ * 追加コストが出るのは「本当に読めない」場合のみ（この面は1サイクル最大4回・逐次でない）。
+ */
+export const LETUS_DASHBOARD_HYDRATION_BUDGET_MS = 8000
 export const LETUS_HYDRATION_PRELUDE = `
-  function litusWaitForHydration(isReady, collect){
-    var DEBOUNCE_MS = 300, BUDGET_MS = 3000;
+  function litusWaitForHydration(isReady, collect, budgetMs){
+    var DEBOUNCE_MS = 300, BUDGET_MS = budgetMs || ${LETUS_HYDRATION_BUDGET_MS};
     var done = false, obs = null, debounceTimer = null, budgetTimer = null;
     function finish(){
       if (done) return; done = true;
@@ -792,7 +810,7 @@ export const COLLECT_MYCOURSES_JS = `(function(){
       try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) })); } catch (e2) {}
     }
   }
-  try { litusWaitForHydration(isReady, collect); } catch (e) {
+  try { litusWaitForHydration(isReady, collect, ${LETUS_DASHBOARD_HYDRATION_BUDGET_MS}); } catch (e) {
     try { window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) })); } catch (e2) {}
   }
   true;

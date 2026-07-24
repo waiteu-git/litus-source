@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
+  BS5_LAYOUT_NOTE_CODE,
   buildBannerContent,
   buildInfoNotes,
   formatLastGoodAt,
   type BannerContent,
 } from './diagnosticsBannerContent'
 import type { DiagnosticsState } from './diagnosticsState'
-import type { DiagnosticCode } from './diagnose'
+import { DIAGNOSTIC_CODES, type DiagnosticCode } from './diagnose'
 
 const T_GOOD = '2026-07-23T10:00:00'
 const T_NOW = '2026-07-23T12:00:00'
@@ -156,5 +157,51 @@ describe('buildBannerContent / buildInfoNotes: 非破壊（入力を変異させ
     buildBannerContent(s)
     buildInfoNotes(s)
     expect(s).toEqual(snapshot)
+  })
+})
+
+describe('buildInfoNotes: 受動版フィンガープリント（BS5観測ノート・§9/T8）', () => {
+  const bs5 = { bs5: true }
+  const bs4 = { bs5: false }
+
+  it('bs5=true なら観測ノートを1行足す', () => {
+    const notes = buildInfoNotes(stateWith([]), bs5)
+    expect(notes.map((n) => n.code)).toEqual([BS5_LAYOUT_NOTE_CODE])
+    expect(notes[0].text).toContain('画面構成が新しくなった可能性')
+  })
+
+  it('bs5=false / 未観測（null・undefined）では足さない', () => {
+    expect(buildInfoNotes(stateWith([]), bs4)).toEqual([])
+    expect(buildInfoNotes(stateWith([]), null)).toEqual([])
+    expect(buildInfoNotes(stateWith([]))).toEqual([])
+  })
+
+  it('台帳が無い（state=null）状態でも出す＝台帳と独立した観測', () => {
+    expect(buildInfoNotes(null, bs5).map((n) => n.code)).toEqual([BS5_LAYOUT_NOTE_CODE])
+    expect(buildInfoNotes(null, bs4)).toEqual([])
+    expect(buildInfoNotes(null)).toEqual([])
+  })
+
+  it('警告バナー表示中（activeCodes 非空）は BS5 ノートも出さない（重複排除は不変）', () => {
+    expect(buildInfoNotes(stateWith(['DASHBOARD_UNREADABLE']), bs5)).toEqual([])
+  })
+
+  it('既知 info コードの固定順（unsupported 先頭）を崩さず末尾に置く', () => {
+    const state = stateWith([], {
+      infoCodes: ['DEADLINE_KEYWORD_NO_DATE', 'UNSUPPORTED_MODULE'],
+    })
+    expect(buildInfoNotes(state, bs5).map((n) => n.code)).toEqual([
+      'UNSUPPORTED_MODULE',
+      'DEADLINE_KEYWORD_NO_DATE',
+      BS5_LAYOUT_NOTE_CODE,
+    ])
+  })
+
+  it('BS5 ノートは診断コード名と衝突しない専用コードを使う（React key の一意性）', () => {
+    expect(DIAGNOSTIC_CODES).not.toContain(BS5_LAYOUT_NOTE_CODE as never)
+    const codes = buildInfoNotes(stateWith([], { infoCodes: ['UNSUPPORTED_MODULE'] }), bs5).map(
+      (n) => n.code,
+    )
+    expect(new Set(codes).size).toBe(codes.length)
   })
 })

@@ -12,6 +12,10 @@
  * - accumulator は 1 サイクル（Dashboard→コース群→活動群）を貫いて可変集約する。per-course の
  *   COURSE_LOST_ALL_ASSIGNMENTS を件数化し、finalize 時に diagnoseCourseLossAggregate へ橋渡しする
  *   （単一コースの正当な非表示と全コース一斉喪失を件数で区別する横断層・§4.3）。
+ * - 受動版フィンガープリント（§9・T8）も同じ集約器に相乗りする。各面の観測関数が既に受け取っている
+ *   HTML から `docs.moodle.org/<NNN>/` の版セグメントを読むだけで、**追加リクエストは1本も出さない**。
+ *   1サイクル集約の設計（T5）を崩さないよう、保存も finalize と同じ記録エントリ
+ *   （recordScanCycleOutcome）が1回だけ行う。
  * - reachedLetus: LETUS に到達し結論の出るページ（logged_in / logged_out）を1つでも観測したか。
  *   これが false のサイクル（WebView がロードに至らない・全ページ unknown）は「不完全サイクル」で、
  *   記録すると lastGoodAt を誤って更新する。記録側（recordScanCycleOutcome）がこのフラグで中立
@@ -28,6 +32,7 @@ import {
   type PageAuthState,
 } from './diagnose'
 import { hasLetusLoginMarker } from './collectionSignals'
+import { fingerprintPage, type MoodleFingerprint } from './moodleFingerprint'
 
 /** 取得HTMLに Moodle の `M.cfg = {...}` インラインJSONがあるか（Moodleページの存在アンカー・§4.3）。 */
 export function hasMoodleConfig(html: string): boolean {
@@ -73,10 +78,41 @@ export interface ScanDiagnosticsAccumulator {
   trackedCourseCount: number
   /** LETUS に到達し結論の出るページ（logged_in / logged_out）を1つでも観測したか（記録可否ゲート）。 */
   reachedLetus: boolean
+  /**
+   * このサイクルで読めた受動版フィンガープリント（§9・T8）。版が読めた最初の観測だけを保持し、
+   * 以降のページでは走査しない（同一サイクル内で稼働版が変わることはない＝数十ページへの
+   * 正規表現走査を避ける）。版が読めなければ null のまま＝記録側が既存の観測を消さない。
+   */
+  fingerprint: MoodleFingerprint | null
 }
 
 export function createScanAccumulator(): ScanDiagnosticsAccumulator {
-  return { codes: [], lostCourseCount: 0, trackedCourseCount: 0, reachedLetus: false }
+  return {
+    codes: [],
+    lostCourseCount: 0,
+    trackedCourseCount: 0,
+    reachedLetus: false,
+    fingerprint: null,
+  }
+}
+
+/**
+ * 受動版フィンガープリント（§9・T8）をこのページから拾う。**追加リクエストは発生しない**
+ * （既に取得済みの HTML を読むだけ）。
+ *
+ * logged_in と分類できたページに限定する: SSO/IdP のログインページやメンテ画面に紛れる
+ * 無関係な docs リンクで稼働版を誤記録しないため（LTW background の分類ゲートと同じ）。
+ * 版が読めない観測（version=null）は採用しない＝観測なしとして扱い、記録側が既存値を保つ。
+ */
+function observeFingerprint(
+  acc: ScanDiagnosticsAccumulator,
+  html: string,
+  pageAuthState: PageAuthState,
+): void {
+  if (pageAuthState !== 'logged_in') return
+  if (acc.fingerprint !== null) return
+  const fp = fingerprintPage(html)
+  if (fp.version !== null) acc.fingerprint = fp
 }
 
 export interface DashboardObservation {
@@ -92,6 +128,7 @@ export interface DashboardObservation {
 export function observeDashboard(acc: ScanDiagnosticsAccumulator, obs: DashboardObservation): void {
   const pageAuthState = classifyFetchedPage(obs.html)
   if (pageAuthState !== 'unknown') acc.reachedLetus = true
+  observeFingerprint(acc, obs.html, pageAuthState)
   acc.codes.push(
     ...diagnoseAuthProbe({
       fetchOk: true,
@@ -121,6 +158,7 @@ export interface CoursePageObservation {
 export function observeCoursePage(acc: ScanDiagnosticsAccumulator, obs: CoursePageObservation): void {
   const pageAuthState = classifyFetchedPage(obs.html)
   if (pageAuthState !== 'unknown') acc.reachedLetus = true
+  observeFingerprint(acc, obs.html, pageAuthState)
   const codes = diagnoseCoursePage({
     pageAuthState,
     modAnchorCount: obs.modAnchorCount,
@@ -153,6 +191,7 @@ export interface ActivityPageObservation {
 export function observeActivityPage(acc: ScanDiagnosticsAccumulator, obs: ActivityPageObservation): void {
   const pageAuthState = classifyFetchedPage(obs.html)
   if (pageAuthState !== 'unknown') acc.reachedLetus = true
+  observeFingerprint(acc, obs.html, pageAuthState)
   const moduleType = moduleTypeFromUrl(obs.url)
   const moduleSupported = moduleType !== null && SUPPORTED_STATUS_MODULES.has(moduleType)
   acc.codes.push(

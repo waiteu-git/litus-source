@@ -9,6 +9,8 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import {
   LETUS_HYDRATION_PRELUDE,
+  LETUS_HYDRATION_BUDGET_MS,
+  LETUS_DASHBOARD_HYDRATION_BUDGET_MS,
   COLLECT_MYCOURSES_JS,
   COLLECT_COURSE_PAGE_JS,
   COLLECT_ASSIGNMENT_PAGE_JS,
@@ -39,7 +41,11 @@ function buildWaiter(mutationObserver: unknown) {
   }
   const fakeDoc = { documentElement: {} }
   const MO = mutationObserver === 'fake' ? FakeMO : mutationObserver
-  const fn = factory(fakeDoc, MO) as (isReady: () => boolean, collect: () => void) => void
+  const fn = factory(fakeDoc, MO) as (
+    isReady: () => boolean,
+    collect: () => void,
+    budgetMs?: number,
+  ) => void
   return { fn, holder }
 }
 
@@ -129,5 +135,52 @@ describe('COLLECT_* 注入JS はハイドレーション待ちを URL 方式で�
 
   it('活動ページ収集の ready 判定は course/view.php パンくずリンク（URL方式）', () => {
     expect(COLLECT_ASSIGNMENT_PAGE_JS).toContain('/course/view.php')
+  })
+})
+
+describe('面ごとの budget（T9 の妥当性判定・2026-07-24）', () => {
+  it('引数省略時は既定 3000ms（SSR が生きている面）', () => {
+    vi.useFakeTimers()
+    const { fn, holder } = buildWaiter('fake')
+    let collected = 0
+    fn(() => false, () => (collected += 1))
+    vi.advanceTimersByTime(LETUS_HYDRATION_BUDGET_MS - 1)
+    expect(collected).toBe(0)
+    vi.advanceTimersByTime(1)
+    expect(collected).toBe(1)
+    expect(holder.mo?.disconnected).toBe(true)
+  })
+
+  it('明示 budget を渡すとその時刻まで待つ（Dashboard の 8000ms）', () => {
+    vi.useFakeTimers()
+    const { fn } = buildWaiter('fake')
+    let collected = 0
+    fn(() => false, () => (collected += 1), LETUS_DASHBOARD_HYDRATION_BUDGET_MS)
+    // 既定 budget を過ぎても打ち切らない＝実採取で観測した4秒超の描画を取り逃さない。
+    vi.advanceTimersByTime(LETUS_HYDRATION_BUDGET_MS)
+    expect(collected).toBe(0)
+    vi.advanceTimersByTime(LETUS_DASHBOARD_HYDRATION_BUDGET_MS - LETUS_HYDRATION_BUDGET_MS)
+    expect(collected).toBe(1)
+  })
+
+  it('延長 budget でも ready 化した時点で即 collect する（待ち損はしない）', () => {
+    vi.useFakeTimers()
+    const { fn, holder } = buildWaiter('fake')
+    let ready = false
+    let collected = 0
+    fn(() => ready, () => (collected += 1), LETUS_DASHBOARD_HYDRATION_BUDGET_MS)
+    vi.advanceTimersByTime(4000) // 実採取で観測した4秒超の描画完了
+    ready = true
+    holder.mo!.cb()
+    vi.advanceTimersByTime(300)
+    expect(collected).toBe(1)
+  })
+
+  it('Dashboard だけが延長 budget を使う（コース/活動ページは既定のまま＝逐次巡回を伸ばさない）', () => {
+    expect(COLLECT_MYCOURSES_JS).toContain(
+      `litusWaitForHydration(isReady, collect, ${LETUS_DASHBOARD_HYDRATION_BUDGET_MS})`,
+    )
+    expect(COLLECT_COURSE_PAGE_JS).toContain('litusWaitForHydration(isReady, collect)')
+    expect(COLLECT_ASSIGNMENT_PAGE_JS).toContain('litusWaitForHydration(isReady, collect)')
   })
 })

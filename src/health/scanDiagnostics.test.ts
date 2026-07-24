@@ -209,3 +209,94 @@ describe('サイクル貫通とゲート', () => {
     expect(finalizeScanCodes(acc)).toEqual(['NOT_A_MOODLE_PAGE'])
   })
 })
+
+describe('受動版フィンガープリントの相乗り観測（§9・T8）', () => {
+  /** Moodle 標準フッタの docs リンク（実 fixture のトリムで落ちている部分の復元）。 */
+  const docsFooter = (segment: string) =>
+    `<footer><a href="https://docs.moodle.org/${segment}/ja/x">このページのヘルプ</a></footer>`
+
+  it('実 5.2 fixture そのままでは版が読めず null のまま（誤って BS5 を主張しない）', () => {
+    const acc = createScanAccumulator()
+    observeDashboard(acc, {
+      html: my52,
+      courseAnchorCount: parseMyCourses(my52, BASE).length,
+      knownCourseCount: 0,
+    })
+    expect(acc.fingerprint).toBeNull()
+  })
+
+  it('logged_in ページから版を読む（5.2 → bs5=true）', () => {
+    const acc = createScanAccumulator()
+    observeDashboard(acc, {
+      html: my52 + docsFooter('502'),
+      courseAnchorCount: 0,
+      knownCourseCount: 0,
+    })
+    expect(acc.fingerprint?.version).toEqual({ major: 5, minor: 2 })
+    expect(acc.fingerprint?.bs5).toBe(true)
+  })
+
+  it('現行世代（4.5）を読んでも bs5=false＝BS5ノートの経路には乗らない', () => {
+    const acc = createScanAccumulator()
+    observeCoursePage(acc, {
+      html: course52 + docsFooter('405'),
+      modAnchorCount: 5,
+      prevSignatureLen: 5,
+    })
+    expect(acc.fingerprint?.version).toEqual({ major: 4, minor: 5 })
+    expect(acc.fingerprint?.bs5).toBe(false)
+  })
+
+  it('logged_out / unknown ページの docs リンクは採用しない（SSO・メンテ画面での誤記録防止）', () => {
+    const loggedOut = createScanAccumulator()
+    observeDashboard(loggedOut, {
+      html: `<input type="password">${docsFooter('502')}`,
+      courseAnchorCount: 0,
+      knownCourseCount: 3,
+    })
+    expect(loggedOut.fingerprint).toBeNull()
+
+    const unknown = createScanAccumulator()
+    observeDashboard(unknown, {
+      html: `<body>portal</body>${docsFooter('502')}`,
+      courseAnchorCount: 0,
+      knownCourseCount: 3,
+    })
+    expect(unknown.fingerprint).toBeNull()
+  })
+
+  it('サイクル内で最初に読めた観測を保持し、以降のページは走査しない', () => {
+    const acc = createScanAccumulator()
+    observeDashboard(acc, {
+      html: my52 + docsFooter('405'),
+      courseAnchorCount: 1,
+      knownCourseCount: 1,
+    })
+    // 後続ページに別版のリンクがあっても上書きしない（同一サイクル内で稼働版は変わらない前提）。
+    observeActivityPage(acc, {
+      html: assign52Ja + docsFooter('502'),
+      url: `${BASE}/mod/assign/view.php?id=724`,
+      keywordFound: true,
+      dateParsed: true,
+      statusResolved: true,
+    })
+    expect(acc.fingerprint?.version).toEqual({ major: 4, minor: 5 })
+  })
+
+  it('版が読めるかどうかは診断コードの集約に影響しない（独立した観測）', () => {
+    const withFp = createScanAccumulator()
+    observeDashboard(withFp, {
+      html: my52 + docsFooter('502'),
+      courseAnchorCount: parseMyCourses(my52, BASE).length,
+      knownCourseCount: 8,
+    })
+    const withoutFp = createScanAccumulator()
+    observeDashboard(withoutFp, {
+      html: my52,
+      courseAnchorCount: parseMyCourses(my52, BASE).length,
+      knownCourseCount: 8,
+    })
+    expect(finalizeScanCodes(withFp)).toEqual(finalizeScanCodes(withoutFp))
+    expect(finalizeScanCodes(withFp)).toContain('DASHBOARD_UNREADABLE')
+  })
+})

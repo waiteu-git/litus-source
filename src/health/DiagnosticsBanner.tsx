@@ -41,12 +41,13 @@ const KIND_ICON: Record<Exclude<BannerKind, 'none'>, keyof typeof Ionicons.glyph
 export default function DiagnosticsBanner({ compact = false }: { compact?: boolean }) {
   const ui = useUi()
   const { active: demo } = useDemo()
-  const { state } = useDiagnostics()
+  const { state, fingerprint } = useDiagnostics()
   const { runFullSync } = useSync()
   const { requireLogin } = useLoginGate()
 
   const banner = buildBannerContent(state)
-  const infoNotes = buildInfoNotes(state)
+  // 第2引数は受動版フィンガープリント（§9・T8）: BS5世代を観測していれば情報ノートを1行足す。
+  const infoNotes = buildInfoNotes(state, fingerprint)
 
   const onRetry = useCallback(() => {
     if (banner.kind === 'logged_out') {
