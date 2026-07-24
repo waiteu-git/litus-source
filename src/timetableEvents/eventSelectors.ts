@@ -5,13 +5,21 @@ export function todayKey(now: Date): string {
   return `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`
 }
 
-/** courseName・period に一致する、当日以降で最も近いイベント。補講(単独)は対象外。無ければ null。 */
-export function pickCellEvent(events: ClassEvent[], courseName: string, period: number, now: Date): ClassEvent | null {
-  const today = todayKey(now)
-  const hits = events
-    .filter((e) => e.courseName === courseName && e.periods.includes(period) && e.date >= today && e.type !== 'makeup')
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-  return hits[0] ?? null
+/**
+ * 時間割セル（cellDate の曜日 × period）に表示するイベント。日付は **完全一致**で引く。
+ *
+ * 「当日以降で最も近い1件」を返していた頃は、期末など先のイベントが発生週より前の全週の
+ * 同じコマにバッジとして出ていた（休講・教室変更も同様）。先の予定の予告はホームの
+ * 試験カウントダウン／「今日の変更」が担うので、時間割セルはその週のその日だけでよい。
+ *
+ * 過去日でも一致すれば返す。時間割は週を明示的に選んで見るUIで、過去週も遡れる（休講は
+ * 起きた事実として残す）。隔週の薄表示 isClassOnDate も過去週を同じ扱いにしている。
+ *
+ * 補講(単独 type='makeup')は対象外（補講日は別導線で出す）。無ければ null。
+ */
+export function pickCellEvent(events: ClassEvent[], courseName: string, period: number, cellDate: Date): ClassEvent | null {
+  const key = todayKey(cellDate)
+  return events.find((e) => e.courseName === courseName && e.periods.includes(period) && e.date === key && e.type !== 'makeup') ?? null
 }
 
 /** date が当日のイベント。 */

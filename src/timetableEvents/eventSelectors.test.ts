@@ -10,18 +10,36 @@ const ev = (o: Partial<ClassEvent>): ClassEvent => ({
 const at = (m: number, d: number) => new Date(2026, m - 1, d, 9, 0)
 
 describe('pickCellEvent', () => {
-  it('該当periodを含む直近の未来イベントを返す', () => {
-    const events = [ev({ date: '2026-07-15', periods: [1, 2], type: 'quiz' }), ev({ date: '2026-07-22', periods: [1, 2], type: 'cancel' })]
-    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 14))?.date).toBe('2026-07-15')
+  it('セルの日付と一致するイベントだけを返す', () => {
+    const events = [ev({ date: '2026-07-15', periods: [1, 2], type: 'quiz' })]
+    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 15))?.date).toBe('2026-07-15')
+  })
+  it('イベント発生週より前の週のセルには出さない（過剰表示の防止）', () => {
+    const events = [ev({ date: '2026-07-29', periods: [1, 2], type: 'final' })]
+    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 15))).toBeNull()
+    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 22))).toBeNull()
+    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 29))?.type).toBe('final')
   })
   it('periodを含まないイベントは対象外（片方だけ休講）', () => {
     const events = [ev({ date: '2026-07-15', periods: [1], type: 'cancel' })]
-    expect(pickCellEvent(events, '物理学実験A', 2, at(7, 14))).toBeNull()
-    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 14))?.type).toBe('cancel')
+    expect(pickCellEvent(events, '物理学実験A', 2, at(7, 15))).toBeNull()
+    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 15))?.type).toBe('cancel')
   })
-  it('過去のイベントは返さない', () => {
-    const events = [ev({ date: '2026-07-10', periods: [1], type: 'quiz' })]
-    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 14))).toBeNull()
+  it('過去の週のセルでも、その日のイベントは出す（週を明示的に見るUIなので隠さない）', () => {
+    const events = [ev({ date: '2026-07-10', periods: [1], type: 'cancel' })]
+    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 10))?.type).toBe('cancel')
+  })
+  it('科目名が違えば返さない', () => {
+    const events = [ev({ date: '2026-07-15', periods: [1], type: 'cancel', courseName: '化学' })]
+    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 15))).toBeNull()
+  })
+  it('単独補講(makeup)はセルバッジの対象外', () => {
+    const events = [ev({ date: '2026-07-15', periods: [1], type: 'makeup' })]
+    expect(pickCellEvent(events, '物理学実験A', 1, at(7, 15))).toBeNull()
+  })
+  it('セル日付の時刻部分に依存しない（同日なら深夜でも一致）', () => {
+    const events = [ev({ date: '2026-07-15', periods: [1], type: 'cancel' })]
+    expect(pickCellEvent(events, '物理学実験A', 1, new Date(2026, 6, 15, 23, 59))?.type).toBe('cancel')
   })
 })
 

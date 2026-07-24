@@ -221,7 +221,10 @@ export default function HomeScreen() {
   const laterClasses = classes.slice(1)
   const deadlineGroups = homeDeadlines(assignments, tick)
   // 試験カウントダウン（手動登録の試験のみ。課題の締切は「直近の締切」が担う）。純ロジックがTDD済み。
-  const countdownItems = buildExamCountdown(classEvents, tick)
+  // periodTimes を渡すと当日の試験は時限終了で消える。CLASSの時限表は学期をまたいで共通（jigen 1つを
+  // 全collectionに配る）ため、最初に取れたものを使う。未取得なら null＝日付のみの判定へフォールバック。
+  const ttPeriodTimes = ttQ.find((c) => c.periodTimes)?.periodTimes ?? null
+  const countdownItems = buildExamCountdown(classEvents, tick, 3, ttPeriodTimes)
   // いまの授業の「残り」面。**出席の受付時間が分かっていればそれを、無ければ授業の残りを**出す。
   // 受付は授業より早く閉じるのが普通なので、時限終了までを一律「残り」と出しつつタップ先が
   // 出席登録だと「まだ90分ある」と誤読させる。採否（今日か・このコマにアンカーできるか）は

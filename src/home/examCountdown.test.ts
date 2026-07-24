@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildExamCountdown, calendarDayDiff, countdownDaysLabel, countdownTone } from './examCountdown'
 import type { ClassEvent, ClassEventType } from '../timetableEvents/classEvent'
+import type { CampusPeriodTimes } from '../parsers/timetable'
 
 const NOW = new Date(2026, 6, 13, 14, 0) // 2026-07-13(月) 14:00
 
@@ -138,6 +139,70 @@ describe('buildExamCountdown', () => {
       NOW,
     )
     expect(items[0]).toMatchObject({ eventId: 'evt_1', courseName: '線形代数', courseCode: 'C123' })
+  })
+
+  describe('当日の時限終了判定（periodTimes を渡した場合）', () => {
+    const PT: CampusPeriodTimes = {
+      campus: '野田',
+      periods: [
+        { period: 1, start: '09:00', end: '10:30' },
+        { period: 2, start: '10:45', end: '12:15' },
+        { period: 3, start: '13:10', end: '14:40' },
+        { period: 4, start: '14:55', end: '16:25' },
+      ],
+    }
+    const today = (o: Partial<ClassEvent> = {}) =>
+      ev({ id: 'e1', type: 'final', date: '2026-07-13', courseName: '本日の試験', periods: [3], ...o })
+
+    it('当日・時限終了前なら残る（「本日」のまま）', () => {
+      // 3限は 13:10-14:40。now=14:00 は終了前。
+      const items = buildExamCountdown([today()], new Date(2026, 6, 13, 14, 0), 3, PT)
+      expect(items.map((i) => i.title)).toEqual(['本日の試験'])
+      expect(items[0]).toMatchObject({ daysLabel: '本日', tone: 'red' })
+    })
+
+    it('終了時刻ちょうどはまだ残る（過ぎてから消す）', () => {
+      const items = buildExamCountdown([today()], new Date(2026, 6, 13, 14, 40), 3, PT)
+      expect(items).toHaveLength(1)
+    })
+
+    it('当日・時限終了後は消える', () => {
+      expect(buildExamCountdown([today()], new Date(2026, 6, 13, 14, 41), 3, PT)).toEqual([])
+      expect(buildExamCountdown([today()], new Date(2026, 6, 13, 23, 59), 3, PT)).toEqual([])
+    })
+
+    it('複数時限は最も遅い終了時刻で判定する', () => {
+      const e = today({ periods: [1, 4] })
+      // 1限(〜10:30)は終わっているが4限(〜16:25)が残っている。
+      expect(buildExamCountdown([e], new Date(2026, 6, 13, 12, 0), 3, PT)).toHaveLength(1)
+      expect(buildExamCountdown([e], new Date(2026, 6, 13, 16, 25), 3, PT)).toHaveLength(1)
+      expect(buildExamCountdown([e], new Date(2026, 6, 13, 16, 26), 3, PT)).toEqual([])
+    })
+
+    it('periodTimes を渡さなければ従来どおり日付のみ（当日は終日残る）', () => {
+      expect(buildExamCountdown([today()], new Date(2026, 6, 13, 23, 59))).toHaveLength(1)
+      expect(buildExamCountdown([today()], new Date(2026, 6, 13, 23, 59), 3, null)).toHaveLength(1)
+    })
+
+    it('時限未設定・periodTimes で引けない時限は日付のみで判定（安全側で当日いっぱい残す）', () => {
+      expect(buildExamCountdown([today({ periods: [] })], new Date(2026, 6, 13, 23, 59), 3, PT)).toHaveLength(1)
+      expect(buildExamCountdown([today({ periods: [9] })], new Date(2026, 6, 13, 23, 59), 3, PT)).toHaveLength(1)
+      // 一部でも引けない時限があれば日付のみへフォールバック（引ける分だけで早く消さない）。
+      expect(buildExamCountdown([today({ periods: [1, 9] })], new Date(2026, 6, 13, 23, 59), 3, PT)).toHaveLength(1)
+    })
+
+    it('時刻書式が壊れた periodTimes は日付のみへフォールバック', () => {
+      const broken: CampusPeriodTimes = { campus: '野田', periods: [{ period: 3, start: '13:10', end: '午後' }] }
+      expect(buildExamCountdown([today()], new Date(2026, 6, 13, 23, 59), 3, broken)).toHaveLength(1)
+    })
+
+    it('未来日は時刻に関係なく残る・過去日は時刻に関係なく消える', () => {
+      const future = ev({ id: 'f', type: 'final', date: '2026-07-14', periods: [1], courseName: '明日' })
+      const past = ev({ id: 'p', type: 'final', date: '2026-07-12', periods: [4], courseName: '昨日' })
+      const items = buildExamCountdown([future, past], new Date(2026, 6, 13, 23, 59), 3, PT)
+      expect(items.map((i) => i.title)).toEqual(['明日'])
+      expect(buildExamCountdown([future, past], new Date(2026, 6, 13, 0, 1), 3, PT).map((i) => i.title)).toEqual(['明日'])
+    })
   })
 
   it('決定論的（同じ入力・同じ now で完全一致）・入力配列を破壊しない', () => {
