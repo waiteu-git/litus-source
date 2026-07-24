@@ -342,11 +342,23 @@ export default function HomeScreen() {
 
   // 試験カウントダウンの行タップ。その予定の編集画面へ（日付・時限・メモが揃う唯一の面。
   // 科目詳細は courseCode が無い手動登録では開けないため、常に着地できるこちらを選ぶ）。
+  // 試験カウントダウンから、その科目の詳細（時間割タブ内）へ飛ぶ。試験そのものより
+  // 「その科目の各回の予定・出欠・LETUSコース」へ繋がる方が使い道が広い（予定の編集は
+  // 科目詳細からも辿れる）。科目コードを持たない手動イベントだけは詳細を開けないので、
+  // 従来どおり予定の編集へ落とす。
   function openCountdown(it: ExamCountdownItem) {
+    if (it.courseCode) {
+      navigation.navigate('時間割', {
+        screen: 'SubjectDetail',
+        params: { courseCode: it.courseCode, name: it.courseName },
+        // initial:false で時間割タブ未訪問時も一覧を下に敷き、科目詳細から戻れるようにする。
+        initial: false,
+      })
+      return
+    }
     navigation.navigate('時間割', {
       screen: 'ClassEventForm',
       params: { courseName: it.courseName, courseCode: it.courseCode, editId: it.eventId },
-      // initial:false で時間割タブ未訪問時も一覧を下に敷き、予定から戻れるようにする。
       initial: false,
     })
   }

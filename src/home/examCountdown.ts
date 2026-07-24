@@ -12,7 +12,10 @@ import type { UrgencyTone } from '../assignments/deadline'
 import type { CampusPeriodTimes } from '../parsers/timetable'
 
 export type ExamCountdownItem = {
-  /** タップ着地（該当イベントの編集画面）に必要な最小情報。 */
+  /**
+   * タップ着地に必要な最小情報。着地先は courseCode があれば科目詳細、
+   * 無い手動イベントのみ該当イベントの編集画面（HomeScreen の openCountdown）。
+   */
   eventId: string
   courseName: string
   courseCode: string | null
