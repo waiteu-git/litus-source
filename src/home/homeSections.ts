@@ -8,6 +8,7 @@ import { createSectionLayout, type SectionMeta, type SectionPref } from '../ui/s
 
 export type HomeSectionKey =
   | 'nowClass'
+  | 'examCountdown'
   | 'laterClasses'
   | 'deadlines'
   | 'todayChanges'
@@ -17,9 +18,11 @@ export type HomeSectionKey =
 export type HomeSectionPref = SectionPref<HomeSectionKey>
 
 /** 既定の並び順（ユーザー指定 2026-07-14: 今の授業→今日の変更→LETUS新着→CLASS掲示→直近の課題→このあとの授業→その他。
- * LETUS新着は「初期ではCLASS掲示の上」の指定）。 */
+ * LETUS新着は「初期ではCLASS掲示の上」の指定）。
+ * 試験カウントダウン(2026-07-24追加)は「残り日数」を大きく見せる主役カードなので、いまの授業の直後に置く。 */
 export const HOME_SECTION_ORDER: HomeSectionKey[] = [
   'nowClass',
+  'examCountdown',
   'todayChanges',
   'letusNews',
   'bulletins',
@@ -31,6 +34,7 @@ export const HOME_SECTION_ORDER: HomeSectionKey[] = [
 /** セクション表示名と、非表示不可（常に表示）フラグ。entries=出席登録/インフォは動線なので常時表示。 */
 export const HOME_SECTION_META: Record<HomeSectionKey, SectionMeta> = {
   nowClass: { label: 'いまの授業', fixedOn: false },
+  examCountdown: { label: '試験カウントダウン', fixedOn: false },
   laterClasses: { label: 'このあとの授業', fixedOn: false },
   deadlines: { label: '直近の締切', fixedOn: false },
   todayChanges: { label: '今日の変更', fixedOn: false },

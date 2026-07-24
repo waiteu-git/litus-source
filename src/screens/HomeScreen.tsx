@@ -11,6 +11,8 @@ import { todayKey } from '../attendance/attendedState'
 import { todayRemainingClasses, type FocusClass } from '../home/focusClass'
 import { bulletinEmptyCard } from '../home/bulletinEmptyCard'
 import { homeDeadlines, type HomeDeadlineBand } from '../home/homeDeadlines'
+import { buildExamCountdown, type ExamCountdownItem } from '../home/examCountdown'
+import ExamCountdownCard from '../home/ExamCountdownCard'
 import { formatDeadlineRich, deadlineMagnitude, urgencyTone } from '../assignments/deadline'
 import { loadAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
@@ -218,6 +220,8 @@ export default function HomeScreen() {
   const hero = classes[0] ?? null
   const laterClasses = classes.slice(1)
   const deadlineGroups = homeDeadlines(assignments, tick)
+  // 試験カウントダウン（手動登録の試験のみ。課題の締切は「直近の締切」が担う）。純ロジックがTDD済み。
+  const countdownItems = buildExamCountdown(classEvents, tick)
   // いまの授業の「残り」面。**出席の受付時間が分かっていればそれを、無ければ授業の残りを**出す。
   // 受付は授業より早く閉じるのが普通なので、時限終了までを一律「残り」と出しつつタップ先が
   // 出席登録だと「まだ90分ある」と誤読させる。採否（今日か・このコマにアンカーできるか）は
@@ -329,6 +333,17 @@ export default function HomeScreen() {
         isRemote: f.isRemote,
       },
       // initial:false で時間割タブ未訪問時も一覧を下に敷き、科目詳細から戻れるようにする。
+      initial: false,
+    })
+  }
+
+  // 試験カウントダウンの行タップ。その予定の編集画面へ（日付・時限・メモが揃う唯一の面。
+  // 科目詳細は courseCode が無い手動登録では開けないため、常に着地できるこちらを選ぶ）。
+  function openCountdown(it: ExamCountdownItem) {
+    navigation.navigate('時間割', {
+      screen: 'ClassEventForm',
+      params: { courseName: it.courseName, courseCode: it.courseCode, editId: it.eventId },
+      // initial:false で時間割タブ未訪問時も一覧を下に敷き、予定から戻れるようにする。
       initial: false,
     })
   }
@@ -479,6 +494,11 @@ export default function HomeScreen() {
               ) : null}
             </PressableCard>
           ) : null,
+              // 試験カウントダウン（手動登録の試験・近い順3件）。
+              // 対象0件はここでnullにする（他セクションと同じく、空セクションの余白も出さないため）。
+              examCountdown: countdownItems.length > 0 ? (
+                <ExamCountdownCard items={countdownItems} onPressItem={openCountdown} />
+              ) : null,
               // このあとの授業（フラット行＋区切り線）。
               laterClasses: laterClasses.length > 0 ? (
             <View style={[ui.card, styles.listCard]}>

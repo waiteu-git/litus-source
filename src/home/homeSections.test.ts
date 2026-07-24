@@ -25,10 +25,11 @@ describe('normalizeHomeLayout', () => {
     ]
     const out = normalizeHomeLayout(raw)
     // 欠けキーは「既定順で自分より前にある全キーの最後尾の直後」へ。deadlines(0)/nowClass(1)を
-    // アンカーに todayChanges→letusNews→bulletins が連なり、laterClasses/entries は末尾に落ちる。
+    // アンカーに examCountdown→todayChanges→letusNews→bulletins が連なり、laterClasses/entries は末尾に落ちる。
     expect(out.map((s) => s.key)).toEqual([
       'deadlines',
       'nowClass',
+      'examCountdown',
       'todayChanges',
       'letusNews',
       'bulletins',
@@ -51,6 +52,7 @@ describe('normalizeHomeLayout', () => {
     const out = normalizeHomeLayout(saved)
     expect(out.map((s) => s.key)).toEqual([
       'nowClass',
+      'examCountdown',
       'todayChanges',
       'letusNews',
       'bulletins',
@@ -58,6 +60,33 @@ describe('normalizeHomeLayout', () => {
       'laterClasses',
       'entries',
     ])
+  })
+
+  it('examCountdown 登場前の保存値へ非破壊にマージされる（既存の順序・表示状態を保つ）', () => {
+    // v103時点の既定順から「LETUS新着を非表示・締切を先頭へ」まで触ったユーザーの保存値。
+    const saved: HomeSectionPref[] = [
+      { key: 'deadlines', enabled: true },
+      { key: 'nowClass', enabled: true },
+      { key: 'todayChanges', enabled: false },
+      { key: 'letusNews', enabled: false },
+      { key: 'bulletins', enabled: true },
+      { key: 'laterClasses', enabled: true },
+      { key: 'entries', enabled: true },
+    ]
+    const out = normalizeHomeLayout(saved)
+    // 新キーは既定順のアンカー（nowClassの直後）に入るだけで、既存キーの相対順序は不変。
+    expect(out.map((s) => s.key)).toEqual([
+      'deadlines',
+      'nowClass',
+      'examCountdown',
+      'todayChanges',
+      'letusNews',
+      'bulletins',
+      'laterClasses',
+      'entries',
+    ])
+    expect(out.filter((s) => s.key !== 'examCountdown')).toEqual(saved)
+    expect(out.find((s) => s.key === 'examCountdown')).toEqual({ key: 'examCountdown', enabled: true })
   })
 
   it('ユーザーが並び替えた保存値でも、欠けキーは既定順の前後関係を尊重して挿入される', () => {
@@ -75,6 +104,7 @@ describe('normalizeHomeLayout', () => {
     expect(out.map((s) => s.key)).toEqual([
       'bulletins',
       'nowClass',
+      'examCountdown',
       'todayChanges',
       'letusNews',
       'deadlines',
@@ -97,18 +127,22 @@ describe('normalizeHomeLayout', () => {
     const i = HOME_SECTION_ORDER.indexOf('letusNews')
     expect(HOME_SECTION_ORDER[i + 1]).toBe('bulletins')
   })
+
+  it('既定順で examCountdown は nowClass の直後（主役カードを上位に置く）', () => {
+    expect(HOME_SECTION_ORDER.indexOf('examCountdown')).toBe(HOME_SECTION_ORDER.indexOf('nowClass') + 1)
+  })
 })
 
 describe('moveSection', () => {
-  // 既定順: [nowClass, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
+  // 既定順: [nowClass, examCountdown, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
   const base: HomeSectionPref[] = DEFAULT_HOME_LAYOUT
   it('上へ移動（隣と入替）', () => {
     const out = moveSection(base, 'todayChanges', -1)
-    expect(out.map((s) => s.key).slice(0, 2)).toEqual(['todayChanges', 'nowClass'])
+    expect(out.map((s) => s.key).slice(0, 3)).toEqual(['nowClass', 'todayChanges', 'examCountdown'])
   })
   it('下へ移動（隣と入替）', () => {
     const out = moveSection(base, 'nowClass', 1)
-    expect(out.map((s) => s.key).slice(0, 2)).toEqual(['todayChanges', 'nowClass'])
+    expect(out.map((s) => s.key).slice(0, 2)).toEqual(['examCountdown', 'nowClass'])
   })
   it('先頭を上・末尾を下はそのまま', () => {
     expect(moveSection(base, 'nowClass', -1)).toEqual(base)
@@ -122,14 +156,15 @@ describe('moveSection', () => {
 })
 
 describe('reorderHomeLayout', () => {
-  // 既定順: [nowClass, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
+  // 既定順: [nowClass, examCountdown, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
   const base: HomeSectionPref[] = DEFAULT_HOME_LAYOUT
   it('下へ移動（0→2）', () => {
     const out = reorderHomeLayout(base, 0, 2)
     expect(out.map((s) => s.key)).toEqual([
+      'examCountdown',
       'todayChanges',
-      'letusNews',
       'nowClass',
+      'letusNews',
       'bulletins',
       'deadlines',
       'laterClasses',
@@ -139,10 +174,11 @@ describe('reorderHomeLayout', () => {
   it('上へ移動（3→0）', () => {
     const out = reorderHomeLayout(base, 3, 0)
     expect(out.map((s) => s.key)).toEqual([
-      'bulletins',
-      'nowClass',
-      'todayChanges',
       'letusNews',
+      'nowClass',
+      'examCountdown',
+      'todayChanges',
+      'bulletins',
       'deadlines',
       'laterClasses',
       'entries',
@@ -152,8 +188,9 @@ describe('reorderHomeLayout', () => {
     expect(reorderHomeLayout(base, 2, 2).map((s) => s.key)).toEqual(base.map((s) => s.key))
   })
   it('範囲外はクランプ（末尾へ / 先頭へ）', () => {
-    expect(reorderHomeLayout(base, 0, 99).map((s) => s.key)[6]).toBe('nowClass')
-    expect(reorderHomeLayout(base, 6, -5).map((s) => s.key)[0]).toBe('entries')
+    const last = base.length - 1
+    expect(reorderHomeLayout(base, 0, 99).map((s) => s.key)[last]).toBe('nowClass')
+    expect(reorderHomeLayout(base, last, -5).map((s) => s.key)[0]).toBe('entries')
   })
   it('元配列を破壊しない', () => {
     const copy = base.map((s) => ({ ...s }))
