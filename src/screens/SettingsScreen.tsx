@@ -143,13 +143,14 @@ export default function SettingsScreen() {
   }
 
   // 端末内の保存データをリセット。破壊的なので二段階で確認する。
-  // **Cookie（SSOログイン状態）は消えない**（resetAll.ts のコメント参照＝消去手段が現状ない）。
-  // ここで「Cookie含む」「ログインからやり直し」と書くと、実装で裏の取れない主張になり、
-  // ストアのデータセーフティ申告へ転記した時点で虚偽記載になる。文言は実装に合わせること。
+  // 文言は**実装に合わせること**（ストアのデータセーフティ申告へ転記されるため、実装で裏の
+  // 取れない主張を書くと虚偽記載になる）。現在の resetAll.ts は 予約通知 → Cookie → AsyncStorage
+  // の順に消すので、ログイン状態の解除まで書いてよい。resetAll.ts を変えたらここも直す。
   function onResetAll() {
     Alert.alert(
       'すべてのデータをリセット',
-      '時間割・課題・掲示・設定・保存済みデータをすべて消去します。この操作は取り消せません。',
+      '時間割・課題・掲示・設定・保存済みデータをすべて消去し、LETUS・CLASSへのログイン状態も解除します。' +
+        'この操作は取り消せません。',
       [
         { text: 'キャンセル', style: 'cancel' },
         { text: '次へ', style: 'destructive', onPress: confirmResetAll },
@@ -159,9 +160,12 @@ export default function SettingsScreen() {
   function confirmResetAll() {
     Alert.alert(
       '本当にリセットしますか？',
-      '消去後はアプリを終了します。次回起動時は規約の同意からやり直しになります。\n\n' +
-        'なお、LETUS・CLASSへのログイン状態（Cookie）はこの操作では消えません。' +
-        'ログインも解除したい場合は、端末の「設定 → アプリ → リタス → ストレージ → データを削除」を実行してください。',
+      '次のものがすべて消えます。\n' +
+        '・時間割・課題・掲示・出席の記録\n' +
+        '・通知の予約と各種設定\n' +
+        '・規約への同意\n' +
+        '・LETUS・CLASSへのログイン状態（Cookie）\n\n' +
+        '消去後はアプリを終了します。次回起動時は、規約の同意とログインからやり直しになります。',
       [
         { text: 'キャンセル', style: 'cancel' },
         { text: 'リセットして終了', style: 'destructive', onPress: doResetAll },
@@ -371,7 +375,7 @@ export default function SettingsScreen() {
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={[styles.rowLabel, { color: ui.valueColor }]}>すべてのデータをリセット</Text>
               <Text style={[styles.note, { color: ui.labelColor, marginTop: 4, marginLeft: 0 }]}>
-                時間割・課題・掲示・設定・保存済みデータをすべて消去します。
+                時間割・課題・掲示・設定・保存済みデータをすべて消去し、ログイン状態も解除します。
               </Text>
             </View>
             <Text style={[styles.danger, { color: ui.colors.danger }]}>リセット</Text>

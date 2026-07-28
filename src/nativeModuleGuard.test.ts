@@ -3,7 +3,13 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { findStaticImportsOf } from './nativeModuleGuard'
 
-const GUARDED = ['expo-notifications', 'react-native-android-widget'] as const
+const GUARDED = [
+  'expo-notifications',
+  'react-native-android-widget',
+  // TurboModuleRegistry.getEnforcing がモジュール評価時に throw する（ネイティブ未搭載環境）。
+  // 到達は必ず storage/cookies.ts の遅延 import 経由にすること。
+  '@preeternal/react-native-cookie-manager',
+] as const
 
 /**
  * 静的 import を許可するファイル（src/ からの相対パス）と、その根拠。
@@ -27,6 +33,9 @@ describe('findStaticImportsOf', () => {
     expect(findStaticImportsOf("import { a } from 'react-native-android-widget'", GUARDED)).toEqual([
       'react-native-android-widget',
     ])
+    expect(
+      findStaticImportsOf("import CookieManager from '@preeternal/react-native-cookie-manager'", GUARDED),
+    ).toEqual(['@preeternal/react-native-cookie-manager'])
   })
 
   it('複数行にまたがる import も検出する', () => {
@@ -76,7 +85,7 @@ function listSources(dir: string): string[] {
  * プラットフォーム別ファイルへ逃がすこと。
  */
 describe('ネイティブモジュールの静的importガード（ラチェット）', () => {
-  it('許可ファイル以外は expo-notifications / react-native-android-widget を静的 import しない', () => {
+  it('許可ファイル以外は GUARDED のネイティブモジュールを静的 import しない', () => {
     const srcDir = join(__dirname)
     if (!existsSync(srcDir)) return
     const offenders: string[] = []
