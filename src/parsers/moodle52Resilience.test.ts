@@ -32,6 +32,13 @@ const read = (rel: string) =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf-8')
 
 const BASE = 'https://letus.ed.tus.ac.jp'
+/**
+ * moodle52/* のフィクスチャは公開sandbox（school.moodledemo.net）から採取したもので、
+ * 中のアンカーは**そのホストの絶対URL**。extractLinksFromHtml は same-host フィルタを掛ける
+ * （抽出URLがCookie共有WebViewに読み込まれるため）ので、これらの検証は
+ * 「取得元と同じホスト」を base に渡さないと成立しない＝採取元をそのまま基準にする。
+ */
+const SANDBOX = 'https://school.moodledemo.net'
 
 const course52 = read('./__fixtures__/moodle52/course52_raw.html')
 const my52 = read('./__fixtures__/moodle52/my52_raw.html')
@@ -55,7 +62,7 @@ const ACTIVITY_SELECTOR = extractActivitySelector(INJECT_COURSE_ADD_BUTTONS_JS)
 
 describe('T2: 活動リンク検出（URL方式・テーマ非依存）— 5.2 で生存すべき', () => {
   it('computeCourseSignature が 5.2 実コースページで 20 件の /mod/*/view.php を拾う', () => {
-    const sig = computeCourseSignature(course52, `${BASE}/course/view.php?id=62`)
+    const sig = computeCourseSignature(course52, `${SANDBOX}/course/view.php?id=62`)
     expect(sig.length).toBe(20)
     // タイトルが空文字に劣化していない（課題名が取れている）
     expect(sig.every((a) => a.title.trim().length > 0)).toBe(true)
@@ -63,7 +70,7 @@ describe('T2: 活動リンク検出（URL方式・テーマ非依存）— 5.2 �
   })
 
   it('extractAssignmentLinks(standard) が 5.2 実コースページで課題系リンクを拾う', () => {
-    const links = extractAssignmentLinks(course52, `${BASE}/course/view.php?id=62`, 'standard')
+    const links = extractAssignmentLinks(course52, `${SANDBOX}/course/view.php?id=62`, 'standard')
     expect(links.length).toBeGreaterThan(0)
     // assign/quiz が含まれる（URL パス方式なので BS5 のクラス改名に非依存）
     expect(links.some((l) => /\/mod\/assign\/view\.php/.test(l.url))).toBe(true)
@@ -141,7 +148,7 @@ describe('T2: 5.2 で壊れる箇所（expected failure・ラチェット）', (
   // parseMyCourses は全カードを拾える。T5 の待ち機構が待っているのはこの状態＝
   // RAW=0件 と合わせて「待てば取れる・待てなければ診断が鳴る」の両端を fixture で固定する。
   it('破損①の解: ハイドレーション後 Dashboard（my52_hydrated）からはコースを拾える', () => {
-    const courses = parseMyCourses(my52Hydrated, BASE)
+    const courses = parseMyCourses(my52Hydrated, SANDBOX)
     expect(courses.length).toBe(10)
     for (const c of courses) expect(c.url).toMatch(/\/course\/view\.php\?id=\d+/)
   })

@@ -11,11 +11,31 @@ export type ScanLevel = 'strict' | 'standard' | 'broad'
 
 export type CourseLink = { title: string; url: string }
 
-/** アンカーを抽出し、baseUrlで絶対URL化、フラグメント除去、タイトル空は除外。 */
+/**
+ * アンカーを抽出し、baseUrlで絶対URL化、フラグメント除去、タイトル空は除外。
+ *
+ * **same-host フィルタ（必須）**: 抽出したURLは後段で
+ * ①非表示WebView（Cookie共有）にそのまま読み込まれ（AssignmentCollector / CourseUpdateEngine /
+ * LetusPageFetcher）、②課題としてタップで可視WebViewに開かれる。よって「コースページのHTMLに
+ * 書ける者」＝コース編集権限者やLETUS側のXSSが、任意ホストへの自動アクセスをアプリに行わせられる。
+ * baseUrl（取得元ページ）と同一ホストのhttp(s)リンクだけを通してこの経路を塞ぐ。
+ * `javascript:` / `data:` 等のスキームも同時に落ちる。
+ * 同型の指摘はLTW `src/core/letusLinks.ts` で先に修正済み（2026-07-23）。
+ *
+ * baseUrl が解釈不能なら**何も返さない**（fail-closed）。基準が無い状態で検証はできないため。
+ */
 export function extractLinksFromHtml(html: string, baseUrl: string): CourseLink[] {
   const links: CourseLink[] = []
   const anchorRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
   let match: RegExpExecArray | null
+
+  let baseHost: string
+  try {
+    baseHost = new URL(baseUrl).host
+  } catch {
+    return links
+  }
+  if (!baseHost) return links
 
   while ((match = anchorRegex.exec(html)) !== null) {
     const href = match[1]
@@ -24,7 +44,10 @@ export function extractLinksFromHtml(html: string, baseUrl: string): CourseLink[
     if (!href) continue
 
     try {
-      const url = new URL(href, baseUrl).toString().split('#')[0]
+      const u = new URL(href, baseUrl)
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') continue
+      if (u.host !== baseHost) continue
+      const url = u.toString().split('#')[0]
       const title = decodeHtmlEntities(stripTags(innerHtml))
       if (title.length > 0) {
         links.push({ title, url })

@@ -22,6 +22,32 @@ describe('extractLinksFromHtml', () => {
     expect(links).toHaveLength(2)
     expect(links.map((l) => l.title)).toEqual(['レポート課題1', '第1回小テスト'])
   })
+
+  // 抽出したURLは非表示WebView（Cookie共有）へそのまま読み込まれるため、
+  // コースページに書ける者が任意ホストへのアクセスをアプリに行わせられてはならない。
+  it('別ホストのリンクは落とす（same-host）', () => {
+    const html = `
+      <a href="https://evil.example/mod/assign/view.php?id=1">レポート課題X</a>
+      <a href="//evil.example/mod/quiz/view.php?id=2">小テストX</a>
+      <a href="https://letus.ed.tus.ac.jp.evil.example/mod/assign/view.php?id=3">課題Y</a>
+      <a href="/mod/assign/view.php?id=9">正規の課題</a>`
+    const links = extractLinksFromHtml(html, base)
+    expect(links.map((l) => l.url)).toEqual(['https://letus.ed.tus.ac.jp/mod/assign/view.php?id=9'])
+  })
+
+  it('http(s)以外のスキームは落とす', () => {
+    const html = `
+      <a href="javascript:alert(1)">課題</a>
+      <a href="data:text/html,<script>alert(1)</script>">課題</a>
+      <a href="/mod/assign/view.php?id=9">正規の課題</a>`
+    const links = extractLinksFromHtml(html, base)
+    expect(links.map((l) => l.url)).toEqual(['https://letus.ed.tus.ac.jp/mod/assign/view.php?id=9'])
+  })
+
+  it('baseUrlが解釈不能なら何も返さない（fail-closed）', () => {
+    expect(extractLinksFromHtml(LINKS_HTML, '')).toEqual([])
+    expect(extractLinksFromHtml(LINKS_HTML, 'not a url')).toEqual([])
+  })
 })
 
 describe('isTargetActivityUrl', () => {
