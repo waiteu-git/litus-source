@@ -54,7 +54,10 @@ function addReleaseSigningConfig(src) {
     '        }',
     '',
   ].join('\n')
-  return src.slice(0, sc.end) + block + src.slice(sc.end)
+  // 閉じ括弧のある行の先頭へ入れる（閉じ括弧の直前に足すと、その行のインデントが
+  // 差し込んだブロックの前に残って生成物の桁が崩れる）。
+  const lineStart = src.lastIndexOf('\n', sc.end) + 1
+  return src.slice(0, lineStart) + block + src.slice(lineStart)
 }
 
 /**

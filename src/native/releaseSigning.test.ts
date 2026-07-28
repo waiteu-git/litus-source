@@ -74,6 +74,12 @@ describe('リリース署名の差し込み（prebuild で消える android/ を
     expect(sc.match(/storeFile file\('/g) ?? []).toHaveLength(1) // debug.keystore の1件だけ
   })
 
+  it('生成物の桁が崩れない（差し込みは閉じ括弧の行頭へ入れる）', () => {
+    expect(out).toContain('\n        release {') // signingConfigs 直下＝8桁
+    expect(out).not.toContain('\n            release {') // 閉じ括弧のインデントが前に残った形
+    expect(out).toContain('\n    }\n    buildTypes') // signingConfigs の閉じ括弧は4桁のまま
+  })
+
   it('二重適用しても壊れない（冪等）', () => {
     expect(applyUploadSigning(out)).toBe(out)
   })
