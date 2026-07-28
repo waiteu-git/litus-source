@@ -59,7 +59,8 @@ export default function LetusPageFetcher({
     // decodeURIComponent が throw し得るため try 内に含める）。
     let body
     try {
-      body = parseAssignBody(payload.html)
+      // baseUrl は実際に着地したページのURL（無ければ要求URL）。添付の same-host 検証の基準になる。
+      body = parseAssignBody(payload.html, payload.url ?? url)
     } catch {
       finish(false)
       return

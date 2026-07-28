@@ -37,7 +37,15 @@ export function parseBuildNumber(raw: string | number | null | undefined): numbe
   return Number.isInteger(n) && n > 0 ? n : null
 }
 
-const normText = (x: unknown): string | null => (typeof x === 'string' && x !== '' ? x : null)
+/**
+ * 停止画面に出す文言の上限。status.json は waiteu.dev 配信＝配信元を取られた場合、
+ * ここが端末に任意テキストを表示できる唯一の面になる（URLもコードも持てず `<Text>` 描画なので
+ * 実行はないが、長文で画面を埋める余地は残る）。実用の文言は数行で足りるので上限で切る（監査L-2）。
+ */
+export const KILL_SWITCH_TEXT_MAX = 400
+
+const normText = (x: unknown): string | null =>
+  typeof x === 'string' && x !== '' ? x.slice(0, KILL_SWITCH_TEXT_MAX) : null
 
 /**
  * status.json本文を、自ビルド番号へ解決済みの状態に正規化する。無効（壊れJSON・HTML誤配信・

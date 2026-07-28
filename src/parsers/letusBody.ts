@@ -8,8 +8,17 @@ export type AssignBody = { description: string; attachments: LetusAttachment[] }
  * LETUS課題ページ(mod/assign/view.php)のHTMLから説明本文と添付を抽出する純粋パーサ。
  * 締切・提出状況は parseAssignmentPage(letus.ts) の担当。ここは本文・添付に限定する。
  * intro が見つからなければ description='' を返し、画面側でWebViewフォールバックさせる。
+ *
+ * **same-host フィルタ**: 添付URLはタップで Cookie共有WebView に開かれるため、本文HTMLに
+ * 書ける者（教員権限・LETUS側のXSS）が `https://外部/pluginfile.php/…` を仕込むと、任意ホストへ
+ * Cookieつきでアクセスさせられうる。baseUrl（取得元ページ）と同一ホストの http(s) だけを残して
+ * これを塞ぐ（`extractLinksFromHtml` と同じ方針・監査L-1）。
+ *
+ * baseUrl は**必須**にしてある。省略可にすると渡し忘れが「添付が黙って消える」or
+ * 「検証されないまま通る」という実行時の挙動になるが、必須なら型エラーで全呼び出し元が炙り出せる。
+ * baseUrl が解釈不能なら添付は空（fail-closed）。基準が無い状態で検証はできないため。
  */
-export function parseAssignBody(html: string): AssignBody {
+export function parseAssignBody(html: string, baseUrl: string): AssignBody {
   const root = parse(html)
   // 実LETUS(Moodle 4.x / LETUS 2026): 本文 #intro/.activity-description は #region-main 直下にあり、
   // [role="main"] は送信ボタン等を含む内側の別divで #intro を子に持たない。v76 は [role="main"] を
@@ -45,9 +54,25 @@ export function parseAssignBody(html: string): AssignBody {
   const attachments: LetusAttachment[] = []
   const seen = new Set<string>()
   const attachScope = introEl ?? main
+  let baseHost: string
+  try {
+    baseHost = new URL(baseUrl).host
+  } catch {
+    return { description, attachments }
+  }
+  if (!baseHost) return { description, attachments }
   for (const a of attachScope.querySelectorAll('a')) {
     const href = a.getAttribute('href') ?? ''
     if (!/\/pluginfile\.php\//i.test(href)) continue
+    // 相対URLもここで絶対化して検証する（画面側はこのURLをそのまま開く）。
+    let abs: URL
+    try {
+      abs = new URL(href, baseUrl)
+    } catch {
+      continue
+    }
+    if (abs.protocol !== 'https:' && abs.protocol !== 'http:') continue
+    if (abs.host !== baseHost) continue
     if (seen.has(href)) continue
     seen.add(href)
     const text = (a.text ?? '').replace(/\s+/g, ' ').trim()

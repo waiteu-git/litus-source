@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   KILL_SWITCH_REFRESH_INTERVAL_MS,
+  KILL_SWITCH_TEXT_MAX,
   isAppKilled,
   isFeatureKilled,
   isKillSwitchStale,
@@ -227,5 +228,30 @@ describe('isKillSwitchStale', () => {
 
   it('未取得（0）は常にstale', () => {
     expect(isKillSwitchStale(0, 1)).toBe(true)
+  })
+})
+
+describe('停止画面の文言の上限（監査L-2）', () => {
+  it('message / title を上限で切る', () => {
+    const long = 'あ'.repeat(KILL_SWITCH_TEXT_MAX + 500)
+    const s = parseKillSwitchStatus(JSON.stringify({ schemaVersion: 1, disabled: [], message: long, title: long }), 104)
+    expect(s?.message).toHaveLength(KILL_SWITCH_TEXT_MAX)
+    expect(s?.title).toHaveLength(KILL_SWITCH_TEXT_MAX)
+  })
+
+  it('versionRules 側の上書き文言にも同じ上限が効く', () => {
+    const long = 'い'.repeat(KILL_SWITCH_TEXT_MAX + 500)
+    const s = parseKillSwitchStatus(
+      JSON.stringify({ schemaVersion: 1, disabled: [], versionRules: [{ disabled: ['all'], maxBuild: 150, message: long, title: long }] }),
+      104,
+    )
+    expect(s?.message).toHaveLength(KILL_SWITCH_TEXT_MAX)
+    expect(s?.title).toHaveLength(KILL_SWITCH_TEXT_MAX)
+  })
+
+  it('上限内の文言はそのまま通す（通常運用を変えない）', () => {
+    const msg = '大学からの要請により一時的に停止しています。'
+    const s = parseKillSwitchStatus(JSON.stringify({ schemaVersion: 1, disabled: ['all'], message: msg }), 104)
+    expect(s?.message).toBe(msg)
   })
 })
