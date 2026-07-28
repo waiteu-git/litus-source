@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRecordAttendance, isAttendedNow, resolveAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
+import { canRecordAttendance, isAttendedNow, resolveAttendedNow, mergeAttendedRecord, todayKey, withExpiredCodeCleared, type AttendedRecord } from './attendedState'
 
 const rec = (over: Partial<AttendedRecord> = {}): AttendedRecord => ({
   date: '2026-07-07',
@@ -101,6 +101,80 @@ describe('isAttendedNow: 科目も受付時間も無い記録の危険性（回�
   it('時刻情報が無い記録は当日ずっと true を返す＝だから canRecordAttendance で作らせない', () => {
     const rec = { date: todayKey(new Date('2026-07-17T09:00:00')), courseName: '', confirmWindow: null, code: '' }
     expect(isAttendedNow(rec, new Date('2026-07-17T23:59:00'))).toBe(true)
+  })
+})
+
+describe('withExpiredCodeCleared（出席コードの期限切れ掃除・監査M-1）', () => {
+  it('期限内は同じ参照を返す＝書き戻さない（コードは表示のため保持）', () => {
+    const r = rec()
+    expect(withExpiredCodeCleared(r, at(13, 0))).toBe(r)
+    expect(r.code).toBe('1234')
+  })
+
+  it('受付終了後は code だけを空にする（date/courseName/confirmWindow は残す）', () => {
+    const r = rec()
+    const out = withExpiredCodeCleared(r, at(14, 31))
+    expect(out).not.toBe(r)
+    expect(out.code).toBe('')
+    expect(out.date).toBe('2026-07-07')
+    expect(out.courseName).toBe('哲学')
+    expect(out.confirmWindow).toBe('12:50〜14:30')
+    // 入力を受け取った記録自体は破壊しない（純粋関数）
+    expect(r.code).toBe('1234')
+  })
+
+  it('「この授業は出席済み」の判定は掃除後も生きる', () => {
+    const out = withExpiredCodeCleared(rec(), at(14, 31))
+    // 翌日の判定に使う date と、当該コマ同定に使う confirmWindow が残っている
+    expect(isAttendedNow(out, at(13, 0))).toBe(true)
+  })
+
+  it('授業終了までの延長中（classEndMin）は保持し、延長も過ぎたら消す', () => {
+    const r = rec({ confirmWindow: '08:50〜09:20' }) // 受付は9:20で終了・授業は10:20(=620分)まで
+    expect(withExpiredCodeCleared(r, at(10, 0), 620)).toBe(r)
+    expect(withExpiredCodeCleared(r, at(10, 21), 620).code).toBe('')
+  })
+
+  it('confirmWindow が無い記録は当日いっぱい保持し、日付が変われば消す', () => {
+    const r = rec({ confirmWindow: null })
+    expect(withExpiredCodeCleared(r, at(23, 59))).toBe(r)
+    expect(withExpiredCodeCleared(r, new Date(2026, 6, 8, 0, 1)).code).toBe('')
+  })
+
+  it('confirmWindow が壊れていても同じ扱い（当日いっぱい→翌日で消す）', () => {
+    const r = rec({ confirmWindow: '受付時間は掲示を確認' })
+    expect(withExpiredCodeCleared(r, at(23, 59))).toBe(r)
+    expect(withExpiredCodeCleared(r, new Date(2026, 6, 8, 0, 1)).code).toBe('')
+  })
+
+  it('日付が違う（前日以前の）記録は時刻に関わらず消す', () => {
+    expect(withExpiredCodeCleared(rec({ date: '2026-07-06' }), at(13, 0)).code).toBe('')
+  })
+
+  it('既に空コードなら同じ参照＝無駄な書き戻しをしない', () => {
+    const r = rec({ code: '' })
+    expect(withExpiredCodeCleared(r, at(14, 31))).toBe(r)
+  })
+
+  it('記録が無ければ null のまま', () => {
+    expect(withExpiredCodeCleared(null, at(13, 0))).toBe(null)
+  })
+
+  it('不変条件: コードが空になる記録は必ず isAttendedNow=false＝出席済みカードが出ないので空文字は表示に流れない', () => {
+    const cases: Array<[AttendedRecord, Date, number | null]> = [
+      [rec(), at(13, 0), null],
+      [rec(), at(14, 31), null],
+      [rec({ confirmWindow: '08:50〜09:20' }), at(10, 0), 620],
+      [rec({ confirmWindow: '08:50〜09:20' }), at(10, 21), 620],
+      [rec({ confirmWindow: null }), at(23, 59), null],
+      [rec({ date: '2026-07-06' }), at(13, 0), null],
+      [rec({ confirmWindow: '壊れた窓' }), at(0, 1), null],
+    ]
+    for (const [r, now, endMin] of cases) {
+      const out = withExpiredCodeCleared(r, now, endMin)
+      if (out.code === '' && r.code !== '') expect(isAttendedNow(out, now, endMin)).toBe(false)
+      if (isAttendedNow(r, now, endMin)) expect(out.code).toBe(r.code)
+    }
   })
 })
 

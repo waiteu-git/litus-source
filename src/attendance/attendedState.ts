@@ -8,7 +8,11 @@ export type AttendedRecord = {
   courseName: string
   /** 受付可能時間（"12:50〜14:30" 等）。この終了までを「その授業の間」とみなす。 */
   confirmWindow: string | null
-  /** 入力して送信した出席コード。授業の間は表示しておく。 */
+  /**
+   * 入力して送信した出席コード。授業の間は表示しておく。
+   * **表示期間が終わったら空文字にする**（`withExpiredCodeCleared`）。AsyncStorage に平文で
+   * 居座らせないため（監査M-1）。空 = 「このアプリで送信していない or 期限切れで消した」。
+   */
   code: string
 }
 
@@ -93,4 +97,43 @@ export function isAttendedNow(
   if (classEndMin != null) ends.push(classEndMin)
   if (ends.length === 0) return true
   return nowMin <= Math.max(...ends)
+}
+
+/**
+ * 表示に使い終わった出席コードを記録から落とす（純粋・監査M-1）。
+ *
+ * なぜ要るか: `code` は AsyncStorage（`attendance.done.v1`）に平文で入り、表示は
+ * `isAttendedNow` で「その授業の間」に絞られているのに**値そのものは次の出席で上書き
+ * されるか resetAllData まで消えない**。Play のデータ安全性で出席コードを「一時的に
+ * 処理される」と説明する以上、実装側で寿命を表示期間に一致させる。
+ *
+ * 期限判定は表示と同じ `isAttendedNow` に一本化する（重複ロジックを作らない）＝
+ * **「見せている間だけ持つ」が定義上保証される**。よって空コードが表示に流れることはない
+ * （空にするのは isAttendedNow が false になった記録だけ）。
+ * confirmWindow が無い/読めない記録は `isAttendedNow` が当日いっぱい true なので、
+ * 日付が変わった時点で消える（時刻情報が無いケースの安全側）。
+ *
+ * 消すのは `code` だけ。`date`/`courseName`/`confirmWindow` は「この授業は出席済み」の
+ * 判定・当該コマの同定に要るので残す。型も `string` のまま（`| null` にすると呼び出し側の
+ * 分岐が増える）。変化が無ければ**同じ参照**を返すので、呼び出し側は `===` で
+ * 「書き戻すべきか」を判定できる（毎回書くと AsyncStorage への無駄な書き込みが増える）。
+ */
+export function withExpiredCodeCleared(
+  rec: AttendedRecord,
+  now: Date,
+  classEndMin?: number | null,
+): AttendedRecord
+export function withExpiredCodeCleared(
+  rec: AttendedRecord | null,
+  now: Date,
+  classEndMin?: number | null,
+): AttendedRecord | null
+export function withExpiredCodeCleared(
+  rec: AttendedRecord | null,
+  now: Date,
+  classEndMin: number | null = null,
+): AttendedRecord | null {
+  if (!rec || !rec.code) return rec
+  if (isAttendedNow(rec, now, classEndMin)) return rec
+  return { ...rec, code: '' }
 }

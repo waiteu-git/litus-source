@@ -40,7 +40,7 @@ import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
 import { canRecordAttendance, isAttendedNow, resolveAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 import { shouldAutoRetrySubmit, toSubmitDiag } from './submitDiag'
 import { addSubmitDiag } from '../storage/submitDiagStore'
-import { loadAttendedRecord, saveAttendedRecord } from '../storage/attendanceDoneStore'
+import { loadAttendedRecord, saveAttendedRecord, scrubExpiredAttendedCode } from '../storage/attendanceDoneStore'
 import { parseWindowMinutes, type ReceptionWindowRecord } from './receptionWindow'
 import { saveReceptionWindow, loadReceptionWindow } from '../storage/receptionWindowStore'
 import {
@@ -191,6 +191,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const [attended, setAttended] = useState<AttendedRecord | null>(null)
   const [receptionWindow, setReceptionWindow] = useState<ReceptionWindowRecord | null>(null)
   const [timetable, setTimetable] = useState<TimetableCollection[]>([])
+  // 時間割の初回読み込みが**決着したか**（成否は問わない）。出席コードの期限切れ掃除には
+  // classEndMin が要るので、読み込み前の空時間割で早まって消さないためのゲート。
+  const [timetableSettled, setTimetableSettled] = useState(false)
   // onMessage クロージャから最新の時間割を読むための ref（受付open通知の科目別OFF判定に使う）。
   const timetableRef = useRef<TimetableCollection[]>([])
   timetableRef.current = timetable
@@ -302,7 +305,11 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   // 時間割を読み込む（起動ポリシー判定用）。前面復帰時も貼り直す（オーケストレータの即時スロット）。
   useEffect(() => {
-    loadTimetable().then((t) => setTimetable(t ?? [])).catch(() => undefined)
+    loadTimetable()
+      .then((t) => setTimetable(t ?? []))
+      .catch(() => undefined)
+      // 失敗しても「決着した」＝時間割が無い前提で先へ進む（掃除が永久に止まらないように）。
+      .finally(() => setTimetableSettled(true))
     return subscribeForeground('timetableReload', () =>
       loadTimetable().then((t) => setTimetable(t ?? [])).catch(() => undefined),
     )
@@ -947,6 +954,26 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const attendedNow = resolveAttendedNow(state.reception?.status, attended, now, classEndMin)
   attendedRef.current = attendedNow
   attendedRecordRef.current = attended
+
+  // 出席コードの期限切れ掃除（監査M-1）。表示期間が終わった記録から `code` だけを落として書き戻す。
+  // 平文の出席コードが AsyncStorage に居座るのを止める（消すのは code のみ＝出席済み判定は生きる）。
+  //
+  // ゲートが3つある:
+  //  1. `timetableSettled` … 時間割の読み込み前は classEndMin が null になり、「受付は閉じたが授業は
+  //     続いている」記録を早まって消す（＝授業中にコードが見えなくなる）。初回読み込みの決着を待つ。
+  //  2. `!attendedNow` … コードを描くのは AttendanceScreen の attendedNow 分岐だけ。**その分岐が
+  //     出ていない時にしか消さない**ので、空文字が表示に流れることが構造的にあり得ない。
+  //     （CLASSが 'attended' を返し続けている間は消えないが、次回起動時に status 未取得で消える。）
+  //  3. `attended?.code` … 空なら書き戻すものが無い。
+  // now は30秒（受付中は1秒）で進むので、起動時だけでなくセッション中に期限が切れても効く。
+  useEffect(() => {
+    if (!timetableSettled || attendedNow || !attended?.code) return
+    scrubExpiredAttendedCode(attended, now, classEndMin)
+      .then((cleaned) => {
+        if (cleaned !== attended) setAttended(cleaned)
+      })
+      .catch(() => undefined)
+  }, [timetableSettled, attendedNow, attended, now, classEndMin])
 
   // 秒間クロック(now)で毎レンダー作り直さないようメモ化する。now は NowCtx へ分離済みなので、
   // ここの依存は「状態が実際に変わった時」だけ変わる（出席カウントダウン中のアプリ全体再レンダー防止）。
