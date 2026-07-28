@@ -108,7 +108,8 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "./plugins/withNoSupportsRtl.js"
+      "./plugins/withNoSupportsRtl.js",
+      "./plugins/withReleaseSigning.js"
     ],
     "extra": {
       "eas": {
