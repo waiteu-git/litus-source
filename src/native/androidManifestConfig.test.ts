@@ -24,6 +24,14 @@ describe('Androidのマージ後manifestに残さない権限・属性', () => {
     const plugins: unknown[] = appJson.expo.plugins
     expect(plugins.filter((p) => typeof p === 'string')).toContain('./plugins/withNoSupportsRtl.js')
   })
+
+  it('自動バックアップを無効にする（AsyncStorage 全体が Google Drive へ出るのを止める）', () => {
+    // Expo 既定は allowBackup=true で、時間割・課題・掲示本文・出席済み記録（認証コードを含む）が
+    // 端末外（Googleアカウントのバックアップ）へ出る。これは掲載申告の「端末外へ出る3経路」にも
+    // 同意画面の文言にも無い第4の経路だった（2026-07-28 セキュリティ監査 M-2）。
+    // アカウント機能が無く、再ログイン＋同期でほぼ復元できるため、申告と実装を一致させる方を採る。
+    expect(appJson.expo.android.allowBackup).toBe(false)
+  })
 })
 
 describe('withNoSupportsRtl', () => {
