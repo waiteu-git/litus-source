@@ -10,6 +10,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 200,
+    date: '2026/07/30',
+    items: [
+      'ストアでの公開に向けた最初のビルドです。アプリの機能はベータ版（build 105）と同じで、変更はありません',
+      'ストア公開版と手渡しのベータ版を区別できるよう、ビルド番号を200番台に切り替えました',
+    ],
+  },
+  {
     build: 105,
     date: '2026/07/29',
     items: [
