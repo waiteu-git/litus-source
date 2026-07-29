@@ -158,9 +158,11 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
           </Pressable>
           {/* 脱出リンク。停止中はアプリ内に情報源が無く、ここが唯一の外への導線になる
               （無いと発信できる場所がストアのレビュー欄だけになる）。URLはコード固定＝
-              status.json が壊れて取得失敗でも必ず開ける。 */}
+              status.json が壊れて取得失敗でも必ず開ける。
+              文言は中立表現で短く保つ（キルスイッチランブックの「復旧時期を約束しない」と整合。
+              「復旧情報を見る」は復旧を前提にするため不可。URL併記もしない＝行き先はタップで分かる）。 */}
           <Pressable style={styles.secondary} onPress={openLitusSite} accessibilityRole="link">
-            <Text style={styles.secondaryText}>最新情報を見る（litus.waiteu.dev）</Text>
+            <Text style={styles.secondaryText}>最新情報を見る</Text>
           </Pressable>
         </View>
       </View>
