@@ -12,6 +12,16 @@ const GUARDED = [
 ] as const
 
 /**
+ * ⚠ GUARDED に足すかどうかは「expoのモジュールだから危ない/安全」では決まらない。基準は
+ * **アプリが走る全環境（native iOS / native Android / Expo Go）にネイティブ実体が在るか**。
+ * 無い環境があると `requireNativeModule` / `TurboModuleRegistry.getEnforcing` が
+ * モジュール評価時に throw し、画面が一切出ないまま起動が死ぬ。
+ *
+ * 例: `expo-application`（ビルドタグ・kill switch の自ビルド番号の取得元）は GUARDED に**要らない**。
+ * 根拠は3点とも実測: ①`expo/bundledNativeModules.json` に載る＝Expo Go にネイティブが同梱される
+ * ②`ios/Podfile.lock` に `EXApplication` が在る ③`expo-notifications` の依存として元々
+ * autolink されている。逆に `@preeternal/react-native-cookie-manager` は①を満たさないので GUARDED。
+ *
  * 静的 import を許可するファイル（src/ からの相対パス）と、その根拠。
  * ここに足すときは「なぜ起動グラフから到達しないか」を必ず書くこと。
  */
