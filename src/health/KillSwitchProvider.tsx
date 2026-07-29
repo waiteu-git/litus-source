@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Constants from 'expo-constants'
+import * as Application from 'expo-application'
 import {
   isAppKilled,
   isFeatureKilled,
@@ -28,7 +28,10 @@ type KillSwitchValue = {
 const Ctx = createContext<KillSwitchValue>({ status: null, isKilled: () => false, refresh: () => {} })
 
 // 自ビルド番号（versionCode）。versionRulesの対象判定と、キャッシュの帰属確認に使う。
-const APP_BUILD = parseBuildNumber(Constants.nativeBuildVersion)
+// ⚠ expo-constants の nativeBuildVersion は非推奨化で実装から消えており、常に undefined を返す
+//   （型は残るので型チェックもテストも素通りする）。build105 まではここが常に null で、
+//   版を絞った緊急停止（versionRules）が一度も適用されない状態だった。取得元を変えないこと。
+const APP_BUILD = parseBuildNumber(Application.nativeBuildVersion)
 
 export function useKillSwitch(): KillSwitchValue {
   return useContext(Ctx)

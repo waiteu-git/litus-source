@@ -9,7 +9,8 @@
     "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "dev.waiteu.litus"
+      "bundleIdentifier": "dev.waiteu.litus",
+      "buildNumber": "105"
     },
     "android": {
       "package": "dev.waiteu.litus",

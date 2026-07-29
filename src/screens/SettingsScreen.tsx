@@ -24,7 +24,7 @@ import { useDisplaySettings } from '../displaySettings'
 import SectionLayoutReorder from '../ui/SectionLayoutReorder'
 import { HOME_LAYOUT_OPS, HOME_SECTION_META } from '../home/homeSections'
 import { SUBJECT_LAYOUT_OPS, SUBJECT_SECTION_META } from '../subject/subjectSections'
-import Constants from 'expo-constants'
+import * as Application from 'expo-application'
 import { formatVersionLabel } from '../appVersion'
 import { RELEASE_STAGE, devBadgeSuffix } from '../releaseStage'
 import { formatSubmitDiag, type SubmitDiag } from '../attendance/submitDiag'
@@ -414,7 +414,7 @@ export default function SettingsScreen() {
         <Accordion title="アプリ情報" icon="information-circle-outline">
           <View style={ui.card}>
             <Text style={{ color: ui.valueColor, fontWeight: '500' }}>
-              リタス {formatVersionLabel(Constants.nativeAppVersion, Constants.nativeBuildVersion)}
+              リタス {formatVersionLabel(Application.nativeApplicationVersion, Application.nativeBuildVersion)}
               {devBadgeSuffix(RELEASE_STAGE)}
             </Text>
             <Pressable onPress={() => Linking.openURL('https://litus.waiteu.dev/')}>
