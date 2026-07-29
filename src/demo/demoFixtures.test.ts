@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEMO_TIMETABLE,
+  DEMO_TIMETABLE_OVERRIDES,
   DEMO_TERMS_CONSENT,
   buildDemoAssignments,
   buildDemoBulletins,
@@ -8,6 +9,11 @@ import {
   buildDemoClassEvents,
   buildDemoBodies,
 } from './demoFixtures'
+import {
+  isQuarterSlot,
+  applyQuarterOverrides,
+  isDimmedForCurrentQuarter,
+} from '../timetableEvents/quarter'
 import { serializeTimetable, deserializeTimetable } from '../storage/timetableSerialize'
 import { serializeAssignments, deserializeAssignments } from '../storage/assignmentsSerialize'
 import { serializeBulletinDigest, deserializeBulletinDigest } from '../storage/bulletinDigestSerialize'
@@ -162,6 +168,94 @@ describe('デモデータの時期非依存性', () => {
     expect(buildDemoBulletins(now).length).toBeGreaterThan(0)
     expect(buildDemoAttendanceStats(now).length).toBeGreaterThan(0)
     expect(buildDemoClassEvents(now).length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * 審査員が実際に触る画面の「厚み」と、機能が露出しているかの保証。
+ * 6コマ・5日ばらけ（最多の曜日でも2コマ）では画面下が大きく空き、
+ * 積みコマが1つも無いと前半/後半トグルが一度も描画されない＝その機能を見せられない。
+ */
+describe('デモ時間割の密度と機能露出', () => {
+  const slots = DEMO_TIMETABLE.flatMap((c) => c.slots)
+  const allClasses = slots.flatMap((s) => s.classes)
+
+  it('週12コマ以上ある（実在の大学の時間割として自然な密度）', () => {
+    expect(slots.length).toBeGreaterThanOrEqual(12)
+  })
+
+  it('1日に3コマ以上入る曜日がある（縦に埋まって見える）', () => {
+    const byDay = new Map<string, number>()
+    for (const s of slots) byDay.set(s.day, (byDay.get(s.day) ?? 0) + 1)
+    expect(Math.max(...byDay.values())).toBeGreaterThanOrEqual(3)
+  })
+
+  it('積みコマ（同一曜限2科目）が1つある（前半/後半トグルが描画される）', () => {
+    // TimetableScreen は hasStacked = slots.some(isQuarterSlot) でしかトグルを出さない。
+    // 積みが無いと審査員はリタス固有のクォーター機能を一度も見られない。
+    expect(slots.filter(isQuarterSlot).length).toBe(1)
+  })
+
+  it('積みコマの2科目に前半/後半が指定されている（トグル操作で薄表示が実際に変わる）', () => {
+    const stacked = slots.find(isQuarterSlot)!
+    const qs = stacked.classes.map((c) => DEMO_TIMETABLE_OVERRIDES[c.courseCode]?.quarter)
+    expect(qs).toContain('first')
+    expect(qs).toContain('second')
+  })
+
+  it('半期指定はどちらか片方だけを薄くする（自動/前半/後半で見た目が変わる）', () => {
+    const stacked = applyQuarterOverrides([slots.find(isQuarterSlot)!], DEMO_TIMETABLE_OVERRIDES)[0]
+    for (const cur of ['first', 'second'] as const) {
+      const dimmed = stacked.classes.filter((c) => isDimmedForCurrentQuarter(c.quarter, cur, true))
+      expect(dimmed.length).toBe(1)
+    }
+  })
+
+  it('全コマに時限表の時刻がある（グリッドの時刻が空欄にならない）', () => {
+    for (const col of DEMO_TIMETABLE) {
+      const periods = col.periodTimes?.periods ?? []
+      for (const s of col.slots) {
+        expect(periods.find((p) => p.period === s.period)).toBeTruthy()
+      }
+    }
+  })
+
+  it('科目コードは全て架空の DEMO 採番（実在の採番規則に寄せない）', () => {
+    for (const c of allClasses) expect(c.courseCode).toMatch(/^DEMO\d{3}$/)
+  })
+
+  it('時間割の全科目に出欠データがある（科目詳細の「あと◯回休める」が全科目で見える）', () => {
+    // 出欠が無い科目の科目詳細は中立の「記録なし」になり、落単ラインの数値UIが出ない。
+    // 13科目中3科目にしか出欠が無いと、審査員が適当に1科目開いても機能に当たらない。
+    const stats = buildDemoAttendanceStats(NOW)
+    const withStats = new Set(stats.map((c) => c.courseCode))
+    for (const c of allClasses) expect(withStats.has(c.courseCode)).toBe(true)
+  })
+
+  it('全科目の出欠に日付つきの回が2回以上ある（落単ラインが計算できる）', () => {
+    for (const c of buildDemoAttendanceStats(NOW)) {
+      expect(c.sessions.filter((s) => s.date).length).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('出欠統計の曜限が時間割と一致する（出席率画面と時間割が食い違わない）', () => {
+    const has = (day: string, period: number, name: string) =>
+      slots.some((s) => s.day === day && s.period === period && s.classes.some((c) => c.name === name))
+    for (const c of buildDemoAttendanceStats(NOW)) {
+      for (const s of c.slots) expect(has(s.day, s.period, c.courseName)).toBe(true)
+    }
+  })
+
+  it('授業イベントの曜限が時間割と一致する（休講・教室変更が実在しないコマを指さない）', () => {
+    const DOW = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+    for (const e of buildDemoClassEvents(NOW)) {
+      const day = DOW[new Date(`${e.date}T00:00:00`).getDay()]
+      for (const p of e.periods) {
+        expect(
+          slots.some((s) => s.day === day && s.period === p && s.classes.some((c) => c.name === e.courseName)),
+        ).toBe(true)
+      }
+    }
   })
 })
 
