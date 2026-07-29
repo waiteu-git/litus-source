@@ -9,6 +9,7 @@
     "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true,
+      "requireFullScreen": true,
       "bundleIdentifier": "dev.waiteu.litus",
       "buildNumber": "105"
     },
