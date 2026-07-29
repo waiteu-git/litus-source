@@ -18,7 +18,7 @@ import { useClassView } from '../collect/classViewArbiter'
 import { evaluateAccess } from '../health/accessGate'
 import { useConnectivity } from '../health/connectivity'
 import { useDemo } from '../demo/DemoProvider'
-import { demoOverrides, demoWindow, DEMO_ATTENDANCE_COURSE } from './demoAttendance'
+import { demoOverrides, demoWindow, demoAttendanceCourse } from './demoAttendance'
 import {
   CLASS_PC_LOGIN_URL,
   DESKTOP_UA,
@@ -64,7 +64,10 @@ import {
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { normalizeAttendanceCode } from './normalizeCode'
 import { loadTimetable } from '../storage/timetableStore'
+import { loadTimetableOverrides, loadCurrentQuarter } from '../storage/timetableOverridesStore'
+import { applyQuarterOverrides, resolveCurrentQuarter, type TimetableOverrides } from '../timetableEvents/quarter'
 import type { TimetableCollection } from '../collect/timetableMessage'
+import type { Quarter } from '../parsers/timetable'
 import {
   attendanceReducer,
   initialEngineState,
@@ -983,14 +986,30 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // functionality" を要求するので、受付中の見た目を作って送信まで通す。
   // ネットワークには一切出ず、記録先もデモ名前空間（Storage 経由）。
   const [demoAttended, setDemoAttended] = useState<AttendedRecord | null>(null)
+  // 受付中として見せる科目は時間割から引く（定数にするとホームの「いまの授業」と食い違う）。
+  // 積みコマ（半期科目）の代表選択のため、ホーム/FABと同じ override + 現在半期を通す。
+  // デモ時だけ読む（実運用側の初期化コストを増やさない）。
+  const [demoTtOverrides, setDemoTtOverrides] = useState<TimetableOverrides>({})
+  const [demoQuarterPref, setDemoQuarterPref] = useState<Quarter | null>(null)
+  useEffect(() => {
+    if (!demo) return
+    loadTimetableOverrides().then(setDemoTtOverrides).catch(() => undefined)
+    loadCurrentQuarter().then(setDemoQuarterPref).catch(() => undefined)
+  }, [demo])
+  const demoTimetable = useMemo(
+    () => (demo ? timetable.map((c) => ({ ...c, slots: applyQuarterOverrides(c.slots, demoTtOverrides) })) : timetable),
+    [demo, timetable, demoTtOverrides],
+  )
+  const demoQuarter = resolveCurrentQuarter(demoQuarterPref, now)
   const demoSubmit = useCallback(() => {
+    const at = new Date()
     setDemoAttended({
-      date: todayKey(new Date()),
-      courseName: DEMO_ATTENDANCE_COURSE,
-      confirmWindow: demoWindow(new Date()),
+      date: todayKey(at),
+      courseName: demoAttendanceCourse(demoTimetable, at, demoQuarter),
+      confirmWindow: demoWindow(at),
       code: code || '0000',
     })
-  }, [code])
+  }, [code, demoTimetable, demoQuarter])
 
   const value: AttendanceEngineValue = useMemo(
     () => ({
@@ -1016,13 +1035,23 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       setRevealClass,
       timetable,
       setAttendanceFocused,
-      ...(demo ? demoOverrides(demoAttended, demoSubmit, now) : null),
+      ...(demo
+        ? demoOverrides({
+            attended: demoAttended,
+            submit: demoSubmit,
+            now,
+            timetable: demoTimetable,
+            currentQuarter: demoQuarter,
+          })
+        : null),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       demo,
       demoAttended,
       demoSubmit,
+      demoTimetable,
+      demoQuarter,
       now,
       state.phase,
       state.reception,
