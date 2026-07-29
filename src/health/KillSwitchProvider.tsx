@@ -12,9 +12,13 @@ import {
   type KillSwitchStatus,
 } from './killSwitch'
 import { fetchKillSwitchStatus } from './killSwitchFetch'
+import { resolveNotice } from './notice'
 import { loadKillSwitchCache, saveKillSwitchCache } from '../storage/killSwitchStore'
+import { loadDismissedNoticeHash, saveDismissedNoticeHash } from '../storage/noticeStore'
 import { subscribeForeground } from '../app/foregroundOrchestrator'
 import { useDemo } from '../demo/DemoProvider'
+import { NoticeBanner } from '../ui/NoticeBanner'
+import { openLitusSite } from '../ui/openLitusSite'
 import { COLORS } from '../theme'
 
 type KillSwitchValue = {
@@ -60,6 +64,10 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets()
   const [status, setStatus] = useState<KillSwitchStatus | null>(null)
   const [cacheLoaded, setCacheLoaded] = useState(false)
+  // お知らせ帯の既読ハッシュ。読込完了まで帯を出さない（消したはずの帯が一瞬見えるのを防ぐ）。
+  // children の描画はこれを待たない。
+  const [dismissedHash, setDismissedHash] = useState<string | null>(null)
+  const [dismissedLoaded, setDismissedLoaded] = useState(false)
   const fetchedAtRef = useRef(0)
   const inFlightRef = useRef(false)
   // refresh は useCallback([]) で固定されるため、デモ状態は ref 経由で読む。
@@ -112,6 +120,27 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => subscribeForeground('killSwitch', () => refresh(false)), [refresh])
 
+  useEffect(() => {
+    let active = true
+    loadDismissedNoticeHash()
+      .then((h) => {
+        if (active) setDismissedHash(h)
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setDismissedLoaded(true)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const dismissNotice = useCallback((hash: string) => {
+    // 先に画面から消す（保存の成否を待たせない）。保存に失敗しても次回また出るだけで実害はない。
+    setDismissedHash(hash)
+    saveDismissedNoticeHash(hash).catch(() => undefined)
+  }, [])
+
   // キャッシュ読込完了まで入場保留（all停止キャッシュがあるのに一瞬起動して見えるのを防ぐ）。
   if (!cacheLoaded) return null
 
@@ -127,14 +156,33 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
           <Pressable style={styles.primary} onPress={() => refresh(true)}>
             <Text style={styles.primaryText}>再確認</Text>
           </Pressable>
+          {/* 脱出リンク。停止中はアプリ内に情報源が無く、ここが唯一の外への導線になる
+              （無いと発信できる場所がストアのレビュー欄だけになる）。URLはコード固定＝
+              status.json が壊れて取得失敗でも必ず開ける。 */}
+          <Pressable style={styles.secondary} onPress={openLitusSite} accessibilityRole="link">
+            <Text style={styles.secondaryText}>最新情報を見る（litus.waiteu.dev）</Text>
+          </Pressable>
         </View>
       </View>
     )
   }
 
+  const notice = dismissedLoaded ? resolveNotice(status, { demo, dismissedHash }) : null
+
   return (
     <Ctx.Provider value={{ status, isKilled: (f) => isFeatureKilled(status, f), refresh: () => refresh(true) }}>
-      {children}
+      {/* お知らせが無いときは children をそのまま返す（ラッパ View を挟まない＝通常時の
+          レイアウトを1ノードも変えない）。 */}
+      {notice ? (
+        // NoticeBanner は上端（セーフエリア含む）まで自前で塗る全幅バー。ここで地色は与えない
+        // （与えても帯の下は children が占めるので見えない）。
+        <View style={styles.host}>
+          <NoticeBanner text={notice.text} onDismiss={() => dismissNotice(notice.hash)} />
+          {children}
+        </View>
+      ) : (
+        children
+      )}
     </Ctx.Provider>
   )
 }
@@ -169,4 +217,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  secondary: {
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    minWidth: 160,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.emerald,
+  },
+  secondaryText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '700' },
+  /** お知らせ帯を children の上に積むためのホスト。帯が無いときは挟まない。 */
+  host: { flex: 1 },
 })
