@@ -23,7 +23,7 @@ import { todaySchedule, type TodayScheduleItem } from '../timetableEvents/eventS
 import type { ClassEvent } from '../timetableEvents/classEvent'
 import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
-import Constants from 'expo-constants'
+import * as Application from 'expo-application'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
 import { formatBuildTag } from '../appVersion'
 import { RELEASE_STAGE, shouldShowBuildTag } from '../releaseStage'
@@ -395,7 +395,7 @@ export default function HomeScreen() {
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: clearance }]}>
           {/* 開発ビルドの識別タグ（versionCode 由来＝APK名 litus-...-vNN と一致）。production では出さない。 */}
           {shouldShowBuildTag(RELEASE_STAGE) ? (
-            <Text style={[styles.devTag, { color: ui.labelColor }]}>{formatBuildTag(Constants.nativeBuildVersion)}</Text>
+            <Text style={[styles.devTag, { color: ui.labelColor }]}>{formatBuildTag(Application.nativeBuildVersion)}</Text>
           ) : null}
           {/* 同期の状況＋操作はヘッダー右の HomeSyncButton へ集約（鮮度・スキップ理由・ヘルス注意）。 */}
           {/* 初回ヒント（×で永続的に消える・設定から再表示可）。 */}
