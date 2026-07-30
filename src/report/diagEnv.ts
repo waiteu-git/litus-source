@@ -10,10 +10,9 @@ import { formatAndroidDevice, iosDeviceFromIdiom, type DiagEnv } from './diagRep
  * （含める理由がない）。広告ID・端末IDの類はそもそも取得していない。
  * `Constants.deviceName`（ユーザーが付けた端末名）は氏名が入りうるので**使わない**。
  *
- * ⚠版の取得元は `expo-application` を使う。expo-constants 側の nativeBuildVersion / nativeAppVersion は
- * 実装が消えており常に undefined（型だけ残る＝tsc も test も素通りする）。
- * ラチェットは `src/appVersion.test.ts`（※あちらはコメントも含む単純な文字列一致なので、
- * ここでは廃止APIのメンバ式を書かない）。
+ * ⚠版の取得元は `expo-application` を使う。
+ * `Constants.nativeBuildVersion` / `Constants.nativeAppVersion` は実装が消えており常に // ratchet-allow
+ * undefined（型だけ残る＝tsc も test も素通りする）。ラチェットは `src/appVersion.test.ts`。
  */
 export function collectDiagEnv(): DiagEnv {
   return {
