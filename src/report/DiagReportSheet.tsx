@@ -8,13 +8,7 @@ import { COLORS } from '../theme'
 import type { SubmitDiag } from '../attendance/submitDiag'
 import { loadSubmitDiags } from '../storage/submitDiagStore'
 import { collectDiagEnv } from './diagEnv'
-import {
-  DIAG_REPORT_TO,
-  buildDiagReportBody,
-  buildDiagReportSubject,
-  buildMailtoUrl,
-  mailtoMayTruncate,
-} from './diagReport'
+import { DIAG_REPORT_TO, buildDiagReportBody, buildDiagReportSubject, buildMailtoUrl } from './diagReport'
 
 /**
  * 不具合報告の下書きを**全画面で見せてから**送る。
@@ -53,7 +47,7 @@ export default function DiagReportSheet({ visible, onClose }: { visible: boolean
     const subject = buildDiagReportSubject(env)
     const body = buildDiagReportBody({ diags, env, nowIso: new Date().toISOString() })
     const url = buildMailtoUrl({ to: DIAG_REPORT_TO, subject, body })
-    return { subject, body, url, long: mailtoMayTruncate(url) }
+    return { subject, body, url }
   }, [diags])
 
   const onCopy = () => {
@@ -106,19 +100,19 @@ export default function DiagReportSheet({ visible, onClose }: { visible: boolean
         </View>
 
         <Text style={[styles.lead, { color: ui.labelColor }]}>
-          下の本文がそのまま {DIAG_REPORT_TO} 宛のメール下書きになります。アプリが勝手に送ることはありません
-          （送信はご自身のメールアプリで行います）。学籍番号・氏名・メールアドレスは含めていません。
+          {`下の本文を ${DIAG_REPORT_TO} へお送りください。アプリが勝手に送ることはありません（送信はご自身のメールアプリなどで行います）。学籍番号・氏名・メールアドレスは含めていません。`}
         </Text>
 
-        {draft?.long ? (
-          <View style={[styles.notice, { backgroundColor: ui.colors.softBoxBg }]}>
-            <Ionicons name="information-circle-outline" size={16} color={ui.labelColor} />
-            <Text style={[styles.noticeText, { color: ui.labelColor }]}>
-              本文が長いため、メールアプリ側で途中までしか入らないことがあります。その場合は「本文をコピー」を
-              お使いください。
-            </Text>
-          </View>
-        ) : null}
+        <View style={[styles.notice, { backgroundColor: ui.colors.softBoxBg }]}>
+          <Ionicons name="information-circle-outline" size={16} color={ui.labelColor} />
+          {/* ⚠常に出す。条件分岐にしていた頃の判定は実測で意味を失った＝**記録1件でも**
+              mailto URL は 2,917 文字（日本語のパーセントエンコードで約3倍に膨らむ）で、
+              10件なら 15,688 文字。「長い時だけ警告」は100%出るので警告として機能しない。
+              ⇒ コピーを主動線にし、切れうることは常に書く。 */}
+          <Text style={[styles.noticeText, { color: ui.labelColor }]}>
+            {'「本文をコピー」→ メールやDMに貼り付けるのが確実です。「メールで送る」は宛先と件名が入りますが、本文が長いためメールアプリ側で途中までしか入らないことがあります。'}
+          </Text>
+        </View>
 
         <ScrollView
           style={[styles.bodyBox, { backgroundColor: ui.inputBg, borderColor: ui.inputBorder }]}
@@ -134,20 +128,21 @@ export default function DiagReportSheet({ visible, onClose }: { visible: boolean
           本文 {draft ? draft.body.length : 0} 文字 / 記録 {diags?.length ?? 0} 件
         </Text>
 
+        {/* コピーが主動線。**コピーだけが長さで壊れない**（上の実測を参照）。 */}
         <Pressable
           style={[styles.cta, { backgroundColor: COLORS.cta }, !draft && styles.ctaBusy]}
           disabled={!draft}
-          onPress={onMail}
+          onPress={onCopy}
         >
-          <Text style={styles.ctaText}>メールで送る</Text>
+          <Text style={styles.ctaText}>本文をコピー</Text>
         </Pressable>
         <Pressable
           style={[styles.ghost, { backgroundColor: ui.inputBg, borderColor: ui.inputBorder }, !draft && styles.ctaBusy]}
           disabled={!draft}
-          onPress={onCopy}
+          onPress={onMail}
         >
           <Text style={[styles.ghostText, { color: ui.dark ? COLORS.emeraldLight : COLORS.emeraldDark }]}>
-            本文をコピー
+            メールで送る
           </Text>
         </Pressable>
       </View>

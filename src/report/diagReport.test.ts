@@ -170,19 +170,39 @@ describe('buildMailtoUrl', () => {
 })
 
 describe('mailtoMayTruncate', () => {
-  it('目安を超えたら真（コピーを主動線へ切り替える判断に使う）', () => {
+  it('目安を超えたら真', () => {
     expect(mailtoMayTruncate('mailto:a?body=' + 'x'.repeat(DIAG_MAILTO_SAFE_LIMIT))).toBe(true)
     expect(mailtoMayTruncate('mailto:a?body=x')).toBe(false)
   })
 
-  it('記録10件が満杯だと目安を超える＝コピー導線が必須になる', () => {
-    // 「メールで送るだけ」では足りないことを、実データ相当の量で固定する。
-    const full = Array.from({ length: 10 }, () => diag({ hint: 'あ'.repeat(80), okBy: 'い'.repeat(80) }))
-    const url = buildMailtoUrl({
-      to: DIAG_REPORT_TO,
-      subject: buildDiagReportSubject(ENV),
-      body: buildDiagReportBody({ diags: full, env: ENV, nowIso: '2026-07-30T03:00:00.000Z' }),
-    })
+  /**
+   * **コピーを主動線に固定した根拠をここで固定する。**
+   * 日本語はパーセントエンコードで約3倍に膨らむので、記録が1件でも mailto URL は目安を超える
+   * ＝「長い時だけ警告」は100%発火して警告にならない。この2つが両方真である限り、
+   * UIをmailto主動線へ戻してはいけない。
+   */
+  it('記録1件でも目安を超える（＝mailtoを主動線にできない）', () => {
+    const url = mailtoFor([diag({ hint: HINT_REAL, okBy: OKBY_REAL })])
     expect(mailtoMayTruncate(url)).toBe(true)
+    expect(url.length).toBeGreaterThan(2500)
+  })
+
+  it('記録10件が満杯だと1万文字を超える', () => {
+    const full = Array.from({ length: 10 }, () => diag({ hint: HINT_REAL, okBy: OKBY_REAL }))
+    expect(mailtoFor(full).length).toBeGreaterThan(10000)
   })
 })
+
+/** 実際に端末で観測したマスク後の `hint`（IP・認証コードはマスク済み）。 */
+const HINT_REAL =
+  '出席登録が完了しました。最終打刻：12:50／認証コード：****／現在、出席確認中の履修授業はありません。（アクセス元 ***.***.***.***）'
+/** 実際の `okBy`（一致文言＋前後40字）。 */
+const OKBY_REAL = '…直前40字ぶんの本文…「出席登録しました」…直後40字ぶんの本文がここに入ります…'
+
+function mailtoFor(diags: SubmitDiag[]): string {
+  return buildMailtoUrl({
+    to: DIAG_REPORT_TO,
+    subject: buildDiagReportSubject(ENV),
+    body: buildDiagReportBody({ diags, env: ENV, nowIso: '2026-07-30T03:00:00.000Z' }),
+  })
+}
