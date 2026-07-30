@@ -10,6 +10,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 202,
+    date: '2026/07/30',
+    items: [
+      'LETUS のページから Box や Google ドライブなど大学の外のサイトへのリンクを開いたときに、アプリの中ではなくお使いのブラウザや対応アプリで開くようにしました',
+      'Word・Excel・PowerPoint・zip などのファイルのリンクが「アプリ内表示に非対応です」で行き止まりだったのを、ブラウザに渡して開けるようにしました（ブラウザ側で LETUS のログインを求められる場合があります）。PDFは今までどおりアプリの中で表示します',
+    ],
+  },
+  {
     build: 201,
     date: '2026/07/30',
     items: [
