@@ -14,6 +14,7 @@ import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceE
 import { submitFailureText, submitOutcome } from '../attendance/submitOutcome'
 import ScreenHint from '../tutorial/ScreenHint'
 import { PressableRow } from '../ui/Pressable'
+import DiagReportSheet from '../report/DiagReportSheet'
 import { COLORS } from '../theme'
 
 /**
@@ -58,6 +59,9 @@ export default function AttendanceScreen() {
   // 学外ネットワーク警告の「再確認」進行状態。次の受付状態更新（reception差し替え）か
   // タイムアウト保険（10秒）で解除する。表示はバー内テキストの差し替えのみ。
   const [netChecking, setNetChecking] = useState(false)
+  // 不具合報告の下書き。**失敗したその場から出す**のが主導線＝設定の奥に置くと誰も辿り着かない
+  // （公開後、開発者はユーザー端末で何が起きているか一切見られない。証拠は端末内の診断記録だけ）。
+  const [reportOpen, setReportOpen] = useState(false)
   const netTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const receptionAtCheckRef = useRef(reception)
   function recheckNetwork() {
@@ -386,9 +390,16 @@ export default function AttendanceScreen() {
                   />
                 </View>
               ) : reactionSubmit.status === 'failed' ? (
-                <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
-                  <Text style={[styles.resultText, { color: ui.colors.danger }]}>{reactionSubmit.message}</Text>
-                </View>
+                <>
+                  <View style={[styles.result, { backgroundColor: ui.colors.dangerBg }]}>
+                    <Text style={[styles.resultText, { color: ui.colors.danger }]}>{reactionSubmit.message}</Text>
+                  </View>
+                  {/* リアペの失敗も同じ「出席送信の記録」に残る＝同じ導線で報告できる。 */}
+                  <Pressable style={styles.reportRow} onPress={() => setReportOpen(true)}>
+                    <Ionicons name="mail-outline" size={14} color={labelColor} />
+                    <Text style={[styles.reportText, { color: labelColor }]}>この不具合を開発者に送る</Text>
+                  </Pressable>
+                </>
               ) : null}
 
               <Pressable
@@ -590,6 +601,12 @@ export default function AttendanceScreen() {
                       <Text style={[styles.failBtnText, { color: dark ? COLORS.emeraldLight : c.emeraldDark }]}>最初から</Text>
                     </Pressable>
                   </View>
+                  {/* 報告導線は失敗のその場に置く（設定の奥では誰も辿り着かない）。ただし
+                      **出席を取り戻す方が優先**なので上の2つより弱い見た目にし、行を分ける。 */}
+                  <Pressable style={styles.reportRow} onPress={() => setReportOpen(true)}>
+                    <Ionicons name="mail-outline" size={14} color={labelColor} />
+                    <Text style={[styles.reportText, { color: labelColor }]}>この不具合を開発者に送る</Text>
+                  </Pressable>
                 </View>
               ) : phase === 'submitting' || verifying ? (
                 // 送信タップ〜出席確定までの待機窓。スイープする不定進捗バーで「処理中」を明示する。
@@ -622,6 +639,7 @@ export default function AttendanceScreen() {
           )}
         </ScrollView>
       </ScreenBg>
+      <DiagReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} />
     </View>
   )
 }
@@ -670,6 +688,10 @@ const styles = StyleSheet.create({
   ctaText: { color: COLORS.white, fontSize: 17, fontWeight: '600' },
   result: { marginTop: 12, borderRadius: 14, padding: 11 },
   resultText: { fontSize: 15, fontWeight: '600' },
+  // 報告導線。出席を取り戻す2ボタンより弱い見た目（無彩色のテキスト行）にして、
+  // 「まずCLASSで登録する」を主動線のまま保つ。
+  reportRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingVertical: 4 },
+  reportText: { fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
   diag: { fontSize: 10, lineHeight: 14, marginTop: 8 },
   diagCenter: { textAlign: 'center' },
   verifyCard: { marginTop: 12, gap: 12 },

@@ -34,6 +34,7 @@ import { useDemo } from '../demo/DemoProvider'
 import { attendanceStatsDiagLine } from '../health/attendanceStatsDiag'
 import { CHANGELOG, getRecentChangelog } from '../changelog'
 import ChangelogModal from '../ui/ChangelogModal'
+import DiagReportSheet from '../report/DiagReportSheet'
 
 type Course = { courseCode: string; name: string }
 
@@ -62,6 +63,8 @@ export default function SettingsScreen() {
   // 出席送信の記録（真因未特定の間欠バグの証拠。開いた時だけ読み込む）。
   const [diags, setDiags] = useState<SubmitDiag[]>([])
   const [showDiags, setShowDiags] = useState(false)
+  // 不具合報告の下書き（副導線。主導線は出席送信が失敗した時のエラー表示から直接）。
+  const [reportOpen, setReportOpen] = useState(false)
   // ホームの並びをドラッグ中は親 ScrollView のスクロールを止める（縦ジェスチャ競合の回避）。
   const [reordering, setReordering] = useState(false)
   const recentChangelog = getRecentChangelog(CHANGELOG, 3)
@@ -409,6 +412,17 @@ export default function SettingsScreen() {
               )}
             </View>
           ) : null}
+          {/* 不具合報告: 記録のすぐ下に置く（「この内容を開発者にお知らせください」と書いてある場所から
+              そのまま送れる）。アプリからは送らず、メールの下書きを作るだけ。 */}
+          <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={() => setReportOpen(true)}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={[styles.rowLabel, { color: ui.valueColor }]}>不具合を開発者に送る</Text>
+              <Text style={[styles.note, { color: ui.labelColor, marginTop: 4, marginLeft: 0 }]}>
+                上の記録と、アプリの版・OS・機種を添えたメールの下書きを作ります。送信前に本文を全部お見せします。
+              </Text>
+            </View>
+            <Text style={[styles.rowAction, { color: ui.labelColor }]}>作成</Text>
+          </Pressable>
         </Accordion>
 
         <Accordion title="アプリ情報" icon="information-circle-outline">
@@ -454,6 +468,7 @@ export default function SettingsScreen() {
         </Accordion>
       </ScrollView>
       <ChangelogModal visible={changelogOpen} entries={CHANGELOG} onClose={() => setChangelogOpen(false)} />
+      <DiagReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} />
     </ScreenBg>
   )
 }
