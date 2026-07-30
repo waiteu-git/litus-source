@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Pressable, StyleSheet, View } from 'react-native'
+import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useWebViewBack } from '../ui/useWebViewBack'
@@ -15,6 +15,7 @@ import {
   isPdfLikeUrl,
   markActivityAddedJs,
 } from '../collect/injectedScripts'
+import { classifyLinkTarget } from '../links/externalLink'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
@@ -35,7 +36,8 @@ type Params = { Web: { url: string; title?: string } }
  * アプリ内で表示する（Cookie共有なのでSSOログイン済みのまま開ける）。
  * - 課題ページ: 未追跡なら「この課題を追加」ボタン（既に追跡中なら出さない）。
  * - コースページ: 各アクティビティ（ファイル/フォーラム/課題等）の隣に「＋追加」ボタンを注入。
- * - ファイル(PDF等)リンク: タップ即ダウンロードを抑止（アプリ内表示はv9で対応）。
+ * - PDFリンク: アプリ内pdf.jsビューア（PdfViewer）へ委譲。
+ * - 学外サイト(Box等)・PDF以外のファイル(docx/zip等): OSに渡して外部アプリで開く（`links/externalLink`）。
  */
 export default function WebViewerScreen() {
   const route = useRoute<RouteProp<Params, 'Web'>>()
@@ -63,6 +65,16 @@ export default function WebViewerScreen() {
   function flash(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(null), 2500)
+  }
+
+  /**
+   * OSに渡して外部アプリ/ブラウザで開く。対応アプリが無いときは**黙らず**トーストで伝える
+   * （タップして何も起きないのが最悪の挙動）。
+   */
+  function openExternally(target: string, note?: string) {
+    Linking.openURL(target)
+      .then(() => { if (note) flash(note) })
+      .catch(() => flash('このリンクを開けるアプリが見つかりませんでした'))
   }
 
   function requestAdd() {
@@ -194,14 +206,22 @@ export default function WebViewerScreen() {
         onLoadEnd={onLoadEnd}
         onMessage={(e) => onMessage(e.nativeEvent.data)}
         onShouldStartLoadWithRequest={(req) => {
+          // 学外サイト(Box等)はアプリ内で開かない。このWebViewはLETUSのクッキージャーを共有して
+          // いるため、第三者サイトを読ませずOSに渡す。埋め込みiframeは対象外（isTopFrame）。
+          if (classifyLinkTarget({ url: req.url, isTopFrame: req.isTopFrame }) === 'external') {
+            openExternally(req.url)
+            return false
+          }
           // PDFはアプリ内pdf.jsビューアで開く（同一オリジンfetch＋canvas描画・ログイン維持）。
           if (isPdfLikeUrl(req.url)) {
             navigation.navigate('PdfViewer', { url: req.url, title })
             return false
           }
-          // PDF以外のファイル(docx/zip等)は即ダウンロードを抑止（アプリ内表示は非対応）。
+          // PDF以外のファイル(docx/zip等)はアプリ内で表示できない。旧実装は抑止するだけで
+          // 取得手段が無い行き止まりだったので、OSに渡す。外部ブラウザはアプリのLETUS
+          // セッションを共有しないため、ログインを求められうることを添えて伝える。
           if (isDownloadableFileUrl(req.url)) {
-            flash('このファイル形式はアプリ内表示に非対応です（自動ダウンロードは抑止しました）')
+            openExternally(req.url, 'ファイルはブラウザで開きます（ログインを求められる場合があります）')
             return false
           }
           return true

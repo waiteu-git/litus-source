@@ -18,3 +18,50 @@ index f83033b3597a425da159555233bacce250ccfce0..a1e76fc5e5345498f41bec49ae944c54
                  request.addRequestHeader("Cookie", cookie)
              } catch (e: MalformedURLException) {
                  Log.w(TAG, "Error getting cookie for DownloadManager", e)
+diff --git a/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java b/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
+--- a/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
++++ b/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
+@@ -92,6 +92,26 @@
+ 
+     @Override
+     public boolean shouldOverrideUrlLoading(WebView view, String url) {
++        // litus patch: the deprecated String overload is only reached below API 24, where subframe
++        // navigations never surface here -> treat it as a top-frame navigation.
++        return this.shouldOverrideUrlLoading(view, url, true);
++    }
++
++    /**
++     * litus patch: carry the frame kind through to JS.
++     *
++     * Upstream drops `WebResourceRequest.isForMainFrame()` and never puts `isTopFrame` into the
++     * event of the blocking path, so `req.isTopFrame` arrives as `undefined` in JS on Android --
++     * while iframe navigations DO reach shouldOverrideUrlLoading on API 24+. Litus decides in
++     * `onShouldStartLoadWithRequest` whether to hand a URL to an external app, so without this
++     * flag an external iframe embedded in a LETUS page (YouTube, LTI tools) would launch another
++     * app by itself. See src/links/externalLink.ts.
++     *
++     * The legacy fallback path below still reports isTopFrame=true regardless, because
++     * TopShouldStartLoadWithRequestEvent overwrites it in its own init. That path only runs while
++     * JS debugging (no blocking call available), so release builds are unaffected.
++     */
++    private boolean shouldOverrideUrlLoading(WebView view, String url, boolean isTopFrame) {
+         final RNCWebView rncWebView = (RNCWebView) view;
+         final boolean isJsDebugging = rncWebView.getReactApplicationContext().getJavaScriptContextHolder().get() == 0;
+ 
+@@ -102,6 +122,7 @@
+ 
+             final WritableMap event = createWebViewEvent(view, url);
+             event.putDouble("lockIdentifier", lockIdentifier);
++            event.putBoolean("isTopFrame", isTopFrame); // litus patch
+             rncWebView.dispatchDirectShouldStartLoadWithRequest(event);
+ 
+             try {
+@@ -143,7 +164,7 @@
+     @Override
+     public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+         final String url = request.getUrl().toString();
+-        return this.shouldOverrideUrlLoading(view, url);
++        return this.shouldOverrideUrlLoading(view, url, request.isForMainFrame()); // litus patch
+     }
+ 
+     @Override
