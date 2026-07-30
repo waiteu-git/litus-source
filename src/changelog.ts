@@ -10,6 +10,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 203,
+    date: '2026/07/30',
+    items: [
+      '設定に「不具合の報告」を独立した項目として置きました。これまで「データ」の中の出席送信の記録の下にあったため、時間割や掲示がうまく動かない時に見つけにくくなっていました',
+    ],
+  },
+  {
     build: 202,
     date: '2026/07/30',
     items: [

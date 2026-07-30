@@ -412,13 +412,19 @@ export default function SettingsScreen() {
               )}
             </View>
           ) : null}
-          {/* 不具合報告: 記録のすぐ下に置く（「この内容を開発者にお知らせください」と書いてある場所から
-              そのまま送れる）。アプリからは送らず、メールの下書きを作るだけ。 */}
-          <Pressable style={[ui.card, styles.rowBetween, { marginTop: 8 }]} onPress={() => setReportOpen(true)}>
+        </Accordion>
+
+        {/* 不具合報告は独立したセクションにする。「データ」の出席送信の記録の下にぶら下げていたため
+            「出席の話」と読まれ、時間割・掲示・ログインが壊れた人が辿り着けなかった。壊れやすさは
+            パース系（LETUSのDOM変化で真っ先に壊れる）のほうが高いのに、そこに受け皿が無く、行き先が
+            公開の場であるストアレビューしか無い状態だった。アプリからは送らず下書きを作るだけ・
+            送信前に本文を全部見せる、という設計は変えていない（memory litus-diag-report-path の裁定）。 */}
+        <Accordion title="不具合の報告" icon="bug-outline">
+          <Pressable style={[ui.card, styles.rowBetween]} onPress={() => setReportOpen(true)}>
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={[styles.rowLabel, { color: ui.valueColor }]}>不具合を開発者に送る</Text>
               <Text style={[styles.note, { color: ui.labelColor, marginTop: 4, marginLeft: 0 }]}>
-                上の記録と、アプリの版・OS・機種を添えたメールの下書きを作ります。送信前に本文を全部お見せします。
+                うまく動かなかった時に、メールの下書きを作ります。アプリの版・OS・機種と、出席送信の記録（あれば）を添えます。送信前に本文を全部お見せします。
               </Text>
             </View>
             <Text style={[styles.rowAction, { color: ui.labelColor }]}>作成</Text>

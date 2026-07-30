@@ -11,11 +11,11 @@
       "supportsTablet": true,
       "requireFullScreen": true,
       "bundleIdentifier": "dev.waiteu.litus",
-      "buildNumber": "202"
+      "buildNumber": "203"
     },
     "android": {
       "package": "dev.waiteu.litus",
-      "versionCode": 202,
+      "versionCode": 203,
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
       "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
