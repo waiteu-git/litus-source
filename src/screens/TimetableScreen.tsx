@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { Alert, Animated, AppState, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import ScreenHint from '../tutorial/ScreenHint'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'

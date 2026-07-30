@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native'
 import { Text } from './Text'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import type { KillSwitchFeature } from '../health/killSwitch'
 import { useUi } from './screen'

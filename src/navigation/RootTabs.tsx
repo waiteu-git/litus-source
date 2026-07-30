@@ -1,6 +1,6 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { getFocusedRouteNameFromRoute, type RouteProp } from '@react-navigation/native'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import TimetableStack from './TimetableStack'
 import AssignmentsStack from './AssignmentsStack'
 import HomeStack from './HomeStack'

@@ -1,7 +1,7 @@
 // app/src/screens/SubjectDetailScreen.tsx
 import { cloneElement, Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native'

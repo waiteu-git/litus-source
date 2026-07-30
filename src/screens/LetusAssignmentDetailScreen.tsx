@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Vie
 import { Text } from '../ui/Text'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { ActionButton, useUi, useTabBarClearance } from '../ui/screen'
 import { useKeyboardHeight } from '../ui/useKeyboardHeight'
 import { COLORS, DARK } from '../theme'

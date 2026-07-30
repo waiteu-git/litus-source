@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { Text } from '../ui/Text'
 import { useUi } from '../ui/screen'
 import { useSync } from '../sync/SyncProvider'
