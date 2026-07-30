@@ -10,3 +10,5 @@ dist/
 *.apk
 *.orig.png
 *(standalone).html
+# macOS がフォルダを開くたび作る。untracked に常駐すると git add -A で紛れ込む
+.DS_Store
