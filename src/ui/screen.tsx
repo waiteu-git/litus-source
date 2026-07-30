@@ -3,7 +3,7 @@ import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-nativ
 import { Text } from './Text'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle, G } from 'react-native-svg'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, DARK, useThemeVariant } from '../theme'
 import { resolveUiColors } from '../theme.tokens'

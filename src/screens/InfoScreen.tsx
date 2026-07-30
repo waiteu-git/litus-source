@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { PressableRow } from '../ui/Pressable'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { useFocusEffect } from '@react-navigation/native'
 import { ScreenBg, ScreenHeader, SectionLabel, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import {

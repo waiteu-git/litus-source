@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type React
 import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { computeHomeBanner } from '../attendance/homeBanner'

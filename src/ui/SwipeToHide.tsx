@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react'
 import { Animated, PanResponder, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { Text } from './Text'
 import { useUi } from './screen'
 import { shouldCaptureSwipe, shouldCommitHide, clampSwipeX } from './swipeHideDecision'

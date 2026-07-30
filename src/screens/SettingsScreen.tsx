@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { Text } from '../ui/Text'
 import { clearTimetable, loadTimetable } from '../storage/timetableStore'
 import { loadAttendanceSettings, saveAttendanceSettings } from '../storage/attendanceSettingsStore'

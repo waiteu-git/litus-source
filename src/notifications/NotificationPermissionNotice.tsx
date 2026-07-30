@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { AppState, Linking, StyleSheet, View } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { Text } from '../ui/Text'
 import { PressableCard } from '../ui/Pressable'
 import { useUi } from '../ui/screen'

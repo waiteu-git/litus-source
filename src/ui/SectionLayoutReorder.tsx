@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Animated, PanResponder, Pressable, StyleSheet, View, type AccessibilityActionEvent } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { Text } from './Text'
 import { useUi } from './screen'
 import { DUR, EASE } from './motion'
