@@ -16,6 +16,15 @@ export type AttendanceAlarm = {
   day: DayOfWeek
   period: number
   fireAt: string
+  /**
+   * その授業回の終了時刻（'HH:MM'・連続コマなら塊の末尾）。ラストチャンスの文面が
+   * 「あとどれだけ猶予があるか」を言うために持つ。開始アラームでは使わないので省略可。
+   *
+   * **相対の残り分数ではなく絶対時刻を持つ理由**: Android 12+ では SCHEDULE_EXACT_ALARM を
+   * 宣言しない方針のため予約は setAndAllowWhileIdle（不正確）で、実発火が数分ずれうる。
+   * 「残り10分」は遅延ぶんだけ嘘になるが、終了時刻はいつ発火しても真のまま。
+   */
+  endsAt?: string
 }
 
 /** courseCode -> 有効。キー不在は「有効」とみなす（既定ON）。false のみ無効。 */
@@ -162,6 +171,8 @@ export function computeAttendanceAlarms(
                 day: e.day,
                 period: run[0],
                 fireAt: lc.toISOString(),
+                // 塊の末尾の終了時刻＝その授業回が実際に終わる時刻。
+                endsAt: lastPt.end,
               })
             }
           }
@@ -174,11 +185,26 @@ export function computeAttendanceAlarms(
   return alarms
 }
 
+/**
+ * 出席アラームの表示文面。
+ *
+ * **狭い画面（スマートウォッチ）を基準に組む。** Wear OS / watchOS はペアリングしたスマホの通知を
+ * 既定でミラーするので、この文面はそのまま手首に出る。手首では題名＋本文の数行しか読めないため:
+ *
+ * - 題名は**科目名を先頭に置く**。切り詰められても「どの授業か」だけは残る（出席は科目が分からないと動けない）。
+ * - 本文で科目名を繰り返さない。題名に既にあるので、繰り返すと狭い1行を同じ情報で潰す。
+ * - 本文は**段階ごとに先頭の語を変える**。題名は2通とも同一なので、先頭が同じだと
+ *   開始アラームとラストチャンスが手首で見分けられない。
+ * - ラストチャンスは終了の**絶対時刻**を言う（相対の残り分数にしない理由は AttendanceAlarm.endsAt）。
+ */
 export function buildAttendanceNotificationContent(alarm: AttendanceAlarm): { title: string; body: string } {
   const title = `${alarm.courseName} 出席コード`
-  const body =
-    alarm.kind === 'attendance-start'
-      ? `${alarm.courseName}の出席コードが入力できるか確認しましょう`
-      : `${alarm.courseName}の出席、まだなら今のうちに入力しましょう`
+  if (alarm.kind === 'attendance-start') {
+    return { title, body: '授業が始まりました。出席コードを入力できるか確認しましょう' }
+  }
+  // endsAt が引けないとき（時限時刻の欠落）は時刻を騙らず、猶予の話だけにする。
+  const body = alarm.endsAt
+    ? `授業は${alarm.endsAt}まで。出席がまだなら今のうちに入力しましょう`
+    : 'まもなく授業が終わります。出席がまだなら今のうちに入力しましょう'
   return { title, body }
 }

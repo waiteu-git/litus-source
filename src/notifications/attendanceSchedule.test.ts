@@ -47,13 +47,63 @@ describe('computeAttendanceAlarms', () => {
 })
 
 describe('buildAttendanceNotificationContent', () => {
+  const base = { courseCode: '9973339', courseName: '基礎情報工学A', day: 'mon' as const, period: 3 }
+  const start = () => buildAttendanceNotificationContent({ ...base, kind: 'attendance-start', fireAt: '' })
+  const last = (endsAt?: string) =>
+    buildAttendanceNotificationContent({ ...base, kind: 'attendance-last-chance', fireAt: '', endsAt })
+
   it('開始とラストチャンスで文面が変わる', () => {
-    const base = { courseCode: '9973339', courseName: '基礎情報工学A', day: 'mon' as const, period: 3 }
-    const start = buildAttendanceNotificationContent({ ...base, kind: 'attendance-start', fireAt: '' })
-    const last = buildAttendanceNotificationContent({ ...base, kind: 'attendance-last-chance', fireAt: '' })
-    expect(start.title).toContain('基礎情報工学A')
-    expect(start.body).not.toEqual(last.body)
-    expect(last.body).toContain('基礎情報工学A')
+    expect(start().title).toContain('基礎情報工学A')
+    expect(start().body).not.toEqual(last('14:40').body)
+  })
+
+  // 手首（スマートウォッチ）は表示幅が狭く、ミラーされた通知は題名＋本文の数行しか出ない。
+  // 題名が既に科目名を持つので、本文でも繰り返すと**狭い画面の1行を同じ情報で潰す**。
+  // 本文の行は「いま何が起きたか／あとどれだけ猶予があるか」に使う。
+  it('本文で科目名を繰り返さない（題名に既にあるため）', () => {
+    expect(start().body).not.toContain('基礎情報工学A')
+    expect(last('14:40').body).not.toContain('基礎情報工学A')
+  })
+
+  // 出席は秒単位で価値がある情報なので、ラストチャンスは「あとどれだけか」を持つ。
+  // **相対の残り分数ではなく授業終了の絶対時刻**を出す: Android 12+ では
+  // SCHEDULE_EXACT_ALARM を宣言していない＝予約が setAndAllowWhileIdle（不正確）で、
+  // 実際の発火が数分ずれうる。「残り10分」は遅延ぶんだけ嘘になるが、終了時刻は
+  // いつ発火しても真のまま（[[litus-notification-architecture]] の exact alarm 不採用の帰結）。
+  it('ラストチャンスは授業終了の絶対時刻を出す（ずれても嘘にならない）', () => {
+    expect(last('14:40').body).toContain('14:40')
+    expect(last('14:40').body).not.toContain('残り')
+  })
+
+  it('終了時刻が無ければ時刻を騙らずフォールバックする', () => {
+    const b = last(undefined).body
+    expect(b).not.toContain('undefined')
+    expect(b.length).toBeGreaterThan(0)
+  })
+
+  // 手首では題名が同一だと2通が見分けられない。本文の**先頭**で段階が分かること。
+  it('開始とラストチャンスは本文の先頭で見分けられる', () => {
+    expect(start().body.slice(0, 6)).not.toEqual(last('14:40').body.slice(0, 6))
+  })
+})
+
+describe('computeAttendanceAlarms: endsAt', () => {
+  it('ラストチャンスに授業終了時刻(HH:MM)を載せる', () => {
+    const alarms = computeAttendanceAlarms([collection()], {}, MONDAY_NOON, { daysAhead: 1, lastChanceLeadMinutes: 10 })
+    expect(alarms[1]).toMatchObject({ kind: 'attendance-last-chance', endsAt: '14:40' })
+  })
+
+  it('連続コマは塊の末尾の終了時刻を載せる', () => {
+    const c: TimetableCollection = {
+      slots: [
+        { day: 'mon', period: 4, classes: [{ courseCode: 'L1', name: '物理学実験Ａ', teachers: [], room: 'K1', isRemote: false, credits: 2, badges: [] }] },
+        { day: 'mon', period: 5, classes: [{ courseCode: 'L1', name: '物理学実験Ａ', teachers: [], room: 'K1', isRemote: false, credits: 2, badges: [] }] },
+      ],
+      periodTimes: { campus: '野田', periods: [{ period: 4, start: '14:40', end: '16:10' }, { period: 5, start: '16:20', end: '17:50' }] },
+    }
+    const alarms = computeAttendanceAlarms([c], {}, MONDAY_NOON, { daysAhead: 1, lastChanceLeadMinutes: 10 })
+    const lc = alarms.find((a) => a.kind === 'attendance-last-chance')
+    expect(lc?.endsAt).toBe('17:50')
   })
 })
 
