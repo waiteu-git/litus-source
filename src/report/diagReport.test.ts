@@ -176,12 +176,15 @@ describe('mailtoMayTruncate', () => {
   })
 
   /**
-   * **コピーを主動線に固定した根拠をここで固定する。**
+   * **記録を載せる入口でコピーを主動線に固定した根拠をここで固定する。**
    * 日本語はパーセントエンコードで約3倍に膨らむので、記録が1件でも mailto URL は目安を超える
    * ＝「長い時だけ警告」は100%発火して警告にならない。この2つが両方真である限り、
-   * UIをmailto主動線へ戻してはいけない。
+   * **出席側（`source: 'attendance'`）を** mailto 主動線へ戻してはいけない。
+   *
+   * ⚠**設定側（`source: 'settings'`）はこの制約の外**。記録を載せないので mailto に収まり、
+   * メールを主動線にできる（下のテストで固定）。**この2つを混ぜないこと。**
    */
-  it('記録1件でも目安を超える（＝mailtoを主動線にできない）', () => {
+  it('記録が付く入口では、1件でも目安を超える（＝mailtoを主動線にできない）', () => {
     const url = mailtoFor([diag({ hint: HINT_REAL, okBy: OKBY_REAL })])
     expect(mailtoMayTruncate(url)).toBe(true)
     expect(url.length).toBeGreaterThan(2500)
@@ -190,6 +193,34 @@ describe('mailtoMayTruncate', () => {
   it('記録10件が満杯だと1万文字を超える', () => {
     const full = Array.from({ length: 10 }, () => diag({ hint: HINT_REAL, okBy: OKBY_REAL }))
     expect(mailtoFor(full).length).toBeGreaterThan(10000)
+  })
+
+  /**
+   * **設定側で「メールで送る」を主動線にした根拠。**
+   * 記録を載せないので、記録が10件あっても本文は環境情報だけで mailto に収まる。
+   * ここが偽になったら（＝本文が育って目安を超えたら）設定側もコピー主動線へ戻すこと。
+   */
+  it('設定から開くと、記録が満杯でも目安に収まる（＝メールを主動線にできる）', () => {
+    const full = Array.from({ length: 10 }, () => diag({ hint: HINT_REAL, okBy: OKBY_REAL }))
+    const body = buildDiagReportBody({ diags: full, env: ENV, nowIso: '2026-07-30T03:00:00.000Z', source: 'settings' })
+    const url = buildMailtoUrl({ to: 'a@b.c', subject: buildDiagReportSubject(ENV), body })
+    expect(mailtoMayTruncate(url)).toBe(false)
+    expect(body).not.toContain('出席送信の記録')
+  })
+
+  it('設定から開くと例文が出席固有でなくなる（時間割・掲示・ログインも含む）', () => {
+    const body = buildDiagReportBody({ diags: [], env: ENV, nowIso: '2026-07-30T03:00:00.000Z', source: 'settings' })
+    expect(body).not.toContain('「出席する」を押したら')
+    expect(body).toContain('時間割')
+    expect(body).toContain('スクリーンショット')
+  })
+
+  it('source 未指定は安全側（記録を載せる＝コピー主動線）に倒れる', () => {
+    const one = [diag({ hint: HINT_REAL, okBy: OKBY_REAL })]
+    const implicit = buildDiagReportBody({ diags: one, env: ENV, nowIso: '2026-07-30T03:00:00.000Z' })
+    const explicit = buildDiagReportBody({ diags: one, env: ENV, nowIso: '2026-07-30T03:00:00.000Z', source: 'attendance' })
+    expect(implicit).toBe(explicit)
+    expect(implicit).toContain('出席送信の記録')
   })
 })
 

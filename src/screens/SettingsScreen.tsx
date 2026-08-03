@@ -474,7 +474,7 @@ export default function SettingsScreen() {
         </Accordion>
       </ScrollView>
       <ChangelogModal visible={changelogOpen} entries={CHANGELOG} onClose={() => setChangelogOpen(false)} />
-      <DiagReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} />
+      <DiagReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} source="settings" />
     </ScreenBg>
   )
 }

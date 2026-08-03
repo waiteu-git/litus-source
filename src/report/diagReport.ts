@@ -30,6 +30,21 @@ export const DIAG_REPORT_TO = 'contact@waiteu.dev'
 const NOTE_HEADING = '■ 状況（お手数ですが、ここに書き足してください）'
 
 /**
+ * どの入口から開いたか。**本文に出席送信の記録を載せるかと、主動線がどちらかを決める。**
+ *
+ * - `attendance` = 出席の失敗カードのその場。記録を載せる＝本文が長くなるので**コピーが主動線**。
+ * - `settings`   = 設定 >「不具合の報告」。**記録を載せない**＝mailto に収まるので**メールが主動線**。
+ *
+ * **なぜ入口で変えるか**: 多くの不具合に出席送信の記録は1行も関係ない（時間割が変・掲示が来ない・
+ * ログインできない）。全部に付けているから本文が長くなり、長いから mailto を主動線にできず、
+ * コピー＆貼り付けという重い手順を全員に強いていた。**記録が要るのは出席の不具合だけ。**
+ *
+ * 実測（2026-07-30）: 記録0件の本文 240字 → mailto URL **1,560字**（目安2,000内）。
+ * 記録10件 → **15,688字**。日本語はパーセントエンコードで約3倍に膨らむ。
+ */
+export type DiagReportSource = 'settings' | 'attendance'
+
+/**
  * `mailto:` の本文が途切れないと見込める、エンコード後URL長の保守的な目安。
  *
  * `mailto:` の本文長の上限はOSでもメールアプリでも規格化されておらず、端末側で黙って
@@ -112,26 +127,42 @@ export function buildDiagReportSubject(env: DiagEnv): string {
  *
  * 記録が0件でも作る＝診断が残っていない不具合（表示崩れ等）も報告できる導線でありたい。
  */
-export function buildDiagReportBody(opts: { diags: SubmitDiag[]; env: DiagEnv; nowIso: string }): string {
-  const { diags, env, nowIso } = opts
-  const records =
-    diags.length === 0
-      ? '（記録はありません）'
-      : diags.map((d, i) => `--- ${i + 1} ---\n${formatSubmitDiag(d)}`).join('\n\n')
-  return [
+export function buildDiagReportBody(opts: {
+  diags: SubmitDiag[]
+  env: DiagEnv
+  nowIso: string
+  /** 既定は `attendance`＝記録を載せる側。**指定漏れは安全側（長くても切れないコピー主動線）へ倒す。** */
+  source?: DiagReportSource
+}): string {
+  const { diags, env, nowIso, source = 'attendance' } = opts
+  const example =
+    source === 'settings'
+      ? '（例: 7/30から時間割の水曜だけ表示されません／掲示の通知が来ません／ログインしても同期が終わりません）'
+      : '（例: 7/30の2限で「出席する」を押したら「出席を確認しています…」から進まず、CLASSでは未出席でした）'
+  const head = [
     NOTE_HEADING,
-    '（例: 7/30の2限で「出席する」を押したら「出席を確認しています…」から進まず、CLASSでは未出席でした）',
+    example,
+    '（不具合の画面のスクリーンショットも、メールに添付していただけると助かります）',
     '',
     '',
     '■ アプリ・端末',
     formatDiagEnv(env),
     `書き出し ${nowIso}`,
-    '',
-    `■ 出席送信の記録（${diags.length}件）`,
-    records,
-    '',
-    '― この本文がそのまま送られます。送りたくない行は送信前に消してください。',
-  ].join('\n')
+  ]
+  // 設定から開いた時は記録を載せない＝本文が mailto に収まり「メールで送る」を主動線にできる。
+  const records =
+    source === 'settings'
+      ? []
+      : [
+          '',
+          `■ 出席送信の記録（${diags.length}件）`,
+          diags.length === 0
+            ? '（記録はありません）'
+            : diags.map((d, i) => `--- ${i + 1} ---\n${formatSubmitDiag(d)}`).join('\n\n'),
+        ]
+  return [...head, ...records, '', '― この本文がそのまま送られます。送りたくない行は送信前に消してください。'].join(
+    '\n',
+  )
 }
 
 /**

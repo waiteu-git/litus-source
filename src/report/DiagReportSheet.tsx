@@ -8,7 +8,13 @@ import { COLORS } from '../theme'
 import type { SubmitDiag } from '../attendance/submitDiag'
 import { loadSubmitDiags } from '../storage/submitDiagStore'
 import { collectDiagEnv } from './diagEnv'
-import { DIAG_REPORT_TO, buildDiagReportBody, buildDiagReportSubject, buildMailtoUrl } from './diagReport'
+import {
+  DIAG_REPORT_TO,
+  buildDiagReportBody,
+  buildDiagReportSubject,
+  buildMailtoUrl,
+  type DiagReportSource,
+} from './diagReport'
 
 /**
  * 不具合報告の下書きを**全画面で見せてから**送る。
@@ -22,14 +28,29 @@ import { DIAG_REPORT_TO, buildDiagReportBody, buildDiagReportSubject, buildMailt
  * - **「メールで送る」と「本文をコピー」を必ず両方出す**。`mailto:` は本文が長いと端末側で
  *   黙って切られることがあり、切れたかどうかは誰にも見えない。コピーはその唯一の逃げ道。
  */
-export default function DiagReportSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export default function DiagReportSheet({
+  visible,
+  onClose,
+  source = 'attendance',
+}: {
+  visible: boolean
+  onClose: () => void
+  /** 入口。`settings` は記録を載せず「メールで送る」を主動線にする。既定は安全側の `attendance`。 */
+  source?: DiagReportSource
+}) {
   const ui = useUi()
   const insets = useSafeAreaInsets()
   const [diags, setDiags] = useState<SubmitDiag[] | null>(null)
+  // 設定から開いた時は記録を本文に載せないので、そもそも読みに行かない。
+  const withDiags = source !== 'settings'
 
   // 開いた時に読む（設定画面の「出席送信の記録」と同じ扱い＝常時メモリに載せない）。
   useEffect(() => {
     if (!visible) return
+    if (!withDiags) {
+      setDiags([])
+      return
+    }
     let alive = true
     loadSubmitDiags()
       .catch(() => [])
@@ -39,13 +60,13 @@ export default function DiagReportSheet({ visible, onClose }: { visible: boolean
     return () => {
       alive = false
     }
-  }, [visible])
+  }, [visible, withDiags])
 
   const draft = useMemo(() => {
     if (diags == null) return null
     const env = collectDiagEnv()
     const subject = buildDiagReportSubject(env)
-    const body = buildDiagReportBody({ diags, env, nowIso: new Date().toISOString() })
+    const body = buildDiagReportBody({ diags, env, nowIso: new Date().toISOString(), source })
     const url = buildMailtoUrl({ to: DIAG_REPORT_TO, subject, body })
     return { subject, body, url }
   }, [diags])
@@ -110,7 +131,9 @@ export default function DiagReportSheet({ visible, onClose }: { visible: boolean
               10件なら 15,688 文字。「長い時だけ警告」は100%出るので警告として機能しない。
               ⇒ コピーを主動線にし、切れうることは常に書く。 */}
           <Text style={[styles.noticeText, { color: ui.labelColor }]}>
-            {'「本文をコピー」→ メールやDMに貼り付けるのが確実です。「メールで送る」は宛先と件名が入りますが、本文が長いためメールアプリ側で途中までしか入らないことがあります。'}
+            {withDiags
+              ? '「本文をコピー」→ メールやDMに貼り付けるのが確実です。「メールで送る」は宛先と件名が入りますが、本文が長いためメールアプリ側で途中までしか入らないことがあります。'
+              : '「メールで送る」を押すと、宛先・件名・本文が入った状態でメールアプリが開きます。送信ボタンを押すだけです。'}
           </Text>
         </View>
 
@@ -125,26 +148,62 @@ export default function DiagReportSheet({ visible, onClose }: { visible: boolean
         </ScrollView>
 
         <Text style={[styles.meta, { color: ui.labelColor }]}>
-          本文 {draft ? draft.body.length : 0} 文字 / 記録 {diags?.length ?? 0} 件
+          {withDiags
+            ? `本文 ${draft ? draft.body.length : 0} 文字 / 記録 ${diags?.length ?? 0} 件`
+            : `本文 ${draft ? draft.body.length : 0} 文字`}
         </Text>
 
-        {/* コピーが主動線。**コピーだけが長さで壊れない**（上の実測を参照）。 */}
-        <Pressable
-          style={[styles.cta, { backgroundColor: COLORS.cta }, !draft && styles.ctaBusy]}
-          disabled={!draft}
-          onPress={onCopy}
-        >
-          <Text style={styles.ctaText}>本文をコピー</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.ghost, { backgroundColor: ui.inputBg, borderColor: ui.inputBorder }, !draft && styles.ctaBusy]}
-          disabled={!draft}
-          onPress={onMail}
-        >
-          <Text style={[styles.ghostText, { color: ui.dark ? COLORS.emeraldLight : COLORS.emeraldDark }]}>
-            メールで送る
-          </Text>
-        </Pressable>
+        {/* 主動線は入口で変わる。記録を載せる側（出席）は本文が長く mailto が黙って切られうるので
+            コピーが主動線。載せない側（設定）は mailto に収まるので「メールで送る」が主動線＝
+            タップ→メールアプリが宛先・件名・本文入りで開く→送信ボタンだけ、まで縮む。
+            **どちらの入口でも両方のボタンは必ず出す**（メールアプリが無い端末の逃げ道がコピー）。 */}
+        {withDiags ? (
+          <>
+            <Pressable
+              style={[styles.cta, { backgroundColor: COLORS.cta }, !draft && styles.ctaBusy]}
+              disabled={!draft}
+              onPress={onCopy}
+            >
+              <Text style={styles.ctaText}>本文をコピー</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.ghost,
+                { backgroundColor: ui.inputBg, borderColor: ui.inputBorder },
+                !draft && styles.ctaBusy,
+              ]}
+              disabled={!draft}
+              onPress={onMail}
+            >
+              <Text style={[styles.ghostText, { color: ui.dark ? COLORS.emeraldLight : COLORS.emeraldDark }]}>
+                メールで送る
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable
+              style={[styles.cta, { backgroundColor: COLORS.cta }, !draft && styles.ctaBusy]}
+              disabled={!draft}
+              onPress={onMail}
+            >
+              <Text style={styles.ctaText}>メールで送る</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.ghost,
+                { backgroundColor: ui.inputBg, borderColor: ui.inputBorder },
+                !draft && styles.ctaBusy,
+              ]}
+              disabled={!draft}
+              onPress={onCopy}
+            >
+              <Text style={[styles.ghostText, { color: ui.dark ? COLORS.emeraldLight : COLORS.emeraldDark }]}>
+                本文をコピー
+              </Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </Modal>
   )
