@@ -1,5 +1,6 @@
 import type { TimetableCollection } from '../collect/timetableMessage'
 import type { CampusPeriodTimes, DayOfWeek } from '../parsers/timetable'
+import type { ClassActivePredicate } from './homeBanner'
 
 const WEEKDAY: Record<DayOfWeek, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
 
@@ -60,15 +61,25 @@ export function attendedClassEndMin(
 }
 
 /**
- * now が「登録授業のある時限の時間帯内」か（開始 preMinutes 前〜終了まで）を判定する純粋関数。
+ * now が「**まだ授業回のある**登録授業の時限の時間帯内」か（開始 preMinutes 前〜終了まで）を
+ * 判定する純粋関数。
  *
  * 背景: CLASS は授業時間帯にログインすると、ホームではなく**モバイル出席登録**画面を出す。
  * リタスもこれに合わせ、授業中はアプリ起動時の既定タブを「出席」にするための判定に使う。
  * 端末非依存・now注入で決定論的（vitestでテスト可能）。
+ *
+ * **isActive は必須**。時間割は学期が終わってもコマを持ち続けるため、曜日と時刻だけで判定すると
+ * 前期終了後も毎週その時間帯に「授業中」と答え続ける（2026-08-03のユーザー報告）。日付を持つ判定
+ * （isCourseActiveOn）を通す口を省略可能にすると、呼び出し側は必ず省略する＝同じ欠陥が戻ってくる
+ * ので、型で強制する。判定そのものをここで再実装しないこと（courseOver.ts が正典）。
+ *
+ * 述語は代表科目を選ぶ**前**の全科目に当てる（findActiveClass と同じ理由＝積みコマで終了済みの
+ * 方が代表に選ばれると、同じコマで生きている科目まで巻き添えで消える）。
  */
-export function isInClassPeriod(
+export function isInActiveClassPeriod(
   collections: TimetableCollection[],
   now: Date,
+  isActive: ClassActivePredicate,
   preMinutes = 5,
 ): boolean {
   const weekday = now.getDay()
@@ -83,7 +94,8 @@ export function isInClassPeriod(
       const start = hhmmToMin(pt.start)
       const end = hhmmToMin(pt.end)
       if (start === null || end === null) continue
-      if (nowMin >= start - preMinutes && nowMin <= end) return true
+      if (nowMin < start - preMinutes || nowMin > end) continue
+      if (slot.classes.some((c) => isActive(c.courseCode, c.name))) return true
     }
   }
   return false

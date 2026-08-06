@@ -318,7 +318,7 @@ export async function clearDeliveredAttendanceOpenNotifications(): Promise<void>
  *
  * **受付open通知が出たときに呼ぶ**。開始アラームは時間割から推測して「入力できるか確認しましょう」と
  * 言うだけだが、受付open通知は CLASS を実際に見て「受付中（14:40〜16:10）」と事実を言う。
- * 授業開始で isInClassPeriod が真→エンジン起動→accepting 検知、が予約アラームとほぼ同時刻になるため、
+ * 授業開始で isInActiveClassPeriod が真→エンジン起動→accepting 検知、が予約アラームとほぼ同時刻になるため、
  * 両方MAXチャンネル（音＋ヘッドアップ）で立て続けに鳴っていた（実機報告 2026-07-17「一気に2つきてうるさい」）。
  * 情報として上位の受付open通知を残し、推測ベースの開始アラームを畳む。
  * courseCode 指定時はその科目のものだけ消す（別授業の予約アラームを巻き込まない）。

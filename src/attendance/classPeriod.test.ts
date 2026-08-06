@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isInClassPeriod, currentPeriodNumber, attendedClassEndMin } from './classPeriod'
+import { isInActiveClassPeriod, currentPeriodNumber, attendedClassEndMin } from './classPeriod'
 import type { TimetableCollection } from '../collect/timetableMessage'
+
+/** 全科目まだ授業がある（＝学期終了の情報が無い時の fail-open 相当）。 */
+const ALL_ACTIVE = () => true
 
 const periodTimes = {
   campus: '野田',
@@ -33,38 +36,60 @@ const MON_0840 = new Date(2026, 6, 6, 8, 40) // 1限開始20分前（pre外）
 const MON_1035 = new Date(2026, 6, 6, 10, 35) // 1限終了後・2限開始前の休み時間
 const TUE_0930 = new Date(2026, 6, 7, 9, 30) // 火曜9:30（月曜授業には該当しない）
 
-describe('isInClassPeriod', () => {
+describe('isInActiveClassPeriod', () => {
   it('登録授業のある時限の最中は true', () => {
-    expect(isInClassPeriod([col('mon', 1)], MON_0930)).toBe(true)
+    expect(isInActiveClassPeriod([col('mon', 1)], MON_0930, ALL_ACTIVE)).toBe(true)
   })
 
   it('開始少し前（既定5分）は true', () => {
-    expect(isInClassPeriod([col('mon', 1)], MON_0857)).toBe(true)
+    expect(isInActiveClassPeriod([col('mon', 1)], MON_0857, ALL_ACTIVE)).toBe(true)
   })
 
   it('開始よりだいぶ前は false', () => {
-    expect(isInClassPeriod([col('mon', 1)], MON_0840)).toBe(false)
+    expect(isInActiveClassPeriod([col('mon', 1)], MON_0840, ALL_ACTIVE)).toBe(false)
   })
 
   it('時限と時限の間（休み時間）は false', () => {
-    expect(isInClassPeriod([col('mon', 1)], MON_1035)).toBe(false)
+    expect(isInActiveClassPeriod([col('mon', 1)], MON_1035, ALL_ACTIVE)).toBe(false)
   })
 
   it('曜日が違えば false', () => {
-    expect(isInClassPeriod([col('mon', 1)], TUE_0930)).toBe(false)
+    expect(isInActiveClassPeriod([col('mon', 1)], TUE_0930, ALL_ACTIVE)).toBe(false)
   })
 
   it('その時限に授業が無い（空きコマ）なら false', () => {
-    expect(isInClassPeriod([col('mon', 1, false)], MON_0930)).toBe(false)
+    expect(isInActiveClassPeriod([col('mon', 1, false)], MON_0930, ALL_ACTIVE)).toBe(false)
   })
 
   it('時限時刻が無ければ false（判定不能）', () => {
     const noTimes: TimetableCollection = { slots: [{ day: 'mon', period: 1, classes: col('mon', 1).slots[0].classes }], periodTimes: null }
-    expect(isInClassPeriod([noTimes], MON_0930)).toBe(false)
+    expect(isInActiveClassPeriod([noTimes], MON_0930, ALL_ACTIVE)).toBe(false)
   })
 
   it('コレクションが空なら false', () => {
-    expect(isInClassPeriod([], MON_0930)).toBe(false)
+    expect(isInActiveClassPeriod([], MON_0930, ALL_ACTIVE)).toBe(false)
+  })
+
+  it('その時限の科目が全て「授業回が終わった」なら false', () => {
+    expect(isInActiveClassPeriod([col('mon', 1)], MON_0930, () => false)).toBe(false)
+  })
+
+  it('述語には科目コードと科目名の両方を渡す', () => {
+    const seen: Array<[string, string]> = []
+    isInActiveClassPeriod([col('mon', 1)], MON_0930, (code, name) => {
+      seen.push([code, name])
+      return true
+    })
+    expect(seen).toEqual([['AB1234', '線形代数']])
+  })
+
+  it('同じコマの積みコマで片方だけ生きていれば true', () => {
+    const two = col('mon', 1)
+    two.slots[0].classes = [
+      { courseCode: 'OVER01', name: '終了済み', teachers: [], room: '', isRemote: false, credits: null, badges: [] },
+      { courseCode: 'LIVE01', name: '継続中', teachers: [], room: '', isRemote: false, credits: null, badges: [] },
+    ]
+    expect(isInActiveClassPeriod([two], MON_0930, (code) => code === 'LIVE01')).toBe(true)
   })
 })
 

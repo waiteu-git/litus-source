@@ -36,7 +36,8 @@ import { canSubmitReaction, REACTION_FILL_MAX_TRIES, REACTION_FILL_RETRY_MS } fr
 import { toReactionDiag, type ReactionOutcome } from './reactionDiag'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage } from './classifyClassPage'
-import { isInClassPeriod, attendedClassEndMin } from './classPeriod'
+import { isInActiveClassPeriod, attendedClassEndMin } from './classPeriod'
+import { useCourseActive } from './useCourseActive'
 import { canRecordAttendance, isAttendedNow, resolveAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
 import { shouldAutoRetrySubmit, toSubmitDiag } from './submitDiag'
 import { addSubmitDiag } from '../storage/submitDiagStore'
@@ -96,7 +97,8 @@ const ATTENDANCE_POLL_MS = 30000
  * 設計: docs/superpowers/specs/2026-07-09-home-tab-attendance-banner-design.md
  * - WebViewはタブ/画面遷移で破棄されない（ここが唯一の所有者）。出席画面(AttendanceScreen)は
  *   このcontextを読むだけの薄いUIになる。
- * - 起動ポリシー: 授業時間帯(isInClassPeriod) または 出席画面がフォーカス中 のあいだだけ
+ * - 起動ポリシー: 授業時間帯(isInActiveClassPeriod＝学期の授業回が終わった科目は除く) または
+ *   出席画面がフォーカス中 のあいだだけ
  *   WebViewを起動する（電池・CLASSセッション負荷回避）。停止中も reception はキャッシュ保持。
  * - 収集(時間割/掲示)がCLASSを使う間は WebView を譲る（classViewArbiter）。
  */
@@ -260,13 +262,20 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // リモートkill switch（attendance）中はどちらでも起動しない（Provider自体は
   // BackgroundBulletinSync等がcontextを消費するためアンマウントできない。ここで止める）。
   // CLASSメンテ帯・オフライン中も起動しても失敗するだけなので抑止する。
+  //
+  // 「授業時間帯」は**日付を持つ判定を通す**（ホームのバナー・FAB・予約通知と同じ courseActive）。
+  // 通さないと学期終了後の死んだコマでも毎週CLASSを叩き続ける＝通信と電池の無駄になる
+  // （受付open通知は実際の status==='accepting' を要求するので誤通知にはならないが、
+  //  素通りさせておくと「日付判定を通していない面」が残る）。読み込み前・出欠が無い端末では
+  // 述語が常に true を返す（fail-open）ので、従来どおり起動する。
   const isOnline = useConnectivity()
+  const courseActive = useCourseActive(now)
   const classAccessible = evaluateAccess('class', { now, isOnline }).allowed
   const running =
     !demo &&
     !killSwitch.isKilled('attendance') &&
     classAccessible &&
-    (attendanceFocused || isInClassPeriod(timetable, now))
+    (attendanceFocused || isInActiveClassPeriod(timetable, now, courseActive))
   const shouldRender = running && !collectActive
   const prevRenderRef = useRef(false)
   const shouldRenderRef = useRef(false)
@@ -372,7 +381,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   }, [])
 
   // 受付中かつ確認時間が取れていれば毎秒 now を更新（カウントダウン）。それ以外は粗いクロックで
-  // isInClassPeriod/バナー判定を回す。
+  // isInActiveClassPeriod/バナー判定を回す。
   useEffect(() => {
     const fast = !!(state.reception?.accepting && state.reception.confirmWindow)
     const id = setInterval(() => setNow(new Date()), fast ? 1000 : 30000)

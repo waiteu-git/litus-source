@@ -231,6 +231,58 @@ describe('buildWidgetModel', () => {
   })
 })
 
+/**
+ * ホーム画面ウィジェットは時間割の曜日・時刻だけで「受付中かも」を出していたため、
+ * 学期が終わっても毎週その時間帯に出続けていた（2026-08-03のユーザー報告の残り面）。
+ * 判定は画面・予約通知と同じ isCourseActiveOn を通す＝ここで述語を再実装しない。
+ */
+describe('buildWidgetModel の出席状態（学期の授業回が終わった科目）', () => {
+  const cols = () => collection([{ day: 'mon' as const, period: 3, classes: [cls('情報理論')] }])
+
+  it('学期の授業回が終わっていれば授業時間帯でも open にしない', () => {
+    const m = buildWidgetModel(MON(13, 30), cols(), [], null, undefined, undefined, 0, {
+      termEnds: { 情報理論: '2026-06-29' },
+      extraPlans: [],
+    })
+    expect(m.attendance).toEqual({ state: 'idle', targetCourse: null })
+  })
+
+  it('学期終了後でもその日に期末・補講の予定があれば open にする', () => {
+    const m = buildWidgetModel(MON(13, 30), cols(), [], null, undefined, undefined, 0, {
+      termEnds: { 情報理論: '2026-06-29' },
+      extraPlans: [{ courseCode: '情報理論', courseName: '情報理論', date: '2026-07-06' }],
+    })
+    expect(m.attendance).toEqual({ state: 'open', targetCourse: '情報理論' })
+  })
+
+  it('出欠データが無い（termEnds が空）なら従来どおり open にする', () => {
+    const m = buildWidgetModel(MON(13, 30), cols(), [], null, undefined, undefined, 0, {
+      termEnds: {},
+      extraPlans: [],
+    })
+    expect(m.attendance).toEqual({ state: 'open', targetCourse: '情報理論' })
+  })
+
+  it('termInfo を渡さなければ従来どおり open にする（fail-open）', () => {
+    const m = buildWidgetModel(MON(13, 30), cols(), [], null)
+    expect(m.attendance).toEqual({ state: 'open', targetCourse: '情報理論' })
+  })
+
+  it('学期の授業回が終わっていても、その日に出席済みなら done のまま', () => {
+    const attended: AttendedRecord = {
+      date: '2026-07-06',
+      courseName: '情報理論',
+      confirmWindow: '13:00〜14:40',
+      code: '1234',
+    }
+    const m = buildWidgetModel(MON(13, 30), cols(), [], attended, undefined, undefined, 0, {
+      termEnds: { 情報理論: '2026-06-29' },
+      extraPlans: [],
+    })
+    expect(m.attendance.state).toBe('done')
+  })
+})
+
 describe('pickDataAt', () => {
   it('未取得(0/無効)は無視し、残りの最古を採る', () => {
     expect(pickDataAt(0, 0)).toBe(0)

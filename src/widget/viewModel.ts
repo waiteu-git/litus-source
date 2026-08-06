@@ -4,7 +4,7 @@
  *
  * 描画層（react-native-android-widget の FlexWidget 群 / 将来 iOS の updateSnapshot）は
  * この出力をマッピングするだけにして、「何を表示するか」の判断を 100% ここへ寄せる（CLAUDE.md のロジック層分離）。
- * 既存の純関数（pickFocusClass / pickUpcomingAssignments / isInClassPeriod / isAttendedNow 等）を再利用する。
+ * 既存の純関数（pickFocusClass / pickUpcomingAssignments / isInActiveClassPeriod / isAttendedNow 等）を再利用する。
  */
 import type { TimetableCollection } from '../collect/timetableMessage'
 import type { Assignment } from '../storage/assignmentsSerialize'
@@ -12,10 +12,16 @@ import type { AttendedRecord } from '../attendance/attendedState'
 import type { DayOfWeek, Quarter } from '../parsers/timetable'
 import { pickFocusClass } from '../home/focusClass'
 import { pickUpcomingAssignments, relDue, urgencyTone } from '../assignments/deadline'
-import { isInClassPeriod, attendedClassEndMin } from '../attendance/classPeriod'
+import { isInActiveClassPeriod, attendedClassEndMin } from '../attendance/classPeriod'
 import { isAttendedNow } from '../attendance/attendedState'
+import { isCourseActiveOn, type CourseTermInfo } from '../attendance/courseOver'
+import type { ClassActivePredicate } from '../attendance/homeBanner'
+import { dateToYmd } from '../timetableEvents/eventDateValue'
 import { representativeClass } from '../timetableEvents/quarter'
 import { formatFreshnessTime } from '../health/freshnessText'
+
+/** 学期終了が「不明」＝全科目まだ授業がある扱い（fail-open）。 */
+const NO_TERM_INFO: CourseTermInfo = { termEnds: {}, extraPlans: [] }
 
 const WEEKDAY_JP = ['日', '月', '火', '水', '木', '金', '土']
 const WEEKDAY: Record<DayOfWeek, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
@@ -126,12 +132,18 @@ function buildAttendance(
   now: Date,
   attended: AttendedRecord | null,
   focusName: string | null,
+  isActive: ClassActivePredicate,
 ): WidgetAttendance {
   const classEndMin = attendedClassEndMin(collections, now, attended?.confirmWindow ?? null)
   if (isAttendedNow(attended, now, classEndMin)) {
     return { state: 'done', targetCourse: attended?.courseName ?? null }
   }
-  if (isInClassPeriod(collections, now)) {
+  // 学期の授業回が終わった科目には「受付中かも」を出さない。時間割は学期が終わってもコマを
+  // 持ち続けるため、曜日と時刻だけで判定すると前期終了後も毎週その時間帯に出続ける。
+  // 隔週の休み週（isOn / weeklyPattern）は**ここには効かせない**＝ホームのバナー・FAB
+  // （computeHomeBanner に courseActive だけを渡す）と同じ範囲に揃える。片方だけ厳しくすると、
+  // 同じ授業についてウィジェットとアプリ本体が食い違う。
+  if (isInActiveClassPeriod(collections, now, isActive)) {
     return { state: 'open', targetCourse: focusName }
   }
   return { state: 'idle', targetCourse: null }
@@ -147,8 +159,18 @@ export function buildWidgetModel(
   currentQuarter?: Quarter,
   /** データを最後に取得した時刻(ms)。0/未指定は未取得＝鮮度ラベルを出さない。 */
   dataAt: number = 0,
+  /**
+   * 学期の授業回が終わった科目を落とすための情報。省略すれば従来どおり全科目に出す（fail-open）。
+   *
+   * **述語ではなく素材を受け取る**。呼び出し側（widgetData）に述語を組ませると、画面・予約通知が
+   * 通す isCourseActiveOn とは別の3本目の判定が生える。組み立ては buildCourseTermInfo が正典。
+   */
+  termInfo: CourseTermInfo = NO_TERM_INFO,
 ): WidgetModel {
   const nowMin = now.getHours() * 60 + now.getMinutes()
+  const dateKey = dateToYmd(now)
+  const isActive: ClassActivePredicate = (courseCode, courseName) =>
+    isCourseActiveOn({ courseCode, courseName, dateKey, termEnds: termInfo.termEnds, extraPlans: termInfo.extraPlans })
 
   const focus = pickFocusClass(timetable, now, isOn, currentQuarter)
   const nextClass: WidgetNextClass | null = focus
@@ -181,7 +203,7 @@ export function buildWidgetModel(
     laterClassesExtended: laterClassesAll.slice(0, 4),
     nearestAssignment,
     upcomingAssignments: upcoming,
-    attendance: buildAttendance(timetable, now, attended, focus?.name ?? null),
+    attendance: buildAttendance(timetable, now, attended, focus?.name ?? null, isActive),
   }
 }
 

@@ -27,7 +27,7 @@ export type ClassActivePredicate = (courseCode: string, courseName: string) => b
 
 /**
  * now が「登録授業のある時限の時間帯内（開始 preMinutes 前〜終了）」なら、その科目を返す。
- * isInClassPeriod と同じ判定だが、バナー文言のため科目名も返す点が異なる。複数該当時は先勝ち。
+ * isInActiveClassPeriod と同じ判定だが、バナー文言のため科目名も返す点が異なる。複数該当時は先勝ち。
  *
  * isOn は代表科目を選ぶ**前**に適用する。積みコマ（半期科目2件）で終了済みの方が代表に選ばれると、
  * 同じコマで生きている科目まで巻き添えで消えるため。

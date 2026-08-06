@@ -1,12 +1,23 @@
 /**
  * 「学期の授業回が終わった科目に、出席案内を出し続けない」ための純粋ロジック。
  *
- * findActiveClass は時間割テンプレの曜日・時刻だけで判定するため日付を持たず、
+ * findActiveClass / isInActiveClassPeriod は時間割テンプレの曜日・時刻だけで判定するため日付を持たず、
  * 学期が終わっていても毎週その時間帯になれば必ず該当を返していた。ここで科目ごとの
  * 「最終授業日」と「追加の予定（期末・追試・補講・教室変更など）」を起こし、述語として注入する。
  *
  * 判定は徹底して fail-open（迷ったら出す）。案内を余分に出す害より、
  * 出席できるはずの回で案内が消える害のほうが大きい。
+ *
+ * **この述語を通す面の数え上げ（2026-08-06で全て閉じた）**。1箇所直しただけでは効かないので、
+ * 出席案内を出す面を足したらここに1行足すこと:
+ *   1. 画面（HomeScreen / AttendanceFab → useCourseActive → computeHomeBanner）… build 104
+ *   2. 予約通知（notificationRefresh → computeAttendanceAlarms）… 2026-08-06
+ *   3. ホーム画面ウィジェット（widgetData → buildWidgetModel → isInActiveClassPeriod）… 2026-08-06
+ *   4. 出席エンジンの起動条件（AttendanceEngineProvider → isInActiveClassPeriod）… 2026-08-06
+ * 数え終わったことは `grep -rn "isInActiveClassPeriod(\|findActiveClass(" src/` で確認できる。
+ * isInActiveClassPeriod は述語が**必須引数**なので、通し忘れたまま新しい面を足すと型エラーになる。
+ * findActiveClass の isOn は後方互換で省略可のままなので、**呼び出し側を目で見ること**
+ * （現在の非テスト呼び出しは computeHomeBanner の1本だけで、そこは通っている）。
  */
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 import { parseBulletinEvents, type BulletinEventCandidate } from '../timetableEvents/bulletinEvents'
