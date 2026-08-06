@@ -1,5 +1,6 @@
 import { computeAttendanceAlarms, buildAttendanceNotificationContent, consecutiveRuns } from './attendanceSchedule'
 import type { TimetableCollection } from '../collect/timetableMessage'
+import type { CourseTermInfo } from '../attendance/courseOver'
 
 // 2026-07-06 は月曜日
 const MONDAY_NOON = new Date(2026, 6, 6, 12, 0, 0, 0)
@@ -305,5 +306,102 @@ describe('休講のコマに出席アラームを出さない', () => {
 
   it('休講リストを渡さなければ従来どおり全コマに出す', () => {
     expect(computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 })).toHaveLength(4)
+  })
+})
+
+describe('学期の授業回が終わった科目に出席アラームを出さない', () => {
+  // 2026-08-03のユーザー報告「授業が終了している期間なのに出席アラームが来る」。
+  // 2026-07-24(build 104)で isCourseActiveOn を入れたが、通したのは**画面だけ**
+  // （ホームのお知らせ・右下のFAB）。予約通知はこの述語を一切通っておらず、
+  // 時間割にコマが残っている限り前期終了後も毎週鳴り続けていた。
+  // 画面に入れた対策は通知には自動では効かない、の実例。
+  const cls = (courseCode: string, name: string) => ({
+    courseCode, name, teachers: [], room: 'K101', isRemote: false, credits: 2, badges: [],
+  })
+  const col: TimetableCollection = {
+    periodTimes: {
+      campus: '野田',
+      periods: [
+        { period: 3, start: '13:10', end: '14:40' },
+        { period: 4, start: '14:50', end: '16:20' },
+      ],
+    },
+    slots: [
+      { day: 'mon', period: 3, classes: [cls('C1', '線形代数1')] },
+      { day: 'mon', period: 4, classes: [cls('C2', '物理学1')] },
+    ],
+  }
+  // 2026-07-19(日)起点・daysAhead 2 → 対象日は 07-19(日) と 07-20(月)。コマは月曜だけ。
+  const sunday = new Date(2026, 6, 19, 9, 0)
+  const ends = (m: Record<string, string>): CourseTermInfo => ({ termEnds: m, extraPlans: [] })
+
+  it('最終授業日を過ぎた科目のアラームは出ない', () => {
+    const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], ends({ C1: '2026-07-13' }))
+    expect(alarms.filter((a) => a.courseCode === 'C1')).toEqual([])
+  })
+
+  it('最終授業日の当日はまだ出す（境界は当日を含む）', () => {
+    const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], ends({ C1: '2026-07-20' }))
+    expect(alarms.filter((a) => a.courseCode === 'C1')).toHaveLength(2)
+  })
+
+  it('学期が終わった科目だけを落とす（同じ日の別科目を巻き込まない）', () => {
+    const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], ends({ C1: '2026-07-13' }))
+    expect(alarms.filter((a) => a.courseCode === 'C2')).toHaveLength(2)
+  })
+
+  // 104の仕様「期末や補講など、その日に授業があると分かっている予定があるときは今までどおり出す」を
+  // 予約通知側でも守る。ここが効かないと、学期終了後の補講で出席アラームが来なくなる（別の不具合）。
+  it('学期終了後でも同日に追加の予定があれば出す', () => {
+    const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], {
+      termEnds: { C1: '2026-07-13' },
+      extraPlans: [{ courseCode: 'C1', courseName: '線形代数1', date: '2026-07-20' }],
+    })
+    expect(alarms.filter((a) => a.courseCode === 'C1')).toHaveLength(2)
+  })
+
+  it('別の日の追加の予定では復活しない', () => {
+    const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], {
+      termEnds: { C1: '2026-07-13' },
+      extraPlans: [{ courseCode: 'C1', courseName: '線形代数1', date: '2026-07-27' }],
+    })
+    expect(alarms.filter((a) => a.courseCode === 'C1')).toEqual([])
+  })
+
+  it('courseCodeを持たない予定（掲示由来）は科目名で照合して復活する', () => {
+    const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], {
+      termEnds: { C1: '2026-07-13' },
+      extraPlans: [{ courseCode: null, courseName: '線形代数1', date: '2026-07-20' }],
+    })
+    expect(alarms.filter((a) => a.courseCode === 'C1')).toHaveLength(2)
+  })
+
+  // ⚠出欠が未収集の端末（新規インストール直後）で通知が全部消えないこと。
+  // 学期終了が「不明」なら従来どおり出す＝fail-open。逆に倒すと9月の新規ユーザーに1件も鳴らない。
+  it('出欠データが無ければ従来どおり出す（fail-open）', () => {
+    const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], ends({}))
+    expect(alarms).toHaveLength(4)
+  })
+
+  it('termInfoを渡さなければ従来どおり全コマに出す', () => {
+    expect(computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [])).toHaveLength(4)
+  })
+
+  it('科目名でも最終授業日を引ける（出欠側でcourseCodeが取れない科目）', () => {
+    const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], ends({ 線形代数1: '2026-07-13' }))
+    expect(alarms.filter((a) => a.courseCode === 'C1')).toEqual([])
+    expect(alarms.filter((a) => a.courseCode === 'C2')).toHaveLength(2)
+  })
+
+  it('休講と学期終了は独立に効く（両方渡しても取りこぼさない）', () => {
+    const alarms = computeAttendanceAlarms(
+      [col],
+      {},
+      sunday,
+      { daysAhead: 2 },
+      [{ date: '2026-07-20', periods: [4], courseCode: 'C2', courseName: '物理学1' }],
+      ends({ C1: '2026-07-13' }),
+    )
+    expect(alarms).toEqual([])
   })
 })

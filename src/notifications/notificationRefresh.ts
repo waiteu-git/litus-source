@@ -14,9 +14,13 @@ import { planNotifications } from './notificationPlan'
 import { syncAttendanceAlarms, syncAssignmentReminders } from './notifier'
 import type { AssignmentMap } from '../storage/assignmentsSerialize'
 import { loadClassEvents } from '../storage/classEventsStore'
+import type { ClassEvent } from '../timetableEvents/classEvent'
 // 変換は純粋層（classEventNotify）に置いてテストで固定する。このファイルはストア（AsyncStorage）を
 // 引き込むため vitest から読めず、ここに変換を書くとテストの穴になる（実際にそれで文面が壊れていた）。
 import { classEventNotifications } from './classEventNotify'
+import { loadAttendanceStats } from '../storage/attendanceStatsStore'
+import { loadBulletinDigest } from '../storage/bulletinDigestStore'
+import { buildCourseTermInfo, type CourseTermInfo } from '../attendance/courseOver'
 import { serializeRuns } from './serializeRuns'
 import { staggerSameInstant, DEFAULT_STAGGER_STEP_MS } from './staggerFireAt'
 import type { ScheduledNotification } from './schedule'
@@ -41,6 +45,22 @@ function toSchedulable(map: AssignmentMap): SchedulableAssignment[] {
 
 
 /**
+ * 「学期の授業回が終わった科目」の判定材料を保存済みデータから読む。
+ *
+ * **読めなければ空＝「学期終了は不明」に倒す（fail-open）。** 出欠が未収集の端末
+ * （新規インストール直後）で出席アラームが1件も鳴らなくなるほうが害が大きい。
+ * ここで例外を投げると課題リマインダも含む予約全体が止まるので、握って従来どおりに戻す。
+ */
+async function loadCourseTermInfo(events: ClassEvent[], now: Date): Promise<CourseTermInfo> {
+  try {
+    const [stats, bulletins] = await Promise.all([loadAttendanceStats(), loadBulletinDigest()])
+    return buildCourseTermInfo({ courses: stats?.courses ?? [], events, bulletins, now })
+  } catch {
+    return { termEnds: {}, extraPlans: [] }
+  }
+}
+
+/**
  * 直列化: 起動時/AppState復帰/収集完了/設定変更から多重発火するため、素のまま並走させると
  * getAllScheduled→cancel→再予約が非アトミックに交錯し二重予約・取りこぼしが起きる。
  * serializeRuns で1本ずつ実行し、実行中に重なった要求は完了後の1回に合流させる。
@@ -63,8 +83,12 @@ export const refreshAllNotifications: (now?: Date) => Promise<void> = serializeR
         courseCode: e.courseCode,
         courseName: e.courseName,
       }))
+    // 学期の授業回が終わった科目には出席アラームを出さない。時間割は学期が終わってもコマを
+    // 持ち続けるため、これを渡さないと前期終了後も毎週鳴り続ける（2026-08-03のユーザー報告）。
+    // 画面（ホームのお知らせ・FAB）は2026-07-24に同じ述語を通したが、予約通知は素通りだった。
+    const termInfo = await loadCourseTermInfo(classEvents, now)
     const attendanceAlarms = collections
-      ? computeAttendanceAlarms(collections, settings, now, {}, cancelled)
+      ? computeAttendanceAlarms(collections, settings, now, {}, cancelled, termInfo)
       : []
 
     const assignmentMap = await loadAssignments()

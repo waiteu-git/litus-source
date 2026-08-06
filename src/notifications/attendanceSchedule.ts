@@ -6,6 +6,7 @@
  */
 import type { DayOfWeek } from '../parsers/timetable'
 import type { TimetableCollection } from '../collect/timetableMessage'
+import { isCourseActiveOn, type CourseTermInfo } from '../attendance/courseOver'
 
 export type AttendanceAlarmKind = 'attendance-start' | 'attendance-last-chance'
 
@@ -111,6 +112,14 @@ export function computeAttendanceAlarms(
   options: AttendanceAlarmOptions = {},
   /** 休講登録済みのコマ。渡さなければ従来どおり全コマにアラームを出す。 */
   cancelled: CancelledClass[] = [],
+  /**
+   * 学期の授業回が終わった科目を落とすための情報。渡さなければ従来どおり全コマに出す。
+   *
+   * 時間割は学期が終わってもコマを持ち続けるので、この情報が無いと前期終了後も毎週鳴る
+   * （2026-08-03のユーザー報告）。判定は画面と同じ isCourseActiveOn を通す＝
+   * **述語をここで再実装しない**。2箇所に持つと必ずズレる。
+   */
+  termInfo: CourseTermInfo = { termEnds: {}, extraPlans: [] },
 ): AttendanceAlarm[] {
   const daysAhead = options.daysAhead ?? 7
   const lead = options.lastChanceLeadMinutes ?? 10
@@ -141,6 +150,20 @@ export function computeAttendanceAlarms(
       }
 
       for (const [courseCode, e] of byCourse) {
+        // 学期の授業回が終わった科目はここで丸ごと落とす。最終授業日が分からなければ通す
+        // （出欠が未収集の端末で全アラームが消えるのを防ぐ）。学期終了後でもその日に
+        // 期末・補講の予定があれば isCourseActiveOn 側が true を返すので落ちない。
+        if (
+          !isCourseActiveOn({
+            courseCode,
+            courseName: e.name,
+            dateKey,
+            termEnds: termInfo.termEnds,
+            extraPlans: termInfo.extraPlans,
+          })
+        ) {
+          continue
+        }
         // 休講のコマを落としてから塊にする。連続コマの一部だけ休講なら、残りのコマで塊を組み直す
         // （例: 4-5限のうち5限だけ休講 → 4限だけの授業として開始/終了前を出す）。
         const active = e.periods.filter((p) => !isCancelled(cancelled, dateKey, courseCode, e.name, p))

@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { courseTermEnds, extraPlansFromCandidates, extraPlansFromEvents, isCourseActiveOn } from './courseOver'
+import {
+  buildCourseTermInfo,
+  courseTermEnds,
+  extraPlansFromCandidates,
+  extraPlansFromEvents,
+  isCourseActiveOn,
+} from './courseOver'
 import type { AttendanceCourseStats, AttendanceSession } from '../parsers/attendanceStats'
 import type { ClassEvent, ClassEventType } from '../timetableEvents/classEvent'
 import type { BulletinEventCandidate } from '../timetableEvents/bulletinEvents'
+import type { BulletinItem } from '../storage/bulletinDigestSerialize'
+import { parseBulletinDetail } from '../parsers/bulletinDetail'
+import { DETAIL_MAKEUP } from '../parsers/__fixtures__/loadEventDetails'
 
 const NOW = new Date(2026, 6, 14) // 2026-07-14
 
@@ -164,5 +173,50 @@ describe('extraPlansFromCandidates', () => {
       cand({ type: 'roomChange', date: '2026-08-21' }),
     ])
     expect(plans.map((p) => p.date)).toEqual(['2026-08-03', '2026-08-10'])
+  })
+})
+
+describe('buildCourseTermInfo', () => {
+  // 述語の入力を組む唯一の場所。画面(useCourseActive)と予約通知(notificationRefresh)が
+  // 別々に組むと、片方だけ入力源が増えて静かにズレる（今回の不具合と同じ形）。
+  const bulletin: BulletinItem = {
+    id: 'b-makeup',
+    category: '補講',
+    title: '【補講】…図学・製図',
+    date: '2026/06/24',
+    meta: '',
+    unread: false,
+    flagged: false,
+    important: false,
+    body: parseBulletinDetail(DETAIL_MAKEUP),
+  }
+
+  it('出欠から最終授業日、登録イベントと掲示から追加の予定を束ねる', () => {
+    const info = buildCourseTermInfo({
+      courses: [course({ courseName: '情報リテラシー演習' })],
+      events: [ev({ type: 'final', date: '2026-08-05' })],
+      bulletins: [bulletin],
+      now: NOW,
+    })
+    expect(info.termEnds['1234567']).toBe('2026-07-20')
+    expect(info.extraPlans).toContainEqual({ courseCode: '1234567', courseName: '情報リテラシー演習', date: '2026-08-05' })
+    // 掲示由来の補講（2026-09-23・図学・製図）も同じ配列に入る
+    expect(info.extraPlans.map((p) => p.date)).toContain('2026-09-23')
+  })
+
+  it('入力が空なら空を返す（学期終了が不明＝全科目 fail-open）', () => {
+    const info = buildCourseTermInfo({ courses: [], events: [], bulletins: [], now: NOW })
+    expect(info).toEqual({ termEnds: {}, extraPlans: [] })
+    expect(isCourseActiveOn({ courseCode: 'X', courseName: 'X', dateKey: '2026-12-01', ...info })).toBe(true)
+  })
+
+  it('本文未取得の掲示は追加の予定を生まない（落ちない）', () => {
+    const info = buildCourseTermInfo({
+      courses: [],
+      events: [],
+      bulletins: [{ ...bulletin, body: null }],
+      now: NOW,
+    })
+    expect(info.extraPlans).toEqual([])
   })
 })

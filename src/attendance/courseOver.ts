@@ -9,13 +9,17 @@
  * 出席できるはずの回で案内が消える害のほうが大きい。
  */
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
-import type { BulletinEventCandidate } from '../timetableEvents/bulletinEvents'
+import { parseBulletinEvents, type BulletinEventCandidate } from '../timetableEvents/bulletinEvents'
 import { makeupOccurrences, type ClassEvent } from '../timetableEvents/classEvent'
 import { dateToYmd } from '../timetableEvents/eventDateValue'
+import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { resolveTermDates } from './attendanceTerm'
 
 /** 学期の通常回が終わった後もその日その科目に授業がある、と分かっている予定。 */
 export type ExtraPlan = { courseCode: string | null; courseName: string; date: string }
+
+/** isCourseActiveOn に渡す入力一式。空＝学期終了が「不明」＝全科目まだ授業がある扱い（fail-open）。 */
+export type CourseTermInfo = { termEnds: Record<string, string>; extraPlans: ExtraPlan[] }
 
 /**
  * 出欠各回（'MM/DD'）から科目ごとの最終授業日（'YYYY-MM-DD'）を起こす。
@@ -61,6 +65,26 @@ export function extraPlansFromCandidates(cands: BulletinEventCandidate[]): Extra
     if (c.makeup) out.push({ courseCode: c.courseCode, courseName: c.courseName, date: c.makeup.date })
   }
   return out
+}
+
+/**
+ * 保存済みデータから述語の入力一式を組む。**入力源を増やす時はここだけを直す。**
+ *
+ * 画面（useCourseActive）と予約通知（notificationRefresh）が各々で組むと、
+ * 片方にだけ入力源が足されて静かにズレる。判定（isCourseActiveOn）を1本にしても、
+ * 入力の組み立てが2本あればズレは戻ってくる。
+ */
+export function buildCourseTermInfo(a: {
+  courses: AttendanceCourseStats[]
+  events: ClassEvent[]
+  bulletins: BulletinItem[]
+  now: Date
+}): CourseTermInfo {
+  const cands = a.bulletins.flatMap((b) => parseBulletinEvents(b))
+  return {
+    termEnds: courseTermEnds(a.courses, a.now),
+    extraPlans: [...extraPlansFromEvents(a.events), ...extraPlansFromCandidates(cands)],
+  }
 }
 
 /**

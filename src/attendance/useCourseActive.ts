@@ -2,42 +2,37 @@ import { useCallback, useEffect, useState } from 'react'
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadClassEvents } from '../storage/classEventsStore'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
-import { parseBulletinEvents } from '../timetableEvents/bulletinEvents'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { dateToYmd } from '../timetableEvents/eventDateValue'
-import {
-  courseTermEnds,
-  extraPlansFromCandidates,
-  extraPlansFromEvents,
-  isCourseActiveOn,
-  type ExtraPlan,
-} from './courseOver'
+import { buildCourseTermInfo, isCourseActiveOn, type CourseTermInfo } from './courseOver'
 import type { ClassActivePredicate } from './homeBanner'
+
+const EMPTY: CourseTermInfo = { termEnds: {}, extraPlans: [] }
 
 /**
  * computeHomeBanner に渡す「その科目にまだ出席案内を出すか」の述語を組む。
- * 判定そのものは courseOver.ts の純粋関数（テスト済み）で、ここは読み込みと束ねだけを担う。
+ * 判定も入力の組み立ても courseOver.ts の純粋関数（テスト済み）で、ここは読み込みだけを担う。
  * ホームのバナーと全画面共通FABの**両方**に同じ述語を渡すこと（片方だけだと不整合になる）。
+ *
+ * 同じ述語を予約通知側（notificationRefresh）も通る。画面だけに入れた対策は通知に効かない。
+ *
+ * 3つの読み込みを**まとめて1回で反映する**: 最終授業日だけ先に入って追加の予定が空の瞬間があると、
+ * 学期終了後の補講が一瞬「終了済み」に見える。どれかが失敗したら全部空＝従来どおり出す（fail-open）。
  */
 export function useCourseActive(now: Date): ClassActivePredicate {
   const { version } = useClassEventsVersion()
-  const [termEnds, setTermEnds] = useState<Record<string, string>>({})
-  const [extraPlans, setExtraPlans] = useState<ExtraPlan[]>([])
+  const [info, setInfo] = useState<CourseTermInfo>(EMPTY)
 
   useEffect(() => {
     let active = true
-    loadAttendanceStats()
-      .then((d) => {
-        if (active && d) setTermEnds(courseTermEnds(d.courses, new Date()))
-      })
-      .catch(() => undefined)
-    Promise.all([loadClassEvents(), loadBulletinDigest()])
-      .then(([events, digest]) => {
+    Promise.all([loadAttendanceStats(), loadClassEvents(), loadBulletinDigest()])
+      .then(([stats, events, bulletins]) => {
         if (!active) return
-        const cands = digest.flatMap((b) => parseBulletinEvents(b))
-        setExtraPlans([...extraPlansFromEvents(events), ...extraPlansFromCandidates(cands)])
+        setInfo(buildCourseTermInfo({ courses: stats?.courses ?? [], events, bulletins, now: new Date() }))
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (active) setInfo(EMPTY)
+      })
     return () => {
       active = false
     }
@@ -46,7 +41,7 @@ export function useCourseActive(now: Date): ClassActivePredicate {
   const dateKey = dateToYmd(now)
   return useCallback(
     (courseCode: string, courseName: string) =>
-      isCourseActiveOn({ courseCode, courseName, dateKey, termEnds, extraPlans }),
-    [dateKey, termEnds, extraPlans],
+      isCourseActiveOn({ courseCode, courseName, dateKey, termEnds: info.termEnds, extraPlans: info.extraPlans }),
+    [dateKey, info],
   )
 }
