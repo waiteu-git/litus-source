@@ -18,6 +18,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 204,
+    date: '2026/08/10',
+    items: [
+      'App Store（iOS版）へ提出するための最初のビルドです。Android版の build 203 と機能は同じで、変更はありません',
+    ],
+  },
+  {
     build: 203,
     date: '2026/07/30',
     items: [
