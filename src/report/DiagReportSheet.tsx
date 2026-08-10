@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { Alert, Clipboard, Linking, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Alert, Clipboard, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { Text, TextInput } from '../ui/Text'
@@ -139,7 +139,11 @@ export default function DiagReportSheet({
           {
             backgroundColor: ui.colors.screenSolid,
             paddingTop: insets.top + 12,
-            paddingBottom: insets.bottom + 12,
+            // ⚠下の安全余白の要否はキーボード表示中だけプラットフォームで逆になる（実機で確認）。
+            // iOS: キーボードがホームインジケータごと覆う＝余白を足すと**何も無い帯**が残る（不要）。
+            // Android: `keyboardDidShow` の高さにナビゲーションバーが**入っていない**＝余白を外すと
+            //          持ち上げ量が足りず、下のボタンがキーボードに数px食われる（必要）。
+            paddingBottom: (kbHeight > 0 && Platform.OS === 'ios' ? 0 : insets.bottom) + 12,
             // Android の RN Modal は Dialog ウィンドウで activity の adjustResize が効かず、
             // iOS はそもそも window が縮まない＝どちらもキーボードが下のボタンに被さる。
             // 器ごと持ち上げて、入力中でもボタンが指の届く位置に残るようにする。
