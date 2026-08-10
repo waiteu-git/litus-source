@@ -6,6 +6,7 @@ import {
   buildDiagReportBody,
   buildDiagReportSubject,
   buildMailtoUrl,
+  diagNotePlaceholder,
   formatAndroidDevice,
   formatDiagEnv,
   iosDeviceFromIdiom,
@@ -133,8 +134,63 @@ describe('buildDiagReportBody', () => {
     expect(empty).toContain('（記録はありません）')
   })
 
+  it('シートで書いた状況をそのまま「■ 状況」節へ載せる', () => {
+    const withNote = buildDiagReportBody({
+      diags: [],
+      env: ENV,
+      nowIso: '2026-07-30T03:00:00.000Z',
+      source: 'settings',
+      note: '7/30から時間割の水曜だけ何も出ません',
+    })
+    expect(withNote.startsWith('■ 状況\n7/30から時間割の水曜だけ何も出ません')).toBe(true)
+    expect(withNote).not.toContain('（未記入）')
+  })
+
+  it('改行を保ったまま載せる（前後の空白だけ落とす）', () => {
+    const multi = buildDiagReportBody({
+      diags: [],
+      env: ENV,
+      nowIso: '2026-07-30T03:00:00.000Z',
+      source: 'settings',
+      note: '\n 1行目\n2行目 \n\n',
+    })
+    expect(multi.startsWith('■ 状況\n1行目\n2行目\n')).toBe(true)
+  })
+
+  /**
+   * **未記入は「節ごと落とす」ではなく「見出し＋（未記入）」**。
+   * 落とすと受け取った側が「書かれなかった」のか「組み立てが壊れて消えた」のか区別できない。
+   * 見出しが残っていれば、メールアプリ側で書き足す逃げ道も残る。
+   */
+  it('未記入なら見出しを残して（未記入）と書く', () => {
+    for (const note of [undefined, '', '   \n \t ']) {
+      const empty = buildDiagReportBody({
+        diags: [],
+        env: ENV,
+        nowIso: '2026-07-30T03:00:00.000Z',
+        source: 'settings',
+        note,
+      })
+      expect(empty.startsWith('■ 状況\n（未記入）')).toBe(true)
+    }
+  })
+
+  it('例文と添付の案内は本文に載せない（mailtoの尺を入力ぶんへ空ける）', () => {
+    const b = buildDiagReportBody({
+      diags: [],
+      env: ENV,
+      nowIso: '2026-07-30T03:00:00.000Z',
+      source: 'settings',
+      note: 'x',
+    })
+    expect(b).not.toContain('例:')
+    expect(b).not.toContain('スクリーンショット')
+    expect(b).not.toContain('ここに書き足してください')
+  })
+
   it('学籍番号・氏名・メールアドレスを本文に入れる経路が無い', () => {
-    // 入力は diags と env だけ＝この2つに無いものは構造的に出ない。
+    // アプリが勝手に載せる入力は diags と env だけ＝この2つに無いものは構造的に出ない
+    // （`note` は第3の入力だが、ユーザーが自分で書いて自分で読んでから送る＝「見せてから送る」の内側）。
     // 万一 env にPIIを足す変更が入ったらここが気づける最後の砦になる。
     expect(Object.keys(ENV).sort()).toEqual([
       'appVersion',
@@ -187,7 +243,9 @@ describe('mailtoMayTruncate', () => {
   it('記録が付く入口では、1件でも目安を超える（＝mailtoを主動線にできない）', () => {
     const url = mailtoFor([diag({ hint: HINT_REAL, okBy: OKBY_REAL })])
     expect(mailtoMayTruncate(url)).toBe(true)
-    expect(url.length).toBeGreaterThan(2500)
+    // 目安すれすれではなく余裕をもって超える＝定型部分が多少痩せても結論は変わらない。
+    // 実測 2,308 文字（2026-08-10。例文を本文からプレースホルダへ移す前は 2,917）。
+    expect(url.length).toBeGreaterThan(2200)
   })
 
   it('記録10件が満杯だと1万文字を超える', () => {
@@ -208,11 +266,14 @@ describe('mailtoMayTruncate', () => {
     expect(body).not.toContain('出席送信の記録')
   })
 
-  it('設定から開くと例文が出席固有でなくなる（時間割・掲示・ログインも含む）', () => {
-    const body = buildDiagReportBody({ diags: [], env: ENV, nowIso: '2026-07-30T03:00:00.000Z', source: 'settings' })
-    expect(body).not.toContain('「出席する」を押したら')
-    expect(body).toContain('時間割')
-    expect(body).toContain('スクリーンショット')
+  /**
+   * **設定側で「メールで送る」を主動線に固定できる境界。**
+   * 本文が育つ余地は入力欄しかない（記録は載らない）ので、長く書かれた時だけコピーへ入れ替わる。
+   * ここが「短文で真」に転んだら、入力欄より先に本文の定型部分が太った合図。
+   */
+  it('設定側でも長く書かれれば目安を超える（＝そこで主動線をコピーへ入れ替える）', () => {
+    expect(mailtoMayTruncate(settingsUrl('あ'.repeat(50)))).toBe(false)
+    expect(mailtoMayTruncate(settingsUrl('あ'.repeat(300)))).toBe(true)
   })
 
   it('source 未指定は安全側（記録を載せる＝コピー主動線）に倒れる', () => {
@@ -237,3 +298,32 @@ function mailtoFor(diags: SubmitDiag[]): string {
     body: buildDiagReportBody({ diags, env: ENV, nowIso: '2026-07-30T03:00:00.000Z' }),
   })
 }
+
+/** 設定から開いた時（記録なし）の mailto URL。入力欄に `note` を書いた状態を作る。 */
+function settingsUrl(note: string): string {
+  return buildMailtoUrl({
+    to: DIAG_REPORT_TO,
+    subject: buildDiagReportSubject(ENV),
+    body: buildDiagReportBody({ diags: [], env: ENV, nowIso: '2026-07-30T03:00:00.000Z', source: 'settings', note }),
+  })
+}
+
+describe('diagNotePlaceholder', () => {
+  /**
+   * 例文は**本文ではなく入力欄のプレースホルダ**に置く。本文に置くと、
+   * 誰も読まないうちにパーセントエンコードで3倍に膨らんで mailto の尺を食う。
+   */
+  it('入口ごとに書き方の手本を変える', () => {
+    expect(diagNotePlaceholder('attendance')).toContain('「出席する」')
+    expect(diagNotePlaceholder('settings')).toContain('時間割')
+    expect(diagNotePlaceholder('settings')).not.toContain('「出席する」')
+  })
+
+  it('日付・画面・操作・期待と実際が入った1例になっている（並べず1つを詳しく）', () => {
+    for (const source of ['attendance', 'settings'] as const) {
+      const ph = diagNotePlaceholder(source)
+      expect(ph).toContain('例:')
+      expect(ph).toMatch(/\d+\/\d+/)
+    }
+  })
+})

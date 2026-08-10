@@ -68,12 +68,18 @@ function listTsx(dir: string): string[] {
  */
 const ALLOW: Record<string, string> = {}
 
+/**
+ * ⚠走査は `src/` 全体。**`src/screens/` だけを見ていた頃、入力欄を持つ Modal
+ * （`src/report/DiagReportSheet.tsx`）は素通りしていた**＝入力は画面の外にも生える。
+ * 詰み方は画面と同じ（むしろ Modal は Android で activity の adjustResize が効かないぶん重い）。
+ */
+const SRC_DIR = join(__dirname, '..')
+
 describe('キーボード退避ガード（ラチェット）', () => {
-  it('TextInput を描画する画面はスクロール＋キーボード退避を持つ', () => {
-    const screensDir = join(__dirname, '..', 'screens')
-    if (!existsSync(screensDir)) return
+  it('TextInput を描画するファイルはスクロール＋キーボード退避を持つ', () => {
+    if (!existsSync(SRC_DIR)) return
     const offenders: string[] = []
-    for (const file of listTsx(screensDir)) {
+    for (const file of listTsx(SRC_DIR)) {
       const rel = file.replace(/\\/g, '/').split('/src/')[1]
       if (rel in ALLOW) continue
       const r = auditKeyboardEscape(readFileSync(file, 'utf8'))
@@ -83,16 +89,17 @@ describe('キーボード退避ガード（ラチェット）', () => {
   })
 
   /**
-   * ガードが**実際に画面を見ている**ことを確かめる。走査対象が空・パスずれで
+   * ガードが**実際にファイルを見ている**ことを確かめる。走査対象が空・パスずれで
    * 「offenders が常に空」になると、ラチェットは緑のまま何も守らない
    * （生色ガードが `src/ui/` を見ていなかったのと同じ失敗の形）。
+   * **`src/screens/` の外も見ていること**まで固定する＝走査範囲が縮んだら気づける。
    */
-  it('走査対象に TextInput 画面が実在する（空振りラチェット防止）', () => {
-    const screensDir = join(__dirname, '..', 'screens')
-    const withInput = listTsx(screensDir).filter(
+  it('走査対象に TextInput のファイルが実在する（空振りラチェット防止）', () => {
+    const withInput = listTsx(SRC_DIR).filter(
       (f) => auditKeyboardEscape(readFileSync(f, 'utf8')).usesTextInput,
     )
     expect(withInput.length).toBeGreaterThanOrEqual(5)
     expect(withInput.some((f) => f.endsWith('AttendanceScreen.tsx'))).toBe(true)
+    expect(withInput.some((f) => !f.replace(/\\/g, '/').includes('/src/screens/'))).toBe(true)
   })
 })
