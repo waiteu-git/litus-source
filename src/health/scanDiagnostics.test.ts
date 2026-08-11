@@ -23,11 +23,16 @@ import {
 import { parseMyCourses } from '../parsers/letusCourses'
 import { parseAssignmentPage } from '../parsers/letus'
 import { applyScanOutcome } from './diagnosticsState'
+import { buildBannerContent } from './diagnosticsBannerContent'
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf-8')
 const BASE = 'https://letus.ed.tus.ac.jp'
 
 const my52 = read('../parsers/__fixtures__/moodle52/my52_raw.html')
+const my52Hydrated = read('../parsers/__fixtures__/moodle52/my52_hydrated.html')
+// my52_hydrated は school.moodledemo.net で実採取した DOM（アンカーが絶対URL）なので、
+// コース抽出の origin はその採取元を渡す（LETUS origin では 0 件になる）。
+const SANDBOX = 'https://school.moodledemo.net'
 const course52 = read('../parsers/__fixtures__/moodle52/course52_raw.html')
 const assign52Ja = read('../parsers/__fixtures__/moodle52/assign52_ja.html')
 const assign52En = read('../parsers/__fixtures__/moodle52/assign52_en.html')
@@ -196,6 +201,69 @@ describe('サイクル貫通とゲート', () => {
     observeDashboard(acc, { html: '<input type="password">', courseAnchorCount: 0, knownCourseCount: 5 })
     expect(finalizeScanCodes(acc)).toEqual(['LOGGED_OUT'])
     expect(acc.reachedLetus).toBe(true)
+  })
+
+  it('SSO中間ページ→再試行成功のサイクルは LOGGED_OUT を残さない', () => {
+    // LetusSyncEngine の courses ステージは「空振り（SSOリダイレクト途中）→WebView作り直して再試行」を
+    // 設計として持つ（COURSES_MAX_TRIES）。1回目の着地は IdP のログインページなので logged_out と
+    // 分類されるが、2回目で SSO が完走して同じ面が正常に読める。セッションは一度も切れていない。
+    const acc = createScanAccumulator()
+    observeDashboard(acc, { html: '<input type="password">', courseAnchorCount: 0, knownCourseCount: 5 })
+    observeDashboard(acc, {
+      html: my52Hydrated,
+      courseAnchorCount: parseMyCourses(my52Hydrated, SANDBOX).length,
+      knownCourseCount: 5,
+    })
+    expect(finalizeScanCodes(acc)).toEqual([])
+  })
+
+  it('ハイドレーション未完→再試行成功のサイクルは DASHBOARD_UNREADABLE を残さない', () => {
+    // LOGGED_OUT と同型の「同一面の再観測」経路。courses ステージの再試行では、1回目が
+    // ログインページでなく「ログイン済みだがまだ描画が終わっていない Dashboard」に着地することもある
+    // （5.x のクライアント描画・T5 の待ち機構が取りこぼした場合）。2回目で全コースが読めているなら
+    // この面は健全なので、1回目の判定を引きずってはいけない。
+    const acc = createScanAccumulator()
+    observeDashboard(acc, { html: my52, courseAnchorCount: 0, knownCourseCount: 5 })
+    observeDashboard(acc, {
+      html: my52Hydrated,
+      courseAnchorCount: parseMyCourses(my52Hydrated, SANDBOX).length,
+      knownCourseCount: 5,
+    })
+    expect(finalizeScanCodes(acc)).toEqual([])
+  })
+
+  it('再観測しても最後の Dashboard が壊れていれば DASHBOARD_UNREADABLE は残る', () => {
+    // 上の打ち消しが「常に消す」に倒れていないことの固定（本当の破損を握り潰さない）。
+    const acc = createScanAccumulator()
+    observeDashboard(acc, {
+      html: my52Hydrated,
+      courseAnchorCount: parseMyCourses(my52Hydrated, SANDBOX).length,
+      knownCourseCount: 5,
+    })
+    observeDashboard(acc, { html: my52, courseAnchorCount: 0, knownCourseCount: 5 })
+    expect(finalizeScanCodes(acc)).toEqual(['DASHBOARD_UNREADABLE'])
+  })
+
+  it('サイクル途中の logged_out 観測は、同サイクルに logged_in 観測があれば警告バナーを出さない', () => {
+    // 症状の end-to-end 再現: 収集自体は成功しているのに「LETUSからログアウトされています」が出る。
+    // LOGGED_OUT は閾値を待たず即 active になるため、過渡的な1ページの誤観測がそのままバナーになる。
+    const acc = createScanAccumulator()
+    observeDashboard(acc, {
+      html: my52Hydrated,
+      courseAnchorCount: parseMyCourses(my52Hydrated, SANDBOX).length,
+      knownCourseCount: 5,
+    })
+    // 活動ページ巡回の途中で1本だけ SSO 中間ページを踏む（他の活動ページは正常）。
+    observeActivityPage(acc, {
+      html: '<input type="password">',
+      url: `${BASE}/mod/assign/view.php?id=1`,
+      keywordFound: false,
+      dateParsed: false,
+      statusResolved: false,
+    })
+    const state = applyScanOutcome(null, { codes: finalizeScanCodes(acc), at: '2026-08-12T10:00:00.000Z' })
+    expect(state.activeCodes).toEqual([])
+    expect(buildBannerContent(state).kind).toBe('none')
   })
 
   it('非Moodleページ（M.cfg無・password無）は NOT_A_MOODLE_PAGE を集約するが reachedLetus=false', () => {

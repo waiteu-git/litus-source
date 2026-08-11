@@ -72,12 +72,31 @@ export function moduleTypeFromUrl(url: string): string | null {
 export interface ScanDiagnosticsAccumulator {
   /** これまでに発火した per-page 診断コード（重複可・finalize で dedupe）。 */
   codes: DiagnosticCode[]
+  /**
+   * Dashboard 面の最新の判定（observeDashboard のたびに **置換** する）。
+   *
+   * Dashboard はサイクル内で唯一の面なのに複数回観測されうる（LetusSyncEngine の courses ステージは
+   * 空振り時に WebView を作り直して COURSES_MAX_TRIES まで再試行し、そのたびに観測が流れる）。
+   * codes へ追記すると1回目の失敗（SSO 中間ページ・ハイドレーション未完）が、2回目で同じ面が
+   * 正常に読めても取り消せず、サイクル全体が汚染される。同一面の再観測は「上書き」が正しい。
+   */
+  dashboardCodes: DiagnosticCode[]
   /** このサイクルで COURSE_LOST_ALL_ASSIGNMENTS を発火した既知コース数（横断集計の分子）。 */
   lostCourseCount: number
   /** このサイクルで観測した既知コース（logged_in・前回シグネチャ>0）の総数（横断集計の分母）。 */
   trackedCourseCount: number
   /** LETUS に到達し結論の出るページ（logged_in / logged_out）を1つでも観測したか（記録可否ゲート）。 */
   reachedLetus: boolean
+  /**
+   * このサイクルで logged_in と結論の出たページを1つでも観測したか（LOGGED_OUT の取り消しゲート）。
+   *
+   * LOGGED_OUT は「ページの欠陥」ではなく **セッションの状態** なので、1ページの観測で確定させては
+   * いけない。1サイクルは SSO 中間ページを踏みうる（courses ステージは空振り→再試行を設計として持ち、
+   * 活動ページ巡回でも過渡的にログイン画面へ落ちうる）。集約器は追記専用なので、後続ページで同じ面が
+   * 正常に読めても先行の LOGGED_OUT を取り消せず、サイクル全体が汚染される。ログイン済みのページを
+   * 1枚でも読めていれば「ログアウトされている」は偽なので、finalize でこのフラグにより打ち消す。
+   */
+  sawLoggedIn: boolean
   /**
    * このサイクルで読めた受動版フィンガープリント（§9・T8）。版が読めた最初の観測だけを保持し、
    * 以降のページでは走査しない（同一サイクル内で稼働版が変わることはない＝数十ページへの
@@ -89,11 +108,23 @@ export interface ScanDiagnosticsAccumulator {
 export function createScanAccumulator(): ScanDiagnosticsAccumulator {
   return {
     codes: [],
+    dashboardCodes: [],
     lostCourseCount: 0,
     trackedCourseCount: 0,
     reachedLetus: false,
+    sawLoggedIn: false,
     fingerprint: null,
   }
+}
+
+/**
+ * 1ページ分の認証状態をサイクル集約器へ反映する（各 observe* の共通入口）。
+ * 「到達したか（reachedLetus）」と「ログイン済みを見たか（sawLoggedIn）」を必ず同時に更新する
+ * ＝観測面を足したときに片方だけ配線し忘れることを防ぐ（面を足す＝両方に効く）。
+ */
+function noteAuthState(acc: ScanDiagnosticsAccumulator, pageAuthState: PageAuthState): void {
+  if (pageAuthState !== 'unknown') acc.reachedLetus = true
+  if (pageAuthState === 'logged_in') acc.sawLoggedIn = true
 }
 
 /**
@@ -127,22 +158,22 @@ export interface DashboardObservation {
 /** Dashboard 面を観測して診断コードを集約する（diagnoseAuthProbe ＋ diagnoseDashboard）。 */
 export function observeDashboard(acc: ScanDiagnosticsAccumulator, obs: DashboardObservation): void {
   const pageAuthState = classifyFetchedPage(obs.html)
-  if (pageAuthState !== 'unknown') acc.reachedLetus = true
+  noteAuthState(acc, pageAuthState)
   observeFingerprint(acc, obs.html, pageAuthState)
-  acc.codes.push(
+  // 同一面の再観測は追記でなく置換（dashboardCodes の根拠参照）。再試行で健全に読めたら
+  // 1回目の判定は消える＝「出す条件」と「消す条件」が同じ粒度で揃う。
+  acc.dashboardCodes = [
     ...diagnoseAuthProbe({
       fetchOk: true,
       hasMcfg: hasMoodleConfig(obs.html),
       hasLoginMarker: hasLetusLoginMarker(obs.html),
     }),
-  )
-  acc.codes.push(
     ...diagnoseDashboard({
       pageAuthState,
       courseAnchorCount: obs.courseAnchorCount,
       knownCourseCount: obs.knownCourseCount,
     }),
-  )
+  ]
 }
 
 export interface CoursePageObservation {
@@ -157,7 +188,7 @@ export interface CoursePageObservation {
 /** コース面を観測して診断コードを集約する。既知コースの喪失は横断集計へも積む。 */
 export function observeCoursePage(acc: ScanDiagnosticsAccumulator, obs: CoursePageObservation): void {
   const pageAuthState = classifyFetchedPage(obs.html)
-  if (pageAuthState !== 'unknown') acc.reachedLetus = true
+  noteAuthState(acc, pageAuthState)
   observeFingerprint(acc, obs.html, pageAuthState)
   const codes = diagnoseCoursePage({
     pageAuthState,
@@ -190,7 +221,7 @@ export interface ActivityPageObservation {
 /** 活動面を観測して診断コードを集約する（diagnoseActivityPage）。 */
 export function observeActivityPage(acc: ScanDiagnosticsAccumulator, obs: ActivityPageObservation): void {
   const pageAuthState = classifyFetchedPage(obs.html)
-  if (pageAuthState !== 'unknown') acc.reachedLetus = true
+  noteAuthState(acc, pageAuthState)
   observeFingerprint(acc, obs.html, pageAuthState)
   const moduleType = moduleTypeFromUrl(obs.url)
   const moduleSupported = moduleType !== null && SUPPORTED_STATUS_MODULES.has(moduleType)
@@ -212,12 +243,20 @@ export function observeActivityPage(acc: ScanDiagnosticsAccumulator, obs: Activi
  * 呼び出し側/テストが検査できるようにする）。
  */
 export function finalizeScanCodes(acc: ScanDiagnosticsAccumulator): DiagnosticCode[] {
-  const codes = [...acc.codes]
+  // Dashboard 面は最新の判定だけを採る（置換済み）。観測順に合わせて先頭へ置く。
+  const codes = [...acc.dashboardCodes, ...acc.codes]
   codes.push(
     ...diagnoseCourseLossAggregate({
       lostCourseCount: acc.lostCourseCount,
       trackedCourseCount: acc.trackedCourseCount,
     }),
   )
-  return Array.from(new Set(codes))
+  // LOGGED_OUT はセッションの状態であってページの欠陥ではない。ログイン済みのページを1枚でも
+  // 読めていれば「ログアウトされている」は偽なので、サイクル確定時に打ち消す（sawLoggedIn の根拠参照）。
+  // これが無いと、SSO 中間ページを1枚踏んだだけのサイクルが LOGGED_OUT 付きで記録され、
+  // reducer 側で LOGGED_OUT は閾値を待たず即 activeCodes へ載るため、収集が成功していてもバナーが出る。
+  // 打ち消しの代償はサイクル途中で本当に失効した場合の検知が1サイクル遅れることだけ
+  // （次サイクルは全ページ logged_out ＝ sawLoggedIn=false になり、閾値を待たず発火する）。
+  const finalized = acc.sawLoggedIn ? codes.filter((code) => code !== 'LOGGED_OUT') : codes
+  return Array.from(new Set(finalized))
 }

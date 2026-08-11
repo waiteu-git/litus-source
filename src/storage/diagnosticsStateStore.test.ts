@@ -107,11 +107,11 @@ describe('diagnosticsStateStore', () => {
 
     it('reachedLetus=true・hardコード有りは失敗として畳み込む（横断集計込み）', async () => {
       const acc: ScanDiagnosticsAccumulator = {
+        ...createScanAccumulator(),
         codes: ['DASHBOARD_UNREADABLE'],
         lostCourseCount: 2,
         trackedCourseCount: 3,
         reachedLetus: true,
-        fingerprint: null,
       }
       const r = await recordScanCycleOutcome(acc, T0)
       // finalize が横断集計 COURSES_MAJORITY_LOST を加える。
