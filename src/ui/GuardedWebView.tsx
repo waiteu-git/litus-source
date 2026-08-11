@@ -13,10 +13,16 @@
  * 注意: ここで null を返すと onMessage 等が永久に来ない。呼び出し側がタイムアウトを
  * 持たない場合「読み込み中」のまま止まるので、デモで到達しうる画面は
  * 別途デモ用の表示に分岐させること（例: SyllabusScreen）。
+ *
+ * もうひとつの役割: iOS で Cookie 入れ物が WebView ごとに分裂するのを止める
+ * （`resolveCacheEnabled` / webViewCookieJar.ts に理由を全部書いた）。生成点が1つなので、
+ * 呼び出し側が `cacheEnabled={false}` を書いてもここで矯正され、SSO セッションが割れない。
  */
 import { forwardRef } from 'react'
+import { Platform } from 'react-native'
 import { WebView as RNWebView, type WebViewProps } from 'react-native-webview'
 import { isDemoNamespace } from '../storage/asyncStorage'
+import { resolveCacheEnabled } from './webViewCookieJar'
 
 /** ref の型として使う（`useRef<WebViewInstance>(null)`）。 */
 export type WebViewInstance = RNWebView
@@ -24,5 +30,13 @@ export type WebViewInstance = RNWebView
 export const WebView = forwardRef<RNWebView, WebViewProps>(function GuardedWebView(props, ref) {
   // デモ中は WebView を1つも作らない＝通信ゼロを構造的に担保する。
   if (isDemoNamespace()) return null
-  return <RNWebView ref={ref} {...props} />
+  // cacheEnabled は **{...props} より後**に置く。前に置くと呼び出し側の false に上書きされ、
+  // iOS の使い捨てストア（＝Cookie 分裂）が無音で復活する。
+  return (
+    <RNWebView
+      ref={ref}
+      {...props}
+      cacheEnabled={resolveCacheEnabled(props.cacheEnabled, Platform.OS)}
+    />
+  )
 })

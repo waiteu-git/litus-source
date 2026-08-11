@@ -18,6 +18,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 205,
+    date: '2026/08/12',
+    items: [
+      'iOS版で、ログインできているのに掲示が取り込めず、課題の画面に「LETUSからログアウトしています」と出ていた問題を修正しました。ログインの状態がアプリの中の画面ごとに分かれてしまい、時間割以外へ伝わっていませんでした。Android版はこの問題が起きない作りのため、動きは変わりません',
+    ],
+  },
+  {
     build: 204,
     date: '2026/08/10',
     items: [
