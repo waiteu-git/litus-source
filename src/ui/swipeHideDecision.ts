@@ -3,8 +3,15 @@
  * PanResponder の gestureState から「横スワイプ捕捉」「非表示確定」を決める。
  * 時間割の曜日スワイプ（daySwipe）と同じく、縦スクロールと分離する横優勢判定を採る。
  */
-export const SWIPE_CAPTURE_DX = 12
-export const SWIPE_CAPTURE_RATIO = 1.4
+/**
+ * 捕捉しきい値。**SwipeToHide は capture 段で responder を決める**（SwipeToHide.tsx 参照）ので、
+ * 通常段のときより述語を厳しくしないと FlatList の縦スクロールを取りすぎる。
+ * 値は同じ問題（横スワイプ×縦スクロールコンテナ）を先に解いた TimetableScreen の実績値と揃える
+ * （24px / 比1.6）。あちらは縦ScrollView＋pull-to-refresh と共存しており、iOS/Android 双方に
+ * 出荷済み＝両OSで成立することが実機で確かめられている唯一の組み合わせなので、OS で分けない。
+ */
+export const SWIPE_CAPTURE_DX = 24
+export const SWIPE_CAPTURE_RATIO = 1.6
 export const SWIPE_COMMIT_DX = 96
 export const SWIPE_COMMIT_VX = 0.35
 

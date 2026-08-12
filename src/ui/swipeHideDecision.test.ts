@@ -40,3 +40,20 @@ describe('clampSwipeX', () => {
     expect(clampSwipeX(-400, 300)).toBe(-300)
   })
 })
+
+describe('capture段への移行にともなう捕捉しきい値（縦スクロールを奪わない）', () => {
+  // SwipeToHide は capture 段で responder を奪う（FlatList の縦スクロールより先に決まる）ため、
+  // 通常段のときより述語を厳しくしないとスクロールを取りすぎる。実績値は TimetableScreen と同じ
+  // 24px / 比1.6（同コンポーネントが両OSで縦ScrollView＋pull-to-refreshと共存できている値）。
+  it('浅い横移動では捕捉しない（旧12px閾値なら奪っていた領域）', () => {
+    expect(shouldCaptureSwipe(-20, 2)).toBe(false)
+  })
+
+  it('斜め成分が強いドラッグは捕捉しない（旧比1.4なら奪っていた領域）', () => {
+    expect(shouldCaptureSwipe(-30, 20)).toBe(false)
+  })
+
+  it('明確に横優勢で十分引いていれば捕捉する', () => {
+    expect(shouldCaptureSwipe(-40, 10)).toBe(true)
+  })
+})

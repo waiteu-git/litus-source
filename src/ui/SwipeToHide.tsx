@@ -31,7 +31,12 @@ export function SwipeToHide({
 
   const responder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => shouldCaptureSwipe(g.dx, g.dy),
+      // **capture 段で決める。** 通常段（onMoveShouldSetPanResponder）だと、しきい値へ到達する前に
+      // 親の FlatList が縦スクロールとして responder を確保してしまい、以後 JS 側から奪えない
+      // ＝「左スワイプしようとすると画面が上下に動く」。しきい値の数値ではなく責任者決定の段の問題。
+      // 同じ問題を先に解いた TimetableScreen.tsx（横スワイプ×縦ScrollView＋pull-to-refresh）と同型。
+      // 奪いすぎないための述語は swipeHideDecision 側で厳しくしてある（24px / 比1.6）。
+      onMoveShouldSetPanResponderCapture: (_e, g) => shouldCaptureSwipe(g.dx, g.dy),
       onPanResponderMove: (_e, g) => {
         tx.setValue(clampSwipeX(g.dx, widthRef.current))
       },
