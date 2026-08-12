@@ -21,7 +21,7 @@ import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { getNotificationPermission, requestNotificationPermission } from '../notifications/notifier'
 import { notificationPermissionAction } from '../notifications/permissionState'
 import { loadOnboardingDone, saveOnboardingDone } from '../storage/onboardingStore'
-import { classifyGatePage, type GateVerdict } from './classifyGatePage'
+import { canDeferLoginUi, classifyGatePage, isSpeculativeLogin, type GateVerdict } from './classifyGatePage'
 import { isRecoverPreserved, recoverPlan } from './gateRecovery'
 import { syncSession } from '../collect/syncSession'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
@@ -52,6 +52,27 @@ const BOOT_LOOP_MS = 1400
 const MAINTENANCE_REPROBE_MS = 60000
 // 接続エラー中、通信が戻ったら自動で入場/ログインへ進めるための静かな再probe間隔。
 const CONN_ERROR_REPROBE_MS = 15000
+/**
+ * **推測的な** needsLogin でログインUIの描画を待つ猶予（ms）。
+ *
+ * 強制終了→起動では大学のセッションCookie（Expires無し）が消えているので、probe は必ず SSO を
+ * 経由する。IdP側のCookieが生きていればこの経由は操作なしで自動完走するが、classifyGatePage は
+ * 「SSOのURLに居る」だけで needsLogin を返す（初画面にパスワード欄が無いためURL判定が要る）。
+ * その結果、完走までの数百msだけログイン画面が描かれる＝「一瞬映る」の正体。
+ * 状態機械は触らず、**描画だけ**をこの猶予ぶん遅らせる（認証フローの挙動は不変）。
+ *
+ * 値の天秤:
+ * - 短すぎる → 自動完走に間に合わず、一瞬の描画が残る（元の不具合が消えない）。
+ * - 長すぎる → 本当にログインが要る時に「固まった」ように見える。
+ * 1500ms は SAML自動完走（フォーム描画→自動POST→リダイレクト往復）を覆いつつ、待たされる側の
+ * 体感がブート画面の範囲に収まる初期値。猶予中はブート画面（"CLASSに接続しています…"）のままなので
+ * 進行中に見え、無反応には見えない。
+ *
+ * ⚠この猶予が効くのは **推測ケースだけ**（isSpeculativeLogin）。パスワード欄が実在する確定ケースは
+ * 猶予せず即描画し、猶予中にパスワード欄が現れたらその場で打ち切る＝「固まる」側の最悪ケースを
+ * 構造的に小さくしてある。実機で詰める前提の初期値。
+ */
+const SSO_AUTO_GRACE_MS = 1500
 
 type GateState =
   | 'loading'
@@ -94,6 +115,10 @@ export function LoginGate({ children }: { children: ReactNode }) {
   stateRef.current = state
   // firstRun 中に届いた判定を保持し、スライド完了時に即適用する。
   const lastResultRef = useRef<GateVerdict | null>(null)
+  // 直近の needsLogin が推測（SSOのURLに居るだけ）だったか。true の間だけ描画を猶予する。
+  const speculativeLoginRef = useRef(false)
+  // ログインUIを実際に描いてよいか（needsLogin へ入っても猶予が明けるまで false）。
+  const [loginUiArmed, setLoginUiArmed] = useState(false)
   // setup での時間割メニュー再試行回数（無限リトライ防止）。
   const setupTriesRef = useRef(0)
   // 自動復帰（ロード失敗/クラッシュ/SAML stale/LETUS迷子）の回数上限（無限ループ防止）。
@@ -216,6 +241,22 @@ export function LoginGate({ children }: { children: ReactNode }) {
     const t = setTimeout(() => setState((s) => (s === 'checking' ? 'connError' : s)), CHECK_TIMEOUT_MS)
     return () => clearTimeout(t)
   }, [state, nonce])
+
+  // ログインUIの描画解禁タイマー（SSO_AUTO_GRACE_MS 参照）。needsLogin を離れたら必ず武装解除する
+  // ＝次に needsLogin へ入ったときは、また猶予から始まる（前回の解禁を持ち越さない）。
+  useEffect(() => {
+    if (state !== 'needsLogin') {
+      setLoginUiArmed(false)
+      return
+    }
+    // 確定（パスワード欄が実在）＝待つ理由が無いので即描画。
+    if (!speculativeLoginRef.current) {
+      setLoginUiArmed(true)
+      return
+    }
+    const t = setTimeout(() => setLoginUiArmed(true), SSO_AUTO_GRACE_MS)
+    return () => clearTimeout(t)
+  }, [state])
 
   // 可視ログイン（needsLogin＝ユーザー操作中）に入ったら復帰カウンタを0に戻す。
   // 起動probeの通信失敗回数を対話ログインへ持ち越して、本物のログインを早まって connError に
@@ -381,7 +422,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
     }
     if (!p) return
     if (p.type === 'page') {
-      const verdict = classifyGatePage({
+      const signal = {
         hasPasswordInput: !!p.hasPasswordInput,
         hasClassMenu: !!p.hasClassMenu,
         hasEnterSplash: !!p.hasEnterSplash,
@@ -389,7 +430,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
         hasSsoStale: !!p.hasSsoStale,
         hasMaintenance: !!p.hasMaintenance,
         url: typeof p.url === 'string' ? p.url : undefined,
-      })
+      }
+      const verdict = classifyGatePage(signal)
       if (verdict === 'pending') return // リダイレクト途中は待つ
       if (verdict === 'stale' || verdict === 'stray') {
         // SAMLリプレイ拒否 or SSO混線でLETUS着地 → WebViewを作り直して新しいSAMLフローで再試行。
@@ -399,6 +441,12 @@ export function LoginGate({ children }: { children: ReactNode }) {
       lastResultRef.current = verdict
       if (verdict === 'authed') recoverTriesRef.current = 0
       const s = stateRef.current
+      // 猶予してよいかを **lastResultRef と同じ場所で必ず更新する**: needsLogin へ入る経路は
+      // onMessage だけでなく onSlidesDone（firstRun 完走時に lastResultRef を見て直接 setState する）
+      // もあり、片方だけで書くと古い値を読む面ができる。判定の出所を1箇所に固定しておく。
+      // 遷移元 s を渡すのは、ブート画面が外れている状態（firstRun / connError）から猶予に入ると
+      // オーバーレイごと再マウントして起動イントロを巻き戻すため（canDeferLoginUi の根拠参照）。
+      if (verdict === 'needsLogin') speculativeLoginRef.current = canDeferLoginUi(signal, s)
       if (verdict === 'maintenance') {
         // CLASS定時メンテナンス（2:00〜4:00）。ログインもできないので専用画面へ（詰まらせない）。
         if (s === 'checking' || s === 'needsLogin' || s === 'connError') setState('maintenance')
@@ -409,9 +457,16 @@ export function LoginGate({ children }: { children: ReactNode }) {
       if (s === 'checking' || s === 'connError') {
         if (verdict === 'authed') proceedToEntry()
         else setState('needsLogin')
-      } else if (s === 'needsLogin' && verdict === 'authed') {
-        // 可視ログイン完了を検知して入場へ。
-        proceedToEntry()
+      } else if (s === 'needsLogin') {
+        if (verdict === 'authed') {
+          // 可視ログイン完了、または猶予中に自動完走した＝一度も描かずに入場する。
+          proceedToEntry()
+        } else if (verdict === 'needsLogin' && !isSpeculativeLogin(signal)) {
+          // 猶予中にパスワード欄が現れた＝もう推測ではない（ref は上で false に更新済み）。
+          // 待たずに打ち切って描く＝猶予が「固まって見える」側へ倒れる最悪ケースを短くする。
+          // ここで明示的に解禁するのは、猶予タイマーの effect が state 変化でしか再実行されないため。
+          setLoginUiArmed(true)
+        }
       }
       return
     }
@@ -459,7 +514,10 @@ export function LoginGate({ children }: { children: ReactNode }) {
       </Text>
     </Pressable>
   )
-  const showLoginUi = state === 'needsLogin'
+  // needsLogin でも、推測段階（SSO自動完走待ち）の間は描かない＝「一瞬映る」を消す。
+  const showLoginUi = state === 'needsLogin' && loginUiArmed
+  // 猶予中。ここを掴んでおかないとブート画面が外れて空白になる（描画を止めただけでは足りない）。
+  const inLoginGrace = state === 'needsLogin' && !loginUiArmed
   const bootStatus =
     state === 'loading'
       ? '起動しています…'
@@ -522,7 +580,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
             }}
           />
         ) : null}
-        {state !== 'connError' && (!bootAnimDone || state === 'loading' || state === 'checking' || state === 'setup' || state === 'sync' || (state === 'authed' && !bootReady)) ? (
+        {state !== 'connError' && (!bootAnimDone || state === 'loading' || state === 'checking' || inLoginGrace || state === 'setup' || state === 'sync' || (state === 'authed' && !bootReady)) ? (
           <View style={[styles.boot, { backgroundColor: chrome.bg }]}>
             {/* 起動ロゴアニメ（純CSS・ローカルHTML）。bootMode 決定前（null）はマウントせず下地色のみ。
                 warm はループのみ版で即ループへ。以降も裏でログイン/取得が進む間は表示。タッチは奪わない。 */}

@@ -30,6 +30,40 @@ export function isSsoLoginUrl(url?: string): boolean {
   return SSO_LOGIN_URL_RE.test(url ?? '')
 }
 
+/**
+ * needsLogin の根拠が「SSOのURLに居る」だけ（＝**推測**）か、パスワード欄が実在する（＝**確定**）か。
+ *
+ * 起動直後は大学のセッションCookie（Expires無し）が消えているので、probe は必ず SSO を経由する。
+ * IdP 側のCookieが生きていればこの経由はユーザー操作なしで自動完走して authed に戻るが、
+ * classifyGatePage は URL だけで needsLogin を返す（初画面にパスワード欄が無いためURL判定が要る）。
+ * つまり **needsLogin には「本当に要ログイン」と「通過中なだけ」が混ざる**。両者は同期的には
+ * 区別できない（待って結果を見るしかない）ので、区別できる材料＝パスワード欄の実在だけを切り出す。
+ *
+ * 呼び出し側（LoginGate）はこれが true のときだけログインUIの描画を猶予し、false なら即描画する。
+ * 判定自体（classifyGatePage の戻り値）は変えない＝認証フローの挙動は不変。
+ */
+export function isSpeculativeLogin(s: GatePageSignal): boolean {
+  if (s.hasPasswordInput) return false
+  return isSsoLoginUrl(s.url)
+}
+
+/**
+ * ログインUIの描画を猶予してよいか。**推測であること＋遷移元がブート画面を既に出していること**の両方。
+ *
+ * 猶予中はブート画面を出しっぱなしにして「一瞬のログイン画面」を隠すが、ブート画面が**外れている**
+ * 状態から猶予に入ると、オーバーレイごと再マウントして4秒の起動イントロを頭から再生し、1.5秒で
+ * 切ることになる（見た目の退行）。ブート画面が外れているのは firstRun（スライド表示中）と
+ * connError（接続エラーカード表示中）の2つ。とくに connError のカードはデモ導線を載せているので、
+ * ここを1.5秒隠すのは審査（2.1）の生命線を隠すことと同じ。
+ *
+ * requireLogin() が復帰時に bootMode='warm' にしているのと同じ趣旨＝
+ * 「戻ってきた起動画面でイントロを再生し直さない」という既存の不変条件をこの猶予も守る。
+ */
+export function canDeferLoginUi(s: GatePageSignal, fromState: string): boolean {
+  if (!isSpeculativeLogin(s)) return false
+  return fromState === 'loading' || fromState === 'checking' || fromState === 'needsLogin'
+}
+
 export function classifyGatePage(s: GatePageSignal): GateVerdict {
   if (s.hasSsoStale) return 'stale'
   if (s.hasPasswordInput) return 'needsLogin'
