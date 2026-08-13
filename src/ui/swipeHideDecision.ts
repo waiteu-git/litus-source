@@ -4,14 +4,20 @@
  * 時間割の曜日スワイプ（daySwipe）と同じく、縦スクロールと分離する横優勢判定を採る。
  */
 /**
- * 捕捉しきい値。**SwipeToHide は capture 段で responder を決める**（SwipeToHide.tsx 参照）ので、
- * 通常段のときより述語を厳しくしないと FlatList の縦スクロールを取りすぎる。
- * 値は同じ問題（横スワイプ×縦スクロールコンテナ）を先に解いた TimetableScreen の実績値と揃える
- * （24px / 比1.6）。あちらは縦ScrollView＋pull-to-refresh と共存しており、iOS/Android 双方に
- * 出荷済み＝両OSで成立することが実機で確かめられている唯一の組み合わせなので、OS で分けない。
+ * 捕捉しきい値。**判別は距離でなく比に担わせる。**
+ *
+ * capture 段で responder を決めても（SwipeToHide.tsx 参照）、**述語が真になるまでの移動は
+ * ネイティブのスクロールが食う**。距離で待つ形にすると、待っている間にリストが目に見えて動き、
+ * 実機の症状（「左スワイプしようとすると画面が上下に動く」＝縦が勝つ側）がそのまま残る。
+ * そこで距離は 8px まで下げて助走を見せず、比 2.5 で「明確に横」だけを拾う
+ * （8px 時点で縦成分が 3.2px 未満＝ほぼ真横のときだけ奪う）。
+ *
+ * ⚠**`TimetableScreen` の週送りは 24px / 比1.6 のままでよい＝値を揃えないこと。**
+ * あちらは**ページ単位の操作**なので多少の助走が自然で、実績値で動いている。こちらは
+ * **行の即応操作**なので、同じ形だと反応が遅れて縦に負ける。**用途が違うので値が違う**。
  */
-export const SWIPE_CAPTURE_DX = 24
-export const SWIPE_CAPTURE_RATIO = 1.6
+export const SWIPE_CAPTURE_DX = 8
+export const SWIPE_CAPTURE_RATIO = 2.5
 export const SWIPE_COMMIT_DX = 96
 export const SWIPE_COMMIT_VX = 0.35
 
