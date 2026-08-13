@@ -29,6 +29,14 @@ describe('shouldCommitHide', () => {
     expect(shouldCommitHide(120, 1)).toBe(false)
     expect(shouldCommitHide(40, -0.5)).toBe(false)
   })
+  // 実機の苦情「少しスライドすると、スライドし切ることなく戻ってしまう」に対する固定。
+  // 旧値（96px / 0.35）ではどちらも false だった＝しきい値を戻すとこの2本が落ちる。
+  it('ゆっくりでも 60px 引けば確定する（旧96pxでは戻っていた）', () => {
+    expect(shouldCommitHide(-60, 0)).toBe(true)
+  })
+  it('穏やかな左フリックでも確定する（旧0.35では戻っていた）', () => {
+    expect(shouldCommitHide(-20, -0.28)).toBe(true)
+  })
 })
 
 describe('clampSwipeX', () => {

@@ -18,8 +18,22 @@
  */
 export const SWIPE_CAPTURE_DX = 8
 export const SWIPE_CAPTURE_RATIO = 2.5
-export const SWIPE_COMMIT_DX = 96
-export const SWIPE_COMMIT_VX = 0.35
+
+/**
+ * 確定しきい値。**捕捉とは別物で、こちらが厳しいと「掴めるのに決まらない」になる。**
+ *
+ * 実機の症状（2026-08-13）＝「少しスライドすると、スライドし切ることなく戻ってしまうことが多い」。
+ * 捕捉を 8px/比2.5 へ緩めて掴めるようにした後に残ったのはこちら側で、旧値 96px は
+ * iPhone の画面幅の約1/4を引く必要があり「少し滑らせた」では届かない。速度の代替も
+ * 0.35px/ms（350px/秒）とやや速めのフリックを要求していた。
+ *
+ * **緩めてよい根拠＝非表示は取り消せる。** 隠した課題は「非表示」グループへ入り戻せる
+ * （AssignmentsScreen の onToggle('hidden') / 「戻す」）。加えて隠す手段は
+ * **スワイプ・長押し・専用ボタンの3つ**あるので、スワイプだけを慎重にしても安全は買えず、
+ * 使いにくさだけが残る。**誤爆のコストが低い側なので、届く値へ寄せる。**
+ */
+export const SWIPE_COMMIT_DX = 56
+export const SWIPE_COMMIT_VX = 0.25
 
 /** 横スワイプとして捕捉するか（|dx|が十分＋縦優勢でない＝FlatListの縦スクロールを妨げない）。 */
 export function shouldCaptureSwipe(dx: number, dy: number): boolean {
