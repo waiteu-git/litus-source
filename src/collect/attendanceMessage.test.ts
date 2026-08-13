@@ -141,15 +141,17 @@ describe('リアペの任意提出（ボタンがあるなら書ける）', () =
     expect(r.status).toBe('accepting')
     expect(r.reactionAvailable).toBe(true)
   })
-  // 実機(2026-08-13・iPhone)で**手動確認**: 受付中の授業が無い画面では、CLASSの
-  // 「リアクションペーパー」ボタンを**指で押しても入力フォームが出ない**。ボタンの存在は
-  // 「提出できる」を意味しない。素通しすると、できないことを約束する表示になる。
-  it('受付なし(none)ではリアペボタンが在っても書けない（手で押してもフォームが出ないため）', () => {
+  // 🔴**状態でリアペを塞がない。** NONE_MARKER は2つの世界で同じ文言が出る:
+  //   (a) 学期中・受付時間外＝履修授業は在り、リアペのフォームは開ける（前期中の実使用）
+  //   (b) 休業期間・履修授業ゼロ＝開かない（2026-08-13 手動押下で確認）
+  // ページに区別する材料が無いので予測できない。(b)だけを見て塞ぐと(a)＝学期中の提出を殺す。
+  // 後期開始は9/11＝公開直後。**誤りの向きが非対称なので塞がない。**
+  it('受付なし(none)でもリアペボタンが在れば書ける（状態からリアペ可否は予測できない）', () => {
     const r = parseAttendanceMessage(
       msg({ text: '出席確認中の履修授業はありません', hasReactionBtn: true }),
     )
     expect(r.status).toBe('none')
-    expect(r.reactionAvailable).toBe(false)
+    expect(r.reactionAvailable).toBe(true)
   })
   // ⚠status は名指しで固定する。最初 `not.toBe('none')` で書いたら実際には 'unknown' を通っており、
   // 守りたい 'closed' を1mmも守れていなかった（時限表示が無いと closed へ落ちない）。
