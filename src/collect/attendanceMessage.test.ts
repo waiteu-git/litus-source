@@ -141,15 +141,15 @@ describe('リアペの任意提出（ボタンがあるなら書ける）', () =
     expect(r.status).toBe('accepting')
     expect(r.reactionAvailable).toBe(true)
   })
-  // 実機(2026-08-13)で確認: 受付中の授業が無い画面でも、CLASSは「リアクションペーパー未提出」を出し、
-  // ボタンから入力フォームへ入って**実際に提出できる**。受付の有無とリアペ可否は別軸なので塞がない。
-  // （一度 'none' で塞ぐ実装を入れたが、実在する提出手段を奪うので撤回した。）
-  it('受付なし(none)でもリアペボタンが在れば書ける（受付の有無とリアペ可否は別軸）', () => {
+  // 実機(2026-08-13・iPhone)で**手動確認**: 受付中の授業が無い画面では、CLASSの
+  // 「リアクションペーパー」ボタンを**指で押しても入力フォームが出ない**。ボタンの存在は
+  // 「提出できる」を意味しない。素通しすると、できないことを約束する表示になる。
+  it('受付なし(none)ではリアペボタンが在っても書けない（手で押してもフォームが出ないため）', () => {
     const r = parseAttendanceMessage(
       msg({ text: '出席確認中の履修授業はありません', hasReactionBtn: true }),
     )
     expect(r.status).toBe('none')
-    expect(r.reactionAvailable).toBe(true)
+    expect(r.reactionAvailable).toBe(false)
   })
   // ⚠status は名指しで固定する。最初 `not.toBe('none')` で書いたら実際には 'unknown' を通っており、
   // 守りたい 'closed' を1mmも守れていなかった（時限表示が無いと closed へ落ちない）。

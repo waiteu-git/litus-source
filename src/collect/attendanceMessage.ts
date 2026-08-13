@@ -160,13 +160,27 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
   if (!text.trim()) return fail(READ_ERROR)
 
   // 2) 受付なし
-  // ⚠**リアペは塞がない。** 2026-08-13に `reactionAvailable=false` で塞いだが**誤りだったので戻した**。
-  // 「受付中の履修授業はありません」の画面でも、CLASSは「リアクションペーパー未提出」を表示し、
-  // 「リアクションペーパー」ボタンから**実際に入力フォームへ入って提出できる**（ユーザーが実機で確認）。
-  // ⇒ 受付の有無とリアペの提出可否は**別軸**。出席の受付が閉じていることを理由にリアペを塞ぐと、
-  // 実在する提出手段を奪う（`reactionAvailableOf` の「提出済みを除外しないこと」と同じ型の絞りすぎ）。
-  // アプリ内提出が form-missing で落ちるのは**アプリ側の欠陥**であって、状態の問題ではない。
-  if (text.includes(NONE_MARKER)) return { ...base('none'), network, reactionAvailable, reactionSubmitted }
+  // **リアペは出せない（reactionAvailable=false で確定させる）。**
+  //
+  // 根拠＝**実測**（2026-08-13・iPhone実機）: この画面でCLASSの「リアクションペーパー」ボタンを
+  // **人が指で押しても入力フォームは出ない**（ユーザーが手動で確認）。つまりアプリの
+  // form-missing は**CLASSの挙動を正しく報告していた**のであって、アプリの欠陥ではない。
+  // `reactionAvailable` は「ボタンが在るか」でしかなく、**そのボタンは受付中の授業が無くても
+  // ページに在る**ため、素通しすると出席カードが「出席確認中の授業がありません」と言っている隣で
+  // リアペカードが「提出できます」と出る＝**できないことを約束する**。
+  //
+  // ⚠**この判断は2回反転している。根拠が違うので混同しないこと。**
+  //   1回目(`3ff1956`)＝form-missing からの**推測**で塞いだ。推測の範囲を確かめていなかった
+  //   2回目(`e83939f`)＝「実際は提出できる」という見立てで**撤回**した
+  //   3回目(ここ)＝**手動押下の観測**で確定。⇒ 以後は観測が覆らない限り再検討しない
+  //
+  // ⚠**塞ぐのは 'none' だけ。** 'closed'（受付終了）や提出済みは触らない
+  // ＝「ボタンがあるなら常に書けるように」(2026-07-17 ユーザー要望) と
+  // 「提出済みを除外しない」(`reactionAvailableOf` のコメント) を壊さないため。
+  // 観測したのは 'none' の画面だけなので、**観測していない状態まで広げない。**
+  if (text.includes(NONE_MARKER)) {
+    return { ...base('none'), network, reactionAvailable: false, reactionSubmitted }
+  }
 
   const cw = windowOf()
 
