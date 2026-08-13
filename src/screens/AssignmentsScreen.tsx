@@ -16,7 +16,7 @@ import {
 } from '../assignments/assignmentListItems'
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
-import { SwipeToHide } from '../ui/SwipeToHide'
+import { SwipeToHide, useSwipeHideHost, type SwipeHideHost } from '../ui/SwipeToHide'
 import { useDisplaySettings } from '../displaySettings'
 import { formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone, formatDeadlineRich, deadlineMagnitude } from '../assignments/deadline'
 import { assignmentsEmptyState } from '../assignments/emptyState'
@@ -62,19 +62,21 @@ const FlatRow = memo(function FlatRow({
   a,
   now,
   rowUi,
+  host,
   onOpen,
   onHide,
 }: {
   a: Assignment
   now: Date
   rowUi: RowUi
+  host: SwipeHideHost
   onOpen: (a: Assignment) => void
   onHide: (a: Assignment) => void
 }) {
   const tone = urgencyTone(a, now)
   const rel = relDue(a.deadline, now)
   return (
-    <SwipeToHide onHide={() => onHide(a)} radius={18} style={styles.flatRowGap}>
+    <SwipeToHide host={host} onHide={() => onHide(a)} radius={18} style={styles.flatRowGap}>
     <PressableRow onPress={() => onOpen(a)} onLongPress={() => onHide(a)} style={[rowUi.card, styles.flatRow, styles.noMb]}>
       <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -111,6 +113,7 @@ const AssignRow = memo(function AssignRow({
   done,
   firstInGroup,
   rowUi,
+  host,
   onOpen,
   onHide,
 }: {
@@ -119,6 +122,7 @@ const AssignRow = memo(function AssignRow({
   done: boolean
   firstInGroup: boolean
   rowUi: RowUi
+  host: SwipeHideHost
   onOpen: (a: Assignment) => void
   onHide: (a: Assignment) => void
 }) {
@@ -128,7 +132,7 @@ const AssignRow = memo(function AssignRow({
   const dWeight: '400' | '500' | '700' = tone === 'red' ? '700' : tone === 'amber' ? '500' : '400'
   const mag = submitted ? '' : deadlineMagnitude(a.deadline, now)
   return (
-    <SwipeToHide onHide={() => onHide(a)}>
+    <SwipeToHide host={host} onHide={() => onHide(a)}>
     <PressableRow
       onPress={() => onOpen(a)}
       onLongPress={() => onHide(a)}
@@ -498,6 +502,10 @@ export default function AssignmentsScreen() {
     [assignments, now, filter, assignmentsView, showOverdue, showHidden],
   )
 
+  // スワイプの司令塔。**FlatList を包む View** に panHandlers を展開する（SwipeToHide の冒頭コメント参照＝
+  // 行の中に置くと iOS の UIScrollView がタッチをキャンセルし、掴めても縦に取られて戻る）。
+  const swipeHost = useSwipeHideHost()
+
   const keyExtractor = useCallback((item: ListItem) => item.key, [])
 
   const renderItem = useCallback(
@@ -505,7 +513,7 @@ export default function AssignmentsScreen() {
       switch (item.type) {
         case 'assignment':
           return item.variant === 'flat' ? (
-            <FlatRow a={item.a} now={now} rowUi={rowUi} onOpen={openDetail} onHide={hide} />
+            <FlatRow a={item.a} now={now} rowUi={rowUi} host={swipeHost} onOpen={openDetail} onHide={hide} />
           ) : (
             <AssignRow
               a={item.a}
@@ -513,6 +521,7 @@ export default function AssignmentsScreen() {
               done={item.done}
               firstInGroup={item.firstInGroup}
               rowUi={rowUi}
+              host={swipeHost}
               onOpen={openDetail}
               onHide={hide}
             />
@@ -540,7 +549,7 @@ export default function AssignmentsScreen() {
           return <Text style={[styles.note, { color: rowUi.labelColor }]}>{item.label}</Text>
       }
     },
-    [now, rowUi, openDetail, hide, unhide, onToggle, bulkHideOverdue],
+    [now, rowUi, swipeHost, openDetail, hide, unhide, onToggle, bulkHideOverdue],
   )
 
   const listHeader = (
@@ -627,6 +636,7 @@ export default function AssignmentsScreen() {
       {showEmpty && emptyState ? (
         <EmptyView state={emptyState} refreshedAt={refreshedAt} onSync={startUpdate} />
       ) : (
+        <View style={{ flex: 1 }} {...swipeHost.panHandlers}>
         <FlatList
           style={{ flex: 1 }}
           data={listItems}
@@ -639,6 +649,7 @@ export default function AssignmentsScreen() {
           windowSize={11}
           keyboardShouldPersistTaps="handled"
         />
+        </View>
       )}
     </ScreenBg>
   )
