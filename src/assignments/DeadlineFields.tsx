@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Switch, View } from 'react-native'
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker'
+import DateTimeSheet from '../ui/DateTimeSheet'
 import { Text } from '../ui/Text'
 import { COLORS, DARK } from '../theme'
 import { useUi } from '../ui/screen'
@@ -36,11 +36,11 @@ export default function DeadlineFields({
   const chipText = ui.dark ? COLORS.emeraldLight : COLORS.emeraldDark
   const setPreset = (days: number) => onChange({ ...value, noDeadline: false, date: dateStr(addDays(new Date(), days)) })
 
-  function onPicked(event: DateTimePickerEvent, d: Date | undefined) {
+  function onPicked(d: Date) {
     const which = picker
     // Androidはダイアログを閉じるたびにonChangeが来る。先に閉じてから反映（再表示ループ防止）。
     setPicker(null)
-    if (event.type !== 'set' || !d || !which) return
+    if (!which) return
     if (which === 'date') onChange({ ...value, noDeadline: false, date: dateToDeadlineDateString(d) })
     else onChange({ ...value, noDeadline: false, time: dateToDeadlineTimeString(d) })
   }
@@ -85,14 +85,15 @@ export default function DeadlineFields({
               </Text>
             </Pressable>
           </View>
-          {picker ? (
-            <DateTimePicker
-              value={deadlineValueToDate(value, new Date())}
-              mode={picker}
-              is24Hour
-              onChange={onPicked}
-            />
-          ) : null}
+          <DateTimeSheet
+            open={picker !== null}
+            value={deadlineValueToDate(value, new Date())}
+            mode={picker ?? 'date'}
+            is24Hour
+            title={picker === 'time' ? '締切の時刻' : '締切の日付'}
+            onConfirm={onPicked}
+            onCancel={() => setPicker(null)}
+          />
         </>
       ) : (
         <Text style={[styles.noDl, { color: labelColor }]}>締切を設定しません</Text>

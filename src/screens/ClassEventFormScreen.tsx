@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker'
+import DateTimeSheet from '../ui/DateTimeSheet'
 import { Text, TextInput } from '../ui/Text'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -97,11 +97,11 @@ export default function ClassEventFormScreen() {
     })
   }, [editId])
 
-  function onPicked(event: DateTimePickerEvent, d: Date | undefined) {
+  function onPicked(d: Date) {
     const which = picker
     // Androidはダイアログを閉じるたびにonChangeが来る。先に閉じてから反映（再表示ループ防止）。
     setPicker(null)
-    if (event.type !== 'set' || !d || !which) return
+    if (!which) return
     if (which === 'date') setDate(dateToYmd(d))
     else setMkDate(dateToYmd(d))
   }
@@ -227,9 +227,14 @@ export default function ClassEventFormScreen() {
             boxStyle={inputStyle}
             a11yLabel={type === 'makeup' ? '補講日を選択' : '日付を選択'}
           />
-          {picker === 'date' ? (
-            <DateTimePicker value={ymdToDate(date, new Date())} mode="date" onChange={onPicked} />
-          ) : null}
+          <DateTimeSheet
+            open={picker === 'date'}
+            value={ymdToDate(date, new Date())}
+            mode="date"
+            title={type === 'makeup' ? '補講日' : '日付'}
+            onConfirm={onPicked}
+            onCancel={() => setPicker(null)}
+          />
         </View>
 
         <View style={[ui.card, styles.card]}>
@@ -283,9 +288,14 @@ export default function ClassEventFormScreen() {
                   boxStyle={inputStyle}
                   a11yLabel="補講日を選択"
                 />
-                {picker === 'mkDate' ? (
-                  <DateTimePicker value={ymdToDate(mkDate, new Date())} mode="date" onChange={onPicked} />
-                ) : null}
+                <DateTimeSheet
+                  open={picker === 'mkDate'}
+                  value={ymdToDate(mkDate, new Date())}
+                  mode="date"
+                  title="補講日"
+                  onConfirm={onPicked}
+                  onCancel={() => setPicker(null)}
+                />
                 {label('補講の時限')}
                 <PeriodChips sel={mkPeriods} onToggle={(p) => setMkPeriods((v) => toggle(v, p))} />
                 {label('補講の教室（任意）')}
