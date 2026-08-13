@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from './injectedScripts'
+import { readAuthSignals } from '../health/authSignals'
 import { computeCourseSignature, diffCourseSignature } from '../updates/courseUpdates'
 import { selectCoursesToSnapshot } from '../updates/courseSnapshotWindow'
 import { loadCourseSnapshots, saveCourseSnapshots } from '../storage/courseSnapshotStore'
@@ -112,6 +113,7 @@ export default function CourseUpdateEngine({
         html: payload.html,
         modAnchorCount: nextSig.length,
         prevSignatureLen: prev ? prev.activities.length : null,
+        pageSignals: readAuthSignals((payload as { auth?: unknown }).auth),
       })
       const diff = prev ? diffCourseSignature(prev.activities, nextSig) : { added: [], removed: [] }
       snapshotsRef.current[currentUrl] = {

@@ -760,6 +760,27 @@ export const LETUS_HYDRATION_BUDGET_MS = 3000
  * 追加コストが出るのは「本当に読めない」場合のみ（この面は1サイクル最大4回・逐次でない）。
  */
 export const LETUS_DASHBOARD_HYDRATION_BUDGET_MS = 8000
+/**
+ * ページ内で Moodle の稼働/ログイン状態を **直接** 読む（自己診断の認証シグナル・§4.2）。
+ *
+ * ⚠収集JSが postMessage するのは `document.body.innerHTML` だが、Moodle の `M.cfg` は
+ * `<head>` の inline script に出るため **送信HTMLには入らない**。HTML文字列から M.cfg を
+ * 探す判定（hasMoodleConfig）は、そのため実ページでは常に false に倒れる。
+ * 一方ログインページの `type=password` は body に在るので検知できる
+ * ＝**失敗しか観測できない一方通行**になり、診断台帳が「失敗を書けるが成功を書けない」状態になる。
+ *
+ * 証拠が在る場所（ページのJSコンテキスト）で読めば、この非対称は消える。
+ * `M.cfg.sesskey` は Moodle がログイン済みセッションにのみ出す値で、版跨ぎで安定。
+ */
+export const LETUS_AUTH_PROBE = `
+  function litusAuthProbe(){
+    try {
+      var cfg = (window.M && window.M.cfg) ? window.M.cfg : null;
+      return { hasMcfg: !!cfg, loggedIn: !!(cfg && cfg.sesskey) };
+    } catch (e) { return { hasMcfg: false, loggedIn: false }; }
+  }
+`
+
 export const LETUS_HYDRATION_PRELUDE = `
   function litusWaitForHydration(isReady, collect, budgetMs){
     var DEBOUNCE_MS = 300, BUDGET_MS = budgetMs || ${LETUS_HYDRATION_BUDGET_MS};
@@ -795,6 +816,7 @@ export const LETUS_HYDRATION_PRELUDE = `
 
 /** マイコース本文HTMLを抽出して postMessage（抽出のみ）。ハイドレーション待ち込み（§6）。 */
 export const COLLECT_MYCOURSES_JS = `(function(){
+  ${LETUS_AUTH_PROBE}
   ${LETUS_HYDRATION_PRELUDE}
   // 準備完了 = コース発見面に /course/view.php?id= アンカーが1つでも描画された（URL方式・テーマ非依存）。
   function isReady(){ return !!document.querySelector('a[href*="/course/view.php?id="]'); }
@@ -803,6 +825,7 @@ export const COLLECT_MYCOURSES_JS = `(function(){
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'mycourses',
         html: document.body ? document.body.innerHTML : '',
+        auth: litusAuthProbe(),
         origin: location.origin,
         url: location.href
       }));
@@ -956,6 +979,7 @@ true;`
 
 /** コースページ本文HTMLを抽出して postMessage（抽出のみ）。ハイドレーション待ち込み（§6）。 */
 export const COLLECT_COURSE_PAGE_JS = `(function(){
+  ${LETUS_AUTH_PROBE}
   ${LETUS_HYDRATION_PRELUDE}
   // 準備完了 = 活動一覧に /mod/<type>/view.php アンカーが1つでも描画された（URL方式・テーマ非依存＝
   // BS5 の course-index クラス改名に非依存）。course-index のクライアント描画化で 0/部分取得になるのを防ぐ。
@@ -965,6 +989,7 @@ export const COLLECT_COURSE_PAGE_JS = `(function(){
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'coursepage',
         html: document.body ? document.body.innerHTML : '',
+        auth: litusAuthProbe(),
         origin: location.origin,
         url: location.href
       }));

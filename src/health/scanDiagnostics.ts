@@ -49,12 +49,34 @@ export function hasCourseFormatMarker(html: string): boolean {
 }
 
 /**
- * 取得HTMLからページ単位の認証状態を導出する（diagnose.ts の共通ゲート入力・§4.2）。
- * ログインマーカー（パスワード欄/SSOリダイレクト断片）を M.cfg より優先する: 学外SSO/IdP の
- * ログインページは Moodle でない（M.cfg 無し）が、それは NOT_A_MOODLE_PAGE でなく logged_out。
+ * ページ内で直接読んだ認証シグナル（injectedScripts の `litusAuthProbe()` の戻り値）。
+ *
+ * ⚠**HTML文字列から M.cfg を探す判定は実ページでは効かない**: 収集JSが送るのは
+ * `document.body.innerHTML` で、Moodle の `M.cfg` は `<head>` に出るため送信HTMLに入らない。
+ * 一方ログインページの `type=password` は body に在るので検知できる。つまりHTMLだけを見ると
+ * **失敗は観測できるが成功は観測できない**＝台帳が「失敗しか書けない」一方通行になる
+ * （実測: 実採取した Dashboard 全文には M.cfg が在るが、その body.innerHTML には無い）。
+ * このフィールドは証拠の在る場所（ページのJSコンテキスト）で読んだ値で、その非対称を消す。
  */
-export function classifyFetchedPage(html: string): PageAuthState {
+export interface PageAuthSignals {
+  /** `window.M.cfg` が在るか（Moodleページの存在アンカー）。 */
+  hasMcfg: boolean
+  /** `window.M.cfg.sesskey` が在るか（ログイン済みセッションにのみ出る）。 */
+  loggedIn: boolean
+}
+
+/**
+ * ページ単位の認証状態を導出する（diagnose.ts の共通ゲート入力・§4.2）。
+ *
+ * 優先順位:
+ * 1. ログインマーカー（パスワード欄/SSOリダイレクト断片）→ logged_out。学外SSO/IdP の
+ *    ログインページは Moodle でない（M.cfg 無し）が、それは NOT_A_MOODLE_PAGE でなく logged_out。
+ * 2. ページ内報告（signals.loggedIn）→ logged_in。**実ページで成功を観測できる唯一の経路**。
+ * 3. HTML中の M.cfg → logged_in（報告が無い経路・既存fixtureとの後方互換）。
+ */
+export function classifyFetchedPage(html: string, signals?: PageAuthSignals | null): PageAuthState {
   if (hasLetusLoginMarker(html)) return 'logged_out'
+  if (signals?.loggedIn === true) return 'logged_in'
   if (hasMoodleConfig(html)) return 'logged_in'
   return 'unknown'
 }
@@ -153,11 +175,13 @@ export interface DashboardObservation {
   courseAnchorCount: number
   /** storage に既に保存されている既知コース数（今回のスキャンで上書きする前の値）。 */
   knownCourseCount: number
+  /** ページ内で直接読んだ認証シグナル（PageAuthSignals 参照）。未報告は undefined。 */
+  pageSignals?: PageAuthSignals | null
 }
 
 /** Dashboard 面を観測して診断コードを集約する（diagnoseAuthProbe ＋ diagnoseDashboard）。 */
 export function observeDashboard(acc: ScanDiagnosticsAccumulator, obs: DashboardObservation): void {
-  const pageAuthState = classifyFetchedPage(obs.html)
+  const pageAuthState = classifyFetchedPage(obs.html, obs.pageSignals)
   noteAuthState(acc, pageAuthState)
   observeFingerprint(acc, obs.html, pageAuthState)
   // 同一面の再観測は追記でなく置換（dashboardCodes の根拠参照）。再試行で健全に読めたら
@@ -165,7 +189,9 @@ export function observeDashboard(acc: ScanDiagnosticsAccumulator, obs: Dashboard
   acc.dashboardCodes = [
     ...diagnoseAuthProbe({
       fetchOk: true,
-      hasMcfg: hasMoodleConfig(obs.html),
+      // 報告があればそれを使う。HTML側は body.innerHTML なので M.cfg を含まない
+      // ＝報告を無視すると健全なページが軒並み NOT_A_MOODLE_PAGE になる。
+      hasMcfg: obs.pageSignals?.hasMcfg ?? hasMoodleConfig(obs.html),
       hasLoginMarker: hasLetusLoginMarker(obs.html),
     }),
     ...diagnoseDashboard({
@@ -183,11 +209,13 @@ export interface CoursePageObservation {
   modAnchorCount: number
   /** 前回スナップショットのシグネチャ件数。null = 初回（prev 無し）。 */
   prevSignatureLen: number | null
+  /** ページ内で直接読んだ認証シグナル（PageAuthSignals 参照）。未報告は undefined。 */
+  pageSignals?: PageAuthSignals | null
 }
 
 /** コース面を観測して診断コードを集約する。既知コースの喪失は横断集計へも積む。 */
 export function observeCoursePage(acc: ScanDiagnosticsAccumulator, obs: CoursePageObservation): void {
-  const pageAuthState = classifyFetchedPage(obs.html)
+  const pageAuthState = classifyFetchedPage(obs.html, obs.pageSignals)
   noteAuthState(acc, pageAuthState)
   observeFingerprint(acc, obs.html, pageAuthState)
   const codes = diagnoseCoursePage({
@@ -216,11 +244,13 @@ export interface ActivityPageObservation {
   dateParsed: boolean
   /** 提出状態が unknown 以外に解決したか（parseAssignmentPage().statusResolved）。 */
   statusResolved: boolean
+  /** ページ内で直接読んだ認証シグナル（PageAuthSignals 参照）。未報告は undefined。 */
+  pageSignals?: PageAuthSignals | null
 }
 
 /** 活動面を観測して診断コードを集約する（diagnoseActivityPage）。 */
 export function observeActivityPage(acc: ScanDiagnosticsAccumulator, obs: ActivityPageObservation): void {
-  const pageAuthState = classifyFetchedPage(obs.html)
+  const pageAuthState = classifyFetchedPage(obs.html, obs.pageSignals)
   noteAuthState(acc, pageAuthState)
   observeFingerprint(acc, obs.html, pageAuthState)
   const moduleType = moduleTypeFromUrl(obs.url)

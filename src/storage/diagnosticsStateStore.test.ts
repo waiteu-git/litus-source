@@ -24,7 +24,15 @@ import {
   DIAGNOSTICS_STATE_KEY,
 } from './diagnosticsStateStore'
 import { setDemoNamespace, DEMO_PREFIX } from './asyncStorage'
-import { createScanAccumulator, type ScanDiagnosticsAccumulator } from '../health/scanDiagnostics'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { parse } from 'node-html-parser'
+import {
+  createScanAccumulator,
+  observeDashboard,
+  type ScanDiagnosticsAccumulator,
+} from '../health/scanDiagnostics'
+import { parseMyCourses } from '../parsers/letusCourses'
 import {
   MOODLE_FINGERPRINT_KEY,
   loadMoodleFingerprint,
@@ -117,6 +125,63 @@ describe('diagnosticsStateStore', () => {
       // finalize が横断集計 COURSES_MAJORITY_LOST を加える。
       expect(r?.consecutiveFailures).toBe(1)
       expect(r?.lastCodes).toEqual(expect.arrayContaining(['DASHBOARD_UNREADABLE', 'COURSES_MAJORITY_LOST']))
+    })
+  })
+
+  describe('壊れた台帳の退役（実機で「バナーが消えない」の再現と修正）', () => {
+    // 収集JSが送るのは `document.body.innerHTML`。Moodle の M.cfg は <head> にあるので
+    // 送信HTMLには入らない＝HTMLだけを見ると健全なページを logged_in と判定できず、
+    // reachedLetus が立たないまま「不完全サイクル」として **記録ごと捨てられる**。
+    // 失敗側（パスワード欄）は body に在るので記録される⇒台帳は失敗しか書けない一方通行になり、
+    // 一度 LOGGED_OUT が載ると健全に戻っても永久に消えない（実機 204/205 の症状）。
+    const SANDBOX = 'https://school.moodledemo.net'
+    const fullDoc = readFileSync(
+      fileURLToPath(new URL('../parsers/__fixtures__/moodle52/my52_hydrated.html', import.meta.url)),
+      'utf-8',
+    )
+    const bodyInner = parse(fullDoc).querySelector('body')?.innerHTML ?? ''
+
+    /** 実機と同じ形（body.innerHTML ＋ ページ内報告）で健全な1サイクルを組む。 */
+    function healthyCycle(pageSignals: { hasMcfg: boolean; loggedIn: boolean } | null) {
+      const acc = createScanAccumulator()
+      observeDashboard(acc, {
+        html: bodyInner,
+        courseAnchorCount: parseMyCourses(bodyInner, SANDBOX).length,
+        knownCourseCount: 5,
+        pageSignals,
+      })
+      return acc
+    }
+
+    /** 壊れていた頃（204/205）に書かれた台帳を投入する。 */
+    async function seedBrokenState() {
+      await recordScanOutcome({ codes: ['LOGGED_OUT'], at: T0 })
+      const seeded = await loadDiagnosticsState()
+      expect(seeded?.activeCodes).toEqual(['LOGGED_OUT'])
+      return seeded
+    }
+
+    it('壊れた状態を投入しても、健全なサイクル1回で LOGGED_OUT が退役する', async () => {
+      await seedBrokenState()
+      const next = await recordScanCycleOutcome(healthyCycle({ hasMcfg: true, loggedIn: true }), T1)
+      expect(next).not.toBeNull()
+      expect(next?.activeCodes).toEqual([])
+      expect(next?.consecutiveFailures).toBe(0)
+      expect(next?.lastGoodAt).toBe(T1)
+      // 画面が読むのは storage の値なので、永続側も退役していること。
+      expect((await loadDiagnosticsState())?.activeCodes).toEqual([])
+    })
+
+    it('ページ内報告が無いと健全でも記録されない＝壊れた台帳が残り続ける（退役が効く根拠）', async () => {
+      const seeded = await seedBrokenState()
+      // 報告なし＝HTML から推定するしかなく、body.innerHTML に M.cfg が無いので unknown に倒れる。
+      expect(await recordScanCycleOutcome(healthyCycle(null), T1)).toBeNull()
+      expect(await loadDiagnosticsState()).toEqual(seeded)
+    })
+
+    it('健全なサイクルが NOT_A_MOODLE_PAGE を新たに出さない（報告を hasMcfg にも通している）', async () => {
+      const next = await recordScanCycleOutcome(healthyCycle({ hasMcfg: true, loggedIn: true }), T1)
+      expect(next?.lastCodes).toEqual([])
     })
   })
 

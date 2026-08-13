@@ -7,6 +7,7 @@ import { loadAllCourses } from '../storage/allCoursesStore'
 import { loadTrackedCourses } from '../storage/trackedCoursesStore'
 import { trackedCourseInfos } from '../updates/courseTracking'
 import { COLLECT_COURSE_PAGE_JS, DESKTOP_UA } from './injectedScripts'
+import { readAuthSignals } from '../health/authSignals'
 import { filterAssignmentCandidates } from '../updates/assignmentCandidates'
 import { selectAssignmentsToVisit } from '../updates/assignmentWindow'
 import { parseAssignmentPage } from '../parsers/letus'
@@ -111,7 +112,7 @@ export default function AssignmentCollector({
   }, [loaded, index, current, candidates.length, onProgress])
 
   function onMessage(data: string) {
-    let payload: { type?: string; html?: string }
+    let payload: { type?: string; html?: string; auth?: unknown }
     try {
       payload = JSON.parse(data)
     } catch {
@@ -130,6 +131,7 @@ export default function AssignmentCollector({
         keywordFound: parsed.keywordFound,
         dateParsed: parsed.dateParsed,
         statusResolved: parsed.statusResolved,
+        pageSignals: readAuthSignals(payload.auth),
       })
       collectedRef.current.push({
         url: current.url,

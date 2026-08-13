@@ -14,6 +14,7 @@ import {
   observeCoursePage,
   observeDashboard,
 } from '../health/scanDiagnostics'
+import { readAuthSignals } from '../health/authSignals'
 import { recordScanCycleOutcome } from '../storage/diagnosticsStateStore'
 import type { DiagnosticsState } from '../health/diagnosticsState'
 
@@ -96,13 +97,19 @@ export default function LetusSyncEngine({
     // 0 アンカー（5.x の全面クライアント描画等）を DASHBOARD_UNREADABLE として捕捉する。URL ゲートに
     // 依存せず html を直接パースする（アンカーの実在数を診断入力にするため）。
     try {
-      const payload = JSON.parse(data) as { type?: unknown; html?: unknown; origin?: unknown }
+      const payload = JSON.parse(data) as {
+        type?: unknown
+        html?: unknown
+        origin?: unknown
+        auth?: unknown
+      }
       if (payload.type === 'mycourses' && typeof payload.html === 'string') {
         const origin = typeof payload.origin === 'string' ? payload.origin : 'https://letus.ed.tus.ac.jp'
         observeDashboard(scanAccRef.current, {
           html: payload.html,
           courseAnchorCount: parseMyCourses(payload.html, origin).length,
           knownCourseCount: prevKnownCountRef.current,
+          pageSignals: readAuthSignals(payload.auth),
         })
       }
     } catch {

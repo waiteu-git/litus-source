@@ -20,6 +20,7 @@ import {
   observeCoursePage,
   observeDashboard,
 } from './scanDiagnostics'
+import { parse } from 'node-html-parser'
 import { parseMyCourses } from '../parsers/letusCourses'
 import { parseAssignmentPage } from '../parsers/letus'
 import { applyScanOutcome } from './diagnosticsState'
@@ -366,5 +367,37 @@ describe('受動版フィンガープリントの相乗り観測（§9・T8）',
     })
     expect(finalizeScanCodes(withFp)).toEqual(finalizeScanCodes(withoutFp))
     expect(finalizeScanCodes(withFp)).toContain('DASHBOARD_UNREADABLE')
+  })
+})
+
+describe('アプリが実際に送るHTML（body.innerHTML）での認証判定', () => {
+  // 収集JS（injectedScripts）は一貫して `document.body.innerHTML` を postMessage する。
+  // 一方 M.cfg は Moodle が <head> に出すため、**アプリが送るHTMLには入らない**。
+  // その結果 classifyFetchedPage が 'unknown' に倒れ、reachedLetus が立たず、
+  // recordScanCycleOutcome が「不完全サイクル」として記録を丸ごと捨てる＝台帳が凍る。
+  // 失敗側（パスワード欄）は body に在るので記録される＝**失敗しか書けない一方通行**になる。
+  const fullDoc = read('../parsers/__fixtures__/moodle52/my52_hydrated.html')
+  const bodyInner = parse(fullDoc).querySelector('body')?.innerHTML ?? ''
+
+  it('前提: 実ページの body.innerHTML に M.cfg は含まれない', () => {
+    expect(hasMoodleConfig(fullDoc)).toBe(true)
+    expect(hasMoodleConfig(bodyInner)).toBe(false)
+  })
+
+  it('健全なDashboardは logged_in と判定され、記録可能なサイクルになる', () => {
+    const acc = createScanAccumulator()
+    observeDashboard(acc, {
+      html: bodyInner,
+      courseAnchorCount: parseMyCourses(bodyInner, SANDBOX).length,
+      knownCourseCount: 5,
+      pageSignals: { hasMcfg: true, loggedIn: true },
+    })
+    expect(acc.reachedLetus).toBe(true)
+    expect(acc.sawLoggedIn).toBe(true)
+    expect(finalizeScanCodes(acc)).toEqual([])
+  })
+
+  it('ページ内報告が無い場合でも、HTMLにM.cfgがあれば従来どおり logged_in', () => {
+    expect(classifyFetchedPage(my52)).toBe('logged_in')
   })
 })
