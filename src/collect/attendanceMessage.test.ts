@@ -141,31 +141,23 @@ describe('リアペの任意提出（ボタンがあるなら書ける）', () =
     expect(r.status).toBe('accepting')
     expect(r.reactionAvailable).toBe(true)
   })
-  // 実機(iPhone/iOS26.6・2026-08-13)で踏んだ回帰。CLASSの「リアクションペーパー」ボタンは
-  // **受付中の授業が無くてもページに在る**ため、素通しすると出席カードが「出席確認中の授業が
-  // ありません」と言っている隣でリアペカードが「提出できます」と出る＝できないことを約束する。
-  // 実際に押すと②入力フォームが来ず（form-missing・②待ち8回）約7秒後に汎用エラーへ落ちた。
-  it('受付なし(none)ではリアペボタンが在っても書けない（アプリができないことを約束しない）', () => {
+  // 実機(2026-08-13)で確認: 受付中の授業が無い画面でも、CLASSは「リアクションペーパー未提出」を出し、
+  // ボタンから入力フォームへ入って**実際に提出できる**。受付の有無とリアペ可否は別軸なので塞がない。
+  // （一度 'none' で塞ぐ実装を入れたが、実在する提出手段を奪うので撤回した。）
+  it('受付なし(none)でもリアペボタンが在れば書ける（受付の有無とリアペ可否は別軸）', () => {
     const r = parseAttendanceMessage(
       msg({ text: '出席確認中の履修授業はありません', hasReactionBtn: true }),
     )
     expect(r.status).toBe('none')
-    expect(r.reactionAvailable).toBe(false)
+    expect(r.reactionAvailable).toBe(true)
   })
-  // ⚠この2本は **status を名指しで固定する**。`not.toBe('none')` だけで書いたら
-  // 実際には 'unknown' を通っていて（時限表示が無いと closed へ落ちない）、
-  // 守りたい 'closed' を1mmも守れていなかった。**通るテストと守れているテストは別物。**
-  it('受付終了(closed)は塞がない（遅れ提出の経路を殺さない）', () => {
+  // ⚠status は名指しで固定する。最初 `not.toBe('none')` で書いたら実際には 'unknown' を通っており、
+  // 守りたい 'closed' を1mmも守れていなかった（時限表示が無いと closed へ落ちない）。
+  it('受付終了(closed)でも書ける', () => {
     const r = parseAttendanceMessage(
-      // confirmWindow が取れないと closed へ落ちない（判定は cw && ended）。既存テストと同じ書式で与える。
       msg({ text: '08:50〜10:20 化学1\n出席確認時間：08:50〜09:20\n出席確認終了', signEnded: true, hasReactionBtn: true }),
     )
     expect(r.status).toBe('closed')
-    expect(r.reactionAvailable).toBe(true)
-  })
-  it('受付なし以外は素通し＝unknownでもボタンが在れば書ける', () => {
-    const r = parseAttendanceMessage(msg({ text: '想定外の画面', hasReactionBtn: true }))
-    expect(r.status).toBe('unknown')
     expect(r.reactionAvailable).toBe(true)
   })
   it('リアペボタンが無い授業は書けない（reactionAvailable=false）', () => {

@@ -160,20 +160,13 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
   if (!text.trim()) return fail(READ_ERROR)
 
   // 2) 受付なし
-  // **リアペは出せない（reactionAvailable=false で確定させる）。**
-  // `reactionAvailable` は「CLASSに『リアクションペーパー』ボタンが在るか」でしかなく、
-  // **そのボタンは受付中の授業が無くてもページに在る**（実機実測 2026-08-13 iPhone/iOS26.6）。
-  // 素通ししていたため、出席カードが「出席確認中の授業がありません」と言っている隣で
-  // リアペカードが「リアクションペーパーを提出できます」と出ていた＝**アプリができないことを
-  // 約束していた**。実際に押すと②入力フォームが来ず（form-missing・②待ち8回を4回とも再現）、
-  // 約7秒後に汎用エラーへ落ちる。
-  // ⚠**塞ぐのは 'none' だけ。** 'closed'（受付終了）や提出済みは触らない
-  // ＝「ボタンがあるなら常に書けるように」(2026-07-17 ユーザー要望) と
-  // 「提出済みを除外しない」(reactionAvailableOf のコメント) を壊さないため。
-  // 授業後の遅れ提出のような経路は 'none' ではないので影響しない。
-  if (text.includes(NONE_MARKER)) {
-    return { ...base('none'), network, reactionAvailable: false, reactionSubmitted }
-  }
+  // ⚠**リアペは塞がない。** 2026-08-13に `reactionAvailable=false` で塞いだが**誤りだったので戻した**。
+  // 「受付中の履修授業はありません」の画面でも、CLASSは「リアクションペーパー未提出」を表示し、
+  // 「リアクションペーパー」ボタンから**実際に入力フォームへ入って提出できる**（ユーザーが実機で確認）。
+  // ⇒ 受付の有無とリアペの提出可否は**別軸**。出席の受付が閉じていることを理由にリアペを塞ぐと、
+  // 実在する提出手段を奪う（`reactionAvailableOf` の「提出済みを除外しないこと」と同じ型の絞りすぎ）。
+  // アプリ内提出が form-missing で落ちるのは**アプリ側の欠陥**であって、状態の問題ではない。
+  if (text.includes(NONE_MARKER)) return { ...base('none'), network, reactionAvailable, reactionSubmitted }
 
   const cw = windowOf()
 
