@@ -30,6 +30,7 @@ import TermsConsentScreen from '../screens/TermsConsentScreen'
 import { TERMS_VERSION } from '../legal/termsVersion'
 import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
 import { BOOT_FADE_MS, bootChrome, bootLogoHtml, nativeSplashBg, needsBootFade } from './bootTheme'
+import { bootStatusBottom } from '../screens/bootFooterGeometry'
 import { isWarmBoot, loadLastAuthedAt, saveLastAuthedAt } from '../storage/bootMetaStore'
 import { useKillSwitch } from '../health/KillSwitchProvider'
 import { useDemo } from '../demo/DemoProvider'
@@ -612,7 +613,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
             {/* 接続状況（アニメ完了後も長い待ちで固まって見えないよう）。背景色に応じて可読色に。
                 アニメ再生中（!bootAnimDone かつ通常フロー）は邪魔しないよう出さない。 */}
             {bootAnimDone ? (
-              <View style={styles.bootStatusWrap} pointerEvents="none">
+              <View style={[styles.bootStatusWrap, { bottom: bootStatusBottom(insets.bottom) }]} pointerEvents="none">
                 <Text style={[styles.bootStatusText, { color: chrome.statusColor }]}>
                   {bootStatus}
                   {state === 'sync' ? '（初回のみ・少し時間がかかります）' : ''}
@@ -792,12 +793,13 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  // 起動ロゴの © フッター（bottom ~40px）に被らないよう、その少し上に接続状況を出す。
+  // 起動ロゴの © フッターに被らない位置は bootFooterGeometry の bootStatusBottom() が決める。
+  // ⚠ここに固定値を書き戻さないこと。フッターは env(safe-area-inset-bottom) の分だけせり上がるので、
+  // 固定値は「Androidでは正しく iOS だけ重なる」形にしかならない（実際に重なった）。
   bootStatusWrap: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 84,
     alignItems: 'center',
     gap: 8,
   },
