@@ -28,8 +28,11 @@ export const BOOT_FOOTER_FONT = 13
  */
 export const BOOT_FOOTER_LINE = 18
 
-/** フッターと接続状況の間に空ける余白。 */
-export const BOOT_STATUS_GAP = SPACE.s5
+/**
+ * フッターと接続状況の間に空ける余白。
+ * 起動画面は情報が2行しかない静かな面なので、行間ではなく**別々のものに見える**だけの間隔を取る。
+ */
+export const BOOT_STATUS_GAP = SPACE.s6
 
 /**
  * 接続状況テキストを置く `bottom`（px）。`insets.bottom` は react-native-safe-area-context の値。
