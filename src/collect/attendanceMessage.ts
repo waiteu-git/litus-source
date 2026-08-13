@@ -160,7 +160,20 @@ export function parseAttendanceMessage(raw: string): AttendanceReception {
   if (!text.trim()) return fail(READ_ERROR)
 
   // 2) 受付なし
-  if (text.includes(NONE_MARKER)) return { ...base('none'), network, reactionAvailable, reactionSubmitted }
+  // **リアペは出せない（reactionAvailable=false で確定させる）。**
+  // `reactionAvailable` は「CLASSに『リアクションペーパー』ボタンが在るか」でしかなく、
+  // **そのボタンは受付中の授業が無くてもページに在る**（実機実測 2026-08-13 iPhone/iOS26.6）。
+  // 素通ししていたため、出席カードが「出席確認中の授業がありません」と言っている隣で
+  // リアペカードが「リアクションペーパーを提出できます」と出ていた＝**アプリができないことを
+  // 約束していた**。実際に押すと②入力フォームが来ず（form-missing・②待ち8回を4回とも再現）、
+  // 約7秒後に汎用エラーへ落ちる。
+  // ⚠**塞ぐのは 'none' だけ。** 'closed'（受付終了）や提出済みは触らない
+  // ＝「ボタンがあるなら常に書けるように」(2026-07-17 ユーザー要望) と
+  // 「提出済みを除外しない」(reactionAvailableOf のコメント) を壊さないため。
+  // 授業後の遅れ提出のような経路は 'none' ではないので影響しない。
+  if (text.includes(NONE_MARKER)) {
+    return { ...base('none'), network, reactionAvailable: false, reactionSubmitted }
+  }
 
   const cw = windowOf()
 
