@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { COLLECT_TIMETABLE_JS, OPEN_TIMETABLE_JS } from './injectedScripts'
 import { parseCollectionMessage } from './timetableMessage'
+import { pickCurrentSemester } from './semester'
 import { saveTimetable } from '../storage/timetableStore'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { saveTimetableRefreshedAt } from '../storage/refreshMetaStore'
@@ -45,10 +46,28 @@ export default function TimetableSyncEngine({ onFinished }: { onFinished: () => 
       }}
       onData={async (raw) => {
         const result = parseCollectionMessage(raw)
+        if (__DEV__) {
+          // 開発時のみ。実機検証ではこの1行が頼りになる（2026-08-27にこれで3件の不具合を特定した）。
+          // gstate: switched=切替が決着 / timeout=効かなかった / nosel=時間割ページに居ない
+          try {
+            const d = JSON.parse(raw) as Record<string, unknown>
+            console.log(
+              '[litus/timetable] page=%s gstate=%s gakki=%s tables=%s heads=%s → 保存=%d件',
+              String(d.page), String(d.gstate), JSON.stringify(d.gakki),
+              Array.isArray(d.tables) ? String(d.tables.length) : '?',
+              JSON.stringify(d.heads),
+              pickCurrentSemester(result.collections, new Date()).length,
+            )
+          } catch {
+            /* 計測が本体を壊さない */
+          }
+        }
         parsedSlots.current = result.collections.reduce((n, c) => n + c.slots.length, 0)
         if (result.error || result.collections.length === 0) return false
         try {
-          await saveTimetable(result.collections)
+          // 学期「すべて」で前期・後期の2枚が返る。**両方を保存しない**＝消費側8モジュールが
+          // collections を全走査するため、終わった学期の授業が今日の授業として出る（semester.ts の頭）。
+          await saveTimetable(pickCurrentSemester(result.collections, new Date()))
           await saveTimetableRefreshedAt()
           await refreshAllNotifications()
           notifyWidgetDataChanged()

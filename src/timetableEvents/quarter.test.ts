@@ -22,11 +22,11 @@ describe('isQuarterSlot', () => {
 })
 
 describe('defaultCurrentQuarter', () => {
-  it('4/5/10/11月は first', () => {
-    for (const m of [4, 5, 10, 11]) expect(defaultCurrentQuarter(new Date(2026, m - 1, 15))).toBe('first')
+  it('4/5/9/10/11月は first（9月＝後期の前半3Q・2026-08-27修正）', () => {
+    for (const m of [4, 5, 9, 10, 11]) expect(defaultCurrentQuarter(new Date(2026, m - 1, 15))).toBe('first')
   })
-  it('6-9/12-3月は second', () => {
-    for (const m of [6, 7, 8, 9, 12, 1, 2, 3]) expect(defaultCurrentQuarter(new Date(2026, m - 1, 15))).toBe('second')
+  it('6-8/12-3月は second', () => {
+    for (const m of [6, 7, 8, 12, 1, 2, 3]) expect(defaultCurrentQuarter(new Date(2026, m - 1, 15))).toBe('second')
   })
 })
 

@@ -14,6 +14,7 @@ import {
   OPEN_TIMETABLE_JS,
 } from '../collect/injectedScripts'
 import { saveTimetable } from '../storage/timetableStore'
+import { pickCurrentSemester } from '../collect/semester'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { useAuth } from '../auth/AuthProvider'
 import { classifyAuthState } from '../auth/classifyAuthState'
@@ -86,7 +87,8 @@ export default function CollectTimetableScreen() {
     const result = parseCollectionMessage(data)
     if (!result.error && result.collections.length > 0) {
       try {
-        await saveTimetable(result.collections)
+        // 2枚返る場合は当該学期だけ保存する（semester.ts の頭）
+        await saveTimetable(pickCurrentSemester(result.collections, new Date()))
         await refreshAllNotifications()
       } catch {
         setCollecting(false)

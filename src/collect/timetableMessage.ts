@@ -9,6 +9,12 @@ import {
 export type TimetableCollection = {
   slots: TimetableSlot[]
   periodTimes: CampusPeriodTimes | null
+  /**
+   * そのテーブルの直前に描かれていた見出し（実測＝「2026年度 前期」）。学期の識別子。
+   * 旧い保存データには無いので optional。無い＝識別できないので**絞り込みをしない**側へ倒す
+   * （[[semester.pickCurrentSemester]]）。
+   */
+  label?: string | null
 }
 
 export type CollectionResult = {
@@ -37,7 +43,7 @@ export function parseCollectionMessage(raw: string): CollectionResult {
     return { collections: [], error: PARSE_ERROR }
   }
 
-  const p = payload as { tables?: unknown; table?: unknown; jigen?: unknown }
+  const p = payload as { tables?: unknown; table?: unknown; jigen?: unknown; heads?: unknown }
   const tables: string[] = []
   if (Array.isArray(p.tables)) {
     for (const t of p.tables) {
@@ -53,9 +59,12 @@ export function parseCollectionMessage(raw: string): CollectionResult {
   const jigen = typeof p.jigen === 'string' ? p.jigen : ''
   const periodTimes = jigen.trim() ? parsePeriodTimes(jigen) : null
 
-  const collections: TimetableCollection[] = tables.map((t) => ({
+  // heads は tables と同じ並び（注入JSが同じ配列から map する）。長さが違う場合は素直に null。
+  const heads = Array.isArray(p.heads) ? p.heads : []
+  const collections: TimetableCollection[] = tables.map((t, i) => ({
     slots: parseTimetable(t),
     periodTimes,
+    label: typeof heads[i] === 'string' && (heads[i] as string).trim() ? (heads[i] as string) : null,
   }))
 
   const anySlots = collections.some((c) => c.slots.length > 0)

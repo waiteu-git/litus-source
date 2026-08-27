@@ -95,3 +95,28 @@ describe('parseCollectionMessage', () => {
     expect(r.error).toBeNull()
   })
 })
+
+describe('学期の見出し(heads)', () => {
+  // 🔴CLASSは各 table.classTable の直前に「2026年度 前期」形式の見出しを描く（2026-08-27実測）。
+  // 注入JSがこれを heads として同じ並びで返し、ここで label に載せる。学期の識別子はこれが唯一。
+  it('heads を同じ並びで label に載せる', () => {
+    const r = parseCollectionMessage(
+      JSON.stringify({ type: 'timetable', tables: [TABLE_MINIMAL, TABLE_MINIMAL], heads: ['2026年度 前期', '2026年度 後期'] }),
+    )
+    expect(r.collections.map((c) => c.label)).toEqual(['2026年度 前期', '2026年度 後期'])
+  })
+  it('heads が無い（旧形式・切替前）なら label は null＝絞り込みをしない側へ倒る', () => {
+    const r = parseCollectionMessage(JSON.stringify({ type: 'timetable', tables: [TABLE_MINIMAL] }))
+    expect(r.collections[0].label).toBeNull()
+  })
+  it('heads の数が足りなくても落ちない', () => {
+    const r = parseCollectionMessage(
+      JSON.stringify({ type: 'timetable', tables: [TABLE_MINIMAL, TABLE_MINIMAL], heads: ['2026年度 前期'] }),
+    )
+    expect(r.collections.map((c) => c.label)).toEqual(['2026年度 前期', null])
+  })
+  it('空文字の見出しは null にする', () => {
+    const r = parseCollectionMessage(JSON.stringify({ type: 'timetable', tables: [TABLE_MINIMAL], heads: ['  '] }))
+    expect(r.collections[0].label).toBeNull()
+  })
+})

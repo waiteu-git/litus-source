@@ -3,27 +3,113 @@ export const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 /**
- * 現在表示中ページから全ての時間割テーブルと時限時刻テキストを抽出して postMessage する（抽出のみ）。
- * 学期「すべて」では前期・後期が別々の table.classTable として並ぶため querySelectorAll で全て取る。
+ * 学期を「すべて対象」へ切り替えたうえで、全ての時間割テーブルと時限時刻テキストを postMessage する。
+ *
+ * 🔴**切替が要る理由（2026-08-27に実機で確定）**: CLASSの学生時間割表は**サーバが学期セレクタの
+ * 「前期」に selected を描く**ため、放置すると table.classTable は1枚（前期）しか出ない。
+ * 2026-07-05に「残ポリッシュ: 学期セレクタ自動化」として先送りされたまま実装されておらず、
+ * **後期が永久に取れない**状態だった。
+ *
+ * 実測した事実（`~/dev/litus-private/class-dom/` の実DOMとプローブより）:
+ * - セレクタは PrimeFaces SelectOneMenu＝`funcForm:gakki`(本体)/`gakki_input`(実select)/`gakki_label`/`gakki_panel`
+ *   option は ""=すべて対象 / "1"=前期 / "2"=後期
+ * - `funcForm:search` は type=submit だが onclick が `PrimeFaces.ab({...});return false;`＝**AJAX部分更新**
+ *   （ネイティブsubmitは打ち消される＝**ページ遷移しない＝window は生き残る**）
+ * - `select.value` 代入＋onclick発火で**実際に切り替わる**（PrimeFacesは送信時にフォームを serialize し
+ *   live な select の値を読む。ラベル/ハイライトは表示専用なので触らなくてよい）
+ * - 切替後は**サーバが funcForm を再描画**し、新しい `gakki_input` が value="" を返す
+ *   ⇒ **「決着したか」を共有状態でなくDOMの自己記述で判定できる**
+ * - 各 table.classTable の**直前に「2026年度 前期」形式の見出し**が在る ⇒ heads で学期を識別する
+ *
+ * ⚠**追加リクエストは1回だけ**（既に「すべて」なら0回）。`__litusGakkiFired` は AJAX で window が
+ *   生き残るので有効。決着するまで postMessage しない＝**前期1枚で収集が完了してしまうのを防ぐ**。
+ * ⚠**取れているものは捨てない**＝切替が効かなかった場合も timeout で現状を送る（今日と同じ挙動）。
  */
 export const COLLECT_TIMETABLE_JS = `(function(){
   try {
-    var tables = Array.prototype.slice
-      .call(document.querySelectorAll('table.classTable'))
-      .map(function(t){ return t.outerHTML; });
-    var jigen = document.querySelector('dd.jigenArea');
-    // 診断マーカー（COLLECT_BULLETIN_TABS_JSと同型）: ヘルス判定(層2)が tables=0 の原因を切り分ける。
-    var body = document.body ? (document.body.innerText || '') : '';
-    var hasPwd = !!document.querySelector('input[type=password]');
-    var btns = Array.prototype.slice.call(document.querySelectorAll('a,button,input[type=submit]'));
-    var hasLogout = btns.some(function(b){ var t=((b.textContent||b.value)||''); return t.indexOf('ログアウト')>=0 || /logout/i.test(b.getAttribute&&(b.getAttribute('href')||'')); });
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'timetable',
-      tables: tables,
-      jigen: jigen ? jigen.textContent : '',
-      page: (location.pathname||'').split('/').pop() || '',
-      pwd: hasPwd?1:0, logout: hasLogout?1:0, blen: body.length
-    }));
+    var TICK = 320, MAX = 25, STAMP = 'data-litus-stale';
+    function gsel(){ return document.getElementById('funcForm:gakki_input'); }
+    function tbl(){ return Array.prototype.slice.call(document.querySelectorAll('table.classTable')); }
+    // テーブル直前の「2026年度 前期」形式の見出しを拾う（学期の識別子）。
+    // 🔴**innerText を使ってはいけない**＝非表示WebViewはレイアウトを計算しないため innerText が
+    // 常に '' になる（2026-08-27にエミュレータ実機で確認。診断の blen=0 として現れた）。
+    // textContent はレイアウト非依存なので使える。改行が入らないので空白を潰して正規表現で拾う。
+    // ⚠**直前の兄弟を優先して探す**＝親の textContent は配下の全テーブルの見出しを含むので、
+    //   親から先に拾うと2枚目にも1枚目の見出しが付く。
+    function headMatch(el){
+      var s = ((el && el.textContent) || '').replace(/\\s+/g, ' ');
+      var m = s.match(/[0-9]{4}\\s*年度\\s*(前期|後期)/);
+      return m ? m[0] : '';
+    }
+    function headOf(t){
+      var up = t, lv = 0;
+      while (up && lv++ < 5) {
+        var sib = up.previousElementSibling, n = 0;
+        while (sib && n++ < 8) {
+          var h = headMatch(sib);
+          if (h) return h;
+          sib = sib.previousElementSibling;
+        }
+        up = up.parentElement;
+      }
+      return '';
+    }
+    function emit(state){
+      var ts = tbl();
+      var jigen = document.querySelector('dd.jigenArea');
+      var body = document.body ? (document.body.textContent || '') : '';  // innerText は非表示WebViewで常に空
+      var hasPwd = !!document.querySelector('input[type=password]');
+      var btns = Array.prototype.slice.call(document.querySelectorAll('a,button,input[type=submit]'));
+      var hasLogout = btns.some(function(b){ var t=((b.textContent||b.value)||''); return t.indexOf('ログアウト')>=0 || /logout/i.test(b.getAttribute&&(b.getAttribute('href')||'')); });
+      var s = gsel();
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'timetable',
+        tables: ts.map(function(t){ return t.outerHTML; }),
+        heads: ts.map(headOf),
+        jigen: jigen ? jigen.textContent : '',
+        page: (location.pathname||'').split('/').pop() || '',
+        gakki: s ? s.value : null, gstate: state,
+        pwd: hasPwd?1:0, logout: hasLogout?1:0, blen: body.length
+      }));
+    }
+    var s0 = gsel();
+    // セレクタが無い（別ページ/構造変化）→ 今までどおり即送る（現状維持＝取れているものは捨てない）
+    if (!s0) { emit('nosel'); return; }
+    // 🔴**「既に すべて だから送信不要」で早期脱出してはいけない。**
+    // セレクタの値はセッションから復元されるのに、**表の中身は前回"送信"した条件のまま**という
+    // 状態が実在する（2026-08-27に実機で観測＝gakki="" なのに rawTables=1・前期のみ）。
+    // ⇒ **ページを開いたら必ず1回は送信する。** window フラグで1ページ1回に制限（AJAXなので
+    //    window は生き残る）。既に すべて でも value 代入は無害。
+    if (!window.__litusGakkiFired) {
+      var btn = document.getElementById('funcForm:search');
+      if (!btn) { emit('nobtn'); return; }
+      window.__litusGakkiFired = 1;
+      // 🔴**古いDOMに印を付けてから切り替える（stale-stamping）。**
+      // s0.value='' は**自分がローカルに代入した値**なので、これだけを決着条件にすると
+      // サーバが返す前に真になり、**切替前の1枚を読んで送ってしまう**（2026-08-27に実機で観測
+      // ＝gstate=switched なのに rawTables=1 のまま前期しか取れなかった）。
+      // PrimeFaces は u:"funcForm" でフォームごと差し替えるので、印の付いたノードは文書から消える。
+      // ⇒ 「印の無い select が居て、印の付いた表が1枚も残っていない」を決着条件にする。
+      var old = tbl();
+      for (var i = 0; i < old.length; i++) { old[i].setAttribute(STAMP, '1'); }
+      s0.setAttribute(STAMP, '1');
+      s0.value = '';
+      var oc = btn.getAttribute('onclick');
+      if (oc) { new Function('event', oc).call(btn, new MouseEvent('click', { bubbles: true })); }
+      else { btn.click(); }
+    }
+    // 決着待ち: サーバが funcForm を差し替え、印の付いたノードが消えたこと
+    var n = 0;
+    (function tick(){
+      var s2 = gsel();
+      var fresh = !!s2 && !s2.hasAttribute(STAMP);
+      var ts = tbl();
+      var stale = false;
+      for (var j = 0; j < ts.length; j++) { if (ts[j].hasAttribute(STAMP)) { stale = true; break; } }
+      if (fresh && !stale && ts.length > 0) { emit('switched'); return; }
+      if (++n >= MAX) { emit('timeout'); return; }
+      setTimeout(tick, TICK);
+    })();
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
   }

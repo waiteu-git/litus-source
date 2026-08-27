@@ -11,6 +11,7 @@ import {
   OPEN_TIMETABLE_JS,
 } from '../collect/injectedScripts'
 import { parseCollectionMessage } from '../collect/timetableMessage'
+import { pickCurrentSemester } from '../collect/semester'
 import { loadTimetable, saveTimetable } from '../storage/timetableStore'
 import {
   isTimetableStale,
@@ -473,10 +474,22 @@ export function LoginGate({ children }: { children: ReactNode }) {
     }
     if (p.type === 'timetable' && stateRef.current === 'setup') {
       const result = parseCollectionMessage(data)
+      if (__DEV__) {
+        // 開発時のみ。LoginGate は起動時の本流なので、こちらにも同じ計測を置く。
+        const d = p as Record<string, unknown>
+        console.log(
+          '[litus/gate] page=%s gstate=%s gakki=%s tables=%s heads=%s → 保存=%d件',
+          String(d.page), String(d.gstate), JSON.stringify(d.gakki),
+          Array.isArray(d.tables) ? String(d.tables.length) : '?',
+          JSON.stringify(d.heads),
+          pickCurrentSemester(result.collections, new Date()).length,
+        )
+      }
       if (!result.error && result.collections.length > 0) {
         ;(async () => {
           try {
-            await saveTimetable(result.collections)
+            // 2枚返る場合は当該学期だけ保存する（semester.ts の頭）
+            await saveTimetable(pickCurrentSemester(result.collections, new Date()))
             await saveTimetableRefreshedAt()
             await refreshAllNotifications()
           } catch {
