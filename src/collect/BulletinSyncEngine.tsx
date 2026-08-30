@@ -12,7 +12,6 @@ import {
   type BulletinCollectDiag,
 } from '../health/collectionSignals'
 import ClassHeadlessCollector from './ClassHeadlessCollector'
-import { autoRegisterBulletinCancels } from '../timetableEvents/autoRegisterCancels'
 import { diffNewBulletins, capNotifiedIds, NOTIFIED_IDS_CAP } from '../notifications/bulletinNotify'
 import { presentBulletinNotifications } from '../notifications/notifier'
 import { mutateNotifiedBulletins } from '../storage/notifiedBulletinsStore'
@@ -117,9 +116,6 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
           () => undefined,
         )
         flushDiag()
-        // 掲示に出ている休講を自動登録し、その日の出席アラームを止める（2026-08-28 ユーザー裁定）。
-        // ⚠ 失敗しても収集の完了は妨げない（握って続行）。次回の同期で再試行される。
-        autoRegisterBulletinCancels().catch(() => undefined)
         onFinished()
       }}
     />

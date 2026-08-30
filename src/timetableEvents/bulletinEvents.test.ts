@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest'
-import { autoRegisterableCancels, type BulletinEventCandidate, parseBulletinEvents, reconcileCandidates, candidateToClassEvent } from './bulletinEvents'
+import { type BulletinEventCandidate, parseBulletinEvents, reconcileCandidates, candidateToClassEvent } from './bulletinEvents'
 import { parseBulletinDetail } from '../parsers/bulletinDetail'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import type { ClassEvent } from './classEvent'
@@ -97,48 +97,4 @@ test('candidateToClassEvent: 休講＆補講→makeupStatus=has＋makeup', () =>
   expect(ev.makeup).toEqual({ date: '2026-09-23', periods: [3], room: '1211教室' })
   // ID決定論
   expect(candidateToClassEvent(cand, cand.sourceBulletinId).id).toBe(ev.id)
-})
-
-describe('🔴 autoRegisterableCancels（掲示由来の休講を自動登録・2026-08-28）', () => {
-  const NOW = new Date('2026-10-05T09:00:00+09:00')
-  const cand = (over: Partial<BulletinEventCandidate> = {}): BulletinEventCandidate => ({
-    courseCode: '9973415', courseName: '図学・製図', type: 'cancel',
-    date: '2026-10-21', periods: [3], room: null, makeup: null, sourceBulletinId: 'b1', ...over,
-  })
-
-  it('新規の休講は自動登録の対象になる', () => {
-    const out = autoRegisterableCancels([cand()], [], NOW)
-    expect(out).toHaveLength(1)
-    expect(out[0].type).toBe('cancel')
-    expect(out[0].date).toBe('2026-10-21')
-  })
-
-  it('🔴 既に登録済みなら足さない（利用者が手で直したものを壊さない）', () => {
-    const existing = [candidateToClassEvent(cand(), NOW.toISOString())]
-    expect(autoRegisterableCancels([cand()], existing, NOW)).toEqual([])
-  })
-
-  it('🔴 休講以外は自動で足さない（予定を勝手に増やす方向の誤りを避ける）', () => {
-    expect(autoRegisterableCancels([cand({ type: 'makeup' })], [], NOW)).toEqual([])
-    expect(autoRegisterableCancels([cand({ type: 'roomChange' })], [], NOW)).toEqual([])
-  })
-
-  it('🔴 過去の日付は足さない（通知に効かず、更新直後に大量に湧くだけ）', () => {
-    expect(autoRegisterableCancels([cand({ date: '2026-10-04' })], [], NOW)).toEqual([])
-    expect(autoRegisterableCancels([cand({ date: '2026-10-05' })], [], NOW)).toHaveLength(1) // 当日は残す
-  })
-
-  it('休講＆補講は1件として登録され、補講の情報も持つ', () => {
-    const out = autoRegisterableCancels(
-      [cand({ makeup: { date: '2026-11-04', periods: [3], room: 'K401' } })], [], NOW,
-    )
-    expect(out).toHaveLength(1)
-    expect(out[0].makeupStatus).toBe('has')
-    expect(out[0].makeup?.date).toBe('2026-11-04')
-  })
-
-  it('同じ休講が複数の掲示から来ても1件', () => {
-    const out = autoRegisterableCancels([cand(), cand({ sourceBulletinId: 'b2' })], [], NOW)
-    expect(out).toHaveLength(1)
-  })
 })

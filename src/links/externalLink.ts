@@ -68,7 +68,15 @@ const HANDOFF_SCHEMES: readonly string[] = ['mailto', 'tel']
 
 /** `scheme://[userinfo@]host[:port]` の scheme と host を取り出す（末尾の `@` までを userinfo 扱い）。 */
 const SCHEME_RE = /^([a-z][a-z\d+\-.]*):/i
-const HOST_RE = /^[a-z][a-z\d+\-.]*:\/\/(?:[^/?#]*@)?([^/?#:]*)/i
+// 🔴 authority の終端に **バックスラッシュ** を含める（2026-08-28 差分監査 CONFIRMED）。
+// WHATWG URL は http(s) のような special scheme で `\` を `/` と同じ区切りとして扱う。
+// 含めないと `https://evil.example\@letus.ed.tus.ac.jp/...` で
+//   自前の解析 → 'letus.ed.tus.ac.jp'（`evil.example\@` を userinfo と誤読）
+//   実際の遷移先 → 'evil.example'
+// となり、**ホスト許可リストも「安全」表示も攻撃者の道具になる**（実測）。
+const HOST_RE = /^[a-z][a-z\d+\-.]*:\/\/(?:[^/?#\\]*@)?([^/?#:\\]*)/i
+// WHATWG は解析前に tab/LF/CR を**位置を問わず除去する**。除去しないと同じ食い違いが起きる。
+const STRIP_RE = /[\t\n\r]/g
 
 /**
  * `scheme://[userinfo@]host` のホストを小文字・末尾ドット除去で取り出す。
@@ -76,7 +84,7 @@ const HOST_RE = /^[a-z][a-z\d+\-.]*:\/\/(?:[^/?#]*@)?([^/?#:]*)/i
  * 「テストは緑なのに実機で判定が食い違う」になる。RNの `URL` を使わない理由は冒頭コメント参照。
  */
 export function hostOf(url: string): string {
-  const m = HOST_RE.exec(url)
+  const m = HOST_RE.exec(url.replace(STRIP_RE, ''))
   if (!m) return ''
   // 末尾ドット（`letus.ed.tus.ac.jp.` も同じホスト）を落として接尾辞判定を通す。
   return m[1].toLowerCase().replace(/\.+$/, '')
