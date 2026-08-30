@@ -218,7 +218,7 @@ export const OPEN_ATTENDANCE_JS = `(function(){
     try {
       var href = (location && location.href) || '';
       if (/Xua00101|Xut11301|Xut12401/i.test(href)) return true;
-      var body = document.body ? (document.body.innerText || '') : '';
+      var body = document.body ? (document.body.innerText || document.body.textContent || '') : '';
       var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit]'));
       function bt(b){ return (((b.textContent || b.value) || '').replace(/\\s+/g, '')); }
       var hasNav = btns.some(function(b){ var t = bt(b); return t.indexOf('前の授業') >= 0 || t.indexOf('次の授業') >= 0; });
@@ -405,7 +405,7 @@ export const DETECT_AUTH_JS = `(function(){
  */
 export const DETECT_PAGE_JS = `(function(){
   try {
-    var body = document.body ? (document.body.innerText || '') : '';
+    var body = document.body ? (document.body.innerText || document.body.textContent || '') : '';
     var hasPassword = !!document.querySelector('input[type=password]');
     var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit],a'));
     function txt(e){ return ((e.textContent||e.value)||'').replace(/\\s+/g,''); }
@@ -561,7 +561,7 @@ export const COLLECT_BULLETIN_JS = `(function(){
     var dls = document.querySelectorAll('dl.keiji');
     var html = '';
     for (var i=0;i<dls.length;i++){ html += dls[i].outerHTML; }
-    var body = document.body ? (document.body.innerText || '') : '';
+    var body = document.body ? (document.body.innerText || document.body.textContent || '') : '';
     // 掲示タブUI（グループ/未読/新着…）か、カテゴリ見出しが有れば掲示ページとみなす。
     var onKeijiPage = dls.length > 0 || !!document.querySelector('.keijiCategory')
       || (/グループ/.test(body) && /未読/.test(body) && /新着/.test(body));
@@ -604,7 +604,7 @@ export const COLLECT_BULLETIN_TABS_JS = `(function(){
       if(dls.length && !wrapHit){ for(var k=0;k<dls.length;k++){ out += dls[k].outerHTML; } }
       // keiji を持つフレームの pathname を page として報告（health の bsd007 判定を通すため）。
       if(dls.length && !keijiPage){ try{ keijiPage=((d.location&&d.location.pathname)||'').split('/').pop()||''; }catch(e){} }
-      var b = d.body ? (d.body.innerText||'') : ''; if(b.length>blen) blen=b.length;
+      var b = d.body ? (d.body.innerText||d.body.textContent||'') : ''; if(b.length>blen) blen=b.length;
       var h = d.body ? (d.body.innerHTML||'') : ''; if(h.length>hlen) hlen=h.length;
       if(d.querySelector('[id$="tabArea"], .ui-tabs')) hasTab=true;
       if(d.querySelector('input[type=password]')) hasPwd=true;
@@ -1096,7 +1096,7 @@ export const COLLECT_COURSE_PAGE_JS = `(function(){
 export const COLLECT_ATTENDANCE_STATS_JS = `(function(){
   try {
     var box = document.querySelector('div[id$="jugyoKaisuTbl"]');
-    var body = document.body ? (document.body.innerText || '') : '';
+    var body = document.body ? (document.body.innerText || document.body.textContent || '') : '';
     var hasPwd = !!document.querySelector('input[type=password]');
     // rows = パース前のDOM行数。健康判定で「表は在るのに1件も解析できない（構造変更）」と
     // 「本当に0件」を区別するのに要る（これが無いと両者を取り違える）。

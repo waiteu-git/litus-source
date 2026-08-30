@@ -333,7 +333,7 @@ describe('学期の授業回が終わった科目に出席アラームを出さ�
   }
   // 2026-07-19(日)起点・daysAhead 2 → 対象日は 07-19(日) と 07-20(月)。コマは月曜だけ。
   const sunday = new Date(2026, 6, 19, 9, 0)
-  const ends = (m: Record<string, string>): CourseTermInfo => ({ termEnds: m, extraPlans: [] })
+  const ends = (m: Record<string, string>, nameOwners: Record<string, string> = {}): CourseTermInfo => ({ termEnds: m, nameOwners, calendar: null, extraPlans: [] })
 
   it('最終授業日を過ぎた科目のアラームは出ない', () => {
     const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], ends({ C1: '2026-07-13' }))
@@ -354,7 +354,7 @@ describe('学期の授業回が終わった科目に出席アラームを出さ�
   // 予約通知側でも守る。ここが効かないと、学期終了後の補講で出席アラームが来なくなる（別の不具合）。
   it('学期終了後でも同日に追加の予定があれば出す', () => {
     const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], {
-      termEnds: { C1: '2026-07-13' },
+      termEnds: { C1: '2026-07-13' }, nameOwners: {}, calendar: null,
       extraPlans: [{ courseCode: 'C1', courseName: '線形代数1', date: '2026-07-20' }],
     })
     expect(alarms.filter((a) => a.courseCode === 'C1')).toHaveLength(2)
@@ -362,7 +362,7 @@ describe('学期の授業回が終わった科目に出席アラームを出さ�
 
   it('別の日の追加の予定では復活しない', () => {
     const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], {
-      termEnds: { C1: '2026-07-13' },
+      termEnds: { C1: '2026-07-13' }, nameOwners: {}, calendar: null,
       extraPlans: [{ courseCode: 'C1', courseName: '線形代数1', date: '2026-07-27' }],
     })
     expect(alarms.filter((a) => a.courseCode === 'C1')).toEqual([])
@@ -370,7 +370,7 @@ describe('学期の授業回が終わった科目に出席アラームを出さ�
 
   it('courseCodeを持たない予定（掲示由来）は科目名で照合して復活する', () => {
     const alarms = computeAttendanceAlarms([col], {}, sunday, { daysAhead: 2 }, [], {
-      termEnds: { C1: '2026-07-13' },
+      termEnds: { C1: '2026-07-13' }, nameOwners: {}, calendar: null,
       extraPlans: [{ courseCode: null, courseName: '線形代数1', date: '2026-07-20' }],
     })
     expect(alarms.filter((a) => a.courseCode === 'C1')).toHaveLength(2)

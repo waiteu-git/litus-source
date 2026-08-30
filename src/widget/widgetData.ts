@@ -16,10 +16,11 @@ import { loadTimetableRefreshedAt, loadAssignmentsRefreshedAt } from '../storage
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadClassEvents } from '../storage/classEventsStore'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
+import { loadKillSwitchCache } from '../storage/killSwitchStore'
 import { buildCourseTermInfo, type CourseTermInfo } from '../attendance/courseOver'
 import { buildWidgetModel, pickDataAt, type WidgetModel } from './viewModel'
 
-const NO_TERM_INFO: CourseTermInfo = { termEnds: {}, extraPlans: [] }
+const NO_TERM_INFO: CourseTermInfo = { termEnds: {}, nameOwners: {}, extraPlans: [], calendar: null }
 
 /**
  * 「学期の授業回が終わった科目」の判定材料を保存済みデータから読む（画面・予約通知と同じ素材）。
@@ -30,12 +31,15 @@ const NO_TERM_INFO: CourseTermInfo = { termEnds: {}, extraPlans: [] }
  */
 async function loadCourseTermInfo(now: Date): Promise<CourseTermInfo> {
   try {
-    const [stats, events, bulletins] = await Promise.all([
+    const [stats, events, bulletins, ks] = await Promise.all([
       loadAttendanceStats(),
       loadClassEvents(),
       loadBulletinDigest(),
+      loadKillSwitchCache(),
     ])
-    return buildCourseTermInfo({ courses: stats?.courses ?? [], events, bulletins, now })
+    return buildCourseTermInfo({
+      courses: stats?.courses ?? [], events, bulletins, now, calendar: ks?.status.calendar ?? null,
+    })
   } catch {
     return NO_TERM_INFO
   }

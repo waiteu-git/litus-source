@@ -11,6 +11,8 @@
  * 設計: docs/2026-07-12-remote-kill-switch-design.md
  */
 
+import { parseAcademicCalendar, type AcademicCalendar } from './academicCalendar'
+
 export type KillSwitchFeature = 'attendance' | 'bulletin' | 'letus'
 
 export type KillSwitchStatus = {
@@ -20,6 +22,11 @@ export type KillSwitchStatus = {
   message: string | null
   /** 全体停止画面の見出し。null＝既定「リタスは一時停止中です」。停止時に status.json で差し替え可。 */
   title: string | null
+  /**
+   * 学年暦（授業実施期間）。null＝配信されていない/壊れている ⇒ **従来どおりの挙動へ倒す**。
+   * ⚠この枠が壊れても kill switch 本体は生かす（停止指示を暦の不備で失わない）。
+   */
+  calendar: AcademicCalendar | null
 }
 
 // 復帰のたびに取得しない（スロットル）。停止指示の伝播は起動時＋この間隔で十分（24h要件）。
@@ -92,6 +99,7 @@ export function parseKillSwitchStatus(raw: string, build: number | null): KillSw
     disabled: FEATURES.filter((f) => disabledSet.has(f)),
     message,
     title,
+    calendar: parseAcademicCalendar((v as Record<string, unknown>).calendar),
   }
 }
 

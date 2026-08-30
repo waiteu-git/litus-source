@@ -5,13 +5,17 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import ScreenHint from '../tutorial/ScreenHint'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { loadTimetable } from '../storage/timetableStore'
+import { loadAllTimetables, loadTimetable } from '../storage/timetableStore'
 import type { TimetableCollection } from '../collect/timetableMessage'
 import type { DayOfWeek } from '../parsers/timetable'
 import type { TimetableStackParamList } from '../navigation/types'
 import { loadCourseMap } from '../storage/courseMapStore'
 import { loadCourseNews } from '../storage/courseNewsStore'
 import { isTimetableStale, loadTimetableRefreshedAt } from '../storage/refreshMetaStore'
+import { pickCurrentSemester } from '../collect/semester'
+import { dateToYmd } from '../timetableEvents/eventDateValue'
+import { loadKillSwitchCache } from '../storage/killSwitchStore'
+import type { AcademicCalendar } from '../health/academicCalendar'
 import { loadCollectionHealth } from '../storage/collectionHealthStore'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 import HealthBanner from '../ui/HealthBanner'
@@ -80,7 +84,8 @@ export default function TimetableScreen() {
   const { running } = useAttendanceEngine()
   // 出席タブが前面か（授業中の確認override判定に使う。前面なら据え置き＝確認を出さない）。
   const { attendanceFocused } = useClassView()
-  const [collections, setCollections] = useState<TimetableCollection[] | null>(null)
+  const [allCollections, setAllCollections] = useState<TimetableCollection[] | null>(null)
+  const [calendar, setCalendar] = useState<AcademicCalendar | null>(null)
   const [updatedCodes, setUpdatedCodes] = useState<Set<string>>(new Set())
   const [events, setEvents] = useState<ClassEvent[]>([])
   const [personalEvents, setPersonalEvents] = useState<PersonalEvent[]>([])
@@ -275,9 +280,14 @@ export default function TimetableScreen() {
     useCallback(() => {
       let active = true
       setWeekOffset(0)
-      loadTimetable().then((c) => {
-        if (active) setCollections(c)
+      // 🔴 表示は**全学期**を読む（絞り込みは render 時に「表示中の週」で行う）。
+      loadAllTimetables().then((c) => {
+        if (active) setAllCollections(c)
       })
+      // 学期の境界を決める学年暦。取れなければ null＝従来どおり（最新1学期）。
+      loadKillSwitchCache()
+        .then((ks) => { if (active) setCalendar(ks?.status.calendar ?? null) })
+        .catch(() => undefined)
       loadClassEvents().then((e) => { if (active) setEvents(e) }).catch(() => undefined)
       loadPersonalEvents().then((list) => {
         if (active) setPersonalEvents(list)
@@ -304,6 +314,19 @@ export default function TimetableScreen() {
     }, []),
   )
 
+  // 表示中の週の月曜（アンカー日）。学期の選択にも使うので col より前に出す。
+  const viewedMonday = viewedWeekMonday(now, weekOffset)
+  // 🔴 **表示中の週**で学期を絞る（2026-08-28 ユーザー要望「戻ると前期・進めると後期」）。
+  // ⚠ 読み込み時ではなく**ここ（render時）で絞る**＝スワイプで週が変わっても effect は
+  // 再実行されないため、読み込み時に絞ると「最初に開いた週の学期で固定」になる。
+  // 境界は遠隔配信の学年暦から導く（前後の学期の中点）。暦が無ければ従来どおり最新1つ。
+  const collections = useMemo(
+    () => (allCollections ? pickCurrentSemester(allCollections, viewedMonday, calendar) : null),
+    // ⚠ 依存は**日付の文字列**にする。viewedMonday は毎レンダー新しい Date で、しかも
+    // ticking する now に依存するため、Date を直接入れると useMemo が毎秒無効化される。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allCollections, dateToYmd(viewedMonday), calendar],
+  )
   const col = collections && collections.length > 0 ? collections[Math.min(selCol, collections.length - 1)] : null
   // 半期指定 override を表示直前にマージ（保存済みcollectionには焼き込まない）。
   const colQ = useMemo(
@@ -314,8 +337,7 @@ export default function TimetableScreen() {
   const hasStacked = !!colQ?.slots.some(isQuarterSlot)
   // 今この瞬間が属する時限（当該コマ強調用）。どの時限でもなければ null。
   const curPeriod = currentPeriodNumber(col?.periodTimes ?? null, now)
-  // 表示中の週の月曜（アンカー日）と各曜日の実日付。weekOffset=0 は既定週（日曜のみ来週）。
-  const viewedMonday = viewedWeekMonday(now, weekOffset)
+  // 各曜日の実日付。weekOffset=0 は既定週（日曜のみ来週）。
   const wd = weekDatesFrom(viewedMonday)
   // 今日を含む週を見ているか（今日ハイライト・現在コマ強調のゲート）。
   const isCurrentWeek = weekOffset === currentWeekOffset(now)
@@ -890,7 +912,12 @@ export default function TimetableScreen() {
           onFinished={() => {
             syncingRef.current = false
             setSyncing(false)
-            loadTimetable().then(setCollections).catch(() => undefined)
+            loadAllTimetables().then(setAllCollections).catch(() => undefined)
+            // 鮮度ラベルもここで読み直す。useFocusEffect でしか読んでいなかったため、画面に留まったまま
+            // 更新すると「HH:mm時点の情報」が古いまま残り、**更新が効いていないように見えた**
+            // （2026-08-28にユーザーと本部の双方が実際に誤読した）。成功時にしか動かない値なので、
+            // 完了直後に読み直すのが唯一の正しい反映点。
+            loadTimetableRefreshedAt().then(setRefreshedAt).catch(() => undefined)
             loadCollectionHealth().then((m) => setHealth(m.timetable ?? null)).catch(() => undefined)
             // 出欠を続けて取る。エンジンの実マウントは SyncProvider が単独所有するので、ここは
             // runner を呼ぶだけ（画面が自前でマウントすると Provider と二重に走る）。

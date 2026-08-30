@@ -56,7 +56,7 @@ export default function TimetableSyncEngine({ onFinished }: { onFinished: () => 
               String(d.page), String(d.gstate), JSON.stringify(d.gakki),
               Array.isArray(d.tables) ? String(d.tables.length) : '?',
               JSON.stringify(d.heads),
-              pickCurrentSemester(result.collections, new Date()).length,
+              result.collections.length,
             )
           } catch {
             /* 計測が本体を壊さない */
@@ -67,7 +67,7 @@ export default function TimetableSyncEngine({ onFinished }: { onFinished: () => 
         try {
           // 学期「すべて」で前期・後期の2枚が返る。**両方を保存しない**＝消費側8モジュールが
           // collections を全走査するため、終わった学期の授業が今日の授業として出る（semester.ts の頭）。
-          await saveTimetable(pickCurrentSemester(result.collections, new Date()))
+          await saveTimetable(result.collections)
           await saveTimetableRefreshedAt()
           await refreshAllNotifications()
           notifyWidgetDataChanged()

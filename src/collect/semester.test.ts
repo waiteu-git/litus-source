@@ -1,3 +1,4 @@
+import { parseAcademicCalendar } from '../health/academicCalendar'
 import { describe, expect, it } from 'vitest'
 import { parseSemesterHeading, currentSemester, pickCurrentSemester } from './semester'
 
@@ -64,5 +65,43 @@ describe('pickCurrentSemester', () => {
   it('年度が新しい方を優先する', () => {
     const mixed = [{ label: '2026年度 後期', slots: [] }, { label: '2027年度 前期', slots: [] }]
     expect(pickCurrentSemester(mixed, new Date(2026, 8 - 1, 20))).toEqual([mixed[1]])
+  })
+})
+
+describe('🔴 表示中の週で学期が切り替わる（2026-08-28 ユーザー要望・遠隔暦つき）', () => {
+  const calendar = parseAcademicCalendar({
+    terms: [
+      { id: 'spring', start: '2026-04-13', end: '2026-08-06' },
+      { id: 'fall', start: '2026-09-11', end: '2027-01-25' },
+    ],
+  })
+  const both = [{ label: '2026年度 前期' }, { label: '2026年度 後期' }]
+  const at = (ymd: string) => new Date(`${ymd}T09:00:00+09:00`)
+  const pick = (ymd: string) => pickCurrentSemester(both, at(ymd), calendar)[0].label
+
+  it('学期の中を見ているときはその学期', () => {
+    expect(pick('2026-05-11')).toBe('2026年度 前期')
+    expect(pick('2026-10-05')).toBe('2026年度 後期')
+  })
+
+  it('🔴 学期間は前後の中点で切り替わる＝境界を固定値で持たない', () => {
+    // 8/6 と 9/11 の中点は 8/24。ユーザーの体感「8/26あたり」とほぼ一致し、毎年追随する。
+    expect(pick('2026-08-17')).toBe('2026年度 前期')
+    expect(pick('2026-08-31')).toBe('2026年度 後期')
+  })
+
+  it('スワイプで前後に動かすと学期が変わる（同じデータ・日付だけ違う）', () => {
+    expect(pick('2026-07-06')).toBe('2026年度 前期')
+    expect(pick('2026-09-14')).toBe('2026年度 後期')
+  })
+
+  it('🔴 移行の世界: 1学期しか保存されていない端末はそのまま返す（無害に縮退）', () => {
+    const only = [{ label: '2026年度 前期' }]
+    expect(pickCurrentSemester(only, at('2026-10-05'), calendar)).toEqual(only)
+  })
+
+  it('🔴 暦が無ければ従来どおり（最新の学期を1つ）＝スワイプ連動は効かないが壊れない', () => {
+    expect(pickCurrentSemester(both, at('2026-05-11'), null)[0].label).toBe('2026年度 前期')
+    expect(pickCurrentSemester(both, at('2026-08-31'), null)[0].label).toBe('2026年度 後期')
   })
 })

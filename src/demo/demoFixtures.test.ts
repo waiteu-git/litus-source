@@ -25,7 +25,7 @@ import { serializeClassEvents, deserializeClassEvents } from '../storage/classEv
 import { serializeTermsConsent, deserializeTermsConsent } from '../storage/termsConsentSerialize'
 import { TERMS_VERSION } from '../legal/termsVersion'
 import { isUserManagedUrl } from '../assignments/assignmentOwnership'
-import { courseTermEnds, isCourseActiveOn } from '../attendance/courseOver'
+import { courseTermEndsWithOwners, isCourseActiveOn } from '../attendance/courseOver'
 import { dateToYmd } from '../timetableEvents/eventDateValue'
 
 const NOW = new Date('2026-09-16T10:00:00+09:00') // 公開目標期（水曜）
@@ -265,7 +265,7 @@ describe('デモモードと学期終了判定', () => {
   it('デモの科目は「学期終了」と判定されない（案内が消えない）', () => {
     const now = new Date('2026-09-16T10:00:00+09:00')
     const courses = buildDemoAttendanceStats(now)
-    const termEnds = courseTermEnds(courses, now)
+    const { termEnds, nameOwners } = courseTermEndsWithOwners(courses, now)
     const dateKey = dateToYmd(now)
     for (const c of courses) {
       expect(
@@ -274,6 +274,7 @@ describe('デモモードと学期終了判定', () => {
           courseName: c.courseName,
           dateKey,
           termEnds,
+          nameOwners, calendar: null,
           extraPlans: [],
         }),
       ).toBe(true)

@@ -241,7 +241,7 @@ describe('buildWidgetModel の出席状態（学期の授業回が終わった�
 
   it('学期の授業回が終わっていれば授業時間帯でも open にしない', () => {
     const m = buildWidgetModel(MON(13, 30), cols(), [], null, undefined, undefined, 0, {
-      termEnds: { 情報理論: '2026-06-29' },
+      termEnds: { 情報理論: '2026-06-29' }, nameOwners: {}, calendar: null,
       extraPlans: [],
     })
     expect(m.attendance).toEqual({ state: 'idle', targetCourse: null })
@@ -249,7 +249,7 @@ describe('buildWidgetModel の出席状態（学期の授業回が終わった�
 
   it('学期終了後でもその日に期末・補講の予定があれば open にする', () => {
     const m = buildWidgetModel(MON(13, 30), cols(), [], null, undefined, undefined, 0, {
-      termEnds: { 情報理論: '2026-06-29' },
+      termEnds: { 情報理論: '2026-06-29' }, nameOwners: {}, calendar: null,
       extraPlans: [{ courseCode: '情報理論', courseName: '情報理論', date: '2026-07-06' }],
     })
     expect(m.attendance).toEqual({ state: 'open', targetCourse: '情報理論' })
@@ -257,7 +257,7 @@ describe('buildWidgetModel の出席状態（学期の授業回が終わった�
 
   it('出欠データが無い（termEnds が空）なら従来どおり open にする', () => {
     const m = buildWidgetModel(MON(13, 30), cols(), [], null, undefined, undefined, 0, {
-      termEnds: {},
+      termEnds: {}, nameOwners: {}, calendar: null,
       extraPlans: [],
     })
     expect(m.attendance).toEqual({ state: 'open', targetCourse: '情報理論' })
@@ -276,7 +276,7 @@ describe('buildWidgetModel の出席状態（学期の授業回が終わった�
       code: '1234',
     }
     const m = buildWidgetModel(MON(13, 30), cols(), [], attended, undefined, undefined, 0, {
-      termEnds: { 情報理論: '2026-06-29' },
+      termEnds: { 情報理論: '2026-06-29' }, nameOwners: {}, calendar: null,
       extraPlans: [],
     })
     expect(m.attendance.state).toBe('done')

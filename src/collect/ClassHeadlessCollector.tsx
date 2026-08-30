@@ -247,7 +247,10 @@ export default function ClassHeadlessCollector({
 
 const styles = StyleSheet.create({
   // 出席WebView(webviewHiddenBox)と同一の隠し方。1×1画面外でもCLASS収集は成立する（出席/時間割で実証済み）。
-  // ※blen=0で固まる主因はWebViewサイズではなくメニュー遷移側（掲示OPENのアンカー探索）だった。
+  // ⚠2026-08-28訂正: 旧コメントは「blen=0の主因はWebViewサイズではなくメニュー遷移側」としていたが**誤り**。
+  // 真因は**非表示WebViewがレイアウトを計算しないこと**で、blen が `body.innerText` 由来だったため
+  // 常に0になっていた（監査CONFIRMED・同日 textContent フォールバックへ修正）。サイズを疑って
+  // 「サイズではない」と結論したのは正しいが、そこから**別の面（innerTextの層依存）へ渡れていなかった**。
   box: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
   web: { width: 1, height: 1 },
 })

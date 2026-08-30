@@ -7,6 +7,7 @@ const ok = (message: string | null): KillSwitchStatus => ({
   disabled: [],
   message,
   title: null,
+  calendar: null,
 })
 
 const NORMAL = { demo: false, dismissedHash: null }
@@ -32,7 +33,9 @@ describe('resolveNotice', () => {
   })
 
   it('アプリ全停止中は出さない（停止画面と二重に出さない）', () => {
-    const killed: KillSwitchStatus = { disabledAll: true, disabled: [], message: '停止中です', title: null }
+    const killed: KillSwitchStatus = {
+      disabledAll: true, disabled: [], message: '停止中です', title: null, calendar: null,
+    }
     expect(resolveNotice(killed, NORMAL)).toBeNull()
   })
 
@@ -48,6 +51,7 @@ describe('resolveNotice', () => {
       disabled: ['attendance'],
       message: '出席機能を一時停止しています',
       title: null,
+      calendar: null,
     }
     expect(resolveNotice(partial, NORMAL)?.text).toBe('出席機能を一時停止しています')
   })

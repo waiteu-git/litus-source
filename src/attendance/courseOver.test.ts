@@ -1,7 +1,8 @@
+import { parseAcademicCalendar } from '../health/academicCalendar'
 import { describe, expect, it } from 'vitest'
 import {
   buildCourseTermInfo,
-  courseTermEnds,
+  courseTermEndsWithOwners,
   extraPlansFromCandidates,
   extraPlansFromEvents,
   isCourseActiveOn,
@@ -42,19 +43,19 @@ function ev(o: Partial<ClassEvent> & { type: ClassEventType; date: string }): Cl
   }
 }
 
-describe('courseTermEnds', () => {
+describe('courseTermEndsWithOwners', () => {
   it('各回の MM/DD から最終授業日を YYYY-MM-DD で起こす', () => {
-    const ends = courseTermEnds([course({ courseName: '情報リテラシー演習' })], NOW)
+    const { termEnds: ends } = courseTermEndsWithOwners([course({ courseName: '情報リテラシー演習' })], NOW)
     expect(ends['1234567']).toBe('2026-07-20')
   })
 
   it('科目コードと科目名の両方を鍵にする（コードで引けない経路のため）', () => {
-    const ends = courseTermEnds([course({ courseName: '情報リテラシー演習' })], NOW)
+    const { termEnds: ends } = courseTermEndsWithOwners([course({ courseName: '情報リテラシー演習' })], NOW)
     expect(ends['情報リテラシー演習']).toBe('2026-07-20')
   })
 
   it('12月→1月の年跨ぎを解決する', () => {
-    const ends = courseTermEnds(
+    const { termEnds: ends } = courseTermEndsWithOwners(
       [course({ courseName: '後期科目', courseCode: '7654321', sessions: sessions(['10/02', '12/25', '01/22']) })],
       new Date(2026, 10, 1),
     )
@@ -62,7 +63,7 @@ describe('courseTermEnds', () => {
   })
 
   it('日付の無い回は無視する', () => {
-    const ends = courseTermEnds(
+    const { termEnds: ends } = courseTermEndsWithOwners(
       [course({ courseName: 'A', courseCode: 'A1', sessions: sessions(['04/13', '07/20', null, null]) })],
       NOW,
     )
@@ -70,7 +71,7 @@ describe('courseTermEnds', () => {
   })
 
   it('日付のある回が1回以下なら鍵自体を作らない（データ不足で終了と誤判定しない＝fail-open）', () => {
-    const ends = courseTermEnds(
+    const { termEnds: ends } = courseTermEndsWithOwners(
       [
         course({ courseName: 'Empty', courseCode: 'E1', sessions: [] }),
         course({ courseName: 'One', courseCode: 'O1', sessions: sessions(['04/13']) }),
@@ -84,7 +85,11 @@ describe('courseTermEnds', () => {
 
 describe('isCourseActiveOn', () => {
   const termEnds = { '1234567': '2026-07-20', 情報リテラシー演習: '2026-07-20' }
-  const base = { courseCode: '1234567', courseName: '情報リテラシー演習', termEnds, extraPlans: [] as never[] }
+  // 名前キーは同じ科目(1234567)が作ったもの＝その科目から引く分には従来どおり使える。
+  const nameOwners = { 情報リテラシー演習: '1234567' }
+  const base = {
+    courseCode: '1234567', courseName: '情報リテラシー演習', termEnds, nameOwners, calendar: null, extraPlans: [] as never[],
+  }
 
   it('最終回当日はまだ出す（境界は <= ）', () => {
     expect(isCourseActiveOn({ ...base, dateKey: '2026-07-20' })).toBe(true)
@@ -197,6 +202,7 @@ describe('buildCourseTermInfo', () => {
       events: [ev({ type: 'final', date: '2026-08-05' })],
       bulletins: [bulletin],
       now: NOW,
+      calendar: null,
     })
     expect(info.termEnds['1234567']).toBe('2026-07-20')
     expect(info.extraPlans).toContainEqual({ courseCode: '1234567', courseName: '情報リテラシー演習', date: '2026-08-05' })
@@ -205,8 +211,8 @@ describe('buildCourseTermInfo', () => {
   })
 
   it('入力が空なら空を返す（学期終了が不明＝全科目 fail-open）', () => {
-    const info = buildCourseTermInfo({ courses: [], events: [], bulletins: [], now: NOW })
-    expect(info).toEqual({ termEnds: {}, extraPlans: [] })
+    const info = buildCourseTermInfo({ courses: [], events: [], bulletins: [], now: NOW, calendar: null })
+    expect(info).toEqual({ termEnds: {}, nameOwners: {}, calendar: null, extraPlans: [] })
     expect(isCourseActiveOn({ courseCode: 'X', courseName: 'X', dateKey: '2026-12-01', ...info })).toBe(true)
   })
 
@@ -216,7 +222,66 @@ describe('buildCourseTermInfo', () => {
       events: [],
       bulletins: [{ ...bulletin, body: null }],
       now: NOW,
+      calendar: null,
     })
     expect(info.extraPlans).toEqual([])
+  })
+})
+
+describe('🔴 同名科目の衝突（2026-08-28 監査）', () => {
+  const base = { dateKey: '2026-10-09', extraPlans: [] }
+  // 前期「英語３」(1111111・最終回 2026-07-17) の記録だけが端末にある状態。
+  // 名前キーは**その前期科目が作った**＝後期の別コード科目が流用してはいけない。
+  const termEnds = { '1111111': '2026-07-17', '英語３': '2026-07-17' }
+  const nameOwners = { '英語３': '1111111' }
+
+  it('後期の同名別コード科目を、前期の終了日で黙らせない', () => {
+    expect(isCourseActiveOn({ ...base, courseCode: '2222222', courseName: '英語３', termEnds, nameOwners, calendar: null })).toBe(true)
+  })
+
+  it('前期のその科目自体は、終了日を過ぎたら黙る（従来どおり）', () => {
+    expect(isCourseActiveOn({ ...base, courseCode: '1111111', courseName: '英語３', termEnds, nameOwners, calendar: null })).toBe(false)
+  })
+
+  it('コードが無い科目は従来どおり名前で引く（出欠側でコードが取れない場合の保険）', () => {
+    expect(isCourseActiveOn({ ...base, courseCode: '', courseName: '英語３', termEnds, nameOwners, calendar: null })).toBe(false)
+  })
+})
+
+describe('🔴 学年暦のゲート（2026-08-28 ユーザー要望「学期間は一切鳴らない」）', () => {
+  const cal = parseAcademicCalendar({
+    terms: [
+      { id: 'spring', start: '2026-04-09', end: '2026-08-07' },
+      { id: 'fall', start: '2026-09-11', end: '2027-01-26' },
+    ],
+  })
+  // 後期の科目＝出欠がまだ無い＝従来は fail-open で鳴っていた状態を再現する。
+  const base = {
+    courseCode: 'C-FALL', courseName: '電気回路A', termEnds: {}, nameOwners: {}, extraPlans: [],
+  }
+
+  it('学期間は黙る（後期の出欠が無くても鳴らない＝要望の本体）', () => {
+    expect(isCourseActiveOn({ ...base, dateKey: '2026-08-31', calendar: cal })).toBe(false)
+    expect(isCourseActiveOn({ ...base, dateKey: '2026-09-10', calendar: cal })).toBe(false)
+  })
+
+  it('🔴 学期間でも、その日に補講・期末があれば鳴る（実在する授業まで消さない）', () => {
+    const extraPlans = [{ courseCode: 'C-FALL', courseName: '電気回路A', date: '2026-08-31' }]
+    expect(isCourseActiveOn({ ...base, extraPlans, dateKey: '2026-08-31', calendar: cal })).toBe(true)
+    // 別の日は黙ったまま
+    expect(isCourseActiveOn({ ...base, extraPlans, dateKey: '2026-09-01', calendar: cal })).toBe(false)
+  })
+
+  it('授業実施期間の中は従来どおり（境界の初日・最終日を含む）', () => {
+    expect(isCourseActiveOn({ ...base, dateKey: '2026-09-11', calendar: cal })).toBe(true)
+    expect(isCourseActiveOn({ ...base, dateKey: '2026-08-07', calendar: cal })).toBe(true)
+  })
+
+  it('🔴 暦が無ければ従来どおり鳴る（オフライン・未配信・更新直後の fail-open）', () => {
+    expect(isCourseActiveOn({ ...base, dateKey: '2026-08-31', calendar: null })).toBe(true)
+  })
+
+  it('🔴 未来の期間が無い古い暦は効かせない（更新忘れで永久に黙らせない）', () => {
+    expect(isCourseActiveOn({ ...base, dateKey: '2027-03-01', calendar: cal })).toBe(true)
   })
 })

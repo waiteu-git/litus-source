@@ -70,7 +70,12 @@ const HANDOFF_SCHEMES: readonly string[] = ['mailto', 'tel']
 const SCHEME_RE = /^([a-z][a-z\d+\-.]*):/i
 const HOST_RE = /^[a-z][a-z\d+\-.]*:\/\/(?:[^/?#]*@)?([^/?#:]*)/i
 
-function hostOf(url: string): string {
+/**
+ * `scheme://[userinfo@]host` のホストを小文字・末尾ドット除去で取り出す。
+ * ⚠**この関数を複製しないこと。** ホスト解析が2本あると必ずズレ、片方だけを直した時に
+ * 「テストは緑なのに実機で判定が食い違う」になる。RNの `URL` を使わない理由は冒頭コメント参照。
+ */
+export function hostOf(url: string): string {
   const m = HOST_RE.exec(url)
   if (!m) return ''
   // 末尾ドット（`letus.ed.tus.ac.jp.` も同じホスト）を落として接尾辞判定を通す。
@@ -111,3 +116,16 @@ export function classifyLinkTarget(input: { url: string; isTopFrame?: boolean })
   if (SSO_URL_MARKERS.some((re) => re.test(url))) return 'in-app'
   return 'external'
 }
+
+/**
+ * ホストが**許可リストそのもの**に載っているか（SSOマーカーの保険は通さない）。
+ * 用途は**表示**＝アドレスバーの無いWebViewで「いま学外のページを見ている」と知らせるため。
+ * ⚠`classifyLinkTarget` と結果が食い違うのは意図どおり＝あちらはマーカーでホスト未知も
+ * in-app に通す（ログイン連鎖を切らないため）。**その「通した先」を利用者に見せるのがここ。**
+ */
+export function isKnownInAppHost(url: string): boolean {
+  const host = hostOf(url)
+  if (!host) return false
+  return IN_APP_HOST_SUFFIXES.some((suffix) => matchesSuffix(host, suffix))
+}
+

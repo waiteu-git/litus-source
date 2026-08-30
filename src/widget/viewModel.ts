@@ -21,7 +21,7 @@ import { representativeClass } from '../timetableEvents/quarter'
 import { formatFreshnessTime } from '../health/freshnessText'
 
 /** 学期終了が「不明」＝全科目まだ授業がある扱い（fail-open）。 */
-const NO_TERM_INFO: CourseTermInfo = { termEnds: {}, extraPlans: [] }
+const NO_TERM_INFO: CourseTermInfo = { termEnds: {}, nameOwners: {}, extraPlans: [], calendar: null }
 
 const WEEKDAY_JP = ['日', '月', '火', '水', '木', '金', '土']
 const WEEKDAY: Record<DayOfWeek, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
@@ -170,7 +170,15 @@ export function buildWidgetModel(
   const nowMin = now.getHours() * 60 + now.getMinutes()
   const dateKey = dateToYmd(now)
   const isActive: ClassActivePredicate = (courseCode, courseName) =>
-    isCourseActiveOn({ courseCode, courseName, dateKey, termEnds: termInfo.termEnds, extraPlans: termInfo.extraPlans })
+    isCourseActiveOn({
+      courseCode,
+      courseName,
+      dateKey,
+      termEnds: termInfo.termEnds,
+      nameOwners: termInfo.nameOwners,
+      calendar: termInfo.calendar,
+      extraPlans: termInfo.extraPlans,
+    })
 
   const focus = pickFocusClass(timetable, now, isOn, currentQuarter)
   const nextClass: WidgetNextClass | null = focus

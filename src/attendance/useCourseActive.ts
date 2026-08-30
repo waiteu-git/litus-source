@@ -4,10 +4,11 @@ import { loadClassEvents } from '../storage/classEventsStore'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { dateToYmd } from '../timetableEvents/eventDateValue'
+import { loadKillSwitchCache } from '../storage/killSwitchStore'
 import { buildCourseTermInfo, isCourseActiveOn, type CourseTermInfo } from './courseOver'
 import type { ClassActivePredicate } from './homeBanner'
 
-const EMPTY: CourseTermInfo = { termEnds: {}, extraPlans: [] }
+const EMPTY: CourseTermInfo = { termEnds: {}, nameOwners: {}, extraPlans: [], calendar: null }
 
 /**
  * computeHomeBanner に渡す「その科目にまだ出席案内を出すか」の述語を組む。
@@ -25,10 +26,15 @@ export function useCourseActive(now: Date): ClassActivePredicate {
 
   useEffect(() => {
     let active = true
-    Promise.all([loadAttendanceStats(), loadClassEvents(), loadBulletinDigest()])
-      .then(([stats, events, bulletins]) => {
+    Promise.all([loadAttendanceStats(), loadClassEvents(), loadBulletinDigest(), loadKillSwitchCache()])
+      .then(([stats, events, bulletins, ks]) => {
         if (!active) return
-        setInfo(buildCourseTermInfo({ courses: stats?.courses ?? [], events, bulletins, now: new Date() }))
+        setInfo(
+          buildCourseTermInfo({
+            courses: stats?.courses ?? [], events, bulletins, now: new Date(),
+            calendar: ks?.status.calendar ?? null,
+          }),
+        )
       })
       .catch(() => {
         if (active) setInfo(EMPTY)
@@ -41,7 +47,15 @@ export function useCourseActive(now: Date): ClassActivePredicate {
   const dateKey = dateToYmd(now)
   return useCallback(
     (courseCode: string, courseName: string) =>
-      isCourseActiveOn({ courseCode, courseName, dateKey, termEnds: info.termEnds, extraPlans: info.extraPlans }),
+      isCourseActiveOn({
+        courseCode,
+        courseName,
+        dateKey,
+        termEnds: info.termEnds,
+        nameOwners: info.nameOwners,
+        calendar: info.calendar,
+        extraPlans: info.extraPlans,
+      }),
     [dateKey, info],
   )
 }

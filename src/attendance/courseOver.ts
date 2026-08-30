@@ -30,6 +30,7 @@
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 import { parseBulletinEvents, type BulletinEventCandidate } from '../timetableEvents/bulletinEvents'
 import { makeupOccurrences, type ClassEvent } from '../timetableEvents/classEvent'
+import { classPeriodStatus, type AcademicCalendar } from '../health/academicCalendar'
 import { dateToYmd } from '../timetableEvents/eventDateValue'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { resolveTermDates } from './attendanceTerm'
@@ -38,7 +39,14 @@ import { resolveTermDates } from './attendanceTerm'
 export type ExtraPlan = { courseCode: string | null; courseName: string; date: string }
 
 /** isCourseActiveOn に渡す入力一式。空＝学期終了が「不明」＝全科目まだ授業がある扱い（fail-open）。 */
-export type CourseTermInfo = { termEnds: Record<string, string>; extraPlans: ExtraPlan[] }
+export type CourseTermInfo = {
+  termEnds: Record<string, string>
+  /** 名前キーの出所コード（''＝コード無しの科目が作った＝誰から引いてもよい）。 */
+  nameOwners: Record<string, string>
+  extraPlans: ExtraPlan[]
+  /** 遠隔配信の学年暦。null＝未配信/壊れ/古い ⇒ **従来どおりの挙動へ倒す**（fail-open）。 */
+  calendar: AcademicCalendar | null
+}
 
 /**
  * 出欠各回（'MM/DD'）から科目ごとの最終授業日（'YYYY-MM-DD'）を起こす。
@@ -47,8 +55,21 @@ export type CourseTermInfo = { termEnds: Record<string, string>; extraPlans: Ext
  * 日付のある回が1回以下の科目は鍵を作らない。出欠が取れていない/パースが退化した科目を
  * 「今日が最終回」と誤判定して案内を消してしまうのを避けるため（fail-open）。
  */
-export function courseTermEnds(courses: AttendanceCourseStats[], now: Date): Record<string, string> {
+/**
+ * `courseTermEnds` に加えて、**各名前キーがどの科目コードから作られたか**を返す。
+ * 🔴 名前は同一性の鍵として弱い（2026-08-28 監査 CONFIRMED）。前期「英語３」(1111111)の
+ * 終了日が、後期の同名別コード「英語３」(2222222)へ流用され、**後期の科目が丸ごと沈黙**した
+ * （アラーム・バナー・ウィジェット・エンジン起動すべて）。
+ * ⚠ かといって名前キーを消してはいけない＝**時間割側にコードが無い経路**で必要（既存テストが
+ * 明示的に守っている）。⇒ 消さずに**出所を持たせ、別科目の答えを流用する時だけ拒む**。
+ * 値 '' はコードの無い科目が作ったキー＝どの科目から引いてもよい。
+ */
+export function courseTermEndsWithOwners(
+  courses: AttendanceCourseStats[],
+  now: Date,
+): { termEnds: Record<string, string>; nameOwners: Record<string, string> } {
   const out: Record<string, string> = {}
+  const owners: Record<string, string> = {}
   for (const c of courses) {
     const resolved = resolveTermDates(c.sessions, now)
     if (resolved.length < 2) continue
@@ -56,9 +77,12 @@ export function courseTermEnds(courses: AttendanceCourseStats[], now: Date): Rec
     for (const r of resolved) if (r.full.getTime() > last.getTime()) last = r.full
     const end = dateToYmd(last)
     if (c.courseCode) out[c.courseCode] = end
-    if (c.courseName) out[c.courseName] = end
+    if (c.courseName) {
+      out[c.courseName] = end
+      owners[c.courseName] = c.courseCode ?? ''
+    }
   }
-  return out
+  return { termEnds: out, nameOwners: owners }
 }
 
 /** 登録済みイベントから追加の予定を平坦化する。休講(cancel)自体は予定ではないので含めない。 */
@@ -98,10 +122,14 @@ export function buildCourseTermInfo(a: {
   events: ClassEvent[]
   bulletins: BulletinItem[]
   now: Date
+  calendar: AcademicCalendar | null
 }): CourseTermInfo {
   const cands = a.bulletins.flatMap((b) => parseBulletinEvents(b))
+  const { termEnds, nameOwners } = courseTermEndsWithOwners(a.courses, a.now)
   return {
-    termEnds: courseTermEnds(a.courses, a.now),
+    termEnds,
+    nameOwners,
+    calendar: a.calendar,
     extraPlans: [...extraPlansFromEvents(a.events), ...extraPlansFromCandidates(cands)],
   }
 }
@@ -115,12 +143,31 @@ export function isCourseActiveOn(a: {
   courseName: string
   dateKey: string
   termEnds: Record<string, string>
+  /** 🔴必須。省略可能にすると呼び出し側は必ず省略し、同じ欠陥が戻る（このファイルの既存方針）。 */
+  nameOwners: Record<string, string>
   extraPlans: ExtraPlan[]
+  /** 🔴必須（同上）。null で明示的に「暦なし」を渡す。 */
+  calendar: AcademicCalendar | null
 }): boolean {
-  const end = (a.courseCode ? a.termEnds[a.courseCode] : undefined) ?? a.termEnds[a.courseName]
+  const hasExtraPlan = () =>
+    a.extraPlans.some(
+      (p) => p.date === a.dateKey && (p.courseCode ? p.courseCode === a.courseCode : p.courseName === a.courseName),
+    )
+  // 🔴 学期間（前期終了〜後期開始）は出席の案内を出さない（2026-08-28 ユーザー要望）。
+  // ⚠ ただし**その日に補講・期末の予定があれば出す**＝学期間に実在する授業まで消さない。
+  // 暦が無い/壊れている/古いときは 'unknown' が返るのでここは素通り＝従来どおり（fail-open）。
+  if (classPeriodStatus(a.calendar, a.dateKey) === 'between') return hasExtraPlan()
+  // コードで引けたらそれが答え。引けない時だけ名前へ落ちるが、🔴**その名前キーが
+  // コード付きの別科目から作られていたら使わない**（2026-08-28 監査）。情報が無い側へ倒す＝
+  // fail-open で鳴る。「生きている授業を黙って殺す」より「終わった授業で鳴る」方が軽い。
+  const byCode = a.courseCode ? a.termEnds[a.courseCode] : undefined
+  const owner = a.nameOwners[a.courseName]
+  // 名前キーを拒むのは「**聞く側にコードがあり、かつその名前キーが別のコードから作られた**」時だけ。
+  // ⚠聞く側にコードが無い（時間割側でコードが取れない経路）なら、名前が唯一の手掛かりなので使う。
+  // ここを塞ぐと『科目名でも最終授業日を引ける』が壊れる（既存テストが守っている実在の経路）。
+  const nameUsable = !a.courseCode || owner === undefined || owner === '' || owner === a.courseCode
+  const end = byCode ?? (nameUsable ? a.termEnds[a.courseName] : undefined)
   if (!end) return true
   if (a.dateKey <= end) return true
-  return a.extraPlans.some(
-    (p) => p.date === a.dateKey && (p.courseCode ? p.courseCode === a.courseCode : p.courseName === a.courseName),
-  )
+  return hasExtraPlan()
 }

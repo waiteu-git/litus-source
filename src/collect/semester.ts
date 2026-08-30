@@ -2,15 +2,21 @@
 // 「前期」に selected を描くため、放置すると後期が永久に取れない（2026-08-27に実機で確定）。
 // 収集JSは「すべて対象」を選び、前期・後期の table.classTable を両方持ち帰る。
 //
-// 🔴**両方を保存してはいけない。** 消費側8モジュール（focusClass / classPeriod / widget /
+// ⚠**2026-08-28に設計が変わった。** 以前は「保存の直前で1学期に絞る」だったが、ユーザー要望
+// 「スワイプで戻ると前期・進めると後期」に応えるため、**保存は両学期・絞り込みは読み出し側**へ移した。
+//
+// 🔴**危険の中身は変わっていない。** 消費側8モジュール（focusClass / classPeriod / widget /
 // attendanceSchedule / homeBanner / attendanceOpenNotify 等）は collections を**全部走査**するので、
-// 2学期分を保存すると「終わった学期の授業が今日の授業として出る」「終わった科目に出席アラームが鳴る」。
-// ⇒ 保存の直前でここが当該学期だけに絞る。**消費側は1枚のままで、union の露出を新しく作らない。**
+// 2学期分をそのまま渡すと「終わった学期の授業が今日の授業として出る」「終わった科目に出席アラームが鳴る」。
+// ⇒ **`loadTimetable()` が唯一の関門**（既定は「今日」で絞る）。消費側は無編集のまま守られる。
+// 🔴 全学期が要るのは**時間割画面の表示だけ**＝`loadAllTimetables()` を使う。他から呼ばないこと。
 //
 // 判定できない時は**絞らない**（＝今日と同じ挙動へ退避する）。見出しの書式が変わった・学年暦の外に
 // 居る、のどちらでも「取れているものを捨てる」方向へは倒さない。
 
 import { academicTermRange } from '../timetableEvents/termBounds'
+import { termOf, type AcademicCalendar } from '../health/academicCalendar'
+import { dateToYmd } from '../timetableEvents/eventDateValue'
 
 export type SemesterTerm = '前期' | '後期'
 export type SemesterLabel = { year: number; term: SemesterTerm }
@@ -31,7 +37,15 @@ export function parseSemesterHeading(head: string | null | undefined): SemesterL
  * termBounds は前期=4/1〜8/7・後期=9/1〜翌2/7 で、**開始を早い側へ倒す**設計（授業日が期間外へ落ちると
  * 週送りが死ぬため）。ここでも同じ境界に乗る＝9/1以降は後期を選ぶ。
  */
-export function currentSemester(now: Date): SemesterTerm | null {
+export function currentSemester(now: Date, calendar?: AcademicCalendar | null): SemesterTerm | null {
+  // 🔴 遠隔配信の学年暦があればそれが最優先。**学期間の日でも前後の中点で必ずどちらかに属する**ので、
+  // 「表示中の週」で学期を切り替えられる（2026年度なら 8/6 と 9/11 の中点＝8/24 が境界）。
+  // ⇒ 8/26 のような体感値をコードに持たない。年度がずれても配信を直せば追随する。
+  const t = termOf(calendar ?? null, dateToYmd(now))
+  // 期間の開始月で前期/後期を決める（idは人間用なので判定に使わない）。
+  if (t) return Number(t.start.slice(5, 7)) <= 8 ? '前期' : '後期'
+  // 暦が無い/古い＝従来どおり。授業期間外は null を返し、pickCurrentSemester が
+  // 「最新の学期を1つ」へ退避する（＝今日と同じ挙動）。**ここで固定値を作らない。**
   const range = academicTermRange(now)
   if (!range) return null
   return range.start.getMonth() + 1 === 4 ? '前期' : '後期'
@@ -53,12 +67,16 @@ type Labeled = { label?: string | null }
  * - 当該学期に一致がある … それだけ
  * - 一致が無い／学期の外 … **最新の学期を1つ**（年→後期>前期 の順）
  */
-export function pickCurrentSemester<T extends Labeled>(items: T[], now: Date): T[] {
+export function pickCurrentSemester<T extends Labeled>(
+  items: T[],
+  now: Date,
+  calendar?: AcademicCalendar | null,
+): T[] {
   if (items.length <= 1) return items
   const parsed = items.map((i) => parseSemesterHeading(i.label))
   if (parsed.every((p) => p === null)) return items
 
-  const term = currentSemester(now)
+  const term = currentSemester(now, calendar)
   if (term) {
     const hit = items.filter((_, i) => parsed[i]?.term === term)
     if (hit.length > 0) return hit

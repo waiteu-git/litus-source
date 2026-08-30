@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native'
 import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useIsFocused, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { ActionButton, StepList, useUi, type Step } from '../ui/screen'
+import { ActionButton, StepList, useTabBarClearance, useUi, type Step } from '../ui/screen'
 import { parseCollectionMessage } from '../collect/timetableMessage'
 import {
   DESKTOP_UA,
@@ -34,6 +34,7 @@ export default function CollectTimetableScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<TimetableStackParamList>>()
   const auth = useAuth()
   const ui = useUi()
+  const clearance = useTabBarClearance()
   // CLASSは複数画面同時操作を禁止。この画面がフォーカス中は調停（classViewArbiter）で
   // CLASSの使用権を取り、出席タブの持続WebViewに譲ってもらう。離れたら返す。
   const isFocused = useIsFocused()
@@ -88,7 +89,7 @@ export default function CollectTimetableScreen() {
     if (!result.error && result.collections.length > 0) {
       try {
         // 2枚返る場合は当該学期だけ保存する（semester.ts の頭）
-        await saveTimetable(pickCurrentSemester(result.collections, new Date()))
+        await saveTimetable(result.collections)
         await refreshAllNotifications()
       } catch {
         setCollecting(false)
@@ -139,7 +140,7 @@ export default function CollectTimetableScreen() {
           />
         ) : null}
       </View>
-      <View style={styles.panel}>
+      <View style={[styles.panel, { paddingBottom: clearance }]}>
         <View style={[ui.card, styles.card]}>
           <StepList steps={steps} />
         </View>

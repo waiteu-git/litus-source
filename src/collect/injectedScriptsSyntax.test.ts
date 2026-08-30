@@ -66,3 +66,24 @@ describe('litusAuthProbe（ページ内で認証状態を直接読む）', () =>
     expect(run(hostile)).toEqual({ hasMcfg: false, loggedIn: false })
   })
 })
+
+describe('🔴 非表示WebViewはレイアウトを計算しない（innerText は常に空）', () => {
+  it('注入される文字列に、textContent フォールバックの無い innerText が無い', () => {
+    // 2026-08-27に時間割の収集JSが実機で3か所同時に落ち、2026-08-28の監査で掲示・出欠の
+    // blen が常に0＝structure_drift 判定が到達不能だと分かった。**ファイル冒頭に
+    // 「innerText を使ってはいけない」と書いてあったのに、守らせるものが無かった**ため
+    // 5箇所が生き残っていた。コメントでなくテストで縛る。
+    // ⚠ ファイルではなく**実際に注入される文字列**を見る＝説明コメントを除外する必要がない。
+    const offenders: string[] = []
+    for (const [name, value] of Object.entries(scripts)) {
+      if (typeof value !== 'string' || !value.includes('innerText')) continue
+      for (const line of value.split('\n')) {
+        if (!line.includes('innerText')) continue
+        if (line.trimStart().startsWith('//')) continue // 注入JS内の説明コメント
+        if (line.includes('textContent')) continue // フォールバックあり＝可
+        offenders.push(`${name}: ${line.trim()}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})

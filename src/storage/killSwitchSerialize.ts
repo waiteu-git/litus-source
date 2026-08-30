@@ -8,6 +8,7 @@
  * build欄の無い旧形式キャッシュも null（破棄）にする。
  */
 import type { KillSwitchFeature, KillSwitchStatus } from '../health/killSwitch'
+import { parseAcademicCalendar } from '../health/academicCalendar'
 
 export type KillSwitchCache = {
   status: KillSwitchStatus
@@ -42,6 +43,10 @@ export function deserializeKillSwitchCache(raw: string | null): KillSwitchCache 
       disabled: FEATURES.filter((f) => (s.disabled as unknown[]).includes(f)),
       message: typeof s.message === 'string' && s.message !== '' ? s.message : null,
       title: typeof s.title === 'string' && s.title !== '' ? s.title : null,
+      // 🔴 ここへ足し忘れると、**取得直後は動くのに再起動で暦が消える**（このファイルは
+      // 既知フィールドだけを通す allowlist 方式）。手元のテストでは踏めない型の無言故障。
+      // 保存時と同じ正規化を通す＝壊れたキャッシュを読み込んでも null に落ちる。
+      calendar: parseAcademicCalendar(s.calendar),
     },
     fetchedAt,
     build,

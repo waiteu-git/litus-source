@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { deserializeKillSwitchCache, serializeKillSwitchCache } from './killSwitchSerialize'
 
 const cache = {
-  status: { disabledAll: false, disabled: ['letus' as const], message: '一部停止中', title: '停止中' },
+  status: {
+    disabledAll: false, disabled: ['letus' as const], message: '一部停止中', title: '停止中', calendar: null,
+  },
   fetchedAt: 1_752_000_000_000,
   build: 78,
 }
@@ -44,7 +46,7 @@ describe('killSwitchSerialize', () => {
       build: 78,
     })
     expect(deserializeKillSwitchCache(raw)).toEqual({
-      status: { disabledAll: true, disabled: ['letus'], message: null, title: null },
+      status: { disabledAll: true, disabled: ['letus'], message: null, title: null, calendar: null },
       fetchedAt: 5,
       build: 78,
     })

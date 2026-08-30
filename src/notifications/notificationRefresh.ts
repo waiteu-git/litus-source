@@ -20,6 +20,11 @@ import type { ClassEvent } from '../timetableEvents/classEvent'
 import { classEventNotifications } from './classEventNotify'
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
+// 🔴 学年暦は kill switch と同じ status.json から来る。**予約通知の経路は killSwitch を
+// 一度も参照していなかった**（2026-08-28 実測・参照0件）ので、ここで初めて配線する。
+// loadKillSwitchCache は React 非依存の非同期読みなので、この層から呼べる。
+// 取得できなければ null＝暦なし＝従来どおり（fail-open）。
+import { loadKillSwitchCache } from '../storage/killSwitchStore'
 import { buildCourseTermInfo, type CourseTermInfo } from '../attendance/courseOver'
 import { serializeRuns } from './serializeRuns'
 import { staggerSameInstant, DEFAULT_STAGGER_STEP_MS } from './staggerFireAt'
@@ -53,10 +58,16 @@ function toSchedulable(map: AssignmentMap): SchedulableAssignment[] {
  */
 async function loadCourseTermInfo(events: ClassEvent[], now: Date): Promise<CourseTermInfo> {
   try {
-    const [stats, bulletins] = await Promise.all([loadAttendanceStats(), loadBulletinDigest()])
-    return buildCourseTermInfo({ courses: stats?.courses ?? [], events, bulletins, now })
+    const [stats, bulletins, ks] = await Promise.all([
+      loadAttendanceStats(),
+      loadBulletinDigest(),
+      loadKillSwitchCache(),
+    ])
+    return buildCourseTermInfo({
+      courses: stats?.courses ?? [], events, bulletins, now, calendar: ks?.status.calendar ?? null,
+    })
   } catch {
-    return { termEnds: {}, extraPlans: [] }
+    return { termEnds: {}, nameOwners: {}, extraPlans: [], calendar: null }
   }
 }
 

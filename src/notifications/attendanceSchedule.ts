@@ -119,7 +119,7 @@ export function computeAttendanceAlarms(
    * （2026-08-03のユーザー報告）。判定は画面と同じ isCourseActiveOn を通す＝
    * **述語をここで再実装しない**。2箇所に持つと必ずズレる。
    */
-  termInfo: CourseTermInfo = { termEnds: {}, extraPlans: [] },
+  termInfo: CourseTermInfo = { termEnds: {}, nameOwners: {}, extraPlans: [], calendar: null },
 ): AttendanceAlarm[] {
   const daysAhead = options.daysAhead ?? 7
   const lead = options.lastChanceLeadMinutes ?? 10
@@ -159,6 +159,8 @@ export function computeAttendanceAlarms(
             courseName: e.name,
             dateKey,
             termEnds: termInfo.termEnds,
+            nameOwners: termInfo.nameOwners,
+            calendar: termInfo.calendar,
             extraPlans: termInfo.extraPlans,
           })
         ) {

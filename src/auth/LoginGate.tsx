@@ -482,14 +482,14 @@ export function LoginGate({ children }: { children: ReactNode }) {
           String(d.page), String(d.gstate), JSON.stringify(d.gakki),
           Array.isArray(d.tables) ? String(d.tables.length) : '?',
           JSON.stringify(d.heads),
-          pickCurrentSemester(result.collections, new Date()).length,
+          result.collections.length,
         )
       }
       if (!result.error && result.collections.length > 0) {
         ;(async () => {
           try {
             // 2枚返る場合は当該学期だけ保存する（semester.ts の頭）
-            await saveTimetable(pickCurrentSemester(result.collections, new Date()))
+            await saveTimetable(result.collections)
             await saveTimetableRefreshedAt()
             await refreshAllNotifications()
           } catch {

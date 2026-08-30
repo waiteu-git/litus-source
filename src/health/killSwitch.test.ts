@@ -14,7 +14,7 @@ const BUILD = 78
 describe('parseKillSwitchStatus', () => {
   it('通常運転のstatus.json（disabled空）をパースできる', () => {
     const s = parseKillSwitchStatus(JSON.stringify({ schemaVersion: 1, disabled: [], message: '' }), BUILD)
-    expect(s).toEqual({ disabledAll: false, disabled: [], message: null, title: null })
+    expect(s).toEqual({ disabledAll: false, disabled: [], message: null, title: null, calendar: null })
   })
 
   it('機能停止の指定を正規化する', () => {
@@ -22,7 +22,9 @@ describe('parseKillSwitchStatus', () => {
       JSON.stringify({ schemaVersion: 1, disabled: ['attendance', 'letus'], message: '一部停止中' }),
       BUILD,
     )
-    expect(s).toEqual({ disabledAll: false, disabled: ['attendance', 'letus'], message: '一部停止中', title: null })
+    expect(s).toEqual({
+      disabledAll: false, disabled: ['attendance', 'letus'], message: '一部停止中', title: null, calendar: null,
+    })
   })
 
   it('title を停止時の見出しとして読む（空/非文字列は null）', () => {
@@ -43,7 +45,7 @@ describe('parseKillSwitchStatus', () => {
       JSON.stringify({ schemaVersion: 2, disabled: ['newfeature', 'bulletin'], message: '' }),
       BUILD,
     )
-    expect(s).toEqual({ disabledAll: false, disabled: ['bulletin'], message: null, title: null })
+    expect(s).toEqual({ disabledAll: false, disabled: ['bulletin'], message: null, title: null, calendar: null })
   })
 
   it('配列内の非文字列は無視する', () => {

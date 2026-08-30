@@ -15,7 +15,8 @@ import {
   isPdfLikeUrl,
   markActivityAddedJs,
 } from '../collect/injectedScripts'
-import { classifyLinkTarget } from '../links/externalLink'
+import { classifyLinkTarget, hostOf, isKnownInAppHost } from '../links/externalLink'
+import { isLetusContentUrl } from '../links/letusContentHost'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { parseAssignmentPage } from '../parsers/letus'
 import { upsertAssignments, type CollectedAssignment } from '../updates/assignmentUpsert'
@@ -107,6 +108,14 @@ export default function WebViewerScreen() {
     }
     if (p.type === 'assignmentpage' && typeof p.html === 'string') {
       const pageUrl = typeof p.url === 'string' ? p.url : currentUrl
+      // 🔴 ページが名乗ったURLをそのまま保存しない（2026-08-28 監査 CONFIRMED）。
+      // **この分岐はユーザー操作ゼロで走る**＝読み込まれた任意のページが postMessage を撃つだけで
+      // 保存でき、以後 LetusPageFetcher が Cookie共有WebViewでそのホストを自動取得していた。
+      // ⚠ 黙って捨てる（flashを出さない）＝攻撃者に「弾かれた」という手掛かりを返さないため。
+      if (!isLetusContentUrl(pageUrl)) {
+        setAdding(false)
+        return
+      }
       const parsed = parseAssignmentPage(p.html, pageUrl)
       await addOne(
         {
@@ -134,10 +143,20 @@ export default function WebViewerScreen() {
         flash('すでに追加されています')
         return
       }
-      if (isCollectedAssignmentUrl(activityUrl)) {
+      // 🔴 収集所有（＝詳細画面が Cookie共有WebViewで**自動取得する**側）に入れてよいのは
+      // LETUS本体のURLだけ。isCollectedAssignmentUrl はパスしか見ないので、
+      // `https://evil.example/mod/assign/view.php` が収集所有になっていた（同監査）。
+      // ⚠ ここは**拒否ではなく降格**にする＝非LETUSはユーザー所有側へ落ち、自動取得されない。
+      // 拒否にすると、正規の外部リンクを手元で追跡する既存の使い方まで壊れる。
+      if (isLetusContentUrl(activityUrl) && isCollectedAssignmentUrl(activityUrl)) {
         // 収集対象: 確認してから追加（締切等は次回収集で補完される）。
         // 旧実装の無確認即追加は、誤タップ時に取り消す手段がなかった。
-        Alert.alert(`「${activityTitle}」を追加しますか？`, activityCourse || undefined, [
+        // ⚠ 本文には**必ずホストを出す**。件名も科目名も攻撃者が決めた文字列なので、
+        // それだけを見せる確認ダイアログは「確認」として機能しない（同監査の指摘）。
+        Alert.alert(
+          `「${activityTitle}」を追加しますか？`,
+          [activityCourse, hostOf(activityUrl)].filter(Boolean).join('\n') || undefined,
+          [
           { text: 'キャンセル', style: 'cancel' },
           {
             text: '追加',
@@ -152,7 +171,8 @@ export default function WebViewerScreen() {
               )
             },
           },
-        ])
+        ],
+        )
       } else {
         // 収集対象外(PDF resource等): 締切ボトムシートを開いてユーザー所有で追加。
         setPending({ url: activityUrl, title: activityTitle, courseName: activityCourse })
@@ -196,6 +216,21 @@ export default function WebViewerScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: ui.colors.screenSolid }]}>
+      {/* 🔴 いま読み込んでいるホストを必ず見せる（2026-08-28 監査）。この画面は**全画面・
+          アドレスバー無し**で、currentUrl を状態に持ちながら一度も表示していなかった＝
+          学外ページが大学の画面になりすませる面だった。**ページ内容から作らず、実際に
+          読み込んだURLから出す**ので偽装できない。学外は色でも分かるようにする。 */}
+      <View style={[styles.hostBar, { backgroundColor: ui.colors.screenSolid }]}>
+        <Text
+          style={[
+            styles.hostText,
+            { color: isKnownInAppHost(currentUrl) ? ui.colors.readingMuted : ui.colors.warn },
+          ]}
+          numberOfLines={1}
+        >
+          {isKnownInAppHost(currentUrl) ? hostOf(currentUrl) : `⚠ 学外のページ: ${hostOf(currentUrl)}`}
+        </Text>
+      </View>
       <WebView
         ref={webviewRef}
         source={{ uri: url }}
@@ -253,6 +288,8 @@ export default function WebViewerScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   web: { flex: 1 },
+  hostBar: { paddingHorizontal: 12, paddingVertical: 4 },
+  hostText: { fontSize: 11 },
   fab: {
     position: 'absolute',
     right: 16,

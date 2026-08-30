@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { StyleSheet, View } from 'react-native'
 import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useNavigation } from '@react-navigation/native'
-import { ActionButton, StepList, useUi, type Step } from '../ui/screen'
+import { ActionButton, StepList, useTabBarClearance, useUi, type Step } from '../ui/screen'
 import { DESKTOP_UA, MYCOURSES_URL, COLLECT_MYCOURSES_JS } from '../collect/injectedScripts'
 import { parseMyCoursesMessage } from '../collect/myCoursesMessage'
 import { buildCourseCodeMap } from '../parsers/letusCourses'
@@ -14,6 +14,7 @@ export default function CollectCoursesScreen() {
   const webviewRef = useRef<WebViewInstance>(null)
   const navigation = useNavigation()
   const ui = useUi()
+  const clearance = useTabBarClearance()
   const [loaded, setLoaded] = useState(false)
   const [collecting, setCollecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,7 +70,7 @@ export default function CollectCoursesScreen() {
           onMessage={(e) => onMessage(e.nativeEvent.data)}
         />
       </View>
-      <View style={styles.panel}>
+      <View style={[styles.panel, { paddingBottom: clearance }]}>
         <View style={[ui.card, styles.card]}>
           <StepList steps={steps} />
         </View>
