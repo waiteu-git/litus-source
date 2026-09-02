@@ -2,15 +2,20 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import * as Application from 'expo-application'
 import {
   isAppKilled,
   isFeatureKilled,
   isKillSwitchStale,
-  parseBuildNumber,
   type KillSwitchFeature,
   type KillSwitchStatus,
 } from './killSwitch'
+import { APP_BUILD } from './appBuild'
+// 解除の検知（設計 §4-Q1）。通知側は前面復帰の 2500ms スロットで古いキャッシュを読むため、
+// これが無いと「解除したのに前面復帰2回ぶん戻らない」（15分スロットルに当たれば更に待つ）。
+// ⚠ App.tsx の通知 effect は**動かさない**。あれが Provider の外に在るからこそ、all 停止中も
+// 購読が生き残って解除後に貼り直せる（内側へ移すと解除しても二度と貼り直されない）。
+import { refreshAllNotifications } from '../notifications/notificationRefresh'
+import { isKillSwitchReleased } from '../notifications/notificationSuppress'
 import { fetchKillSwitchStatus } from './killSwitchFetch'
 import { resolveNotice } from './notice'
 import { loadKillSwitchCache, saveKillSwitchCache } from '../storage/killSwitchStore'
@@ -30,12 +35,6 @@ type KillSwitchValue = {
 
 // Provider外（テスト等）はfail-open: 何も止めない。
 const Ctx = createContext<KillSwitchValue>({ status: null, isKilled: () => false, refresh: () => {} })
-
-// 自ビルド番号（versionCode）。versionRulesの対象判定と、キャッシュの帰属確認に使う。
-// ⚠ expo-constants の nativeBuildVersion は非推奨化で実装から消えており、常に undefined を返す
-//   （型は残るので型チェックもテストも素通りする）。build105 まではここが常に null で、
-//   版を絞った緊急停止（versionRules）が一度も適用されない状態だった。取得元を変えないこと。
-const APP_BUILD = parseBuildNumber(Application.nativeBuildVersion)
 
 export function useKillSwitch(): KillSwitchValue {
   return useContext(Ctx)
@@ -70,6 +69,8 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
   const [dismissedLoaded, setDismissedLoaded] = useState(false)
   const fetchedAtRef = useRef(0)
   const inFlightRef = useRef(false)
+  // 直近の全停止状態（null＝未取得＝不明）。停止→解除の遷移だけを拾うために持つ。
+  const lastDisabledAllRef = useRef<boolean | null>(null)
   // refresh は useCallback([]) で固定されるため、デモ状態は ref 経由で読む。
   const { active: demo } = useDemo()
   const demoRef = useRef(false)
@@ -86,9 +87,16 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
         if (!s) return // 失敗: 直近取得値を維持（fetchedAtも進めない＝次の機会に再試行）
         fetchedAtRef.current = Date.now()
         setStatus(s)
-        return saveKillSwitchCache({ status: s, fetchedAt: fetchedAtRef.current, build: APP_BUILD }).catch(
-          () => undefined,
-        )
+        const released = isKillSwitchReleased(lastDisabledAllRef.current, s.disabledAll)
+        lastDisabledAllRef.current = s.disabledAll
+        return saveKillSwitchCache({ status: s, fetchedAt: fetchedAtRef.current, build: APP_BUILD })
+          .catch(() => undefined)
+          .then(() => {
+            // 🔴 必ずキャッシュ保存の**後**に叩く。先に叩くと関門が古い"停止"を読んで再び全キャンセルし、
+            // 解除が1回ぶん無駄になる。保存自体の失敗は握り潰されたままで、そのときは次の復帰まで戻らない
+            // （範囲外・台帳に別項目として登録済み）。
+            if (released) return refreshAllNotifications().catch(() => undefined)
+          })
       })
       .finally(() => {
         inFlightRef.current = false
@@ -104,6 +112,7 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
         // （アップデート直後に旧ビルド向け停止が一瞬適用されるのを防ぐ）。破棄しても起動時のforce取得で埋まる。
         if (cache && cache.build === APP_BUILD) {
           fetchedAtRef.current = cache.fetchedAt
+          lastDisabledAllRef.current = cache.status.disabledAll
           setStatus(cache.status)
         }
       })

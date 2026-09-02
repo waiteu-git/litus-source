@@ -25,6 +25,14 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 // loadKillSwitchCache は React 非依存の非同期読みなので、この層から呼べる。
 // 取得できなければ null＝暦なし＝従来どおり（fail-open）。
 import { loadKillSwitchCache } from '../storage/killSwitchStore'
+// 🔴 kill switch の `disabled:["all"]` は React ツリーを停止画面に差し替えるが、**予約済みの
+// ローカル通知はそのまま鳴り続ける**（出席・朝まとめは最長7日、課題締切は無期限）。停止要請から
+// 24h以内に止める約束の穴だったので、予約の唯一の入口であるこの関門で止める。
+// 判定は純粋層（notificationSuppress）に置く。このファイルは AsyncStorage を引き込むため
+// vitest から読めず、ここに判定を書くとテストの穴になる。
+// 設計: docs/design/2026-09-02-killswitch-notification-cancel.md
+import { resolveNotificationSuppression } from './notificationSuppress'
+import { APP_BUILD } from '../health/appBuild'
 import { buildCourseTermInfo, type CourseTermInfo } from '../attendance/courseOver'
 import { serializeRuns } from './serializeRuns'
 import { staggerSameInstant, DEFAULT_STAGGER_STEP_MS } from './staggerFireAt'
@@ -81,6 +89,20 @@ export const refreshAllNotifications: (now?: Date) => Promise<void> = serializeR
     // デモ中は OS の予約通知に触れない。触ると実ユーザーの出席アラーム・課題リマインダを
     // 全キャンセルして架空科目のものに差し替えてしまう（デモを抜けても再実行まで戻らない）。
     if (isDemoNamespace()) return
+    // 全停止中は予約を残さない。⚠ kill の読みは学年暦（loadCourseTermInfo）の catch に
+    // 相乗りさせない——あの catch は「読めなければ暦なし」に倒す設計で、混ぜると「停止指示が
+    // 無い」と「読めなかった」が区別できなくなる。ここは独立した読みにして、倒す向き
+    // （null も例外も fail-open。ただし例外は握り潰さず記録する）を自前で決める。
+    // 出口は既存の同期2本だけで、どちらも空配列を渡せばタグ一致を全キャンセルする＝
+    // **新しいキャンセルAPIは要らない**。出席・課題・各回イベントの計算より前で返すこと。
+    const suppressed = await resolveNotificationSuppression(loadKillSwitchCache, APP_BUILD, (e) => {
+      console.warn('停止指示の読み取りに失敗しました（予約は従来どおり継続します）', e)
+    })
+    if (suppressed) {
+      await syncAttendanceAlarms([])
+      await syncAssignmentReminders([])
+      return
+    }
     const collections = await loadTimetable()
     const settings = await loadAttendanceSettings()
     const classEvents = await loadClassEvents()
