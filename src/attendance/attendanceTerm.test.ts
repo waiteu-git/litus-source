@@ -47,6 +47,54 @@ describe('resolveTermDates', () => {
   })
 })
 
+describe('resolveTermDates: 基準年の反転（211 積み荷⑤ / docs/design/2026-09-03-attendance-year-inference.md）', () => {
+  it('前期データ（初回04/10）をnow=2026-10-10に読んでも2026に解決する（回帰の本体）', () => {
+    const now = new Date(2026, 9, 10) // 2026-10-10
+    const r = resolveTermDates([S('04/10')], now)
+    expect(r[0].full.getFullYear()).toBe(2026)
+  })
+
+  it('後期データ（初回09/11）をnow=2027-03-13に読んでも2026に解決する', () => {
+    const now = new Date(2027, 2, 13) // 2027-03-13
+    const r = resolveTermDates([S('09/11')], now)
+    expect(r[0].full.getFullYear()).toBe(2026)
+  })
+
+  it('TOLERANCE境界: 先頭回がnowの13日先なら当年に解決する', () => {
+    const now = new Date(2026, 0, 1) // 2026-01-01
+    const r = resolveTermDates([S('01/14')], now) // 13日先
+    expect(r[0].full.getFullYear()).toBe(2026)
+  })
+
+  it('TOLERANCE境界: 先頭回がnowの15日先なら前年に解決する', () => {
+    const now = new Date(2026, 0, 1) // 2026-01-01
+    const r = resolveTermDates([S('01/16')], now) // 15日先
+    expect(r[0].full.getFullYear()).toBe(2025)
+  })
+
+  it('反転は授業期間の外（3月下旬の春休み）にしか来ない（反転が無いことは主張しない）', () => {
+    // 前期データ（初回04/10）を2026-04-10から730日、1日ずつ走査する。
+    const sessions = [S('04/10')]
+    let prevYear: number | null = null
+    const transitions: Date[] = []
+    for (let i = 0; i <= 730; i++) {
+      const now = new Date(2026, 3, 10)
+      now.setDate(now.getDate() + i)
+      const resolvedYear = resolveTermDates(sessions, now)[0].full.getFullYear()
+      if (prevYear !== null && resolvedYear > prevYear) {
+        transitions.push(new Date(now))
+      }
+      prevYear = resolvedYear
+    }
+    // 反転（解決年が増える日）は必ず起きる（§2.1: 消せない）。かつ授業期間の外＝3月下旬に限られる。
+    expect(transitions.length).toBeGreaterThan(0)
+    for (const t of transitions) {
+      expect(t.getMonth() + 1).toBe(3)
+      expect(t.getDate()).toBeGreaterThanOrEqual(20) // 3月下旬
+    }
+  })
+})
+
 describe('termWeeksFromSessions', () => {
   it('同一週の複数コマは1週に畳み、昇順ユニークの月曜Dateを返す', () => {
     const now = new Date(2026, 6, 16)

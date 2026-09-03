@@ -13,10 +13,22 @@ export type ResolvedSession = { date: string; full: Date }
 
 const MMDD = /^(\d{1,2})\/(\d{1,2})$/
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+// 基準年決定の許容量（§2.3、docs/design/2026-09-03-attendance-year-inference.md）。
+// 候補年は必ず{nowY-1, nowY, nowY+1}の3つなので、基準年決定は1年周期で必ず1回「反転」する
+// （原理的に消せない・実測で確定済み）。反転位置は「学期開始のTOLERANCE_DAYS日前」に来るため、
+// 値はその反転を無害な日へ動かすように選ぶ。総当たり実測:
+//   0日  → 反転が学期初日ちょうど（学期開始直前のテストケースが落ちる）
+//   14日 → 反転が春休み(3/27)・夏休み(8/28)＝授業の無い期間に落ちる（採用）
+//   60日 → 反転が後期の試験期に落ちる＝選んではいけない
+const TOLERANCE_DAYS = 14
+
 /**
  * 各回（時系列順・空/非MM/DDは除外）を実日付へ解決する。
- * 基準年: 先頭回の MM/DD を候補年 {now-1, now, now+1} に置き now に最も近い年を採る
- * （学期開始が now の少し前でも少し後でも当たる。後期の年跨ぎも吸収）。
+ * 基準年: 先頭回の MM/DD を候補年 {now-1, now, now+1} に置き、
+ * 先頭回が now+TOLERANCE_DAYS 以内になる最大の年を採る（過去へ倒す。
+ * 学期開始前の収集ぶんだけ未来を許す。後期の年跨ぎも吸収）。
  * 以降は月が前回より小さくなったら年+1（12月→1月の折返し）。
  */
 export function resolveTermDates(sessions: AttendanceSession[], now: Date): ResolvedSession[] {
@@ -29,14 +41,12 @@ export function resolveTermDates(sessions: AttendanceSession[], now: Date): Reso
 
   const first = dated[0]
   const nowY = now.getFullYear()
-  let baseYear = nowY
-  let bestDiff = Infinity
+  // 候補{nowY-1, nowY, nowY+1}のうち、先頭回が now+TOLERANCE_DAYS 以内になる最大の年を採る。
+  // nowY-1 の先頭回は必ず過去になるため常に条件を満たし、規則は全域で定義される。
+  const limit = now.getTime() + TOLERANCE_DAYS * MS_PER_DAY
+  let baseYear = nowY - 1
   for (const y of [nowY - 1, nowY, nowY + 1]) {
-    const diff = Math.abs(new Date(y, first.m - 1, first.d).getTime() - now.getTime())
-    if (diff < bestDiff) {
-      bestDiff = diff
-      baseYear = y
-    }
+    if (new Date(y, first.m - 1, first.d).getTime() <= limit) baseYear = y
   }
 
   const out: ResolvedSession[] = []
