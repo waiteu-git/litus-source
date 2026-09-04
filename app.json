@@ -13,7 +13,9 @@
       "bundleIdentifier": "dev.waiteu.litus",
       "buildNumber": "210",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleLocalizations": ["ja"],
+        "CFBundleDevelopmentRegion": "ja"
       }
     },
     "android": {

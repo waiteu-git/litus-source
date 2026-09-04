@@ -30,3 +30,32 @@ describe('iOS の輸出コンプライアンス申告', () => {
     expect(appJson.expo.ios.infoPlist.ITSAppUsesNonExemptEncryption).toBe(false)
   })
 })
+
+/**
+ * App Store 掲載の「言語」欄が英語（EN）になる不具合の対処（211 積み荷④）。
+ * 原因: ASC の設定ではなく `.app` バンドルの中身（`CFBundleLocalizations` /
+ * `CFBundleDevelopmentRegion`）で決まる。実測でこれが未宣言だった
+ * （`itunes.apple.com/jp/lookup?id=6799900160` の languageCodesISO2A が ['EN']）。
+ *
+ * 🔴 これは掲載表示だけの問題ではない。実行時のシステムUI言語選択にも効く
+ * （同じ根本原因が `src/ui/DateTimeSheet.tsx` の日付ピッカー英語化を既に一度起こしている）。
+ *
+ * ⚠ このテストが守れるのは「app.json に宣言が在ること」だけ。
+ *   宣言が消えていないことのラチェットに過ぎず、次を一切保証しない:
+ *   - 実機での挙動（システムUIが実際に日本語になるか）
+ *   - App Store 掲載の言語欄（211 がストアに出るまで確認できない。ASC を触っても変わらない）
+ *   このテストが緑でも、掲載が英語のままである可能性は残る。
+ *
+ * ⚠ この値は `expo prebuild` を通らないと `Info.plist` に1バイトも反映されない。
+ *   成果物側（生成された `ios/app/Info.plist`）で必ず確認すること。
+ * 設計: docs/design/2026-09-03-ios-bundle-localizations.md
+ */
+describe('iOS バンドルの言語宣言（App Store 掲載言語対策）', () => {
+  it('ios.infoPlist.CFBundleLocalizations に ja が含まれる', () => {
+    expect(appJson.expo.ios.infoPlist?.CFBundleLocalizations).toContain('ja')
+  })
+
+  it('ios.infoPlist.CFBundleDevelopmentRegion が ja', () => {
+    expect(appJson.expo.ios.infoPlist?.CFBundleDevelopmentRegion).toBe('ja')
+  })
+})

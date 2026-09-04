@@ -46,6 +46,12 @@ export default function DateTimeSheet(props: {
  * spinner は回すたびに onChange が来るので、ドラフトに溜めて「完了」でだけ確定する
  * （回している途中の値が画面へ反映され続けるのを防ぐ）。
  * 表記が英語になっていた不具合があるので locale を明示する。
+ *
+ * 211（積み荷④）で app.json に CFBundleLocalizations: ["ja"] を宣言したので、
+ * 将来的にこの locale 指定が不要になる可能性がある。ただし実機で確認できていないため、
+ * この積み荷ではあえて外さず判断を先送りにしている（外して壊れると日付ピッカーが英語に
+ * 戻り、実機で日付を開かないと気づけない）。除去は実機確認の後に別途判断すること。
+ * 設計: docs/design/2026-09-03-ios-bundle-localizations.md §4-Q2
  */
 function IosDateTimeSheet({
   value,
