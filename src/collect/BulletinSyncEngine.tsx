@@ -16,6 +16,8 @@ import { diffNewBulletins, capNotifiedIds, NOTIFIED_IDS_CAP } from '../notificat
 import { presentBulletinNotifications } from '../notifications/notifier'
 import { mutateNotifiedBulletins } from '../storage/notifiedBulletinsStore'
 import { loadBulletinNotifySettings } from '../storage/bulletinNotifySettingsStore'
+import { autoRegisterCancelsFromBulletins } from './autoRegisterCancels'
+import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 
 /**
  * CLASS掲示の headless 収集エンジン。ページ内の全掲示行を収集し、既存の body キャッシュを保って
@@ -25,6 +27,7 @@ import { loadBulletinNotifySettings } from '../storage/bulletinNotifySettingsSto
  * ヘルス(層2): 観測シグナルから ok/empty_valid/structure_drift 等を分類し、finish 時に保存する（層1バナー用）。
  */
 export default function BulletinSyncEngine({ onFinished }: { onFinished: () => void }) {
+  const { bump: bumpClassEvents } = useClassEventsVersion()
   // 最後に観測したシグナル（診断用）。ページ未到達でも finish 時に書き出す。
   const diag = useRef({ page: '', stage: '', keiji: 0, align: 0, rows: 0, got: false, tab: 0, pwd: 0, logout: 0, blen: 0, hlen: 0, fr: 0 })
   // ヘルス判定用の観測（pageシグナル累積＋最終collectペイロード＋最終パース件数）。
@@ -88,6 +91,14 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
             prev = cur
             return mergeBulletinItems(cur, incoming, new Date())
           })
+          // 掲示由来の休講の自動登録（211 積み荷②）。新着通知ブロックと同じ層だが別の try にする——
+          // 握りつぶす理由が違う（通知は再送で回復するが、こちらは台帳/ClassEventsの整合が絡む）。
+          try {
+            const { added } = await autoRegisterCancelsFromBulletins(incoming)
+            if (added > 0) bumpClassEvents()
+          } catch {
+            // 台帳/ClassEvents の読み書き失敗は次回同期で再評価（収集自体は成立済み）。
+          }
           await saveBulletinRefreshedAt()
           diag.current.got = true
           // 新着ローカル通知（即時発火・完全独立経路）。失敗しても収集は成立済みなので握りつぶす。
