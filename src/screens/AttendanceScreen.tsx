@@ -229,6 +229,22 @@ export default function AttendanceScreen() {
           <KillSwitchBanner feature="attendance" />
           <ScreenHint hintKey="attendance" />
 
+          {/* 出席の自動登録は実地で一度も通っていない経路で、間欠的に「登録しました」と出ても
+              CLASS側に反映されていないことがある。利用者がその食い違いに気づける唯一の手段なので
+              常設で置く。
+              ⚠ ScreenHint に入れてはいけない: ScreenHint は×で永続的に消え（dismissHint）、
+                 一度閉じた利用者には二度と出ない＝安全に関わる告知には使えない。
+              ⚠ 意味色（danger/warn）を使わない: 常設なので色を付けると画面が常に異常に見える。
+                 無彩色（labelColor）で診断行と同じ扱いにする。
+              ⚠ この文言はユーザー裁定済み。変更・削除は裁定を取ること
+                 （ラチェット: screens/attendanceUnverifiedNotice.test.ts）。 */}
+          <View style={[ui.card, styles.trialNote]}>
+            <Ionicons name="information-circle-outline" size={16} color={labelColor} />
+            <Text style={[styles.trialNoteText, { color: labelColor }]}>
+              出席の自動登録は試験段階です。登録できたかは必ずCLASSでご確認ください。
+            </Text>
+          </View>
+
           {/* 学外ネットワーク警告: 出席ページ自身の文言（学外ネットワークからのアクセス）を検知した時だけ出す。
               学内Wi-Fiへ切り替えてもWebView側の表示が自動では追随しないため「再確認」で再取得する。
               進行表示はバー内テキストの差し替えのみ（取得系と同じ・大きなアニメは出さない方針）。
@@ -556,6 +572,18 @@ export default function AttendanceScreen() {
                     <Ionicons name="checkmark" size={38} color={c.white} />
                   </View>
                   <Text style={[styles.doneTitle, { color: valueColor }]}>出席を登録しました</Text>
+                  {/* 成功表示は「送信が通った」までしか保証しない（登録されない事象を追跡中）。
+                      利用者が食い違いに気づけるよう、成功時こそ確認を促す。失敗時には出さない
+                      （既に理由表示と手動退避があり、重ねると薄まる）。
+                      ⚠ 一律の否定文（「保証しません」）は入れない: outcome='ok' には attended
+                         （CLASSの出欠ページを読み直した実測）と result.ok（actuator応答一致・
+                         2026-07-22に誤検出の実績あり）の2経路があり、前者では過剰。経路ごとの
+                         出し分けも実装コスト・利用者への説明困難を理由に却下済み。
+                      ⚠ この文言はユーザー裁定済み。変更・削除は裁定を取ること
+                         （ラチェット: screens/attendanceUnverifiedNotice.test.ts）。 */}
+                  <Text style={[styles.doneCaution, { color: labelColor }]}>
+                    ※CLASSの出欠に反映されているか必ずご確認ください。
+                  </Text>
                   {/* 成功時も診断を出す: 自動送信は元々「未検証」の経路で、間欠的に登録されない事象を
                       追っている。どの経路(method)で通ったかが分かって初めて再発を潰せる。 */}
                   <Text selectable style={[styles.diag, styles.diagCenter, { color: labelColor }]}>
@@ -692,6 +720,9 @@ const styles = StyleSheet.create({
   // 「まずCLASSで登録する」を主動線のまま保つ。
   reportRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingVertical: 4 },
   reportText: { fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
+  trialNote: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10 },
+  trialNoteText: { flex: 1, fontSize: 12, lineHeight: 17 },
+  doneCaution: { fontSize: 12, lineHeight: 17, marginTop: 8, textAlign: 'center' },
   diag: { fontSize: 10, lineHeight: 14, marginTop: 8 },
   diagCenter: { textAlign: 'center' },
   verifyCard: { marginTop: 12, gap: 12 },
