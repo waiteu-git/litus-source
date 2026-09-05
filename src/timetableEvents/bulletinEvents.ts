@@ -121,14 +121,8 @@ export function parseBulletinEvents(item: BulletinItem): BulletinEventCandidate[
   }]
 }
 
-/** 科目名の正規化（空白除去）。突合の基準として複数箇所（reconcile・自動登録の台帳キー）で共有する。 */
-export function normCourseName(s: string): string {
-  return s.replace(/[\s　]/g, '')
-}
-/** コマ配列を昇順・カンマ区切りのキーへ。突合・台帳キーで共有する。 */
-export function periodsKey(p: number[]): string {
-  return [...p].sort((a, b) => a - b).join(',')
-}
+const normCourseName = (s: string) => s.replace(/[\s　]/g, '')
+const periodsKey = (p: number[]) => [...p].sort((a, b) => a - b).join(',')
 
 /** 候補と既存イベントが同一授業・同一種別・同日・同コマか。コードがあればコード、無ければ名称で突合。 */
 function sameSlot(c: BulletinEventCandidate, e: ClassEvent): boolean {

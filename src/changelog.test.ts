@@ -103,8 +103,13 @@ describe('formatChangelogHeading', () => {
     )
   })
 
-  it('CHANGELOG の先頭（212）は版の見出しになる', () => {
-    expect(formatChangelogHeading(CHANGELOG[0])).toBe('v1.1.0（2026/09/05）')
+  // 🔴 212 では `version` を使わない。自動登録（積み荷②）を降ろした結果、212 は v1.0.0 の中の
+  // ビルド更新に戻ったため（版を上げるのは自動登録を目玉にする 213 以降＝v1.1.0）。
+  // ⇒ 実データ側は build 表示のままで、v 表示の経路は上の純粋関数テストで担保する。
+  it('CHANGELOG の先頭（212）は version を持たず build 見出しになる', () => {
+    expect(CHANGELOG[0].build).toBe(212)
+    expect(CHANGELOG[0].version).toBeUndefined()
+    expect(formatChangelogHeading(CHANGELOG[0])).toBe('build 212（2026/09/05）')
   })
 })
 

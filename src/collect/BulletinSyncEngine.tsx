@@ -16,7 +16,6 @@ import { diffNewBulletins, capNotifiedIds, NOTIFIED_IDS_CAP } from '../notificat
 import { presentBulletinNotifications } from '../notifications/notifier'
 import { mutateNotifiedBulletins } from '../storage/notifiedBulletinsStore'
 import { loadBulletinNotifySettings } from '../storage/bulletinNotifySettingsStore'
-import { autoRegisterCancelsFromBulletins } from './autoRegisterCancels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 
 /**
@@ -91,14 +90,6 @@ export default function BulletinSyncEngine({ onFinished }: { onFinished: () => v
             prev = cur
             return mergeBulletinItems(cur, incoming, new Date())
           })
-          // 掲示由来の休講の自動登録（211 積み荷②）。新着通知ブロックと同じ層だが別の try にする——
-          // 握りつぶす理由が違う（通知は再送で回復するが、こちらは台帳/ClassEventsの整合が絡む）。
-          try {
-            const { added } = await autoRegisterCancelsFromBulletins(incoming)
-            if (added > 0) bumpClassEvents()
-          } catch {
-            // 台帳/ClassEvents の読み書き失敗は次回同期で再評価（収集自体は成立済み）。
-          }
           await saveBulletinRefreshedAt()
           diag.current.got = true
           // 新着ローカル通知（即時発火・完全独立経路）。失敗しても収集は成立済みなので握りつぶす。
