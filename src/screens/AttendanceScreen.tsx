@@ -62,6 +62,12 @@ export default function AttendanceScreen() {
   // 不具合報告の下書き。**失敗したその場から出す**のが主導線＝設定の奥に置くと誰も辿り着かない
   // （公開後、開発者はユーザー端末で何が起きているか一切見られない。証拠は端末内の診断記録だけ）。
   const [reportOpen, setReportOpen] = useState(false)
+  // 失敗カードの送信診断の開閉。**既定は閉じ**＝失敗のその場で利用者が読むべきは
+  // 「出席は登録されていません／CLASSで登録してください」であって、btn や onclick ではない。
+  // ⚠ 畳んでよい根拠: 報告メール（`DiagReportSheet`）は保存済みの `SubmitDiag[]`
+  //   （`loadSubmitDiags()` → `buildDiagReportBody`）から本文を組んでおり、**この画面の
+  //   テキストを一切読んでいない**。⇒ 畳んでも開発者に届く情報は1バイトも減らない。
+  const [diagOpen, setDiagOpen] = useState(false)
   const netTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const receptionAtCheckRef = useRef(reception)
   function recheckNetwork() {
@@ -605,15 +611,26 @@ export default function AttendanceScreen() {
                     出席は登録されていません。CLASSの画面を開いて「出席登録する」を押してください。
                   </Text>
                   {/* 送信診断: 「発火しているのに登録されない」原因（process範囲など）の特定に要る。
-                      失敗時だけ・折りたたまず小さく出す（作者が実機で読める唯一の経路）。 */}
-                  <Text selectable style={[styles.diag, { color: labelColor }]}>
-                    診断: btn={String(result?.btnFound)} / method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁
-                    {'\n'}送信: 発火={String(result?.ajaxFired)} / 応答={String(result?.ajaxDone)} / status=
-                    {result?.ajaxStatus ?? '-'}
-                    {result?.ajaxError ? ` / err=${result.ajaxError}` : ''}
-                    {result?.hint ? `\nCLASSの応答: ${result.hint}` : ''}
-                    {result?.onclick ? `\n${result.onclick}` : ''}
-                  </Text>
+                      **既定で畳む**（開けば内容は従来と同一）。
+                      ⚠ かつてのコメント「作者が実機で読める唯一の経路」は**古い**。報告経路が
+                        育った今、`DiagReportSheet` は保存済みの `SubmitDiag[]` から本文を組んでおり
+                        画面のテキストは読んでいない（上の diagOpen 宣言のコメント参照）。
+                        ⇒ 畳んでも開発者に届く情報は減らない。失敗の場は退避動線を主役に保つ。
+                      ⚠ 意味色は使わない（danger/warn は「異常」の合図。診断の開閉は異常ではない）。 */}
+                  <Pressable onPress={() => setDiagOpen((v) => !v)} hitSlop={8} style={styles.diagToggle}>
+                    <Ionicons name={diagOpen ? 'chevron-down' : 'chevron-forward'} size={12} color={labelColor} />
+                    <Text style={[styles.diagToggleText, { color: labelColor }]}>詳細</Text>
+                  </Pressable>
+                  {diagOpen ? (
+                    <Text selectable style={[styles.diag, { color: labelColor }]}>
+                      診断: btn={String(result?.btnFound)} / method={result?.method ?? '-'} / 入力={result?.filled ?? '-'}桁
+                      {'\n'}送信: 発火={String(result?.ajaxFired)} / 応答={String(result?.ajaxDone)} / status=
+                      {result?.ajaxStatus ?? '-'}
+                      {result?.ajaxError ? ` / err=${result.ajaxError}` : ''}
+                      {result?.hint ? `\nCLASSの応答: ${result.hint}` : ''}
+                      {result?.onclick ? `\n${result.onclick}` : ''}
+                    </Text>
+                  ) : null}
                   <View style={styles.failRow}>
                     <Pressable style={[styles.failBtn, { backgroundColor: c.cta }]} onPress={() => setRevealClass(true)}>
                       <Text style={styles.failBtnText}>CLASSの画面を表示</Text>
@@ -724,6 +741,8 @@ const styles = StyleSheet.create({
   trialNoteText: { flex: 1, fontSize: 12, lineHeight: 17 },
   doneCaution: { fontSize: 12, lineHeight: 17, marginTop: 8, textAlign: 'center' },
   diag: { fontSize: 10, lineHeight: 14, marginTop: 8 },
+  diagToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10, alignSelf: 'flex-start' },
+  diagToggleText: { fontSize: 11, fontWeight: '600' },
   diagCenter: { textAlign: 'center' },
   verifyCard: { marginTop: 12, gap: 12 },
   verifyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
