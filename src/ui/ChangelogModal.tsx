@@ -1,7 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from './Text'
 import { useUi } from './screen'
-import { sortChangelogDesc, type ChangelogEntry } from '../changelog'
+import { formatChangelogHeading, sortChangelogDesc, type ChangelogEntry } from '../changelog'
 
 /** 変更履歴の全件表示（下からのスライドシート）。 */
 export default function ChangelogModal({
@@ -30,9 +30,7 @@ export default function ChangelogModal({
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {sorted.map((entry) => (
             <View key={entry.build} style={styles.entry}>
-              <Text style={[styles.entryTitle, { color: ui.valueColor }]}>
-                build {entry.build}（{entry.date}）
-              </Text>
+              <Text style={[styles.entryTitle, { color: ui.valueColor }]}>{formatChangelogHeading(entry)}</Text>
               {entry.items.map((item, i) => (
                 <Text key={i} style={[styles.item, { color: ui.labelColor }]}>
                   ・{item}

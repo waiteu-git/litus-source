@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { CHANGELOG, getRecentChangelog, sortChangelogDesc, type ChangelogEntry } from './changelog'
+import {
+  CHANGELOG,
+  formatChangelogHeading,
+  getRecentChangelog,
+  sortChangelogDesc,
+  type ChangelogEntry,
+} from './changelog'
 
 const SAMPLE: ChangelogEntry[] = [
   { build: 70, date: '2026/07/12', items: ['a'] },
@@ -75,5 +81,45 @@ describe('🔴 changelog と app.json の版が一致する', () => {
   it('同じ build が二度出てこない', () => {
     const builds = CHANGELOG.map((e) => e.build)
     expect(new Set(builds).size).toBe(builds.length)
+  })
+})
+
+describe('formatChangelogHeading', () => {
+  // 表示は React なので vitest から見られない。**見出しを組む純粋関数**をここで縛る
+  // （設計 `docs/design/2026-09-05-changelog-by-version.md` §4-Q5）。
+  it('version があれば v{版}（日付）を返す', () => {
+    expect(formatChangelogHeading({ build: 212, version: '1.1.0', date: '2026/09/05', items: ['a'] })).toBe(
+      'v1.1.0（2026/09/05）',
+    )
+  })
+
+  it('version が無いエントリは従来どおり build N（日付）のまま', () => {
+    expect(formatChangelogHeading({ build: 210, date: '2026/08/28', items: ['a'] })).toBe('build 210（2026/08/28）')
+  })
+
+  it('version が空文字のときも build 表示へ倒す（v（日付）という空の見出しを出さない）', () => {
+    expect(formatChangelogHeading({ build: 210, version: '', date: '2026/08/28', items: ['a'] })).toBe(
+      'build 210（2026/08/28）',
+    )
+  })
+
+  it('CHANGELOG の先頭（212）は版の見出しになる', () => {
+    expect(formatChangelogHeading(CHANGELOG[0])).toBe('v1.1.0（2026/09/05）')
+  })
+})
+
+describe('🔴 CHANGELOG の件数ラチェット', () => {
+  // 版単位表示への移行（212）で**既存エントリを畳もうとする誘惑**が常にある。
+  // 49件を「v1.0.0」1件へまとめると1エントリに約400項目が入って読めなくなるため、
+  // 任意欄 `version` を足すだけにして既存は無変更で残す設計にした。
+  // ⚠ ここが減ったら、それは畳んだか消したかのどちらか。増やすのは自由。
+  it('エントリ数が 49 を下回らない', () => {
+    expect(CHANGELOG.length).toBeGreaterThanOrEqual(49)
+  })
+
+  it('version を持つのは 212 以降だけ（既存への遡及付与をしない）', () => {
+    for (const entry of CHANGELOG) {
+      if (entry.version !== undefined) expect(entry.build).toBeGreaterThanOrEqual(212)
+    }
   })
 })

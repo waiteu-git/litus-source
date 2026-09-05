@@ -12,15 +12,25 @@
  */
 export type ChangelogEntry = {
   build: number
+  /**
+   * アプリのバージョン（versionName）。**任意欄**＝212以降のエントリだけが持つ。
+   * 既存の build エントリは無変更のまま `build N` 表示で残す（50件を1件へ畳むと
+   * 1エントリに約400項目入って読めなくなる）。
+   * ⚠ 並び順のキーは `build`（数値）のまま＝版が同じでも build は単調増加する。
+   */
+  version?: string
   date: string
   items: string[]
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    build: 211,
-    date: '2026/09/04',
+    build: 212,
+    version: '1.1.0',
+    date: '2026/09/05',
     items: [
+      '更新履歴を、ビルド番号ごとではなくアプリのバージョンごとに表示するようにしました',
+      '出席の登録に失敗したときの技術的な情報を、既定では折りたたむようにしました（「詳細」で開けます。開発者へ送る内容は変わりません）',
       '出席の画面に、登録できたかどうかをCLASSで確かめていただくご案内を出すようにしました。出席の自動登録はまだ試験段階で、アプリが「登録しました」と表示しても実際には登録されていないことがあります。大切な出席を落とさないよう、お手数ですがCLASSの出欠もあわせてご確認ください',
       '休講のお知らせから、その日の休講を自動で登録するようになりました。休講の日には出席のアラームが鳴りません。自動で登録されたものをご自身で消したり日付を直したりした場合は、次の取り込みで勝手に元へ戻ることはありません',
       '学期が終わってしばらく経つと、終わった授業がまた「授業中」として扱われ、出席のお知らせやウィジェットに出てくることがあった問題を直しました。出欠の記録は日付に年が入っていないため、アプリが年を推測しており、その推測が学期のおよそ半年後にずれていたのが原因です',
@@ -505,6 +515,19 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
 ]
+
+/**
+ * 変更履歴の見出し文字列。`version` があれば版で、無ければ従来どおり build 番号で出す。
+ *
+ * ⚠ 表示は React なので vitest から直接見られない。**文字列を組む部分をここ（純粋層）に置く**
+ *   ＝`ChangelogModal` / `SettingsScreen` はこの関数を呼ぶだけにして、分岐をテストできる形に保つ。
+ * 🔴 版文字列を**比較に使ってはいけない**（ここは組み立てるだけ）。`"1.1.0"` と `"1.10.0"` の
+ *   パース誤りは「全停止」か「誰も止まらない」に直結する。キルスイッチの `versionRules`
+ *   （minBuild/maxBuild）は数値比較のままにする。版を使うのは**表示層だけ**。
+ */
+export function formatChangelogHeading(entry: ChangelogEntry): string {
+  return entry.version ? `v${entry.version}（${entry.date}）` : `build ${entry.build}（${entry.date}）`
+}
 
 /** build番号の降順（新しい順）に並べ替える。 */
 export function sortChangelogDesc(entries: ChangelogEntry[]): ChangelogEntry[] {

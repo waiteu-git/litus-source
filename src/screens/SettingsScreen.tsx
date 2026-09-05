@@ -32,7 +32,7 @@ import { clearSubmitDiags, loadSubmitDiags } from '../storage/submitDiagStore'
 import { useSync } from '../sync/SyncProvider'
 import { useDemo } from '../demo/DemoProvider'
 import { attendanceStatsDiagLine } from '../health/attendanceStatsDiag'
-import { CHANGELOG, getRecentChangelog } from '../changelog'
+import { CHANGELOG, formatChangelogHeading, getRecentChangelog } from '../changelog'
 import ChangelogModal from '../ui/ChangelogModal'
 import DiagReportSheet from '../report/DiagReportSheet'
 
@@ -446,7 +446,7 @@ export default function SettingsScreen() {
             {recentChangelog.map((entry) => (
               <View key={entry.build} style={styles.changelogEntry}>
                 <Text style={[styles.changelogEntryTitle, { color: ui.labelColor }]}>
-                  build {entry.build}（{entry.date}）
+                  {formatChangelogHeading(entry)}
                 </Text>
                 {entry.items.map((item, i) => (
                   <Text key={i} style={[styles.changelogItem, { color: ui.labelColor }]} numberOfLines={2}>
