@@ -29,7 +29,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '1.0.0',
     date: '2026/09/05',
     items: [
-      '更新履歴を、ビルド番号ごとではなくアプリのバージョンごとに表示するようにしました。今回から見出しが「v1.0.0」の形になります',
+      '更新履歴を、ビルド番号ごとではなくアプリのバージョンごとに表示するようにしました。今回から見出しが「v1.0.0 (build 212)」の形になります。不具合のご報告のときは、この番号をお知らせいただけると助かります',
       '出席の登録に失敗したときの技術的な情報を、既定では折りたたむようにしました（「詳細」で開けます。開発者へ送る内容は変わりません）',
       '出席の画面に、登録できたかどうかをCLASSで確かめていただくご案内を出すようにしました。出席の自動登録はまだ試験段階で、アプリが「登録しました」と表示しても実際には登録されていないことがあります。大切な出席を落とさないよう、お手数ですがCLASSの出欠もあわせてご確認ください',
       '学期が終わってしばらく経つと、終わった授業がまた「授業中」として扱われ、出席のお知らせやウィジェットに出てくることがあった問題を直しました。出欠の記録は日付に年が入っていないため、アプリが年を推測しており、その推測が学期のおよそ半年後にずれていたのが原因です',
@@ -525,7 +525,13 @@ export const CHANGELOG: ChangelogEntry[] = [
  *   （minBuild/maxBuild）は数値比較のままにする。版を使うのは**表示層だけ**。
  */
 export function formatChangelogHeading(entry: ChangelogEntry): string {
-  return entry.version ? `v${entry.version}（${entry.date}）` : `build ${entry.build}（${entry.date}）`
+  // 版を持つエントリでも **build を必ず併記する**。書式は設定＞アプリ情報の
+  // `formatVersionLabel`（`v1.0.0 (build 212)`）と1文字も違えない。
+  // ⚠ 版だけにすると、同じ版の別ビルド（提出→リジェクト→再提出で build だけ増える）を
+  //   区別できず、不具合報告でどの成果物の話か聞き取れなくなる。
+  return entry.version
+    ? `v${entry.version} (build ${entry.build})（${entry.date}）`
+    : `build ${entry.build}（${entry.date}）`
 }
 
 /** build番号の降順（新しい順）に並べ替える。 */
