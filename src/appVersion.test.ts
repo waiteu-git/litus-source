@@ -10,6 +10,13 @@ describe('formatVersionLabel', () => {
     expect(formatVersionLabel('1.0.0', '76')).toBe('v1.0.0 (build 76)')
   })
 
+  // 🔴 2026-09-05 裁定: build は内部管理と配信しないテスト版にのみ使う。
+  // production では版だけを出す（呼び出し側が isPrerelease(RELEASE_STAGE) を渡す）。
+  it('showBuild=false なら build を出さない（production の表示）', () => {
+    expect(formatVersionLabel('1.0.1', 212, false)).toBe('v1.0.1')
+    expect(formatVersionLabel('1.0.1', 212, true)).toBe('v1.0.1 (build 212)')
+  })
+
   it('build 欠落時は version のみ', () => {
     expect(formatVersionLabel('1.2.0', null)).toBe('v1.2.0')
     expect(formatVersionLabel('1.2.0', undefined)).toBe('v1.2.0')

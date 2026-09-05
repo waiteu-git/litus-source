@@ -26,7 +26,7 @@ import { HOME_LAYOUT_OPS, HOME_SECTION_META } from '../home/homeSections'
 import { SUBJECT_LAYOUT_OPS, SUBJECT_SECTION_META } from '../subject/subjectSections'
 import * as Application from 'expo-application'
 import { formatVersionLabel } from '../appVersion'
-import { RELEASE_STAGE, devBadgeSuffix } from '../releaseStage'
+import { RELEASE_STAGE, devBadgeSuffix, isPrerelease } from '../releaseStage'
 import { formatSubmitDiag, type SubmitDiag } from '../attendance/submitDiag'
 import { clearSubmitDiags, loadSubmitDiags } from '../storage/submitDiagStore'
 import { useSync } from '../sync/SyncProvider'
@@ -434,7 +434,7 @@ export default function SettingsScreen() {
         <Accordion title="アプリ情報" icon="information-circle-outline">
           <View style={ui.card}>
             <Text style={{ color: ui.valueColor, fontWeight: '500' }}>
-              リタス {formatVersionLabel(Application.nativeApplicationVersion, Application.nativeBuildVersion)}
+              リタス {formatVersionLabel(Application.nativeApplicationVersion, Application.nativeBuildVersion, isPrerelease(RELEASE_STAGE))}
               {devBadgeSuffix(RELEASE_STAGE)}
             </Text>
             <Pressable onPress={() => Linking.openURL('https://litus.waiteu.dev/')}>

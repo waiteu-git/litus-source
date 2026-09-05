@@ -87,9 +87,9 @@ describe('🔴 changelog と app.json の版が一致する', () => {
 describe('formatChangelogHeading', () => {
   // 表示は React なので vitest から見られない。**見出しを組む純粋関数**をここで縛る
   // （設計 `docs/design/2026-09-05-changelog-by-version.md` §4-Q5）。
-  it('version があれば v{版} (build N)（日付）を返す', () => {
+  it('version があれば v{版}（日付）を返す', () => {
     expect(formatChangelogHeading({ build: 212, version: '1.1.0', date: '2026/09/05', items: ['a'] })).toBe(
-      'v1.1.0 (build 212)（2026/09/05）',
+      'v1.1.0（2026/09/05）',
     )
   })
 
@@ -108,8 +108,8 @@ describe('formatChangelogHeading', () => {
   // （付けても情報が増えず、畳むと1エントリに約400項目入って読めなくなる＝設計 §5）。
   it('CHANGELOG の先頭（212）は版の見出しになる', () => {
     expect(CHANGELOG[0].build).toBe(212)
-    expect(CHANGELOG[0].version).toBe('1.0.0')
-    expect(formatChangelogHeading(CHANGELOG[0])).toBe('v1.0.0 (build 212)（2026/09/05）')
+    expect(CHANGELOG[0].version).toBe('1.0.1')
+    expect(formatChangelogHeading(CHANGELOG[0])).toBe('v1.0.1（2026/09/05）')
   })
 })
 
