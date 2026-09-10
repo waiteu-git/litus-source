@@ -2,8 +2,9 @@
 
 東京理科大学の学生向け非公式モバイルアプリ（iOS / Android）。LETUSの課題締切通知と、CLASSの時間割・出席リマインドをスマホ単体で提供する。
 
-- 初版 **v1.0.0** を2026年9月（後期開始）公開目標で開発中
-- 事前登録: https://lms.waiteu.dev/app
+- **v1.0.1** を配信中（日本のみ）
+  - [App Store](https://apps.apple.com/jp/app/id6799900160)（2026-09-01 配信開始）
+  - [Google Play](https://play.google.com/store/apps/details?id=dev.waiteu.litus)（2026-09-04 配信開始・**オープンテスト**）
 - 前身・関連: [LETUS Task Watcher](https://lms.waiteu.dev)（Chrome拡張。バックエンドを共用）
 
 ## 開発
