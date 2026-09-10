@@ -25,6 +25,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 213,
+    version: '1.0.2',
+    date: '2026/09/10',
+    items: [
+      'アプリのアイコンを新しくしました。これまでのアイコンは、開発ツール「Vite」のロゴとほぼ同じ形のまま使ってしまっていたため、リタス独自のマークに差し替えました。ご指摘くださった方に感謝します',
+    ],
+  },
+  {
     build: 212,
     version: '1.0.1',
     date: '2026/09/05',

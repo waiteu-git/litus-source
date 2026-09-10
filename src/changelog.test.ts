@@ -103,13 +103,24 @@ describe('formatChangelogHeading', () => {
     )
   })
 
-  // 🔴 版単位表示は 212 が1件目。版の値は 1.0.0（自動登録＝積み荷②を降ろしたので機能追加が無く、
-  // 版は上げない）。⚠ 既存49件も中身は v1.0.0 のビルドだが、遡及で version を付けない
-  // （付けても情報が増えず、畳むと1エントリに約400項目入って読めなくなる＝設計 §5）。
-  it('CHANGELOG の先頭（212）は版の見出しになる', () => {
-    expect(CHANGELOG[0].build).toBe(212)
-    expect(CHANGELOG[0].version).toBe('1.0.1')
-    expect(formatChangelogHeading(CHANGELOG[0])).toBe('v1.0.1（2026/09/05）')
+  // 🔴 版単位表示は 212 が1件目（版は 1.0.1）。⚠ 既存49件も中身は v1.0.0 のビルドだが、
+  // 遡及で version を付けない（付けても情報が増えず、畳むと1エントリに約400項目入って
+  // 読めなくなる＝設計 §5）。
+  //
+  // ⚠**このテストで先頭の build 番号を固定しない。** 以前は `toBe(212)` と書いており、
+  // 213 を切った瞬間に「実装は正しいのにテストだけ落ちる」形になった（2026-09-10 に実際に踏んだ）。
+  // 守りたいのは「先頭は版表示になる」という性質であって、特定の番号ではない。
+  it('CHANGELOG の先頭は必ず版の見出しになる（番号は固定しない）', () => {
+    const head = CHANGELOG[0]
+    expect(head.version, '新しいエントリには version を付ける').toBeTruthy()
+    expect(formatChangelogHeading(head)).toBe(`v${head.version}（${head.date}）`)
+  })
+
+  // 版表示の起点である 212 は歴史上の事実なので固定してよい（動かない）。
+  it('212 は v1.0.1 の見出しのまま', () => {
+    const e = CHANGELOG.find((x) => x.build === 212)
+    expect(e).toBeDefined()
+    expect(formatChangelogHeading(e!)).toBe('v1.0.1（2026/09/05）')
   })
 })
 
