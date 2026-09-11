@@ -25,6 +25,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 215,
+    version: '1.0.3',
+    date: '2026/09/11',
+    items: [
+      '起動画面で、上がっていくロゴが通り過ぎてから LITUS の文字が出るようにしました',
+    ],
+  },
+  {
     build: 214,
     version: '1.0.3',
     date: '2026/09/11',
