@@ -20,6 +20,8 @@ function warmAnimationPart(part: string): string {
   }
   // イントロ（both フィル）: duration/delay を捨てて 0s に。both で最終フレームが即適用される。
   // both を持たない未知パターンは変換せず素通し（生成物が将来変わってもフル版へ自然フォールバック）。
+  // ⚠この素通しに依存しているものがある: boltRise（ロゴの上昇）と LITUS の層の fadeUp（上昇を待つ）はどちらも
+  // backwards で、warm でも同じ時間で動く必要がある。ここを「イントロは全部畳む」に変えると warm で重なりが戻る。
   if (!p.includes('both')) return part
   const name = p.split(/\s+/)[0]
   return `${name} 0s both`

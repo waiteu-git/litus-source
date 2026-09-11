@@ -65,4 +65,13 @@ describe('toWarmBootHtml', () => {
   it('both も infinite も無い未知パターンは素通し（フォールバック）', () => {
     expect(toWarmBootHtml('animation:spin 2s linear')).toBe('animation:spin 2s linear')
   })
+
+  it('backwards フィルも素通し（ロゴの上昇と LITUS の待ちが warm でも同じ時間で動くのはこれに依存）', () => {
+    expect(
+      toWarmBootHtml('animation:boltRise 0.9s cubic-bezier(0.16,1,0.3,1) 0.15s backwards'),
+    ).toBe('animation:boltRise 0.9s cubic-bezier(0.16,1,0.3,1) 0.15s backwards')
+    expect(
+      toWarmBootHtml('animation:fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.3s backwards'),
+    ).toBe('animation:fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.3s backwards')
+  })
 })

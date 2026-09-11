@@ -9,7 +9,17 @@
  * 121.2px＝このレイアウトで「画面中央 − ロゴの中心」（高さ 740/844/932 で実測して一定）。1.3889＝200/144。
  * 包みの div が上昇、img が呼吸を持つ（同じ transform を2つのアニメで奪い合わない）。backwards 指定なので
  * bootLogoWarm の短縮変換（both のイントロだけを 0s に畳む）で消えず、2回目以降の起動でも同じつなぎになる。
- * 列の高さ（ロゴ・52px の間隔・LITUS 90px・リタス＋バー）を変えたら 121.2 を測り直すこと。 */
+ * 列の高さ（ロゴ・52px の間隔・LITUS 90px・リタス＋バー）を変えたら 121.2 を測り直すこと。
+ * 2026-09-11（build 215）: LITUS の文字の層（overflow:hidden の3枚目）に fadeUp 0.6s … 0.3s backwards を足した。
+ * warm 版（その日2回目以降＝bootLogoWarm がイントロの both を 0s に畳む）では LITUS が t=0 から出ている一方、
+ * ロゴは画面中央から 0.15s で上がり始めるため、t=0〜0.18s にロゴが「I・T・U」に重なっていた（実機報告）。
+ * backwards なので warm 変換を素通りし、warm でも 0.3s まで文字を出さずに待つ。full 版では LITUS の文字自体が
+ * 1.1s まで透明で、待ちは 0.9s に終わるので見た目は変わらない（白 412x915 の 0〜1.2s を画素比較して差なし）。
+ * 数値は起動画面の重なり計測（ヘッドレス Chrome・画素で測定・412x915/390x844 × 白/翠/ダーク × full/warm）で決めた:
+ * warm の最小間隔 74px（直す前は −6.5px＝重なり）、full は 15.9px のまま（直す前と同じ）。
+ * 待ちの下限: 開始を 0.19s にすると 10px、0.18s 以下では重なりが戻る。余裕（同じ待ちを文字ブロック全体に掛けた案で
+ * 測った値。warm の最小間隔と出方はこの案と一致）: 上昇の開始が +50ms で 54.5px、+100ms で 25px、マークが 1.5 倍で 53.5px。
+ * boltRise（開始・時間・曲線・121.2/1.3889）かマークを変えたら測り直すこと。 */
 
 export const BOOT_LOGO_WHITE = `<!DOCTYPE html>
 <html><head>
@@ -85,7 +95,7 @@ body{font-family:'Outfit','Zen Kaku Gothic New',system-ui,sans-serif;overflow:hi
     <div style="position:absolute;inset:0;display:flex;align-items:center;font-weight:600;color:#a7bcb3;animation:mergeBot 2.4s linear 0.45s both;">
       <span style="width:66px;flex-shrink:0;"></span><span style="letter-spacing:0.02em;">LETUS</span>
     </div>
-    <div style="position:absolute;inset:0;display:flex;align-items:center;font-weight:700;overflow:hidden;">
+    <div style="position:absolute;inset:0;display:flex;align-items:center;font-weight:700;overflow:hidden;animation:fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.3s backwards;">
       <span style="width:66px;flex-shrink:0;"></span>
       <span style="position:relative;letter-spacing:0.02em;display:inline-flex;"><span style="display:inline-block;color:#12332a;animation:liIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.00s infinite;">L</span><span style="display:inline-block;color:#12332a;animation:liIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.06s infinite;">I</span><span style="display:inline-block;color:#0f9e75;animation:tusIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.12s infinite;">T</span><span style="display:inline-block;color:#0f9e75;animation:tusIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.18s infinite;">U</span><span style="display:inline-block;color:#0f9e75;animation:tusIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.24s infinite;">S</span></span>
     </div>
@@ -176,7 +186,7 @@ body{font-family:'Outfit','Zen Kaku Gothic New',system-ui,sans-serif;overflow:hi
     <div style="position:absolute;inset:0;display:flex;align-items:center;font-weight:600;color:rgba(255,255,255,0.6);animation:mergeBot 2.4s linear 0.45s both;">
       <span style="width:66px;flex-shrink:0;"></span><span style="letter-spacing:0.02em;">LETUS</span>
     </div>
-    <div style="position:absolute;inset:0;display:flex;align-items:center;font-weight:700;overflow:hidden;">
+    <div style="position:absolute;inset:0;display:flex;align-items:center;font-weight:700;overflow:hidden;animation:fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.3s backwards;">
       <span style="width:66px;flex-shrink:0;"></span>
       <span style="position:relative;letter-spacing:0.02em;display:inline-flex;"><span style="display:inline-block;color:#ffffff;animation:liIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.00s infinite;">L</span><span style="display:inline-block;color:#ffffff;animation:liIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.06s infinite;">I</span><span style="display:inline-block;color:#ffffff;animation:tusIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.12s infinite;">T</span><span style="display:inline-block;color:#ffffff;animation:tusIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.18s infinite;">U</span><span style="display:inline-block;color:#ffffff;animation:tusIn 2.4s 0.45s both, letterWave 1.4s ease-in-out 4.24s infinite;">S</span></span>
     </div>
