@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    リタス（Litus）のブランドマーク「カタカナ三画」の原本（2026-09-11 採用）。
+    This file is the single source of the mark. The generator (tools/make_mark.py in the store-assets
+    workspace) derives every other variant from the two path strings below: full-bleed app icon
+    (this file as is), rounded web favicon, Android adaptive foreground (the same paths at 2/3 about
+    the centre, over background colour #0F9E75, plus a monochrome layer), splash (green mark, long
+    side 0.51), notification (white mark, long side 0.83) and inline web SVGs. See docs/brand-mark.md.
+
+    Provenance: every coordinate below was computed by hand-written geometry. No font outline, no
+    existing logo, no icon set, no template image and no generated image was used. Straight lines and
+    circular arcs only; path coordinates written to 3 decimals. Before adoption the mark was checked
+    by image search (Google Lens, colour and silhouette): no app or logo with the same composition.
+    Strokes: A = リ 1st stroke = タ ノ / B = リ 2nd stroke + the ㇇ shared by タ and ス /
+    C = タ ヽ = ス ㇏ (starts inside the hook, crosses B's sweep, ends outside).
+
+    Icon frame: W = 1024, a full square (iOS applies its own corner mask; none is drawn).
+    Stroke weight t = 116 (0.113W), uniform for all three strokes.
+    Ends: round caps, radius t/2 = 58; each cap is written as two quarter arcs through its apex.
+    Joins: union of the stroke shapes only (B and C merged into one contour; A separate).
+
+    Centre-lines (icon frame; stroke-width 116, round caps):
+      A  M284,274 L259,512
+           tilt 6.00 deg from vertical; top cap apex at y = 216
+      B  M474,278 L604,278 A123,123 0 0 1 727,401 L727,431 A246,246 0 0 1 611.36,639.62 L403.588,769.45
+           horizontal 130 -> corner r 123 centre (604,401) -> vertical 30
+           -> sweep r 246 centre (481,431) turning 58 deg -> straight tail L 245,
+           32 deg below horizontal (tangent to the sweep). Sweep end (611.36,639.62), tail end (403.588,769.45).
+      C  M474,468 L731,725
+           exactly 45 deg below horizontal, length 363.453 (= 257 x sqrt 2).
+           Start x = B's start x (the two round ends sit one above the other).
+           C crosses B's centre-line on the sweep at (631.6,625.6), 52.27 deg along it, crossing angle 82.7 deg
+           (v2: 82.4; its comment gave the supplement, 97.6).
+           Along C's centre-line: 222.8 from its start to the crossing, 140.6 from the crossing to its end.
+
+    Where C's edges meet B's edges (exact line-circle / line-line intersections, used in the path), with the
+    distance along B's edge to the nearest arc/line seam (none is closer than 10):
+      X1 C upper edge x B outer sweep (714.1,626.1) seam 95.9   X2 C lower edge x B outer tail (624.1,700.1) seam 21.3
+      X3 C lower edge x B inner tail  (539.9,615.9) seam 48.1   X4 C upper edge x B inner sweep (631.6,543.6) seam 69.6
+    Crotch at each of them = angle of the green wedge between the two edges that meet there (v2 -> final, deg):
+      X1 right of the crossing, outside the hook, opens right  94.8 ->  95.1
+      X2 below the crossing, opens downward                   107.4 -> 103.0   (v2 as written: 106.7)
+      X3 left of the crossing, the wedge opening toward A      72.3 ->  77.0
+      X4 above the crossing, inside the hook, opens upward     82.3 ->  81.8
+      X2 + X3 = 180 in final because both lie on the two parallel edges of B's straight tail.
+
+    Optical alignment (round cap apex vs flat edge -> the round end overshoots by 4 = 0.034t):
+      top: A apex y = 216, B flat top y = 220.   right: C apex x = 789, B flat shoulder x = 785.
+
+    Checks (icon-frame units):
+      bounding box x 200.8-789 (588.2 = 0.574W), y 215.8-827.5 (611.8 = 0.597W)
+      bbox centre (494.9,521.6); area centroid (528.5,494.9); their average (511.7,508.3) sits on (512,508)
+      (optical centre slightly above the geometric centre), via the whole-unit shift (-2,-2) of the construction frame.
+      C beyond B's outer edge: straight part 0.71t (upper edge) / 0.80t (lower edge) + cap; depth from the
+      chord X1-X2 to the tip 1.25t.
+      visible gaps: A-B 74.0, C start-B top (the hook's entrance) 74.0, A-C 93.2, B tail end-A 179.3. All >= 0.5t.
+      counters (largest inscribed circle): inside B's hook 143; crossing node 158.
+      reach from the canvas centre: max 387.7.
+      path vs centre-line field: XOR thickness 0.50 (rasterised at 4x); every arc re-fitted from the written
+      endpoints lands within 0.001 of its intended centre; shortest arc chord 82.0.
+      small sizes (smallsize.py; Lanczos, worst of 16 sub-pixel phases): from 29px up every visible gap keeps at
+      least one fully green pixel; 24px is borderline; at 16px none does, the crossing closes into one blob and
+      C's exit is left as a 1-2 pixel nub, so a 16px favicon would need its own pixel-fitted drawing (none made here).
+      look-alikes (review of 2026-09-11: 3459 simple-icons + 4054 Iconify marks redrawn and scored): nearest IoU 0.576,
+      against 0.905 between v2 and final themselves. C's 45 deg was weighed there and kept.
+
+    Changes from v2 (numbers are v2 -> final, before the common shift):
+      - A top: apex y 222 -> 218 (bottom end kept at (261,514)): tilt 6.10 -> 6.00 deg. The round apex no
+        longer reads 3-5 lower than B's flat top.
+      - C: angle 40.33 -> 45 deg, end (729,684.8) -> (733,727). The part outside B grows from a knob
+        (straight 0.41t/0.52t, depth 0.96t) to a stroke end (straight 0.71t/0.80t, depth 1.25t).
+        Of the crotches, the left wedge X3 opens 72.3 -> 77.0 and the one below the crossing, X2,
+        narrows 107.4 -> 103.0. Start, crossing structure and right edge alignment kept
+        (the apex now overshoots by 4).
+      - Hygiene: v2 put X2 1.6 before the sweep/tail seam and wrote a 1.7-long r304 arc between them whose
+        centre, re-fitted from 0.1-rounded endpoints, drifted about 3 units; now X2 is 21.3 past the seam on the tail,
+        no short arc remains, and all coordinates are written to 3 decimals.
+      - Whole mark shifted (-2,-2) so the placement rule still holds after the two changes.
+      - Record fixes (text only; no coordinate changed): the first issue of this file said "the lower notch opens
+        72.6 -> 77.0". 72.6 was 180 minus v2's X2, and 77.0 is X3, hence the named table above. It also listed two
+        v2 "gaps", C start-B tail 102.3 and C start-B vertical/sweep 103.8; both lines run through C's own ink, so
+        they are not visible gaps and are no longer listed.
+    Not changed on purpose: t, B's skeleton (130 / 123 / 30 / 246 turning 58 / tail 245), C's start, A's bottom, the gap A-B.
+  -->
+  <rect x="0" y="0" width="1024" height="1024" fill="#0F9E75"/>
+  <g fill="#FFFFFF">
+    <!-- A -->
+    <path d="M341.683,280.059 L316.683,518.059 A58,58 0 0 1 252.941,569.683 A58,58 0 0 1 201.317,505.941 L226.317,267.941 A58,58 0 0 1 290.059,216.317 A58,58 0 0 1 341.683,280.059 Z"/>
+    <!-- B + C (one contour = union; X1-X4 are exact line-circle / line-line intersections) -->
+    <path d="M474,220 L604,220 A181,181 0 0 1 785,401 L785,431 A304,304 0 0 1 714.13,626.106 L772.012,683.988 A58,58 0 0 1 772.012,766.012 A58,58 0 0 1 689.988,766.012 L624.055,700.079 L434.324,818.637 A58,58 0 0 1 354.402,800.185 A58,58 0 0 1 372.853,720.263 L539.873,615.898 L432.988,509.012 A58,58 0 0 1 432.988,426.988 A58,58 0 0 1 515.012,426.988 L631.582,543.557 A188,188 0 0 0 669,431 L669,401 A65,65 0 0 0 604,336 L474,336 A58,58 0 0 1 416,278 A58,58 0 0 1 474,220 Z"/>
+  </g>
+</svg>

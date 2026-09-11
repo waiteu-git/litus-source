@@ -25,6 +25,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 214,
+    version: '1.0.3',
+    date: '2026/09/11',
+    items: [
+      'アプリのアイコンを新しくしました。カタカナの「リ・タ・ス」を組み合わせたマークです',
+    ],
+  },
+  {
     build: 213,
     version: '1.0.2',
     date: '2026/09/10',

@@ -1,6 +1,16 @@
 #!/usr/bin/env node
 /**
- * assets/icon.png（ブランドの稲妻マーク・翠ベタ塗り on 白・アルファ無し）から、
+ * ⛔ 2026-09-11 から使わない（実行すると即座に止まる）。
+ * 通知アイコンの生成は ~/dev/litus-store-assets/tools/make_mark.py に一本化した（原本 assets/brand/litus-mark.svg）。
+ * このスクリプトは「assets/icon.png＝白地に翠のインク」という旧前提で被覆率をアルファへ変換する。現行の icon.png は
+ * 翠の地に白の記号なので計算が反転し、192px の中央が白い不透明の四角になる。しかも形式チェックも vitest の
+ * ヘッダ検査も通るので、黙って再発する（2026-09-11 の独立審査で実測）。以下は記録として残す旧実装。
+ */
+console.error('make-notification-icon.mjs は使わない。~/dev/litus-store-assets/tools/make_mark.py で生成する（docs/brand-mark.md）')
+process.exit(1)
+
+/**
+ * assets/icon.png（旧マーク・翠ベタ塗り on 白・アルファ無し＝2026-09-10 以前の前提）から、
  * Android 通知の small icon 用の白抜き PNG（assets/notification-icon.png）を生成する。
  *
  * ステータスバーの small icon は**アルファチャンネルだけ**を使う。したがって

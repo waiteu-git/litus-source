@@ -7,7 +7,7 @@
  * 各 dpi の notification_icon.png を**削除する**（withNotificationsAndroid.js）。
  * その結果 ExpoNotificationBuilder は `context.applicationInfo.icon`（＝@mipmap/ic_launcher）へ
  * フォールバックする。ステータスバーの小アイコンは**アルファチャンネルだけ**を使うため、
- * ランチャーアイコン（adaptive-icon の背景が #ffffff べた塗り・元素材 assets/icon.png は
+ * ランチャーアイコン（adaptive-icon の背景は不透明のべた塗り・元素材 assets/icon.png は
  * アルファ無しの colorType 2）を渡すと全画素が不透明扱いになり、
  * **アイコン領域が丸ごと塗り潰された四角**として描かれる。
  *
