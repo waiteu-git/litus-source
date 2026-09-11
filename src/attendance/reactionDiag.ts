@@ -73,6 +73,34 @@ export type ReactionDiagInput = {
   ajaxServerError?: string
 }
 
+/** 提出中に通ったページの記録の上限（診断の1行を長くしすぎない）。 */
+export const REACTION_TRAIL_MAX = 6
+
+/**
+ * 提出中に非表示WebViewが通ったページを1つ足す（純粋）。`portal:Xua00102` のように
+ * ページ種別と画面ID（URL のファイル名部分だけ）を残す。クエリや本文は残さない。
+ * 同じものが続いたら畳む。上限を超えた分は捨てて、最後に `…` を1つだけ付ける。
+ *
+ * 失敗した時に「②へ着いてから戻された」のか「②が一度も来なかった」のかを記録で見分けるためのもの
+ * （2026-09-11 の実機報告は「提出フォームが見つからない・②待ち8回」しか残っておらず、どちらか分からなかった）。
+ */
+export function appendReactionTrail(trail: readonly string[], kind: string, url?: string): string[] {
+  const id = /\/([A-Za-z]{3}\d{5})\.xhtml/.exec(url ?? '')?.[1]
+  const step = id ? `${kind}:${id}` : kind
+  if (trail[trail.length - 1] === step) return [...trail]
+  if (trail.length >= REACTION_TRAIL_MAX) return trail[trail.length - 1] === '…' ? [...trail] : [...trail, '…']
+  return [...trail, step]
+}
+
+/** 診断の補足欄（②待ちの回数と、提出中に通ったページ）。どちらも無ければ undefined（純粋）。 */
+export function formatReactionNote(fillTries: number, trail: readonly string[]): string | undefined {
+  const parts = [
+    fillTries > 0 ? `②待ち${fillTries}回` : null,
+    trail.length > 0 ? `遷移=${trail.join('>')}` : null,
+  ].filter((x): x is string => x !== null)
+  return parts.length > 0 ? parts.join('・') : undefined
+}
+
 /** リアペ提出の診断を、出席送信と同じ器（SubmitDiag）へ変換する（純粋・nowIso は注入）。 */
 export function toReactionDiag(
   r: ReactionDiagInput,

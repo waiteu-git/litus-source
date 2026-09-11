@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toReactionDiag, reactionFailLabel } from './reactionDiag'
+import { toReactionDiag, reactionFailLabel, appendReactionTrail, formatReactionNote, REACTION_TRAIL_MAX } from './reactionDiag'
 import { formatSubmitDiag } from './submitDiag'
 
 const ctx = { nowIso: '2026-07-20T04:56:42.060Z', courseName: '法学１ （月３）' }
@@ -120,5 +120,48 @@ describe('リアペ診断もサーバ側の失敗を落とさない', () => {
     expect(s).toContain('（任意・再提出）')
     // 本文そのものは残さない（長さのみ）。
     expect(s).toContain('本文=120文字')
+  })
+})
+
+describe('提出中に通ったページの記録（appendReactionTrail / formatReactionNote）', () => {
+  const U1 = 'https://class.admin.tus.ac.jp/uprx/up/xu/xut124/Xut12401.xhtml'
+  const U2 = 'https://class.admin.tus.ac.jp/uprx/up/xu/xua001/Xua00102.xhtml?x=1#y'
+
+  it('種別と画面IDだけを残す（クエリ・フラグメントは残さない）', () => {
+    const t = appendReactionTrail(appendReactionTrail([], 'attendance', U1), 'portal', U2)
+    expect(t).toEqual(['attendance:Xut12401', 'portal:Xua00102'])
+    expect(t.join('')).not.toContain('x=1')
+  })
+  it('画面IDが取れないURL・URL無しは種別だけ', () => {
+    expect(appendReactionTrail([], 'login', 'https://login.microsoftonline.com/abc')).toEqual(['login'])
+    expect(appendReactionTrail([], 'other')).toEqual(['other'])
+  })
+  it('同じものが続いたら畳む', () => {
+    const t = appendReactionTrail(appendReactionTrail([], 'portal', U2), 'portal', U2)
+    expect(t).toEqual(['portal:Xua00102'])
+  })
+  it('上限を超えたら捨てて「…」を1つだけ付ける', () => {
+    let t: string[] = []
+    for (let i = 0; i < REACTION_TRAIL_MAX + 5; i++) t = appendReactionTrail(t, i % 2 ? 'portal' : 'attendance', i % 2 ? U2 : U1)
+    expect(t).toHaveLength(REACTION_TRAIL_MAX + 1)
+    expect(t[t.length - 1]).toBe('…')
+  })
+  it('元の配列を書き換えない', () => {
+    const a = ['attendance:Xut12401']
+    appendReactionTrail(a, 'portal', U2)
+    expect(a).toEqual(['attendance:Xut12401'])
+  })
+  it('補足欄: ②待ちと遷移を並べる／どちらも無ければ undefined', () => {
+    expect(formatReactionNote(8, ['attendance:Xut12401', 'portal:Xua00102'])).toBe('②待ち8回・遷移=attendance:Xut12401>portal:Xua00102')
+    expect(formatReactionNote(0, ['portal:Xua00102'])).toBe('遷移=portal:Xua00102')
+    expect(formatReactionNote(3, [])).toBe('②待ち3回')
+    expect(formatReactionNote(0, [])).toBeUndefined()
+  })
+  it('診断の1行へそのまま載る（toReactionDiag の note）', () => {
+    const d = toReactionDiag(
+      { outcome: 'form-missing', required: true, resubmit: false, length: 13 },
+      { ...ctx, note: formatReactionNote(8, ['portal:Xua00102', 'attendance:Xut12401']) },
+    )
+    expect(d.note).toBe('必須・②待ち8回・遷移=portal:Xua00102>attendance:Xut12401')
   })
 })

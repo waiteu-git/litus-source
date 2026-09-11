@@ -33,9 +33,9 @@ import { buildSubmitReactionJs } from '../collect/reactionSubmit.private'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { parseReactionMessage, reactionSubmitAccepted } from '../collect/reactionMessage'
 import { canSubmitReaction, REACTION_FILL_MAX_TRIES, REACTION_FILL_RETRY_MS } from './reactionPaper'
-import { toReactionDiag, type ReactionOutcome } from './reactionDiag'
+import { appendReactionTrail, formatReactionNote, toReactionDiag, type ReactionOutcome } from './reactionDiag'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
-import { classifyClassPage } from './classifyClassPage'
+import { classifyClassPage, portalAction } from './classifyClassPage'
 import { isInActiveClassPeriod, attendedClassEndMin } from './classPeriod'
 import { useCourseActive } from './useCourseActive'
 import { canRecordAttendance, isAttendedNow, resolveAttendedNow, mergeAttendedRecord, todayKey, type AttendedRecord } from './attendedState'
@@ -189,7 +189,16 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const [code, setCode] = useState('')
   const [webviewKey, setWebviewKey] = useState(0)
   const [now, setNow] = useState(() => new Date())
-  const [revealClass, setRevealClass] = useState(false)
+  const [revealClass, setRevealClassState] = useState(false)
+  // onMessage／タイマー／前面復帰のクロージャから「利用者が CLASS の画面を見ているか」を読むための ref。
+  // 見ている間はエンジンが画面を動かさない（portalAction・前面復帰・定期取り直し）。
+  // 描画を待たずに効かせるため、書き込みは必ず setRevealClass を通す（ref と state を同時に更新する）。
+  const revealClassRef = useRef(false)
+  revealClassRef.current = revealClass
+  const setRevealClass = useCallback((b: boolean) => {
+    revealClassRef.current = b
+    setRevealClassState(b)
+  }, [])
   // 直近の送信時刻。submitOutcome の確認窓（無期限の「確認しています」を防ぐ）の起点。
   const [submitAt, setSubmitAt] = useState<number | null>(null)
   const [failCount, setFailCount] = useState(0)
@@ -209,6 +218,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const reactionBusyRef = useRef(false)
   const reactionTextRef = useRef('')
   const reactionFillTriesRef = useRef(0)
+  // 提出中に非表示WebViewが通ったページ（診断用。`portal:Xua00102` の形・本文やクエリは持たない）。
+  const reactionTrailRef = useRef<string[]>([])
   // この提出が「必須」だったか（submitReaction 時点の状態で確定させる。提出後は状態が変わるため
   // 都度参照だと判定がぶれる）。必須=.attendSuc 待ち／任意=リアペが提出済みになるのを待つ。
   const reactionRequiredRef = useRef(false)
@@ -346,7 +357,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // フォアグラウンド復帰時に再判定/リフレッシュ（オーケストレータのattendanceスロット）。送信中はスキップ。
   useEffect(() => {
     return subscribeForeground('attendance', () => {
-      if (phaseRef.current === 'submitting' || reactionBusyRef.current || !shouldRenderRef.current) return
+      // CLASSの画面を利用者が見ている間も触らない（取り直し＝出席ページへの遷移で、開いた画面を奪う）。
+      if (phaseRef.current === 'submitting' || reactionBusyRef.current || revealClassRef.current || !shouldRenderRef.current) return
       // 競合中の前面復帰は「PCを閉じて戻ってきた」可能性が高い。バックオフを畳み直して即1回試す。
       if (conflictRef.current) {
         resumeConflictRetry()
@@ -371,7 +383,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         shouldRenderRef.current &&
         !collectActiveRef.current &&
         phaseRef.current !== 'submitting' &&
-        !reactionBusyRef.current // リアペ提出中は②フォーム上に居る。取り直しで流し込みを壊さない
+        !reactionBusyRef.current && // リアペ提出中は②フォーム上に居る。取り直しで流し込みを壊さない
+        !revealClassRef.current // CLASSの画面を利用者が操作中。取り直しは出席ページへの遷移なので画面を奪う
       ) {
         refreshAttendance()
       }
@@ -492,6 +505,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   // 時間がかかることがあり、単発タイムアウトで「取得できませんでした」を出すと、実際は出席登録が
   // 済んでCLASSも正常なのに失敗表示になってしまう。競合中・非表示中は再試行しない（別経路が担う）。
   function onNavTimeout() {
+    // 利用者が CLASS の画面を見ている間は WebView を作り直さない（作り直すと操作中の画面が CLASS の入口へ戻る。
+    // 取得失敗 → 「CLASSの画面を表示」の経路は booting のままページを渡り歩くので、ここに当たりうる）。
+    // 何もしないと閉じた後に booting のまま止まりうるので、張り直して閉じた後の判定へ持ち越す。
+    if (revealClassRef.current) {
+      armNavTimeout()
+      return
+    }
     if (navTimeoutRetryRef.current < NAV_TIMEOUT_RETRIES && shouldRenderRef.current && !conflictRef.current) {
       navTimeoutRetryRef.current += 1
       portalTriesRef.current = 0
@@ -554,8 +574,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
         {
           nowIso: new Date().toISOString(),
           courseName: state.reception?.courseName ?? null,
-          // ②フォーム待ちのポーリング回数。form-missing で落ちた時に「何秒待ったか」が分かる。
-          note: reactionFillTriesRef.current > 0 ? `②待ち${reactionFillTriesRef.current}回` : undefined,
+          // ②フォーム待ちのポーリング回数（form-missing で落ちた時に「何秒待ったか」）と、提出中に通ったページ
+          // （「②へ着いてから戻された」のか「②が来なかった」のかを見分ける）。
+          note: formatReactionNote(reactionFillTriesRef.current, reactionTrailRef.current),
         },
       ),
     ).catch(() => undefined)
@@ -566,6 +587,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     reactionBusyRef.current = false
     recordReactionDiag(outcome)
     setReactionSubmitState({ status: 'failed', message })
+    // 提出中は portalAction が②に留めていた。畳んだら現在地を取り直し、②に居れば通常どおり
+    // 出席ページへ戻す（戻さないと onAttendanceRef が false のままで受付状況の取り直しが止まる）。
+    // 利用者が CLASS の画面を見ている間は動かさない。
+    if (!revealClassRef.current && shouldRenderRef.current && !collectActiveRef.current) inject(DETECT_PAGE_JS)
   }
 
   function resetReaction() {
@@ -584,6 +609,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     }
     reactionTextRef.current = text
     reactionFillTriesRef.current = 0
+    reactionTrailRef.current = []
     // 提出開始時の状態で「必須か」「既に提出済みか（＝再提出）」を確定させる
     // （提出後は状態が変わるので後から見ない）。
     reactionRequiredRef.current = receptionStatusRef.current === 'reaction_pending'
@@ -633,6 +659,13 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       })
       dispatch({ kind: 'page', page: kind })
       onAttendanceRef.current = kind === 'attendance'
+      if (reactionBusyRef.current) {
+        reactionTrailRef.current = appendReactionTrail(
+          reactionTrailRef.current,
+          kind,
+          typeof parsed.url === 'string' ? parsed.url : undefined,
+        )
+      }
       if (kind !== 'conflict') setConflict(false)
       if (kind === 'login') {
         loginGate.requireLogin()
@@ -656,7 +689,12 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       } else if (kind === 'splash') {
         inject(ENTER_CLASS_PC_JS)
       } else if (kind === 'portal') {
-        if (portalTriesRef.current < 2) {
+        // リアペの提出ページ（②）も portal に落ちる。利用者が CLASS の画面で操作している間と、
+        // アプリ内提出が②へ向かっている間は、出席ページへ戻しに行かない（戻すと②を開いた直後に
+        // ①へ引き戻す＝2026-09-11 実機報告の真因と推定）。回数も数えない（autoRestart へ進ませない）。
+        if (portalAction({ revealClass: revealClassRef.current, reactionBusy: reactionBusyRef.current }) === 'stay') {
+          // 何もしない
+        } else if (portalTriesRef.current < 2) {
           portalTriesRef.current += 1
           inject(OPEN_ATTENDANCE_JS)
           setTimeout(() => inject(DETECT_PAGE_JS), 1500)
@@ -679,7 +717,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
           failReaction('リアクションペーパーの画面を開けませんでした。「CLASSの画面で書く」から提出してください', 'open-failed')
           return
         }
-        // ①→②はPrimeFacesのAJAX postback（ページロードなし＝onLoadEnd不発）。再描画を待って流し込む。
+        // ①→②は URL の変わるページ遷移（Xua00102・2026-07-17 アドレスバー実測）と見られ、着地で onLoadEnd →
+        // DETECT_PAGE_JS が走り portal と判定される。提出中は portalAction が②に留める。描画を待って流し込み、
+        // まだなら form-missing で待ち直す。（旧コメントは「AJAX postback＝onLoadEnd 不発」としていたが、
+        // 実URLが変わる以上ページロードと推定され、portal 判定が②から①へ引き戻していたと見ている＝2026-09-11 実機報告。）
         scheduleReaction(() => inject(buildSubmitReactionJs(reactionTextRef.current)), 1800)
         return
       }
@@ -1082,6 +1123,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       failCount,
       submitAt,
       revealClass,
+      setRevealClass,
       timetable,
       setAttendanceFocused,
     ],

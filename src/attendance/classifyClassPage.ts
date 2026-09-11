@@ -59,3 +59,20 @@ export function classifyClassPage(s: ClassPageSignal): ClassPageKind {
   if (s.hasClassMenu) return 'portal'
   return 'other'
 }
+
+/**
+ * portal と判定したページで、エンジンが出席ページへ戻しに行ってよいか（純粋）。
+ *
+ * portal には「出欠管理」メニューを持つ**全ページ**が落ちる。リアペの提出ページ（Xua00102）も
+ * 前後ナビを持たないので portal になる（上の isAttendanceUrl のとおり、意図して attendance にしない）。
+ * ①（出席ページ）→②（提出ページ）は URL の変わる遷移（2026-07-17 アドレスバー実測）＝ページロードと見られ、
+ * 着地すると onLoadEnd → DETECT_PAGE_JS が走る。ここで無条件に出席ページへ戻すと、②を開いた直後に①へ
+ * 引き戻す（2026-09-11 実機報告の症状と一致: 「CLASSの画面で書く」から開いたフォームがすぐ出席画面に戻る／
+ * アプリ内提出が「提出フォームが見つからない」で落ちる。実機での確認は未了）。
+ * 次の2つの間は、エンジンは画面を動かさない:
+ *   ・revealClass: 利用者が CLASS の画面を見て操作している
+ *   ・reactionBusy: アプリ内のリアペ提出が②フォームへ向かっている／流し込んでいる
+ */
+export function portalAction(ctx: { revealClass: boolean; reactionBusy: boolean }): 'stay' | 'open-attendance' {
+  return ctx.revealClass || ctx.reactionBusy ? 'stay' : 'open-attendance'
+}
