@@ -60,12 +60,14 @@ import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 import { swipeTargetDay, type SwipeDirection } from '../timetableEvents/daySwipe'
 import { shouldShowTodayPill } from '../timetableEvents/todayPill'
-import { weekDatesFrom, dayHeadLabel, weekRangeLabelFrom } from '../timetableEvents/weekDates'
+import { weekDatesFrom, dayHeadLabel, weekRangeLabelFrom, dayTabA11yLabel } from '../timetableEvents/weekDates'
 import { viewedWeekMonday, currentWeekOffset, clampOffset, weekOrdinal } from '../timetableEvents/weekNav'
 import { deriveTermBounds } from '../timetableEvents/termBounds'
 import { shouldShowThisWeekChip } from '../timetableEvents/thisWeekPill'
 import { RADIUS, SHADOW, DIM_OPACITY } from '../ui/scale'
 import { DUR, EASE, SHIFT } from '../ui/motion'
+import { reducedShift } from '../ui/reducedMotion'
+import { useReducedMotion } from '../ui/useReducedMotion'
 import { Badge } from '../ui/Badge'
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
@@ -380,8 +382,10 @@ export default function TimetableScreen() {
   // 縦ScrollView＋pull-to-refreshと共存させるため、capture段のmove判定で
   // 「横方向が明確に優勢なドラッグ」だけを奪う（タップ・縦スクロールは素通し）。
   // days/selDay はレンダーごとに変わるので ref 経由で最新値を参照する。
-  const swipeStateRef = useRef({ days, selDay, enabled: false })
-  swipeStateRef.current = { days, selDay, enabled: timetableView === 'list' && !!col }
+  // Reduce Motion も同じ ref で読む（PanResponder は初回に1回だけ作られる＝E0 禁止事項3・M10）。
+  const reduce = useReducedMotion()
+  const swipeStateRef = useRef({ days, selDay, enabled: false, reduce: false })
+  swipeStateRef.current = { days, selDay, enabled: timetableView === 'list' && !!col, reduce }
   const swipeShift = useRef(new Animated.Value(0)).current
   const swipeOpacity = useRef(new Animated.Value(1)).current
   const swipePan = useRef(
@@ -392,13 +396,14 @@ export default function TimetableScreen() {
       onPanResponderRelease: (_e, g) => {
         if (Math.abs(g.dx) < 40) return
         const dir: SwipeDirection = g.dx < 0 ? 'next' : 'prev'
-        const { days: ds, selDay: cur } = swipeStateRef.current
+        const { days: ds, selDay: cur, reduce: rm } = swipeStateRef.current
         const target = swipeTargetDay(ds, cur, dir)
         if (!target) return
         selDayAutoRef.current = false // スワイプもタブ手動選択と同じ扱い（今日への自動追従を止める）
         setSelDay(target)
         // 移動方向から新しい曜日が滑り込む控えめなフィードバック（既存モーショントークンと同トーン）。
-        swipeShift.setValue(dir === 'next' ? SHIFT.medium : -SHIFT.medium)
+        // Reduce Motion では変位0＝fade だけ（E0 M10）。
+        swipeShift.setValue(reducedShift(rm, dir === 'next' ? SHIFT.medium : -SHIFT.medium))
         swipeOpacity.setValue(0.3)
         Animated.parallel([
           Animated.timing(swipeShift, { toValue: 0, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
@@ -575,6 +580,10 @@ export default function TimetableScreen() {
                   selDayAutoRef.current = false
                   setSelDay(d)
                 }}
+                // 読み上げ（E0 A2）: Segmented と同じ役割＋選択状態に、曜日と日付の名前（今日なら「、今日」）。
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={dayTabA11yLabel(wd[d], DAY_LABEL[d], isToday)}
                 style={({ pressed }) => [
                   styles.dtab,
                   on && { backgroundColor: ui.pillBg },

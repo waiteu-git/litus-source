@@ -8,6 +8,7 @@ import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { SectionLabel, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
+import { joinA11yLabel } from '../ui/a11yState'
 import { loadTimetable } from '../storage/timetableStore'
 import { loadTimetableOverrides, saveTimetableOverride } from '../storage/timetableOverridesStore'
 import { isQuarterSlot } from '../timetableEvents/quarter'
@@ -283,6 +284,14 @@ export default function SubjectDetailScreen() {
   )
   const attention = useMemo(() => pickAttentionEvent(events, now), [events]) // eslint-disable-line react-hooks/exhaustive-deps
   const eventsSlots = subjectEventsHeaderSlots(attention)
+  // 「各回の予定」見出しのサブタイトル（表示と読み上げ名で同じ値を使う＝E0 A4）。
+  const eventsSubtitle = attention
+    ? `直近: ${Number(attention.date.split('-')[1])}/${Number(attention.date.split('-')[2])} ${attention.type === 'cancel' ? '休講' : '教室変更'}`
+    : events.length
+      ? `${events.length}件`
+      : undefined
+  // 予定の追加フォームへ（見出しの「追加」ボタンと、読み上げの操作「予定を追加」で共用）。
+  const openAddEvent = () => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })
 
   const fmtNext = (n: NextSession): string => {
     const [y, mo, d] = n.date.split('-').map(Number)
@@ -344,7 +353,11 @@ export default function SubjectDetailScreen() {
       <Accordion
         title="各回の予定"
         icon="list-outline"
-        subtitle={attention ? `直近: ${Number(attention.date.split('-')[1])}/${Number(attention.date.split('-')[2])} ${attention.type === 'cancel' ? '休講' : '教室変更'}` : events.length ? `${events.length}件` : undefined}
+        subtitle={eventsSubtitle}
+        // 読み上げ（E0 A4）: 見出しは1つの読み上げ要素になり、入れ子の「予定を追加」に iOS では届かない（F5）ので
+        // 見出しの操作としても出す。名前に right の「要対応」は入らないので、出ている時だけ足す（§9-2）。
+        accessibilityLabel={joinA11yLabel('各回の予定', eventsSubtitle, eventsSlots.attentionPill ? '要対応' : null)}
+        a11yActions={[{ name: 'addEvent', label: '予定を追加', onAction: openAddEvent }]}
         right={
           <>
             {eventsSlots.attentionPill ? (
@@ -357,7 +370,7 @@ export default function SubjectDetailScreen() {
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="予定を追加"
-              onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })}
+              onPress={openAddEvent}
             >
               <Ionicons name="add" size={16} color={ui.accent} />
               <Text style={[styles.addBtnText, { color: ui.accent }]}>追加</Text>

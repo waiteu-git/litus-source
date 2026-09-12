@@ -149,7 +149,16 @@ export default function BulletinDetailScreen() {
               </View>
             ) : null}
             <View style={{ flex: 1 }} />
-            <Pressable onPress={toggleFlag} disabled={flagBusy || fetching} hitSlop={8} style={{ opacity: fetching ? 0.4 : 1 }}>
+            <Pressable
+              onPress={toggleFlag}
+              disabled={flagBusy || fetching}
+              hitSlop={8}
+              style={{ opacity: fetching ? 0.4 : 1 }}
+              // 読み上げ（E0 A7）: アイコンだけのボタンに名前を付ける（呼び方は一覧のタブ「フラグ付き」に合わせる）。
+              // 押すと CLASS へ setFlag を送る。押せる条件は変えない（disabled は F5 で無効の状態として読まれる）。
+              accessibilityRole="button"
+              accessibilityLabel={item.flagged ? 'フラグを外す' : 'フラグを付ける'}
+            >
               {flagBusy ? (
                 <ActivityIndicator size="small" color={readAccent} />
               ) : (

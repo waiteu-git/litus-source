@@ -12,6 +12,8 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import { Text } from './Text'
 import { useUi } from './screen'
 import { shouldCaptureSwipe, shouldCommitHide, clampSwipeX } from './swipeHideDecision'
+import { DUR, EASE } from './motion'
+import { useReducedMotion } from './useReducedMotion'
 
 /**
  * 課題行の左スワイプ非表示。**PanResponder は行の中ではなくリストを包む側（ホスト）に置く。**
@@ -55,10 +57,22 @@ export type SwipeHideHost = {
 }
 
 const SPRING_BACK = { toValue: 0, useNativeDriver: true, friction: 9, tension: 90 } as const
+/** Reduce Motion 時の戻り。バネの代わりに DUR.fast の timing で、行き過ぎずに0へ戻す（E0 M9）。 */
+const SETTLE_BACK = { toValue: 0, duration: DUR.fast, easing: EASE.enter, useNativeDriver: true } as const
+
+/** 行を0へ戻す。Reduce Motion ならバネを使わない。指への追従と確定時の滑り出しは利用者の操作の続きなので残す。 */
+function settleBack(tx: Animated.Value, reduce: boolean) {
+  if (reduce) Animated.timing(tx, SETTLE_BACK).start()
+  else Animated.spring(tx, SPRING_BACK).start()
+}
 
 /** リスト側に置くスワイプの司令塔。触られている行を1つだけ憶えて駆動する。 */
 export function useSwipeHideHost(): SwipeHideHost {
   const active = useRef<SwipeTarget | null>(null)
+  // Reduce Motion。PanResponder は初回に1回だけ作るので、直接読まず ref で読む（E0 禁止事項3）。
+  const reduce = useReducedMotion()
+  const reduceRef = useRef(reduce)
+  reduceRef.current = reduce
   const pan = useRef(
     PanResponder.create({
       // 新しいタッチのたびに対象を捨てる。**capture 段はホスト→行の順に走る**ので、
@@ -86,13 +100,13 @@ export function useSwipeHideHost(): SwipeHideHost {
             t.hide(),
           )
         } else {
-          Animated.spring(t.tx, SPRING_BACK).start()
+          settleBack(t.tx, reduceRef.current)
         }
       },
       onPanResponderTerminate: () => {
         const t = active.current
         active.current = null
-        if (t) Animated.spring(t.tx, SPRING_BACK).start()
+        if (t) settleBack(t.tx, reduceRef.current)
       },
     }),
   ).current

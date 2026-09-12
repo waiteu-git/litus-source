@@ -9,6 +9,9 @@ import { COLORS, DARK, useThemeVariant } from '../theme'
 import { resolveUiColors } from '../theme.tokens'
 import { DUR, EASE, SHIFT } from './motion'
 import { classifySwipe, shouldCaptureSwipe, stepIndex } from './carouselSwipe'
+import { AMBIENT_STATIC_FRAME, autoAdvanceAllowed, reducedShift, shouldAnimateAmbient } from './reducedMotion'
+import { useReducedMotion } from './useReducedMotion'
+import { useScreenReaderEnabled } from './useScreenReaderEnabled'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -125,6 +128,10 @@ export function Segmented<T extends string>({
           <Pressable
             key={o.key}
             onPress={() => onChange(o.key)}
+            // 読み上げ（E0 A1）: 役割は button＋選択状態。tab は RN 0.86 の iOS で役割が読まれない（F22）。
+            // selected は OS の特性なので OS 自身の訳で読まれる（Q8）。名前は表示中の文言のまま（§9-2）。
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
             style={[
               ui.seg,
               { borderColor: c.segBorder },
@@ -292,6 +299,8 @@ export function CountdownRing({
  * 不定進捗バー（indeterminate）。進捗率が不明な待機中に、細いトラックの上を明色セグメントが
  * 左→右へ連続でスイープし「処理中でありフリーズしていない」ことを明示する。translateX のみで
  * useNativeDriver に載せる。トラック幅は onLayout で実測してからループを開始する。
+ * Reduce Motion オンの時はループを始めず、中間フレーム（セグメントが中央）で止める。「処理中」は隣の文言が
+ * 伝える（E0 M2）。変更はこの部品の中で閉じる＝使う側（AttendanceScreen.tsx）の差分は0行。
  */
 export function IndeterminateBar({
   color,
@@ -302,16 +311,21 @@ export function IndeterminateBar({
   trackColor: string
   height?: number
 }) {
+  const reduce = useReducedMotion()
   const [w, setW] = useState(0)
   const x = useRef(new Animated.Value(0)).current
   useEffect(() => {
     if (w <= 0) return
+    if (!shouldAnimateAmbient(reduce)) {
+      x.setValue(AMBIENT_STATIC_FRAME)
+      return
+    }
     const loop = Animated.loop(
       Animated.timing(x, { toValue: 1, duration: 1100, easing: EASE.move, useNativeDriver: true }),
     )
     loop.start()
     return () => loop.stop()
-  }, [w, x])
+  }, [w, x, reduce])
   const seg = Math.max(48, w * 0.4)
   const translateX = x.interpolate({ inputRange: [0, 1], outputRange: [-seg, Math.max(w, seg)] })
   return (
@@ -357,6 +371,8 @@ function CarouselDot({ active, inactiveColor }: { active: boolean; inactiveColor
  * 横移動がスロップ超えのときだけレスポンダを奪う（判定は carouselSwipe.ts の純ロジック）。
  * 前提: スライドは移動ジェスチャを親に譲れること（Pressable は可）。レスポンダを離さない
  * 横ScrollView等をスライドに入れると、そのスライド上ではスワイプ送りが効かない。
+ * Reduce Motion オンの時と読み上げ（VoiceOver／TalkBack）中は自動送りしない（E0 M3・S1）。Reduce Motion では
+ * ドリフトも0にしてクロスフェードだけ残す（M4）。手でのスワイプ送りは残す。props は変えない。
  */
 export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; intervalMs?: number }) {
   const [idx, setIdx] = useState(0)
@@ -374,6 +390,12 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
   // 指が触れている間は自動送りを見送る。押下中にスライドが差し替わってタップが
   // 飲み込まれるのを防ぎ、スワイプ確定と自動送りの二重進行も避ける。
   const touchActiveRef = useRef(false)
+  // Reduce Motion と読み上げの状態（E0 M3・M4・S1）。タイマーと PanResponder は初回に1回だけ作るので、
+  // 直接読まず ref で読む（useReducedMotion の初期値 false のまま固まるのを防ぐ＝E0 禁止事項3）。
+  const reduce = useReducedMotion()
+  const screenReader = useScreenReaderEnabled()
+  const a11yRef = useRef({ reduce, screenReader })
+  a11yRef.current = { reduce, screenReader }
 
   // 自動送り・スワイプ共通の切替。参照するのは ref と Animated 値（すべて安定）のみ。
   const goTo = useCallback(
@@ -420,7 +442,10 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
     if (itemsRef.current.length <= 1) return
     timerRef.current = setInterval(() => {
       if (touchActiveRef.current) return
-      goTo(1, { x: 0, y: 6 })
+      // Reduce Motion・読み上げ中は送らない。タイマーは作り直さず毎 tick で判定する＝設定を戻せば次の tick で再開する。
+      const { reduce: rm, screenReader: sr } = a11yRef.current
+      if (!autoAdvanceAllowed(itemsRef.current.length, rm, sr)) return
+      goTo(1, { x: 0, y: reducedShift(rm, 6) })
     }, intervalMs)
   }, [goTo, intervalMs, stopAuto])
   useEffect(() => {
@@ -442,7 +467,8 @@ export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; int
           // 手動で切り替えたら自動送りを仕切り直す（直後の自動送りで操作感を壊さない）。
           stopAuto()
           // 新スライドはスワイプの進行方向から入る（左スワイプ=次は右から、右スワイプ=前は左から）。
-          goTo(delta, { x: delta * SHIFT.small, y: 0 })
+          // Reduce Motion ではドリフト0＝クロスフェードだけ残す（E0 M4）。
+          goTo(delta, { x: reducedShift(a11yRef.current.reduce, delta * SHIFT.small), y: 0 })
           startAuto()
         },
       }),

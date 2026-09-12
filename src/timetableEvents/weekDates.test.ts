@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mondayOf, weekDates, weekRangeLabel, dayHeadLabel, weekDatesFrom, weekRangeLabelFrom } from './weekDates'
+import { mondayOf, weekDates, weekRangeLabel, dayHeadLabel, weekDatesFrom, weekRangeLabelFrom, dayTabA11yLabel } from './weekDates'
 
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const
 
@@ -70,5 +70,15 @@ describe('weekRangeLabelFrom', () => {
   })
   it('空配列は空文字', () => {
     expect(weekRangeLabelFrom(new Date(2026, 6, 13), [])).toBe('')
+  })
+})
+
+describe('dayTabA11yLabel（E0 A2・§9-2）', () => {
+  it('陽性: 「月曜 14日」の形／今日なら「、今日」を足す', () => {
+    expect(dayTabA11yLabel(new Date(2026, 8, 14), '月', false)).toBe('月曜 14日')
+    expect(dayTabA11yLabel(new Date(2026, 8, 14), '月', true)).toBe('月曜 14日、今日')
+  })
+  it('陰性: 今日でなければ「今日」を含まない', () => {
+    expect(dayTabA11yLabel(new Date(2026, 8, 15), '火', false)).not.toContain('今日')
   })
 })

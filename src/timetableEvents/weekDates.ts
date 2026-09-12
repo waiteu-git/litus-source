@@ -45,3 +45,11 @@ export function weekRangeLabel(today: Date, days: readonly DayKey[]): string {
 export function dayHeadLabel(date: Date, dow: string): string {
   return `${date.getMonth() + 1}月${date.getDate()}日（${dow}）`
 }
+
+/**
+ * 時間割の曜日タブの読み上げ名「月曜 14日」（E0 A2・§9-2）。dow は曜日1文字（月/火/…）。
+ * 今日の印はドットだけで読み上げでは伝わらないので、今日なら「、今日」を足す。
+ */
+export function dayTabA11yLabel(date: Date, dow: string, isToday: boolean): string {
+  return `${dow}曜 ${date.getDate()}日${isToday ? '、今日' : ''}`
+}

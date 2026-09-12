@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { healthWarn, syncBarSkipText, syncBarView, syncHeaderView, type SyncBarInput } from './syncBarLabel'
+import { healthWarn, syncBarSkipText, syncBarView, syncChipA11yLabel, syncHeaderView, type SyncBarInput } from './syncBarLabel'
 import type { StoredHealth } from '../storage/collectionHealthSerialize'
 
 const now = new Date(2026, 6, 14, 12, 0)
@@ -90,5 +90,53 @@ describe('syncBarSkipText', () => {
   it('kill switch停止中は一時停止の文言（feature単位で出し分け＝課題同期中の表示と矛盾させない）', () => {
     expect(syncBarSkipText('class', 'stopped')).toContain('掲示の同期は一時停止')
     expect(syncBarSkipText('letus', 'stopped')).toContain('課題の同期は一時停止')
+  })
+})
+
+describe('syncChipA11yLabel（E0 A8・§9-2）', () => {
+  it('承認済みの文言どおり', () => {
+    expect(syncChipA11yLabel({ ...base, lastSyncAt: now.getTime() - 3 * 60_000 }, now)).toBe('同期、3分前に同期')
+    expect(syncChipA11yLabel({ ...base, bulletinBusy: true }, now)).toBe('同期中')
+    expect(syncChipA11yLabel({ ...base, assignmentBusy: true }, now)).toBe('課題を同期中')
+    expect(syncChipA11yLabel({ ...base, skip: { feature: 'class', reason: 'offline' } }, now)).toBe(
+      '同期、オフライン・接続後に同期できます',
+    )
+    expect(syncChipA11yLabel({ ...base, letusHealth: h('not_logged_in') }, now)).toBe(
+      '同期、要再同期、最新を取得できていない可能性・タップで再同期',
+    )
+    expect(syncChipA11yLabel({ ...base, skip: { feature: 'class', reason: 'maintenance' } }, now)).toBe(
+      '同期、メンテ中、CLASSメンテナンス中・終了後に同期',
+    )
+    expect(syncChipA11yLabel(base, now)).toBe('同期、未同期')
+  })
+
+  const reasons = ['offline', 'maintenance', 'attending', 'stopped', 'demo'] as const
+  const features = ['class', 'letus'] as const
+  const inputs: SyncBarInput[] = [
+    { ...base, bulletinBusy: true },
+    { ...base, assignmentBusy: true },
+    ...reasons.flatMap((reason) => features.map((feature) => ({ ...base, skip: { feature, reason } }))),
+    { ...base, bulletinHealth: h('structure_drift') },
+    { ...base, letusHealth: h('not_logged_in') },
+    base,
+    { ...base, lastSyncAt: now.getTime() - 30_000 },
+    { ...base, lastSyncAt: now.getTime() - 3 * 60_000 },
+    { ...base, lastSyncAt: now.getTime() - 2 * 60 * 60_000 },
+    { ...base, lastSyncAt: new Date(2026, 6, 13, 9, 5).getTime() },
+  ]
+
+  it('陽性: 全 kind・全スキップ理由・全 feature で、画面の短縮形（syncHeaderView）を含む（音声コントロール＝WCAG 2.5.3）', () => {
+    for (const i of inputs) expect(syncChipA11yLabel(i, now)).toContain(syncHeaderView(i, now).text)
+  })
+  it('陰性: どの入力でも「同期」だけを返さず、末尾に「…」を残さない', () => {
+    for (const i of inputs) {
+      const label = syncChipA11yLabel(i, now)
+      expect(label).not.toBe('同期')
+      expect(label.endsWith('…')).toBe(false)
+    }
+  })
+  it('入力が kind を網羅している（テストの形骸化防止）', () => {
+    const kinds = new Set(inputs.map((i) => syncHeaderView(i, now).kind))
+    expect([...kinds].sort()).toEqual(['busyQuiet', 'busySpinner', 'fresh', 'skip', 'warn'])
   })
 })

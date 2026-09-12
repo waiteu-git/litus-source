@@ -94,3 +94,17 @@ export function syncHeaderView(input: SyncBarInput, now: Date): SyncBarView {
       return { kind, text: formatSyncAgoShort(input.lastSyncAt, now) }
   }
 }
+
+/**
+ * ヘッダーの同期チップの読み上げ名（E0 A8・§9-2）。状態は長い文言（syncBarView）で伝える。
+ * 同期中の2種はその文言のまま（末尾の「…」は落とす）、それ以外は「同期、」の後に続ける。
+ * 🔴 名前は画面に出ている短縮形（syncHeaderView）を必ず含む（音声コントロールは画面の文字を言って押す＝WCAG 2.5.3）。
+ * 長い文言が短縮形を含まない種（要再同期・メンテ中）だけ、短縮形を先に置く。表示用の syncHeaderView は変えない。
+ */
+export function syncChipA11yLabel(input: SyncBarInput, now: Date): string {
+  const long = syncBarView(input, now)
+  const text = long.text.replace(/…$/, '')
+  if (long.kind === 'busySpinner' || long.kind === 'busyQuiet') return text
+  const short = syncHeaderView(input, now).text
+  return text.includes(short) ? `同期、${text}` : `同期、${short}、${text}`
+}

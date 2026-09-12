@@ -49,6 +49,9 @@ import DiagnosticsBanner from '../health/DiagnosticsBanner'
 import { COLORS } from '../theme'
 import { SPACE } from '../ui/scale'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
+import { reducedShift, reducedStagger, shouldAnimateAmbient } from '../ui/reducedMotion'
+import { useReducedMotion } from '../ui/useReducedMotion'
+import { seeAllHitSlop } from '../home/seeAllHitSlop'
 import { PressableCard, PressableRow } from '../ui/Pressable'
 import { useDisplaySettings } from '../displaySettings'
 import type { HomeSectionKey } from '../home/homeSections'
@@ -256,6 +259,11 @@ export default function HomeScreen() {
   const edgeAnim = useRef(new Animated.Value(0)).current
   const pillOpacity = useRef(new Animated.Value(0)).current
   const pillScale = useRef(new Animated.Value(SPRING.from)).current
+  // Reduce Motion（E0 M5〜M7）。描画時の変位は reduce をそのまま使い、下の展開⇄収縮エフェクトでは ref で読む
+  // （依存に入れると、設定を切り替えた瞬間に収縮の演出が再生される）。
+  const reduce = useReducedMotion()
+  const reduceRef = useRef(reduce)
+  reduceRef.current = reduce
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 「新しい受付状態」への切り替わりを検知する署名（種別＋科目名）。変化時だけ再展開する。
   const sigRef = useRef<string>('')
@@ -276,14 +284,16 @@ export default function HomeScreen() {
 
   // 展開⇄収縮アニメ（モーショントークン準拠・上品に）:
   // 展開=バナーが slow enter で降りる／収縮=バナー格納→短い線が右端を base で伝い→着地点で円が hero spring 着地。
+  // Reduce Motion（E0 M5〜M7）: 降下の変位0（描画時に reducedShift）・線を動かさない・円は待たずバネなしの fade だけ。
   useEffect(() => {
     if (!banner.active) return
+    const rm = reduceRef.current
     if (expanded) {
       setBannerMounted(true)
       edgeAnim.setValue(0)
       Animated.timing(bannerAnim, { toValue: 1, duration: DUR.slow, easing: EASE.enter, useNativeDriver: true }).start()
       Animated.timing(pillOpacity, { toValue: 0, duration: DUR.fast, easing: EASE.exit, useNativeDriver: true }).start()
-      pillScale.setValue(SPRING.from)
+      pillScale.setValue(rm ? SPRING.to : SPRING.from)
     } else {
       // 1) バナーが base で上へ格納。
       Animated.timing(bannerAnim, { toValue: 0, duration: DUR.base, easing: EASE.exit, useNativeDriver: true }).start(
@@ -291,21 +301,27 @@ export default function HomeScreen() {
           if (finished) setBannerMounted(false)
         },
       )
-      // 2) 短い線が右端を伝って降りる（少し遅れて開始・move）。
+      // 2) 短い線が右端を伝って降りる（少し遅れて開始・move）。Reduce Motion では動かさない（不透明度0のまま＝M6）。
       edgeAnim.setValue(0)
-      Animated.timing(edgeAnim, { toValue: 1, duration: 420, delay: 120, easing: EASE.move, useNativeDriver: true }).start()
+      if (shouldAnimateAmbient(rm)) {
+        Animated.timing(edgeAnim, { toValue: 1, duration: 420, delay: 120, easing: EASE.move, useNativeDriver: true }).start()
+      }
       // 3) 線が着く直前に、着地点で円が hero spring（0.9→1.03→1）で立ち上がる＋fast フェードイン。
-      pillScale.setValue(SPRING.from)
+      //    Reduce Motion では 480ms 待たず（reducedStagger）、拡大率1のまま fade だけで出す（M7）。
+      pillScale.setValue(rm ? SPRING.to : SPRING.from)
       pillOpacity.setValue(0)
+      const fadeIn = Animated.timing(pillOpacity, { toValue: 1, duration: DUR.fast, easing: EASE.enter, useNativeDriver: true })
       Animated.sequence([
-        Animated.delay(120 + 420 - 60),
-        Animated.parallel([
-          Animated.timing(pillOpacity, { toValue: 1, duration: DUR.fast, easing: EASE.enter, useNativeDriver: true }),
-          Animated.sequence([
-            Animated.timing(pillScale, { toValue: SPRING.over, duration: SPRING.upMs, easing: EASE.enter, useNativeDriver: true }),
-            Animated.timing(pillScale, { toValue: SPRING.to, duration: SPRING.downMs, easing: EASE.enter, useNativeDriver: true }),
-          ]),
-        ]),
+        Animated.delay(reducedStagger(rm, 120 + 420 - 60)),
+        rm
+          ? fadeIn
+          : Animated.parallel([
+              fadeIn,
+              Animated.sequence([
+                Animated.timing(pillScale, { toValue: SPRING.over, duration: SPRING.upMs, easing: EASE.enter, useNativeDriver: true }),
+                Animated.timing(pillScale, { toValue: SPRING.to, duration: SPRING.downMs, easing: EASE.enter, useNativeDriver: true }),
+              ]),
+            ]),
       ]).start()
     }
   }, [expanded, banner.active, bannerAnim, edgeAnim, pillOpacity, pillScale])
@@ -417,7 +433,8 @@ export default function HomeScreen() {
                   left: 0,
                   right: 0,
                   opacity: bannerAnim,
-                  transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-SHIFT.large, 0] }) }],
+                  // Reduce Motion では変位0（fade だけ）。描画時に計算するので、値が途中で確定しても次の描画から0になる（M5）。
+                  transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-reducedShift(reduce, SHIFT.large), 0] }) }],
                 }}
               >
                 <Pressable
@@ -659,7 +676,7 @@ export default function HomeScreen() {
               <Carousel
                 intervalMs={3500}
                 items={unreadBulletin.map((b) => (
-                  <Pressable key={b.id} onPress={() => openBulletinDetail(b.id)} style={styles.bulletinSlide}>
+                  <Pressable key={b.id} onPress={() => openBulletinDetail(b.id)} style={styles.bulletinSlide} accessibilityRole="button">
                     <View style={{ marginBottom: 6 }}>
                       <Tag label={b.category} size="sm" />
                     </View>
@@ -681,7 +698,13 @@ export default function HomeScreen() {
                   </Pressable>
                 ))}
               />
-              <PressableRow onPress={openBulletin}>
+              <PressableRow
+                onPress={openBulletin}
+                // 押せる範囲だけを上下へ（見た目不変・カードの内側だけ＝E0 H2）。名前は ↗ を読ませない（A9・§9-2）。
+                hitSlop={seeAllHitSlop(unreadBulletin.length)}
+                accessibilityRole="button"
+                accessibilityLabel="掲示をすべて見る"
+              >
                 <Text style={[styles.bulletinMore, { color: ui.accentSoft }]}>すべて見る ↗</Text>
               </PressableRow>
             </View>
@@ -789,7 +812,7 @@ export default function HomeScreen() {
               },
             ]}
           >
-            <Pressable onPress={openAttendance} accessibilityLabel={banner.text} style={styles.miniPillHit}>
+            <Pressable onPress={openAttendance} accessibilityRole="button" accessibilityLabel={banner.text} style={styles.miniPillHit}>
               <Ionicons name="flash" size={16} color={COLORS.white} />
             </Pressable>
           </Animated.View>

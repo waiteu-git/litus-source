@@ -17,6 +17,7 @@ import {
 import type { AssignmentsStackParamList } from '../navigation/types'
 import { Chip, ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { SwipeToHide, useSwipeHideHost, type SwipeHideHost } from '../ui/SwipeToHide'
+import { disclosureA11yProps } from '../ui/disclosureA11y'
 import { useDisplaySettings } from '../displaySettings'
 import { formatDeadline, isSubmitted, relDue, TONE_COLOR, urgencyTone, formatDeadlineRich, deadlineMagnitude } from '../assignments/deadline'
 import { assignmentsEmptyState } from '../assignments/emptyState'
@@ -58,6 +59,11 @@ function ChipDone({ rowUi }: { rowUi: RowUi }) {
   )
 }
 
+// 課題行の読み上げ操作「非表示にする」（E0 A6）。行（PressableRow）は1つの読み上げ要素になり、入れ子の
+// 非表示ボタンに iOS では届かない（F5）ので、行自身の操作として出す。'activate' は載せない＝ダブルタップは
+// 今の onPress（詳細を開く）のまま。実行すると onHide（端末内の非表示・予約の貼り直し・ウィジェット更新）を呼ぶ。
+const HIDE_ACTIONS = [{ name: 'hide', label: '非表示にする' }] as const
+
 const FlatRow = memo(function FlatRow({
   a,
   now,
@@ -77,7 +83,15 @@ const FlatRow = memo(function FlatRow({
   const rel = relDue(a.deadline, now)
   return (
     <SwipeToHide host={host} onHide={() => onHide(a)} radius={18} style={styles.flatRowGap}>
-    <PressableRow onPress={() => onOpen(a)} onLongPress={() => onHide(a)} style={[rowUi.card, styles.flatRow, styles.noMb]}>
+    <PressableRow
+      onPress={() => onOpen(a)}
+      onLongPress={() => onHide(a)}
+      accessibilityActions={HIDE_ACTIONS}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'hide') onHide(a)
+      }}
+      style={[rowUi.card, styles.flatRow, styles.noMb]}
+    >
       <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={styles.courseRow}>
@@ -98,7 +112,7 @@ const FlatRow = memo(function FlatRow({
         <Text style={[styles.flatRel, { color: TONE_COLOR[tone] }]}>{rel || (isSubmitted(a) ? '提出済み' : '')}</Text>
         <Text style={[styles.flatDue, { color: rowUi.labelColor }]}>{formatDeadline(a.deadline)}</Text>
       </View>
-      <Pressable onPress={() => onHide(a)} hitSlop={8} style={styles.hideBtn}>
+      <Pressable onPress={() => onHide(a)} hitSlop={8} style={styles.hideBtn} accessibilityRole="button" accessibilityLabel="非表示にする">
         <Ionicons name="eye-off-outline" size={18} color={rowUi.labelColor} />
       </Pressable>
     </PressableRow>
@@ -136,6 +150,10 @@ const AssignRow = memo(function AssignRow({
     <PressableRow
       onPress={() => onOpen(a)}
       onLongPress={() => onHide(a)}
+      accessibilityActions={HIDE_ACTIONS}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'hide') onHide(a)
+      }}
       style={[
         styles.assignRow,
         { backgroundColor: rowUi.card.backgroundColor },
@@ -198,7 +216,13 @@ const GroupHeader = memo(function GroupHeader({
   return (
     <View style={[styles.ghead, { backgroundColor: rowUi.softBg, borderBottomColor: rowUi.divider }]}>
       {collapsible ? (
-        <Pressable onPress={() => onToggle('overdue')} hitSlop={6} style={styles.gheadToggle}>
+        <Pressable
+          onPress={() => onToggle('overdue')}
+          hitSlop={6}
+          style={styles.gheadToggle}
+          // 読み上げ（E0 A5）: 役割と開閉状態（名前は表示中の「期限切れ」のまま）。
+          {...disclosureA11yProps(open, () => onToggle('overdue'))}
+        >
           <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={15} color={labelColor} />
           <Text style={[styles.glabel, { color: labelColor }]}>{label}</Text>
         </Pressable>
@@ -263,7 +287,12 @@ const CollapseHeaderRow = memo(function CollapseHeaderRow({
 }) {
   const color = group === 'overdue' ? rowUi.danger : rowUi.labelColor
   return (
-    <Pressable onPress={() => onToggle(group)} style={[styles.collapseHead, styles.collapseSpacing]}>
+    <Pressable
+      onPress={() => onToggle(group)}
+      style={[styles.collapseHead, styles.collapseSpacing]}
+      // 読み上げ（E0 A5）: 役割と開閉状態（名前は表示中の文言のまま）。
+      {...disclosureA11yProps(open, () => onToggle(group))}
+    >
       <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={16} color={color} />
       <Text style={[styles.collapseText, { color }]}>{label}</Text>
     </Pressable>
