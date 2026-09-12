@@ -11,6 +11,8 @@ import { updateBulletinItem, saveBulletinDetailDiag } from '../storage/bulletinD
 import ClassHeadlessCollector from './ClassHeadlessCollector'
 import { evaluateAccess } from '../health/accessGate'
 import { isOnlineNow } from '../health/connectivity'
+import { useKillSwitch } from '../health/KillSwitchProvider'
+import { isBulletinActionBlocked } from './bulletinActionGate'
 
 type Props = {
   action: 'openDetail' | 'setFlag'
@@ -26,12 +28,18 @@ type Props = {
  * - openDetail: 対象の掲示内容モーダルを開いて本文を取得し、ローカルを既読化＋body保存。
  * - setFlag: 対象行のフラグを切替え、ソースで反映を確認してからローカルのフラグを直接更新。
  * どちらも 1 セッション 1 アクション（ViewState保護）。
+ * 停止中（CLASS帯・オフライン・停止キー bulletin/all）は WebView を起こさず onFinished を1回だけ呼ぶ。
+ * 呼び出し側を KillSwitchGate で包まないこと（Gate は onFinished を呼ばず、詳細が取得中のまま固まる）。
  */
 export default function BulletinActionEngine({ action, title, date, desiredFlag, onFinished }: Props) {
   const id = `${date}::${title}`
   const diag = useRef({ page: '', stage: '', panel: 0, plen: 0, got: false })
-  // CLASS帯 or オフラインでは掲示アクションは不成立。WebViewを起こさず即終了し、次回操作/収集に委ねる。
-  const blocked = !evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }).allowed
+  const { status: killStatus } = useKillSwitch()
+  // CLASS帯・オフライン・掲示の停止キー（all を含む）では掲示アクションは不成立。WebViewを起こさず即終了。
+  const blocked = isBulletinActionBlocked(
+    evaluateAccess('class', { now: new Date(), isOnline: isOnlineNow() }),
+    killStatus,
+  )
   useEffect(() => {
     if (blocked) onFinished()
   }, [blocked, onFinished])

@@ -12,6 +12,7 @@ import { loadBulletinDigest, loadBulletinDetailDiag, updateBulletinItem } from '
 import { useDemo } from '../demo/DemoProvider'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
+import KillSwitchBanner from '../ui/KillSwitchBanner'
 import { evaluateAccess } from '../health/accessGate'
 import { useConnectivity } from '../health/connectivity'
 
@@ -130,6 +131,8 @@ export default function BulletinDetailScreen() {
   const targetDate = item.date || item.id.split('::')[0]
   return (
     <ScreenBg>
+      {/* 掲示の停止中（bulletin/all）だけ出る。ホームのカルーセルから一覧を経ずに来る経路があるため一覧と同じ置き方で置く。 */}
+      <KillSwitchBanner feature="bulletin" />
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: clearance }]}>
         {/* 読書面: 本文カードを不透明サーフェスへ昇格（ガラスに沈ませない・面の3階級②）。 */}
         <View style={[styles.card, { backgroundColor: ui.colors.readingSurface, borderColor: ui.colors.readingBorder }]}>
