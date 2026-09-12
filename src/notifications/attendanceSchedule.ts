@@ -5,6 +5,8 @@
  * 仕様: docs/superpowers/specs/2026-07-05-v2.0.0-class-integration-design.md「出席アラーム設計」。
  */
 import type { DayOfWeek } from '../parsers/timetable'
+import type { Quarter } from '../parsers/timetable'
+import type { TimetableOverrides } from '../timetableEvents/quarter'
 import type { TimetableCollection } from '../collect/timetableMessage'
 import { isCourseActiveOn, type CourseTermInfo } from '../attendance/courseOver'
 
@@ -37,6 +39,9 @@ export type AttendanceAlarmOptions = {
   /** ラストチャンス通知を授業終了の何分前に出すか。既定10分。 */
   lastChanceLeadMinutes?: number
 }
+
+/** 終了前の通知を授業終了の何分前に出すかの既定。N1 の照合（まとめ・M2）と共有する（設計 §4.3）。 */
+export const DEFAULT_LAST_CHANCE_LEAD_MINUTES = 10
 
 /**
  * 休講が登録されているコマ（アラームを出さない対象）。ClassEvent から必要な分だけ写した形。
@@ -122,7 +127,7 @@ export function computeAttendanceAlarms(
   termInfo: CourseTermInfo = { termEnds: {}, nameOwners: {}, extraPlans: [], calendar: null },
 ): AttendanceAlarm[] {
   const daysAhead = options.daysAhead ?? 7
-  const lead = options.lastChanceLeadMinutes ?? 10
+  const lead = options.lastChanceLeadMinutes ?? DEFAULT_LAST_CHANCE_LEAD_MINUTES
   const alarms: AttendanceAlarm[] = []
 
   for (let i = 0; i < daysAhead; i++) {
@@ -222,7 +227,9 @@ export function computeAttendanceAlarms(
  *   開始アラームとラストチャンスが手首で見分けられない。
  * - ラストチャンスは終了の**絶対時刻**を言う（相対の残り分数にしない理由は AttendanceAlarm.endsAt）。
  */
-export function buildAttendanceNotificationContent(alarm: AttendanceAlarm): { title: string; body: string } {
+export function buildAttendanceNotificationContent<A extends Pick<AttendanceAlarm, 'kind' | 'courseName' | 'endsAt'>>(
+  alarm: A,
+): { title: string; body: string } {
   const title = `${alarm.courseName} 出席コード`
   if (alarm.kind === 'attendance-start') {
     return { title, body: '授業が始まりました。出席コードを入力できるか確認しましょう' }
@@ -232,4 +239,214 @@ export function buildAttendanceNotificationContent(alarm: AttendanceAlarm): { ti
     ? `授業は${alarm.endsAt}まで。出席がまだなら今のうちに入力しましょう`
     : 'まもなく授業が終わります。出席がまだなら今のうちに入力しましょう'
   return { title, body }
+}
+
+// ---- N1（v1.1 train1・2026-09-12）: 同じ種類・同じ時刻の出席アラームを1通にまとめる ----
+// 設計: docs/design/2026-09-12-v11-train1-N1.md §4.1・§4.2。
+// 🔴 まとめるだけで消さない（representativeClass を持ち込まない＝禁止事項1）。鳴る時刻の集合は変えない（§7-T1）。
+
+/** 予約する出席通知の1枠（同じ種類・同じずらす前の時刻の出席アラームをまとめたもの）。 */
+export type AttendanceNotice = {
+  /** `att:s:YYYYMMDD-HHMM`（開始）／`att:l:YYYYMMDD-HHMM`（終了前）。ずらす前の時刻のローカル時刻。 */
+  id: string
+  kind: AttendanceAlarmKind
+  /** ずらす前の時刻（ISO）。staggerSameInstant を通した後は実際に予約する時刻になる（id は変わらない）。 */
+  fireAt: string
+  /** 終了前のみ（同じ時刻にまとまる科目は終了時刻も同じ）。 */
+  endsAt?: string
+  /** 'YYYY-MM-DD'（ローカル）。 */
+  date: string
+  /** 'HH:MM-HH:MM'＝まとめた科目の授業時間の和（照合 M1・M2 に使う）。 */
+  span: string
+  /** 1件以上・科目コードの重複なし・科目コードの昇順。 */
+  courses: { courseCode: string; courseName: string }[]
+}
+
+const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes()
+const hhmmFromMinutes = (m: number) => `${p2(Math.floor(m / 60))}:${p2(m % 60)}`
+function minutesOfHhmm(hhmm: string): number | null {
+  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/)
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+}
+const byCourseCode = (a: { courseCode: string }, b: { courseCode: string }) =>
+  a.courseCode < b.courseCode ? -1 : a.courseCode > b.courseCode ? 1 : 0
+
+/**
+ * 出席の予約の identifier（§4.2）。入力が同じなら貼り直しをまたいでも同じ値になり、積みコマは同じ時刻なので同じ枠になる。
+ * 🔴 時限番号を鍵にしない（禁止事項6）: 先頭の時限が同じで終わりが違う積みコマ（A＝3-4限・B＝3限）で、
+ * 2つの終了前が同じ鍵になり、片方が上書きされて黙って消える。
+ */
+export function attendanceNoticeId(kind: AttendanceAlarmKind, fireAtIso: string): string {
+  const d = new Date(fireAtIso)
+  const k = kind === 'attendance-start' ? 's' : 'l'
+  return `att:${k}:${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`
+}
+
+const NOTICE_ID = /^att:[sl]:\d{8}-\d{4}$/
+
+/** 決まった形の出席 identifier か（計器の legacy＝旧版の uuid を数えるのに使う）。 */
+export function isAttendanceNoticeId(id: string): boolean {
+  return NOTICE_ID.test(id)
+}
+
+/** 開始の枠の identifier か（受付open 済みの除外 M4 は開始だけ）。 */
+export function isStartNoticeId(id: string): boolean {
+  return NOTICE_ID.test(id) && id.startsWith('att:s:')
+}
+
+/** その日のローカル 0:00。 */
+export function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0)
+}
+
+/** span（'HH:MM-HH:MM'）を分に直す。読めなければ null。 */
+export function spanMinutes(span: string): { startMin: number; endMin: number } | null {
+  const m = span.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/)
+  if (!m) return null
+  const startMin = minutesOfHhmm(m[1])
+  const endMin = minutesOfHhmm(m[2])
+  return startMin === null || endMin === null ? null : { startMin, endMin }
+}
+
+/**
+ * 出席アラームを「種類＋ずらす前の発火時刻（＝identifier）」ごとに1枠へまとめる（純粋・入力を壊さない）。
+ * 科目ごとの計算（科目別OFF・休講・学期終了）は computeAttendanceAlarms がもう済ませているので、ここは束ねるだけ。
+ * span（授業の時間帯）は、同じ授業回（科目×日付×先頭の時限）の開始と終了前の組から起こす。開始が既に過ぎていると
+ * 組が欠けるので、呼び出し側は今日の0:00から計算した出力を渡す（upcomingAttendanceNotices）。
+ */
+export function mergeAttendanceNotices(alarms: readonly AttendanceAlarm[]): AttendanceNotice[] {
+  const runKey = (a: AttendanceAlarm) => `${a.courseCode}|${ymd(new Date(a.fireAt))}|${a.period}`
+  const runs = new Map<string, { startMin?: number; endMin?: number }>()
+  for (const a of alarms) {
+    const r = runs.get(runKey(a)) ?? {}
+    if (a.kind === 'attendance-start') {
+      r.startMin = minutesOfDay(new Date(a.fireAt))
+    } else {
+      const fallback = minutesOfDay(new Date(new Date(a.fireAt).getTime() + DEFAULT_LAST_CHANCE_LEAD_MINUTES * 60_000))
+      r.endMin = (a.endsAt ? minutesOfHhmm(a.endsAt) : null) ?? fallback
+    }
+    runs.set(runKey(a), r)
+  }
+
+  type Group = {
+    kind: AttendanceAlarmKind
+    fireAt: string
+    endsAt?: string
+    date: string
+    startMin: number
+    endMin: number
+    courses: Map<string, string>
+  }
+  const groups = new Map<string, Group>()
+  for (const a of alarms) {
+    const id = attendanceNoticeId(a.kind, a.fireAt)
+    const r = runs.get(runKey(a)) ?? {}
+    const own = minutesOfDay(new Date(a.fireAt))
+    const s = r.startMin ?? r.endMin ?? own
+    const e = r.endMin ?? r.startMin ?? own
+    const g = groups.get(id)
+    if (g) {
+      g.startMin = Math.min(g.startMin, s)
+      g.endMin = Math.max(g.endMin, e)
+      if (!g.courses.has(a.courseCode)) g.courses.set(a.courseCode, a.courseName)
+      if (!g.endsAt && a.endsAt) g.endsAt = a.endsAt
+    } else {
+      groups.set(id, {
+        kind: a.kind,
+        fireAt: a.fireAt,
+        endsAt: a.endsAt,
+        date: ymd(new Date(a.fireAt)),
+        startMin: s,
+        endMin: e,
+        courses: new Map([[a.courseCode, a.courseName]]),
+      })
+    }
+  }
+
+  return [...groups.entries()]
+    .map(([id, g]): AttendanceNotice => ({
+      id,
+      kind: g.kind,
+      fireAt: g.fireAt,
+      ...(g.endsAt ? { endsAt: g.endsAt } : {}),
+      date: g.date,
+      span: `${hhmmFromMinutes(g.startMin)}-${hhmmFromMinutes(g.endMin)}`,
+      courses: [...g.courses].map(([courseCode, courseName]) => ({ courseCode, courseName })).sort(byCourseCode),
+    }))
+    .sort(
+      (x, y) =>
+        new Date(x.fireAt).getTime() - new Date(y.fireAt).getTime() || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0),
+    )
+}
+
+/**
+ * 予約する出席通知（まとめた後）のうち、now より後に鳴るもの。
+ * 🔴 alarmsFromDayStart は **今日の0:00から** 計算した computeAttendanceAlarms の出力を渡すこと。
+ * 始まっている授業の終了前にも span が付き、鳴る時刻の集合は now で計算した場合と同じになる（§7-T1 で固定）。
+ */
+export function upcomingAttendanceNotices(alarmsFromDayStart: readonly AttendanceAlarm[], now: Date): AttendanceNotice[] {
+  return mergeAttendanceNotices(alarmsFromDayStart).filter((n) => new Date(n.fireAt).getTime() > now.getTime())
+}
+
+/** id が excludedIds に入る枠を落とす（除外 M4・M5。§4.3）。 */
+export function excludeNotices(notices: readonly AttendanceNotice[], excludedIds: ReadonlySet<string>): AttendanceNotice[] {
+  return notices.filter((n) => !excludedIds.has(n.id))
+}
+
+/**
+ * 今日の枠（照合 M1・M2 用・§4.3）。**科目別OFF・休講・学期終了を通さない**＝時間割にある全科目。
+ * 既存の computeAttendanceAlarms をそのまま使い、コマの組み方を再実装しない。
+ */
+export function todaySlotNotices(collections: TimetableCollection[], now: Date): AttendanceNotice[] {
+  return mergeAttendanceNotices(computeAttendanceAlarms(collections, {}, startOfLocalDay(now), { daysAhead: 1 }))
+}
+
+/** 積みコマの題名を決める材料（§4.1）。 */
+export type NoticeTitleContext = {
+  /** timetable.overrides.v1（科目ごとの半期の明示）。CLASS は半期を返さないので、指定はここにしか無い。 */
+  overrides: TimetableOverrides
+  /** 現在の半期の**手動**指定（loadCurrentQuarter）。null＝自動（月の近似）＝題名の絞り込みに使わない。 */
+  manualQuarter: Quarter | null
+  /** 並べ替えに使う現在の半期（resolveCurrentQuarter の値）。変わるのは順番だけ。 */
+  resolvedQuarter: Quarter
+}
+
+/**
+ * まとめた枠の題名に使う科目名（§4.1・§9-2 承認）。**絞るのは題名だけで、枠（鳴る時刻）はどの場合も1つ残る。**
+ * 1つの名前にするのは、①現在の半期が手動で指定され②全科目に半期が明示され③現在の半期に一致するのがちょうど1科目、の時だけ。
+ * それ以外は全科目を「／」で並べる（現在の半期に一致と明示 → 未指定 → 別の半期と明示、同順位は科目コード昇順）。
+ * 古い指定のまま忘れていても（9月に「前半」、12月もそのまま）害は科目名の取り違えで、出席を落とす方向ではない。
+ */
+export function noticeTitleName(
+  courses: readonly { courseCode: string; courseName: string }[],
+  ctx: NoticeTitleContext,
+): string {
+  const names = [...new Set(courses.map((c) => c.courseName))]
+  if (names.length <= 1) return names[0] ?? ''
+  const quarterOf = (c: { courseCode: string }) => ctx.overrides[c.courseCode]?.quarter
+  if (ctx.manualQuarter !== null && courses.every((c) => quarterOf(c) !== undefined)) {
+    const hits = courses.filter((c) => quarterOf(c) === ctx.manualQuarter)
+    if (hits.length === 1) return hits[0].courseName
+  }
+  const rank = (c: { courseCode: string }) => {
+    const q = quarterOf(c)
+    return q === ctx.resolvedQuarter ? 0 : q === undefined ? 1 : 2
+  }
+  const ordered = [...courses].sort((a, b) => rank(a) - rank(b) || byCourseCode(a, b))
+  return [...new Set(ordered.map((c) => c.courseName))].join('／')
+}
+
+/**
+ * まとめた枠の文面。1科目でも複数科目でも既存の buildAttendanceNotificationContent に任せる
+ * （題名の科目名だけを差し替える）＝今の文面の回帰は構造上起きない（§4.1）。
+ */
+export function buildAttendanceNoticeContent(
+  notice: AttendanceNotice,
+  ctx: NoticeTitleContext,
+): { title: string; body: string } {
+  return buildAttendanceNotificationContent({
+    kind: notice.kind,
+    courseName: noticeTitleName(notice.courses, ctx),
+    endsAt: notice.endsAt,
+  })
 }

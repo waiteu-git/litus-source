@@ -164,3 +164,21 @@ describe('出席アラームが枠を食い潰さない（実規模・2026-07-17
     expect(plan.attendance).toHaveLength(1)
   })
 })
+
+describe('id の作り方を引数で受け取る（N1 §4.1）', () => {
+  it('まとめた枠（id 持ち）を渡すと、その id で重複を弾いて配分する', () => {
+    // 科目コードが違う2件＝既定の attendanceId なら2件とも残る組。id の作り方を受け取っていなければ落ちる
+    // （同じ要素を2つ渡す形だと、既定の id でも1件に畳まれて HEAD でも緑になり、赤→緑の証拠にならない）。
+    type N = AttendanceAlarm & { id: string }
+    const a: N = { ...att('A', 2 * H), id: 'att:s:20260706-0200' }
+    const b: N = { ...att('B', 2 * H), id: 'att:s:20260706-0200' }
+    const plan = planNotifications([a, b], [reminder('r1', 3 * H)], now, { cap: 60 }, (x: N) => x.id)
+    expect(plan.attendance).toEqual([a])
+    expect(plan.assignments).toHaveLength(1)
+  })
+
+  it('既定は従来の attendanceId（科目コードを含む）＝別科目・同時刻は2件とも残る', () => {
+    const plan = planNotifications([att('A', 2 * H), att('B', 2 * H)], [], now)
+    expect(plan.attendance).toHaveLength(2)
+  })
+})

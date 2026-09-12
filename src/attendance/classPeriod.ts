@@ -61,6 +61,12 @@ export function attendedClassEndMin(
 }
 
 /**
+ * 授業開始の何分前から「授業の時間帯」とみなすか。出席エンジンの起動（isInActiveClassPeriod）と、
+ * N1 の照合（受付open → コマ＝M1、出席済み → コマ＝M2）で同じ値を使う（2箇所に持つと必ずずれる）。
+ */
+export const ACTIVE_CLASS_PRE_MINUTES = 5
+
+/**
  * now が「**まだ授業回のある**登録授業の時限の時間帯内」か（開始 preMinutes 前〜終了まで）を
  * 判定する純粋関数。
  *
@@ -80,7 +86,7 @@ export function isInActiveClassPeriod(
   collections: TimetableCollection[],
   now: Date,
   isActive: ClassActivePredicate,
-  preMinutes = 5,
+  preMinutes = ACTIVE_CLASS_PRE_MINUTES,
 ): boolean {
   const weekday = now.getDay()
   const nowMin = now.getHours() * 60 + now.getMinutes()

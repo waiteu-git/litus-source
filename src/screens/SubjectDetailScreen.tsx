@@ -659,7 +659,7 @@ export default function SubjectDetailScreen() {
             subtitle={quarterPref === 'first' ? '前半' : quarterPref === 'second' ? '後半' : '通期'}
           >
             <Text style={[styles.patHint, { color: ui.labelColor, marginBottom: 8, marginTop: 0 }]}>
-              同じ曜限にもう1科目ある半期科目です。この科目が前半／後半どちらの開講かを指定すると、時間割で「今の半期」に該当しない科目を薄く表示します（CLASSは前半/後半を公開しないため手動指定）。
+              同じ曜限にもう1科目ある半期科目です。この科目が前半／後半どちらの開講かを指定すると、時間割で「今の半期」に該当しない科目を薄く表示し、出席アラームの題名の科目名にも使います（CLASSは前半/後半を公開しないため手動指定）。
             </Text>
             <Segmented
               options={[

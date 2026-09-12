@@ -21,6 +21,16 @@ export type NotificationPayload = {
   assignmentId?: string
   /** 各回イベントの識別子（現状ルート決定には使わないが、日付精度の着地を足すときの足がかり）。 */
   eventId?: string
+  /** 出席の予約（N1）: まとめた全科目のコード・名前（科目コードの昇順）。着地には使わない。 */
+  courseCodes?: string[]
+  courseNames?: string[]
+  /** 出席の予約（N1）: 'YYYY-MM-DD'・'HH:MM-HH:MM'・実際に予約した時刻（ISO）。計器が保留の時刻を知る唯一の手段（iOS は保留から時刻を読めない）。 */
+  date?: string
+  span?: string
+  fireAt?: string
+  /** 受付open（N1）: 当てたコマ（開始の枠の identifier）と、音なしで置き換えたか。 */
+  slotId?: string
+  quiet?: boolean
 }
 
 export type NotificationRoute =

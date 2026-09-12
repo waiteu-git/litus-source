@@ -327,7 +327,7 @@ export default function SettingsScreen() {
 
           <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>出席アラーム（科目別）</Text>
           <Text style={[styles.note, { color: ui.labelColor }]}>
-            授業の開始時と終了前にお知らせします。OFFにした科目は、出席の受付が始まったときのお知らせも止まります。
+            授業の開始時と終了前にお知らせします。リタスで出席済みと確認できた授業には送りません。OFFにした科目は、出席の受付が始まったときのお知らせも止まります。
           </Text>
           {courses.length === 0 ? (
             <View style={ui.card}>

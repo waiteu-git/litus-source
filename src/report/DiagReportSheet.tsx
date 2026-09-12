@@ -9,6 +9,7 @@ import { COLORS } from '../theme'
 import type { SubmitDiag } from '../attendance/submitDiag'
 import { loadSubmitDiags } from '../storage/submitDiagStore'
 import { collectDiagEnv } from './diagEnv'
+import { collectNotifDiagLine } from './notifDiagLine'
 import {
   DIAG_REPORT_TO,
   buildDiagReportBody,
@@ -55,6 +56,8 @@ export default function DiagReportSheet({
   const kbHeight = useKeyboardHeight()
   const [diags, setDiags] = useState<SubmitDiag[] | null>(null)
   const [note, setNote] = useState('')
+  // 通知の計器の1行（N1 §4.6）。開いた時に1回読む。送らなければ端末の外に出ない。
+  const [notifLine, setNotifLine] = useState<string | null>(null)
   // 設定から開いた時は記録を本文に載せないので、そもそも読みに行かない。
   const withDiags = source !== 'settings'
   // 打鍵ごとに本文（記録10件なら約5,000字）を組み直して再描画すると入力が引っかかる。
@@ -83,14 +86,28 @@ export default function DiagReportSheet({
     }
   }, [visible, withDiags])
 
+  useEffect(() => {
+    if (!visible) return
+    let alive = true
+    setNotifLine(null)
+    collectNotifDiagLine()
+      .then((line) => {
+        if (alive) setNotifLine(line)
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [visible])
+
   const draft = useMemo(() => {
     if (diags == null) return null
     const env = collectDiagEnv()
     const subject = buildDiagReportSubject(env)
-    const body = buildDiagReportBody({ diags, env, nowIso: new Date().toISOString(), source, note: deferredNote })
+    const body = buildDiagReportBody({ diags, env, nowIso: new Date().toISOString(), source, note: deferredNote, notifLine })
     const url = buildMailtoUrl({ to: DIAG_REPORT_TO, subject, body })
     return { subject, body, url }
-  }, [diags, deferredNote, source])
+  }, [diags, deferredNote, source, notifLine])
 
   /**
    * **コピーを主動線にするか**。入口ではなく**エンコード後の実長**で決める。

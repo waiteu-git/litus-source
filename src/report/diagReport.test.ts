@@ -327,3 +327,36 @@ describe('diagNotePlaceholder', () => {
     }
   })
 })
+
+describe('通知の計器の1行（N1 §4.6・T16）', () => {
+  const LINE = 'notif att=10 dupe=0 legacy=0 next=09-14T10:30 asg=18 fail=0 open=1'
+
+  it('「■ アプリ・端末」の中、環境の後・書き出しの前に1行で載る', () => {
+    const b = buildDiagReportBody({ diags: [], env: ENV, nowIso: '2026-07-30T03:00:00.000Z', source: 'settings', notifLine: LINE })
+    expect(b).toContain(`Android 15 / Google Pixel 8\n${LINE}\n書き出し 2026-07-30T03:00:00.000Z`)
+  })
+
+  it('渡さなければ今の本文と同じ（既存の入口の回帰なし）', () => {
+    const a = buildDiagReportBody({ diags: [], env: ENV, nowIso: 'x', source: 'settings' })
+    expect(buildDiagReportBody({ diags: [], env: ENV, nowIso: 'x', source: 'settings', notifLine: null })).toBe(a)
+  })
+
+  it('設定から開いた下書き（計器つき・未記入）の mailto は 2,000 字の目安に収まる', () => {
+    const url = buildMailtoUrl({
+      to: DIAG_REPORT_TO,
+      subject: buildDiagReportSubject(ENV),
+      body: buildDiagReportBody({ diags: [], env: ENV, nowIso: '2026-07-30T03:00:00.000Z', source: 'settings', notifLine: LINE }),
+    })
+    expect(url.length).toBeLessThanOrEqual(DIAG_MAILTO_SAFE_LIMIT)
+    expect(mailtoMayTruncate(url)).toBe(false)
+  })
+
+  it('計器つきでも、50字の状況なら目安に収まる（設定側の主動線は変わらない）', () => {
+    const url = buildMailtoUrl({
+      to: DIAG_REPORT_TO,
+      subject: buildDiagReportSubject(ENV),
+      body: buildDiagReportBody({ diags: [], env: ENV, nowIso: '2026-07-30T03:00:00.000Z', source: 'settings', note: 'あ'.repeat(50), notifLine: LINE }),
+    })
+    expect(mailtoMayTruncate(url)).toBe(false)
+  })
+})

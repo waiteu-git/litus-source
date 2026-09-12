@@ -44,24 +44,9 @@ import { addSubmitDiag } from '../storage/submitDiagStore'
 import { loadAttendedRecord, saveAttendedRecord, scrubExpiredAttendedCode } from '../storage/attendanceDoneStore'
 import { parseWindowMinutes, type ReceptionWindowRecord } from './receptionWindow'
 import { saveReceptionWindow, loadReceptionWindow } from '../storage/receptionWindowStore'
-import {
-  attendanceOpenKey,
-  shouldNotifyAttendanceOpen,
-  buildAttendanceOpenContent,
-  courseCodeByName,
-  pruneNotifiedAttendanceKeys,
-} from '../notifications/attendanceOpenNotify'
-import { loadAttendanceSettings } from '../storage/attendanceSettingsStore'
-import type { AttendanceAlarmSettings } from '../notifications/attendanceSchedule'
-import {
-  loadNotifiedAttendanceOpen,
-  mutateNotifiedAttendanceOpen,
-} from '../storage/notifiedAttendanceOpenStore'
-import {
-  presentAttendanceOpenNotification,
-  clearDeliveredAttendanceOpenNotifications,
-  clearDeliveredAttendanceStartNotifications,
-} from '../notifications/notifier'
+// 受付open と出席済みの取り下げ（N1）。判断と順番は純粋層 attendanceOpenSequence、配線は attendanceOpenFlow。
+import { announceAttendanceOpen, retractAttendedSlots } from '../notifications/attendanceOpenFlow'
+import { clearDeliveredAttendanceOpenNotifications } from '../notifications/notifier'
 import { notifyWidgetDataChanged } from '../widget/updateWidget'
 import { normalizeAttendanceCode } from './normalizeCode'
 import { loadTimetable } from '../storage/timetableStore'
@@ -430,6 +415,15 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       })
       .catch(() => undefined)
   }, [])
+
+  // 出席済みのコマの開始・終了前を取り下げる（予約とトレイの両方・N1 §4.4）。依存は記録の日付・科目名・受付時間の3つだけ
+  // （期限切れのコード掃除で code だけ変わっても走らせない）。照合（M2）と順番は純粋層 attendanceOpenSequence。
+  // 出席済みの分岐（onMessage の attended）の中身は変えない＝記録の保存は fire-and-forget のまま。デモ中は流れの側で何もしない。
+  useEffect(() => {
+    if (!attended) return
+    retractAttendedSlots({ rec: attended, now: new Date() }).catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attended?.date, attended?.courseName, attended?.confirmWindow])
 
   // アンマウント時にリアペ提出フローのタイマーを畳む（リーク・遅延injectの防止）。
   useEffect(() => {
@@ -827,40 +821,18 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       if (rec.status === 'reaction_pending' && prevStatus !== 'reaction_pending' && !reactionBusyRef.current) {
         setReactionSubmitState((s) => (s.status === 'failed' ? { status: 'idle', message: null } : s))
       }
-      // 受付openローカル通知（即時発火・完全独立経路。refreshAllNotifications/serializeRunsは通らない）。
-      // 検知はこの in-class ポーリングに依存し、ポーリングはWebViewが動く前面/授業中在席時にしか回らない
-      // （WebViewはBG継続不可）＝バックグラウンド中の受付openは拾えない。抑制条件（accepting以外/出席済み/
-      // 出席画面フォーカス中/通知済み）は純粋関数 shouldNotifyAttendanceOpen が単独で決める。
+      // 受付openローカル通知。検知はこの in-class ポーリングに依存し、ポーリングはWebViewが動く前面/授業中在席時にしか
+      // 回らない（WebViewはBG継続不可）＝バックグラウンド中の受付openは拾えない。
+      // 🔴 2026-09-12 撤回（N1 §4.8-撤回2）: 以前は「予約とは完全に独立した経路」だった。今は出席の直列キューで予約と協調させる
+      // （登録→提示→確認→取り消し→記録の順番は純粋層 attendanceOpenSequence、配線は attendanceOpenFlow）。
       // 失敗は握りつぶす（受付状況の表示・出席登録は通知の成否に依存せず成立）。
-      if (rec.status === 'accepting') {
-        const nowD = new Date()
-        const key = attendanceOpenKey({ courseName: rec.courseName, confirmWindow: rec.confirmWindow, now: nowD })
-        ;(async () => {
-          const notified = await loadNotifiedAttendanceOpen()
-          // 科目別OFF（設定画面「出席アラーム（科目別）」）を受付open通知にも効かせる。
-          // 設定は courseCode 鍵・受付は科目名しか持たないので時間割で橋渡しする。
-          // 引けなければ undefined＝通知する側に倒す（黙って通知を殺さない）。
-          const code = courseCodeByName(timetableRef.current, rec.courseName)
-          const settings: AttendanceAlarmSettings = await loadAttendanceSettings().catch(() => ({}))
-          if (
-            shouldNotifyAttendanceOpen({
-              status: rec.status,
-              attendedNow: attendedRef.current,
-              attendanceFocused,
-              key,
-              notifiedKeys: notified,
-              courseDisabled: code ? settings[code] === false : false,
-            })
-          ) {
-            await presentAttendanceOpenNotification(buildAttendanceOpenContent(rec))
-            // 授業開始の予約アラームとほぼ同時刻に鳴るため、推測ベースの開始アラームは畳む
-            // （受付open通知のほうが「受付中（時刻）」まで言える上位互換）。MAXチャンネルで
-            // 立て続けに2つ鳴るのを止める（実機報告「一気に2つきてうるさい」）。
-            await clearDeliveredAttendanceStartNotifications(code).catch(() => undefined)
-            await mutateNotifiedAttendanceOpen((ks) => pruneNotifiedAttendanceKeys([...ks, key], todayKey(nowD)))
-          }
-        })().catch(() => undefined)
-      }
+      announceAttendanceOpen({
+        rec,
+        now: new Date(),
+        timetable: timetableRef.current,
+        attendedNow: attendedRef.current,
+        attendanceFocused,
+      }).catch(() => undefined)
       // CLASSが「出席済み」を示したら、どのデバイスで出していても記録を更新（授業間の継続表示・
       // オフライン補助）。CLASSの状態が正。配信済みの受付open通知も消す（自分の送信/別デバイス出席いずれも）。
       if (rec.status === 'attended') {

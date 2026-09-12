@@ -1,6 +1,9 @@
 import { computeAttendanceAlarms, buildAttendanceNotificationContent, consecutiveRuns } from './attendanceSchedule'
 import type { TimetableCollection } from '../collect/timetableMessage'
 import type { CourseTermInfo } from '../attendance/courseOver'
+import { attendanceNoticeId, excludeNotices, isAttendanceNoticeId, isStartNoticeId, mergeAttendanceNotices, spanMinutes, startOfLocalDay, todaySlotNotices, upcomingAttendanceNotices } from './attendanceSchedule'
+import { staggerSameInstant, DEFAULT_STAGGER_STEP_MS } from './staggerFireAt'
+import { buildAttendanceNoticeContent, noticeTitleName, type AttendanceNotice, type NoticeTitleContext } from './attendanceSchedule'
 
 // 2026-07-06 は月曜日
 const MONDAY_NOON = new Date(2026, 6, 6, 12, 0, 0, 0)
@@ -403,5 +406,206 @@ describe('学期の授業回が終わった科目に出席アラームを出さ�
       ends({ C1: '2026-07-13' }),
     )
     expect(alarms).toEqual([])
+  })
+})
+
+// ---- N1（2026-09-12）: 同じ種類・同じ時刻を1枠にまとめる（設計 §4.1・§4.2・§7-T2/T3） ----
+const n1cls = (courseCode: string, name: string) => ({
+  courseCode, name, teachers: [], room: 'K101', isRemote: false, credits: 2, badges: [],
+})
+const N1_PERIODS = [
+  { period: 1, start: '09:00', end: '10:30' },
+  { period: 2, start: '10:40', end: '12:10' },
+  { period: 3, start: '13:00', end: '14:30' },
+  { period: 4, start: '14:40', end: '16:10' },
+]
+/** 2026-09-14（月）08:00。 */
+const MON_8 = new Date(2026, 8, 14, 8, 0, 0, 0)
+const monCol = (slots: TimetableCollection['slots']): TimetableCollection => ({
+  periodTimes: { campus: '野田', periods: N1_PERIODS },
+  slots,
+})
+const noticesOn = (col: TimetableCollection, now = MON_8) =>
+  upcomingAttendanceNotices(computeAttendanceAlarms([col], {}, startOfLocalDay(now), { daysAhead: 1 }), now)
+
+describe('積みコマは同じ時刻の1枠にまとめる（N1 §4.1・T2/T3）', () => {
+  const stacked = monCol([{ day: 'mon', period: 2, classes: [n1cls('Q1', '情報科学概論A'), n1cls('Q2', '情報科学概論B')] }])
+
+  it('T2 陽性: 月2限に A・B → 開始1枠・終了前1枠。科目は2つとも残る', () => {
+    const n = noticesOn(stacked)
+    expect(n.map((x) => x.id)).toEqual(['att:s:20260914-1040', 'att:l:20260914-1200'])
+    for (const x of n) {
+      expect(x.courses).toEqual([
+        { courseCode: 'Q1', courseName: '情報科学概論A' },
+        { courseCode: 'Q2', courseName: '情報科学概論B' },
+      ])
+    }
+    expect(n[0].span).toBe('10:40-12:10')
+    expect(n[1].endsAt).toBe('12:10')
+  })
+
+  it('T2 陽性: まとめた後は20秒のずれが起きない（開始は 10:40:00 のまま）', () => {
+    const s = staggerSameInstant(noticesOn(stacked), DEFAULT_STAGGER_STEP_MS, (x) => x.id)
+    expect(s[0].fireAt).toBe(new Date(2026, 8, 14, 10, 40, 0).toISOString())
+  })
+
+  it('T2 陰性: 積んでいないコマは1科目の枠が今と同じ時刻に2つ', () => {
+    const n = noticesOn(monCol([{ day: 'mon', period: 2, classes: [n1cls('C1', '線形代数1')] }]))
+    expect(n.map((x) => [x.id, x.courses.length])).toEqual([
+      ['att:s:20260914-1040', 1],
+      ['att:l:20260914-1200', 1],
+    ])
+  })
+
+  it('T3 長さの違う積みコマ（A＝3-4限、B＝3限）→ 開始1枠、終了前2枠（別の id）', () => {
+    const n = noticesOn(
+      monCol([
+        { day: 'mon', period: 3, classes: [n1cls('X1', '化学実験'), n1cls('X2', '化学演習')] },
+        { day: 'mon', period: 4, classes: [n1cls('X1', '化学実験')] },
+      ]),
+    )
+    expect(n.map((x) => [x.id, x.courses.map((c) => c.courseCode).join(','), x.span])).toEqual([
+      ['att:s:20260914-1300', 'X1,X2', '13:00-16:10'],
+      ['att:l:20260914-1420', 'X2', '13:00-14:30'],
+      ['att:l:20260914-1600', 'X1', '13:00-16:10'],
+    ])
+  })
+
+  it('始まっている授業の終了前にも授業の時間帯（span）が付く（今日の0:00から計算する理由）', () => {
+    const n = noticesOn(stacked, new Date(2026, 8, 14, 11, 0))
+    expect(n).toHaveLength(1)
+    expect(n[0]).toMatchObject({ id: 'att:l:20260914-1200', span: '10:40-12:10' })
+  })
+})
+
+describe('N1 の小道具（§4.2・§4.3）', () => {
+  it('attendanceNoticeId はローカル時刻の日付＋時分で、秒は落とす', () => {
+    expect(attendanceNoticeId('attendance-start', new Date(2026, 8, 14, 9, 5, 20).toISOString())).toBe('att:s:20260914-0905')
+    expect(attendanceNoticeId('attendance-last-chance', new Date(2026, 8, 14, 16, 0).toISOString())).toBe('att:l:20260914-1600')
+  })
+
+  it('isAttendanceNoticeId / isStartNoticeId（陰性: 旧版の uuid・受付open の identifier）', () => {
+    expect(isAttendanceNoticeId('att:l:20260914-1600')).toBe(true)
+    expect(isAttendanceNoticeId('3f2b9a1c-0000-4000-8000-000000000000')).toBe(false)
+    expect(isAttendanceNoticeId('open:2026-09-14|線形代数1|10:40〜12:10')).toBe(false)
+    expect(isStartNoticeId('att:s:20260914-1040')).toBe(true)
+    expect(isStartNoticeId('att:l:20260914-1200')).toBe(false)
+  })
+
+  it('startOfLocalDay / spanMinutes', () => {
+    expect(startOfLocalDay(new Date(2026, 8, 14, 23, 59))).toEqual(new Date(2026, 8, 14, 0, 0, 0, 0))
+    expect(spanMinutes('10:40-12:10')).toEqual({ startMin: 640, endMin: 730 })
+    expect(spanMinutes('壊れ')).toBeNull()
+  })
+
+  it('excludeNotices は id が一致する枠だけを落とす', () => {
+    const n = noticesOn(monCol([{ day: 'mon', period: 2, classes: [n1cls('C1', '線形代数1')] }]))
+    expect(excludeNotices(n, new Set(['att:s:20260914-1040'])).map((x) => x.id)).toEqual(['att:l:20260914-1200'])
+  })
+
+  it('todaySlotNotices は科目別OFF・休講・学期終了を通さない（照合は時間割にある全科目で行う）', () => {
+    const col = monCol([{ day: 'mon', period: 1, classes: [n1cls('D1', '英語')] }])
+    expect(computeAttendanceAlarms([col], { D1: false }, MON_8, { daysAhead: 1 })).toEqual([])
+    expect(todaySlotNotices([col], MON_8).map((x) => x.id)).toEqual(['att:s:20260914-0900', 'att:l:20260914-1020'])
+  })
+
+  it('mergeAttendanceNotices は入力を壊さない', () => {
+    const alarms = computeAttendanceAlarms(
+      [monCol([{ day: 'mon', period: 2, classes: [n1cls('Q1', 'A'), n1cls('Q2', 'B')] }])],
+      {},
+      MON_8,
+      { daysAhead: 1 },
+    )
+    const snap = JSON.parse(JSON.stringify(alarms))
+    mergeAttendanceNotices(alarms)
+    expect(alarms).toEqual(snap)
+  })
+})
+
+describe('積みコマの題名（N1 §4.1・T2/T4/T5）', () => {
+  const ctx = (over: Partial<NoticeTitleContext> = {}): NoticeTitleContext => ({
+    overrides: {},
+    manualQuarter: null,
+    resolvedQuarter: 'first',
+    ...over,
+  })
+  const A = { courseCode: 'Q1', courseName: '情報科学概論A' }
+  const B = { courseCode: 'Q2', courseName: '情報科学概論B' }
+  const notice = (courses: AttendanceNotice['courses'], kind: AttendanceNotice['kind'] = 'attendance-start'): AttendanceNotice =>
+    kind === 'attendance-start'
+      ? { id: 'att:s:20260914-1040', kind, fireAt: new Date(2026, 8, 14, 10, 40).toISOString(), date: '2026-09-14', span: '10:40-12:10', courses }
+      : { id: 'att:l:20260914-1200', kind, fireAt: new Date(2026, 8, 14, 12, 0).toISOString(), endsAt: '12:10', date: '2026-09-14', span: '10:40-12:10', courses }
+
+  it('T2: 指定が無ければ「A／B 出席コード」（本文は1科目の時と同じ）', () => {
+    const c = buildAttendanceNoticeContent(notice([A, B]), ctx())
+    expect(c.title).toBe('情報科学概論A／情報科学概論B 出席コード')
+    expect(c.body).toBe('授業が始まりました。出席コードを入力できるか確認しましょう')
+  })
+
+  it('T2 陰性: 1科目の枠は既存の buildAttendanceNotificationContent と同じ文面（開始・終了前とも）', () => {
+    for (const kind of ['attendance-start', 'attendance-last-chance'] as const) {
+      const n = notice([A], kind)
+      expect(buildAttendanceNoticeContent(n, ctx())).toEqual(
+        buildAttendanceNotificationContent({
+          kind, courseCode: 'Q1', courseName: '情報科学概論A', day: 'mon', period: 2, fireAt: n.fireAt, endsAt: n.endsAt,
+        }),
+      )
+    }
+  })
+
+  it('T4 陽性: 手動の指定があり、全科目に半期が明示され、現在に一致するのが1科目 → その科目名だけ', () => {
+    expect(
+      noticeTitleName([A, B], ctx({ manualQuarter: 'second', resolvedQuarter: 'second', overrides: { Q1: { quarter: 'first' }, Q2: { quarter: 'second' } } })),
+    ).toBe('情報科学概論B')
+  })
+
+  it('T4 陰性: 現在の半期が自動（null）なら絞らない（月の近似は使わない）', () => {
+    expect(
+      noticeTitleName([A, B], ctx({ manualQuarter: null, resolvedQuarter: 'second', overrides: { Q1: { quarter: 'first' }, Q2: { quarter: 'second' } } })),
+    ).toBe('情報科学概論B／情報科学概論A')
+  })
+
+  it('T4 陰性: 1科目が未指定なら絞らない', () => {
+    expect(
+      noticeTitleName([A, B], ctx({ manualQuarter: 'second', resolvedQuarter: 'second', overrides: { Q2: { quarter: 'second' } } })),
+    ).toBe('情報科学概論B／情報科学概論A')
+  })
+
+  it('T4 陰性: 両方が現在の半期なら絞らない', () => {
+    expect(
+      noticeTitleName([A, B], ctx({ manualQuarter: 'first', resolvedQuarter: 'first', overrides: { Q1: { quarter: 'first' }, Q2: { quarter: 'first' } } })),
+    ).toBe('情報科学概論A／情報科学概論B')
+  })
+
+  it('T4 陰性: 両方が別の半期なら絞らない', () => {
+    expect(
+      noticeTitleName([A, B], ctx({ manualQuarter: 'first', resolvedQuarter: 'first', overrides: { Q1: { quarter: 'second' }, Q2: { quarter: 'second' } } })),
+    ).toBe('情報科学概論A／情報科学概論B')
+  })
+
+  it('T4 並び: 現在の半期に一致 → 未指定 → 別の半期。同じ順位は科目コードの昇順', () => {
+    const C = { courseCode: 'Q0', courseName: '情報科学概論C' }
+    expect(
+      noticeTitleName([A, B, C], ctx({ resolvedQuarter: 'first', overrides: { Q2: { quarter: 'first' }, Q1: { quarter: 'second' } } })),
+    ).toBe('情報科学概論B／情報科学概論C／情報科学概論A')
+  })
+
+  it('T4: どの場合も枠は1つ（題名だけが変わる）', () => {
+    const n = mergeAttendanceNotices(
+      computeAttendanceAlarms(
+        [monCol([{ day: 'mon', period: 2, classes: [n1cls('Q1', '情報科学概論A'), n1cls('Q2', '情報科学概論B')] }])],
+        {},
+        startOfLocalDay(MON_8),
+        { daysAhead: 1 },
+      ),
+    )
+    expect(n.filter((x) => x.kind === 'attendance-start')).toHaveLength(1)
+    for (const c of [ctx(), ctx({ manualQuarter: 'first', overrides: { Q1: { quarter: 'first' }, Q2: { quarter: 'second' } } })]) {
+      expect(buildAttendanceNoticeContent(n[0], c).title.endsWith(' 出席コード')).toBe(true)
+    }
+  })
+
+  it('T5: 同名で別コード → 題名は1つの名前', () => {
+    expect(noticeTitleName([{ courseCode: 'E1', courseName: '英語' }, { courseCode: 'E2', courseName: '英語' }], ctx())).toBe('英語')
   })
 })

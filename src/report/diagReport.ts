@@ -171,8 +171,13 @@ export function buildDiagReportBody(opts: {
    * 未記入・空白のみなら見出しを残して `（未記入）` を書く。
    */
   note?: string
+  /**
+   * 通知の計器の1行（N1 §4.6・ASCII のみ・科目名なし）。例: `notif att=10 dupe=0 legacy=0 next=09-14T10:30 asg=18 fail=0 open=1`。
+   * 次の出席アラームの時刻（＝次の授業の時刻）が載る。送る前に全文が見える（「見せてから送る」の内側）。渡さなければ載せない。
+   */
+  notifLine?: string | null
 }): string {
-  const { diags, env, nowIso, source = 'attendance', note } = opts
+  const { diags, env, nowIso, source = 'attendance', note, notifLine } = opts
   const head = [
     NOTE_HEADING,
     // 前後の空白だけ落とし、**中の改行は保つ**（書いた通りに送る＝「見せてから送る」の一部）。
@@ -181,6 +186,7 @@ export function buildDiagReportBody(opts: {
     '',
     '■ アプリ・端末',
     formatDiagEnv(env),
+    ...(notifLine ? [notifLine] : []),
     `書き出し ${nowIso}`,
   ]
   // 設定から開いた時は記録を載せない＝本文が mailto に収まり「メールで送る」を主動線にできる。

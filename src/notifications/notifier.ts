@@ -15,6 +15,15 @@ import Constants, { ExecutionEnvironment } from 'expo-constants'
 import type { AttendanceAlarm } from './attendanceSchedule'
 import { buildAttendanceNotificationContent } from './attendanceSchedule'
 import type { ScheduledNotification } from './schedule'
+import {
+  runScheduleLoop,
+  syncAttendanceWith,
+  type AttendanceScheduleItem,
+  type PendingRequestLike,
+} from './attendanceSync'
+import { addScheduleFailures } from './attendanceNotifState'
+import type { DeliveredLike } from './attendanceOpenNotify'
+import type { OpenPresentRequest } from './attendanceOpenSequence'
 import { buildAssignmentNotificationContent } from './assignmentContent'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { buildBulletinNotificationContent } from './bulletinNotify'
@@ -196,31 +205,49 @@ export async function requestNotificationPermission(): Promise<NotifPermission |
   }
 }
 
-export async function syncAttendanceAlarms(alarms: AttendanceAlarm[]): Promise<void> {
+/** expo の NotificationRequest から、判断に使う identifier と data だけを取る。 */
+function toPendingLike(n: { identifier: string; content: { data?: unknown } }): PendingRequestLike {
+  const d = n.content.data
+  return { identifier: n.identifier, data: d && typeof d === 'object' ? (d as Record<string, unknown>) : null }
+}
+
+/**
+ * 出席アラームを差分で同期する（N1 §4.2）。
+ * 🔴 2026-09-12 撤回（N1 §4.8-撤回3）: 以前は「既存の出席アラームを全キャンセルしてから貼り直す（差分管理せず単純化）」だった。
+ * identifier を渡さず expo が毎回 uuid を振っていたので冪等でなく、1件の reject でループごと止まっていた。
+ * 今は決まった identifier（att:s:/att:l:＋日付＋ずらす前の時刻）で予約し、同じ identifier は置き換えになる。
+ * 判断（取り消す集合・直前の除外・1件ずつの try/catch）は純粋層 attendanceSync.ts。ここは expo を渡すだけ。
+ * 空配列＝出席タグの予約を全部取り消す（キルスイッチ all の出口・旧版の uuid の掃除）。
+ */
+export async function syncAttendanceAlarms(items: AttendanceScheduleItem[]): Promise<void> {
   const Notifications = await loadNotifications()
   if (!Notifications) return
-  // 既存の出席アラームを全キャンセルしてから貼り直す（差分管理せず単純化）。
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync()
-  for (const n of scheduled) {
-    const data = n.content.data as { tag?: string } | null
-    if (data?.tag === ATTENDANCE_TAG) {
-      await Notifications.cancelScheduledNotificationAsync(n.identifier)
-    }
-  }
-  for (const alarm of alarms) {
-    const { title, body } = buildAttendanceNotificationContent(alarm)
-    await Notifications.scheduleNotificationAsync({
-      content: { title, body, data: { tag: ATTENDANCE_TAG, courseCode: alarm.courseCode, kind: alarm.kind } },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: new Date(alarm.fireAt),
-        channelId: ATTENDANCE_CHANNEL_ID,
-      },
-    })
+  const r = await syncAttendanceWith(items, {
+    getPending: async () => (await Notifications.getAllScheduledNotificationsAsync()).map(toPendingLike),
+    cancel: (identifier) => Notifications.cancelScheduledNotificationAsync(identifier),
+    schedule: (item) =>
+      Notifications.scheduleNotificationAsync({
+        identifier: item.id,
+        content: { title: item.title, body: item.body, data: item.data },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(item.fireAt),
+          channelId: ATTENDANCE_CHANNEL_ID,
+        },
+      }),
+    clock: () => Date.now(),
+  })
+  addScheduleFailures(r.failed)
+  if (r.failed > 0 || r.cancelFailed > 0) {
+    console.warn(`出席アラームの予約に失敗しました（予約${r.failed}件・取り消し${r.cancelFailed}件）`)
   }
 }
 
-/** 課題の締切前リマインダー＋朝まとめを貼り直す（既存の課題通知を全キャンセルしてから予約）。 */
+/**
+ * 課題の締切前リマインダー＋朝まとめを貼り直す（既存の課題通知を全キャンセルしてから予約）。
+ * N1 §4.2: 1件ずつ try/catch し（1件の reject で残りを落とさない）、発火まで2秒未満は予約しない（iOS は秒へ切り捨てて reject になる）。
+ * ⚠10秒の窓は使わない＝全部取り消した後なので、10秒以内を除くとその1件が消える。identifier の決定化もしない（N2 で触る）。
+ */
 export async function syncAssignmentReminders(notifications: ScheduledNotification[]): Promise<void> {
   const Notifications = await loadNotifications()
   if (!Notifications) return
@@ -234,25 +261,31 @@ export async function syncAssignmentReminders(notifications: ScheduledNotificati
       await Notifications.cancelScheduledNotificationAsync(n.identifier)
     }
   }
-  for (const n of notifications) {
-    const { title, body } = buildAssignmentNotificationContent(n)
-    const isEvent = n.kind === 'class-event'
-    // **対象の識別子を必ず載せる**。載せないとタップされても「どの課題か」が分からず、
-    // 課題リマインドは一覧までしか着地できない（assignmentId は課題ページURLそのもの）。
-    const data: NotificationPayload = isEvent
-      ? { tag: CLASS_EVENT_TAG, kind: n.kind, eventId: n.eventId }
-      : n.kind === 'morning-digest'
-        ? { tag: ASSIGNMENT_TAG, kind: n.kind }
-        : { tag: ASSIGNMENT_TAG, kind: n.kind, assignmentId: n.assignmentId }
-    await Notifications.scheduleNotificationAsync({
-      content: { title, body, data },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: new Date(n.fireAt),
-        channelId: isEvent ? CLASS_EVENT_CHANNEL_ID : ASSIGNMENT_CHANNEL_ID,
-      },
-    })
-  }
+  const r = await runScheduleLoop(notifications, {
+    isPending: () => false,
+    clock: () => Date.now(),
+    schedule: (n) => {
+      const { title, body } = buildAssignmentNotificationContent(n)
+      const isEvent = n.kind === 'class-event'
+      // **対象の識別子を必ず載せる**。載せないとタップされても「どの課題か」が分からず、
+      // 課題リマインドは一覧までしか着地できない（assignmentId は課題ページURLそのもの）。
+      const data: NotificationPayload = isEvent
+        ? { tag: CLASS_EVENT_TAG, kind: n.kind, eventId: n.eventId }
+        : n.kind === 'morning-digest'
+          ? { tag: ASSIGNMENT_TAG, kind: n.kind }
+          : { tag: ASSIGNMENT_TAG, kind: n.kind, assignmentId: n.assignmentId }
+      return Notifications.scheduleNotificationAsync({
+        content: { title, body, data },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(n.fireAt),
+          channelId: isEvent ? CLASS_EVENT_CHANNEL_ID : ASSIGNMENT_CHANNEL_ID,
+        },
+      })
+    },
+  })
+  addScheduleFailures(r.failed)
+  if (r.failed > 0) console.warn(`課題リマインドの予約に失敗しました（${r.failed}件）`)
 }
 
 /**
@@ -273,19 +306,54 @@ export async function presentBulletinNotifications(items: BulletinItem[]): Promi
 
 /**
  * 出席受付openを即時ローカル通知する（trigger に channelId のみ＝即時発火＋チャンネル指定）。
- * 既存 attendance チャンネル（AndroidImportance.MAX）に相乗り。掲示の即時通知と同型。
- * 出席の予約枠（refreshAllNotifications・iOS 64枠）とは独立。Expo Go では no-op。
+ * 既存 attendance チャンネル（AndroidImportance.MAX）に相乗り。掲示の即時通知と同型。Expo Go では reject（提示しない）。
+ * 🔴 2026-09-12 撤回（N1 §4.8-撤回2）: 以前は「出席の予約枠（refreshAllNotifications）とは独立」だった。
+ * 今は attendanceOpenSequence が出席の直列キューの中で予約と協調させ、identifier・音の有無・payload を決める。
+ * 音なし（sound:false）は通知ごとに消すだけでチャンネル属性には触れない（iOS は sound=nil・Android は setSilent）。
+ * **この関数の解決は「表示された」の証拠にならない**（前面はハンドラを待ち3秒で打ち切る）。確かめは getPresentedNotificationsSnapshot。
  */
-export async function presentAttendanceOpenNotification(content: {
-  title: string
-  body: string
-}): Promise<void> {
+export async function presentAttendanceOpenNotification(req: OpenPresentRequest): Promise<void> {
   const Notifications = await loadNotifications()
-  if (!Notifications) return
+  if (!Notifications) throw new Error('通知モジュールを利用できません')
   await Notifications.scheduleNotificationAsync({
-    content: { title: content.title, body: content.body, data: { tag: ATTENDANCE_OPEN_TAG } },
+    ...(req.identifier ? { identifier: req.identifier } : {}),
+    content: { title: req.title, body: req.body, data: req.data, ...(req.sound ? {} : { sound: false }) },
     trigger: { channelId: ATTENDANCE_CHANNEL_ID },
   })
+}
+
+/** 配信済み通知の写し（受付open の確認と「音なしで置き換えるか」の判断用）。date は OS の単位のまま（iOS 秒・Android ミリ秒）。 */
+export async function getPresentedNotificationsSnapshot(): Promise<DeliveredLike[]> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return []
+  return (await Notifications.getPresentedNotificationsAsync()).map((n) => {
+    const d = n.request.content.data as unknown
+    return {
+      identifier: n.request.identifier,
+      date: n.date,
+      data: d && typeof d === 'object' ? (d as Record<string, unknown>) : null,
+    }
+  })
+}
+
+/** 保留中の予約の写し（計器用・N1 §4.6）。判断は純粋層 notifInstrument。 */
+export async function getScheduledNotificationsSnapshot(): Promise<PendingRequestLike[]> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return []
+  return (await Notifications.getAllScheduledNotificationsAsync()).map(toPendingLike)
+}
+
+/** 保留中の予約を1件取り消す（受付open の b・出席済みの取り下げ）。表示中の通知には触れない。 */
+export async function cancelScheduledNotification(identifier: string): Promise<void> {
+  const Notifications = await loadNotifications()
+  if (!Notifications) return
+  await Notifications.cancelScheduledNotificationAsync(identifier)
+}
+
+/** 出席タグ（開始・終了前・受付open）の配信済み通知のうち、identifier が一致するものをトレイから消す。他タグは触らない。 */
+export async function dismissPresentedAttendanceByIds(identifiers: string[]): Promise<void> {
+  const ids = new Set(identifiers)
+  await clearDelivered([ATTENDANCE_TAG, ATTENDANCE_OPEN_TAG], (_d, identifier) => ids.has(identifier))
 }
 
 /**
@@ -295,7 +363,7 @@ export async function presentAttendanceOpenNotification(content: {
  */
 async function clearDelivered(
   tags: string[],
-  match?: (data: NotifResponseData) => boolean,
+  match?: (data: NotifResponseData, identifier: string) => boolean,
 ): Promise<void> {
   const Notifications = await loadNotifications()
   if (!Notifications) return
@@ -303,7 +371,7 @@ async function clearDelivered(
   for (const n of presented) {
     const data = (n.request.content.data ?? {}) as NotifResponseData
     if (!data.tag || !tags.includes(data.tag)) continue
-    if (match && !match(data)) continue
+    if (match && !match(data, n.request.identifier)) continue
     await Notifications.dismissNotificationAsync(n.request.identifier)
   }
 }
@@ -325,9 +393,12 @@ export async function clearDeliveredAttendanceOpenNotifications(): Promise<void>
  * last-chance は「まだなら今のうちに」＝別の役割なので消さない。
  */
 export async function clearDeliveredAttendanceStartNotifications(courseCode?: string | null): Promise<void> {
+  // N1 §4.7: まとめた枠は courseCodes を持つ。無ければ courseCode を見る（配信済みの旧通知のため）。
   await clearDelivered(
     [ATTENDANCE_TAG],
-    (d) => d.kind === 'attendance-start' && (!courseCode || d.courseCode === courseCode),
+    (d) =>
+      d.kind === 'attendance-start' &&
+      (!courseCode || (Array.isArray(d.courseCodes) ? d.courseCodes.includes(courseCode) : d.courseCode === courseCode)),
   )
 }
 

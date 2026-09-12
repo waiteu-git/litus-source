@@ -27,8 +27,9 @@ import { allocateNotificationSlots, type SlotRequest } from './slotAllocation'
 import type { AttendanceAlarm } from './attendanceSchedule'
 import type { ScheduledNotification, DeadlineReminder, MorningDigest } from './schedule'
 
-export type NotificationPlan = {
-  attendance: AttendanceAlarm[]
+/** 出席の要素は既定で AttendanceAlarm。N1 以降の貼り直しは AttendanceNotice（まとめた枠）を渡す。 */
+export type NotificationPlan<A = AttendanceAlarm> = {
+  attendance: A[]
   assignments: ScheduledNotification[]
 }
 
@@ -57,18 +58,38 @@ export function planNotifications(
   attendanceAlarms: AttendanceAlarm[],
   assignmentNotifications: ScheduledNotification[],
   now: Date,
+  options?: PlanOptions,
+): NotificationPlan<AttendanceAlarm>
+/**
+ * 出席の要素を汎用にした形（N1 §4.1）。まとめた枠は科目コードを1つに決められないので、
+ * 重複排除の id の作り方を呼び出し側が渡す（貼り直しは `(n) => n.id`）。
+ */
+export function planNotifications<A extends { fireAt: string }>(
+  attendanceAlarms: A[],
+  assignmentNotifications: ScheduledNotification[],
+  now: Date,
+  options: PlanOptions,
+  idOf: (a: A) => string,
+): NotificationPlan<A>
+export function planNotifications<A extends { fireAt: string }>(
+  attendanceAlarms: A[],
+  assignmentNotifications: ScheduledNotification[],
+  now: Date,
   options: PlanOptions = {},
-): NotificationPlan {
+  idOf?: (a: A) => string,
+): NotificationPlan<A> {
   const cap = options.cap ?? DEFAULT_CAP
   const nearWindowMs = options.nearWindowMs ?? DEFAULT_NEAR_WINDOW_MS
   const nearCutoff = now.getTime() + nearWindowMs
+  // 既定は従来の attendanceId（AttendanceAlarm 用）。汎用の要素ではオーバーロードが idOf を必須にしている。
+  const attendanceKey = idOf ?? (attendanceId as unknown as (a: A) => string)
 
   const requests: SlotRequest[] = []
-  const attendanceById = new Map<string, AttendanceAlarm>()
+  const attendanceById = new Map<string, A>()
   const assignmentById = new Map<string, ScheduledNotification>()
 
   for (const a of attendanceAlarms) {
-    const id = attendanceId(a)
+    const id = attendanceKey(a)
     // 同一idの重複を弾く（前期・後期の両テーブルに同じ通年科目が同じ曜日時限で載っていると、
     // fireAt まで完全に同一のアラームが2件でき、そのまま同一文面が2回鳴る）。
     if (attendanceById.has(id)) continue
@@ -90,7 +111,7 @@ export function planNotifications(
 
   const kept = allocateNotificationSlots(requests, cap)
 
-  const attendance: AttendanceAlarm[] = []
+  const attendance: A[] = []
   const assignments: ScheduledNotification[] = []
   for (const r of kept) {
     const a = attendanceById.get(r.id)
