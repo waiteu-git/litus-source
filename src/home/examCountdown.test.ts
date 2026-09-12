@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { buildExamCountdown, calendarDayDiff, countdownDaysLabel, countdownTone } from './examCountdown'
 import type { ClassEvent, ClassEventType } from '../timetableEvents/classEvent'
 import type { CampusPeriodTimes } from '../parsers/timetable'
+import type { CountdownStart } from '../timetableEvents/classEvent'
+import { buildDemoClassEvents } from '../demo/demoFixtures'
 
 const NOW = new Date(2026, 6, 13, 14, 0) // 2026-07-13(月) 14:00
 
@@ -213,5 +215,114 @@ describe('buildExamCountdown', () => {
     const before = events.map((e) => e.id)
     expect(buildExamCountdown(events, NOW)).toEqual(buildExamCountdown(events, NOW))
     expect(events.map((e) => e.id)).toEqual(before)
+  })
+})
+
+describe('表示開始（startSetting と試験ごとの countdownStart・設計 A §4-2・§7-2A）', () => {
+  const EXAM = (o: Partial<ClassEvent> = {}) =>
+    ev({ id: 'x', type: 'final', date: '2026-07-20', courseName: '試験', ...o })
+
+  it('境界: 全体7日前・試験日7/20で、7/12 23:59（8日前）には出ない／7/13 0:00（7日前）に「残り7日」で出る', () => {
+    expect(buildExamCountdown([EXAM()], new Date(2026, 6, 12, 23, 59), 3, null, 7)).toEqual([])
+    const items = buildExamCountdown([EXAM()], new Date(2026, 6, 13, 0, 0), 3, null, 7)
+    expect(items.map((i) => i.daysLabel)).toEqual(['残り7日'])
+  })
+
+  it('always を渡した結果は、引数を省いた結果と一致する（既定＝今と同じ）', () => {
+    const events = [
+      EXAM({ id: 'a', date: '2026-07-14', courseName: 'A' }),
+      EXAM({ id: 'b', date: '2026-08-10', courseName: 'B' }),
+      EXAM({ id: 'c', date: '2026-09-30', courseName: 'C' }),
+      EXAM({ id: 'd', date: '2026-10-30', courseName: 'D' }),
+    ]
+    const omitted = buildExamCountdown(events, NOW)
+    expect(buildExamCountdown(events, NOW, 3, null, 'always')).toEqual(omitted)
+    expect(omitted.map((i) => i.title)).toEqual(['A', 'B', 'C'])
+    // 陰性対照: 全体7なら結果が変わる（この入力で表示開始が実際に効くことの確認）
+    expect(buildExamCountdown(events, NOW, 3, null, 7).map((i) => i.title)).toEqual(['A'])
+  })
+
+  it('試験ごとの N日前 は全体に勝つ: 全体 always に試験7で、8日前は出ない／7日前は出る', () => {
+    const e = EXAM({ countdownStart: { kind: 'days', days: 7 } })
+    expect(buildExamCountdown([e], new Date(2026, 6, 12, 12, 0), 3, null, 'always')).toEqual([])
+    expect(buildExamCountdown([e], new Date(2026, 6, 13, 0, 0), 3, null, 'always')).toHaveLength(1)
+  })
+
+  it('試験ごとの N日前 は全体に勝つ: 全体7に試験30で、20日前に出る（上書きの無い試験は出ない＝対照）', () => {
+    const now = new Date(2026, 5, 30, 12, 0) // 6/30＝7/20 の20日前
+    const items = buildExamCountdown(
+      [
+        EXAM({ id: 'o', courseName: '上書き30', countdownStart: { kind: 'days', days: 30 } }),
+        EXAM({ id: 'p', courseName: '上書きなし' }),
+      ],
+      now,
+      3,
+      null,
+      7,
+    )
+    expect(items.map((i) => i.title)).toEqual(['上書き30'])
+    expect(items[0].daysLabel).toBe('残り20日')
+  })
+
+  it('日時を指定: 開始1分前は出ない／ちょうどで出る（全体 always より試験ごとが勝つ）', () => {
+    const e = EXAM({ countdownStart: { kind: 'at', date: '2026-07-15', time: '09:00' } })
+    expect(buildExamCountdown([e], new Date(2026, 6, 15, 8, 59), 3, null, 'always')).toEqual([])
+    expect(buildExamCountdown([e], new Date(2026, 6, 15, 9, 0), 3, null, 'always')).toHaveLength(1)
+  })
+
+  it('日時を指定: 試験当日の朝を開始にすると、開始から時限の終了まで出る', () => {
+    const PT: CampusPeriodTimes = { campus: '野田', periods: [{ period: 3, start: '13:10', end: '14:40' }] }
+    const e = EXAM({ date: '2026-07-13', periods: [3], countdownStart: { kind: 'at', date: '2026-07-13', time: '09:00' } })
+    expect(buildExamCountdown([e], new Date(2026, 6, 13, 8, 59), 3, PT)).toEqual([])
+    expect(buildExamCountdown([e], new Date(2026, 6, 13, 9, 0), 3, PT)).toHaveLength(1)
+    expect(buildExamCountdown([e], new Date(2026, 6, 13, 14, 40), 3, PT)).toHaveLength(1)
+    expect(buildExamCountdown([e], new Date(2026, 6, 13, 14, 41), 3, PT)).toEqual([])
+  })
+
+  it('🔴 3件に切る前に落とす: 最も近い1件が開始前でも、残りの3件が出る（2件にならない）', () => {
+    const later = [
+      EXAM({ id: 'b', date: '2026-07-19', courseName: 'B' }),
+      EXAM({ id: 'c', date: '2026-07-20', courseName: 'C' }),
+      EXAM({ id: 'd', date: '2026-07-21', courseName: 'D' }),
+    ]
+    const aNotYet = EXAM({ id: 'a', date: '2026-07-18', courseName: 'A', countdownStart: { kind: 'at', date: '2026-07-18', time: '08:00' } })
+    const aPlain = EXAM({ id: 'a', date: '2026-07-18', courseName: 'A' })
+    expect(buildExamCountdown([aNotYet, ...later], NOW).map((i) => i.title)).toEqual(['B', 'C', 'D'])
+    // 対照: A の上書きが無ければ A が先頭に入る（上の結果は表示開始が効いたせい）
+    expect(buildExamCountdown([aPlain, ...later], NOW).map((i) => i.title)).toEqual(['A', 'B', 'C'])
+  })
+
+  it('日時を指定が試験日より後（壊れた値）なら全体の設定で判定する（永久に消えない）', () => {
+    const e = EXAM({ countdownStart: { kind: 'at', date: '2026-07-25', time: '00:00' } })
+    expect(buildExamCountdown([e], NOW, 3, null, 'always')).toHaveLength(1) // NOW=7/13: 全体 always なら出る
+    expect(buildExamCountdown([e], new Date(2026, 6, 12, 12, 0), 3, null, 7)).toEqual([]) // 8日前・全体7
+    expect(buildExamCountdown([e], NOW, 3, null, 7)).toHaveLength(1) // 7日前・全体7
+  })
+
+  it('日時を指定の日付・時刻が壊れていても全体の設定で判定する', () => {
+    const broken: CountdownStart[] = [
+      { kind: 'at', date: '2026-02-31', time: '09:00' },
+      { kind: 'at', date: '2026-07-15', time: '24:00' },
+      { kind: 'at', date: '2026-07-15', time: '9:00' },
+    ]
+    for (const cs of broken) {
+      expect(buildExamCountdown([EXAM({ countdownStart: cs })], NOW, 3, null, 'always')).toHaveLength(1)
+    }
+  })
+
+  it('試験以外の種類は、countdownStart を持っていても出ない（今と同じ）', () => {
+    const e = ev({ id: 'c', type: 'cancel', date: '2026-07-15', countdownStart: { kind: 'days', days: 60 } })
+    expect(buildExamCountdown([e], NOW, 3, null, 'always')).toEqual([])
+  })
+
+  it('デモ: 既定（always）なら中間（demo-event-3・14〜20日先）が出る／全体7なら出ない（曜日を変えて7通り）', () => {
+    for (let d = 13; d <= 19; d++) {
+      // 2026-07-13(月)〜07-19(日)
+      const now = new Date(2026, 6, d, 10, 0)
+      const events = buildDemoClassEvents(now)
+      expect(buildExamCountdown(events, now).map((i) => i.eventId)).toEqual(['demo-event-3'])
+      expect(buildExamCountdown(events, now, 3, null, 'always').map((i) => i.eventId)).toEqual(['demo-event-3'])
+      expect(buildExamCountdown(events, now, 3, null, 7)).toEqual([])
+    }
   })
 })

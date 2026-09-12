@@ -178,8 +178,8 @@ export default function App() {
 /**
  * ログインゲートの内側（＝通信を伴う層）。デモモードでは LoginGate を丸ごと外す。
  *
- * LoginGate の WebView は showLoginUi に関わらず**常時マウント**されており
- * （セッション判定 probe を兼ねる）、描画したままではデモ中も大学へ通信する。
+ * LoginGate の WebView（セッション判定 probe）は、規約の同意が確定した後のゲート画面では showLoginUi に
+ * 関わらずマウントされており（同意の前はマウントしない＝設計 PC）、描画したままではデモ中も大学へ通信する。
  * したがって「デモ中は通信ゼロ」を満たすには LoginGate をツリーから外すしかない。
  *
  * 一方 AttendanceEngineProvider / SyncProvider / ClassViewProvider は**外せない**。

@@ -21,6 +21,7 @@ import { Accordion } from '../ui/Accordion'
 import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
 import { FONT_LICENSE_TEXT, FONT_LICENSE_TITLE } from '../legal/fontLicense'
 import { useDisplaySettings } from '../displaySettings'
+import { toExamCountdownStart } from '../storage/displaySettingsSerialize'
 import SectionLayoutReorder from '../ui/SectionLayoutReorder'
 import { HOME_LAYOUT_OPS, HOME_SECTION_META } from '../home/homeSections'
 import { SUBJECT_LAYOUT_OPS, SUBJECT_SECTION_META } from '../subject/subjectSections'
@@ -50,10 +51,12 @@ export default function SettingsScreen() {
     assignmentsView,
     homeLayout,
     subjectLayout,
+    examCountdownStart,
     setTimetableView,
     setAssignmentsView,
     setHomeLayout,
     setSubjectLayout,
+    setExamCountdownStart,
   } = useDisplaySettings()
   const [courses, setCourses] = useState<Course[]>([])
   const [settings, setSettings] = useState<AttendanceAlarmSettings>({})
@@ -233,6 +236,24 @@ export default function SettingsScreen() {
             value={assignmentsView}
             onChange={setAssignmentsView}
           />
+
+          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>試験カウントダウンの表示開始</Text>
+          {/* Segmented は折り返さず等分するので、ラベルは「から」を省いて短くする（設計 A §6 Q9・§9-1）。
+              キーは文字列なので 60 などは '60' に写して渡し、戻す時は toExamCountdownStart で検める。 */}
+          <Segmented
+            options={[
+              { key: 'always', label: 'いつでも' },
+              { key: '60', label: '60日前' },
+              { key: '30', label: '30日前' },
+              { key: '14', label: '14日前' },
+              { key: '7', label: '7日前' },
+            ]}
+            value={String(examCountdownStart)}
+            onChange={(k) => setExamCountdownStart(toExamCountdownStart(k === 'always' ? k : Number(k)))}
+          />
+          <Text style={[styles.note, { color: ui.labelColor }]}>
+            ホームの試験カウントダウンに、試験の何日前から出すかを選べます。試験ごとの設定は各回の予定の編集で変えられます。試験の通知（前日20:00・当日8:00）は、この設定では変わりません。
+          </Text>
 
           <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>ホームの並び</Text>
           <SectionLayoutReorder

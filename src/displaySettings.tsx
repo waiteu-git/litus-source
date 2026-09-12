@@ -4,6 +4,7 @@ import {
   DEFAULT_DISPLAY_SETTINGS,
   type AssignmentsView,
   type DisplaySettings,
+  type ExamCountdownStartSetting,
   type TimetableView,
 } from './storage/displaySettingsSerialize'
 import type { HomeSectionPref } from './home/homeSections'
@@ -14,10 +15,12 @@ type Ctx = {
   assignmentsView: AssignmentsView
   homeLayout: HomeSectionPref[]
   subjectLayout: SubjectSectionPref[]
+  examCountdownStart: ExamCountdownStartSetting
   setTimetableView: (v: TimetableView) => void
   setAssignmentsView: (v: AssignmentsView) => void
   setHomeLayout: (v: HomeSectionPref[]) => void
   setSubjectLayout: (v: SubjectSectionPref[]) => void
+  setExamCountdownStart: (v: ExamCountdownStartSetting) => void
 }
 
 const DisplaySettingsContext = createContext<Ctx>({
@@ -26,11 +29,12 @@ const DisplaySettingsContext = createContext<Ctx>({
   setAssignmentsView: () => {},
   setHomeLayout: () => {},
   setSubjectLayout: () => {},
+  setExamCountdownStart: () => {},
 })
 
 /**
- * 表示形式（時間割: リスト/グリッド、課題: バケット別/締切順）をアプリ全体で共有・永続化する。
- * theme.tsx の ThemeProvider と同じ形。設定タブでの切替が即、時間割/課題タブに反映される。
+ * 表示形式（時間割: リスト/グリッド、課題: バケット別/締切順、ホーム・科目詳細の並び、試験カウントダウンの表示開始）を
+ * アプリ全体で共有・永続化する。theme.tsx の ThemeProvider と同じ形。設定タブでの切替が即、各画面に反映される。
  */
 export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<DisplaySettings>(DEFAULT_DISPLAY_SETTINGS)
@@ -53,10 +57,12 @@ export function DisplaySettingsProvider({ children }: { children: ReactNode }) {
         assignmentsView: settings.assignmentsView,
         homeLayout: settings.homeLayout,
         subjectLayout: settings.subjectLayout,
+        examCountdownStart: settings.examCountdownStart,
         setTimetableView: (v) => persist({ ...settings, timetableView: v }),
         setAssignmentsView: (v) => persist({ ...settings, assignmentsView: v }),
         setHomeLayout: (v) => persist({ ...settings, homeLayout: v }),
         setSubjectLayout: (v) => persist({ ...settings, subjectLayout: v }),
+        setExamCountdownStart: (v) => persist({ ...settings, examCountdownStart: v }),
       }}
     >
       {children}

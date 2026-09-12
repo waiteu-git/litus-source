@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { pickCellEvent, todayEvents, todaySchedule, upcomingMakeups } from './eventSelectors'
 import type { ClassEvent } from './classEvent'
+import { buildExamCountdown } from '../home/examCountdown'
 
 let seq = 0
 const ev = (o: Partial<ClassEvent>): ClassEvent => ({
@@ -96,5 +97,35 @@ describe('upcomingMakeups', () => {
       ev({ id: 'm1', type: 'makeup', date: '2026-07-20', periods: [4], room: null }),
     ]
     expect(upcomingMakeups(events, at(7, 14)).map((m) => m.date)).toEqual(['2026-07-20', '2026-07-25'])
+  })
+})
+
+describe('表示開始（countdownStart）は今日の変更と時間割のバッジを変えない（設計 A §7-2E）', () => {
+  const now = at(7, 15) // 2026-07-15 09:00
+  const base = [
+    ev({ id: 'today-quiz', type: 'quiz', date: '2026-07-15', periods: [1, 2] }),
+    ev({ id: 'far-final', type: 'final', date: '2026-08-20', periods: [1] }),
+  ]
+  const withStart: ClassEvent[] = [
+    { ...base[0], countdownStart: { kind: 'at', date: '2026-07-15', time: '23:00' } },
+    { ...base[1], countdownStart: { kind: 'days', days: 7 } },
+  ]
+
+  it('todaySchedule の出力が一致する（開始前の試験も今日の変更に出る）', () => {
+    const a = todaySchedule(base, now)
+    expect(a).toHaveLength(1)
+    expect(todaySchedule(withStart, now)).toEqual(a)
+  })
+
+  it('pickCellEvent は同じ予定を選ぶ', () => {
+    expect(pickCellEvent(base, '物理学実験A', 1, at(7, 15))?.id).toBe('today-quiz')
+    expect(pickCellEvent(withStart, '物理学実験A', 1, at(7, 15))?.id).toBe('today-quiz')
+    expect(pickCellEvent(base, '物理学実験A', 1, at(8, 20))?.id).toBe('far-final')
+    expect(pickCellEvent(withStart, '物理学実験A', 1, at(8, 20))?.id).toBe('far-final')
+  })
+
+  it('対照: 同じ入力で試験カウントダウンは変わる', () => {
+    expect(buildExamCountdown(base, now)).toHaveLength(2)
+    expect(buildExamCountdown(withStart, now)).toEqual([])
   })
 })

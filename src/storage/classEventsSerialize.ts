@@ -1,4 +1,12 @@
-import type { ClassEvent, ClassEventType, MakeupStatus } from '../timetableEvents/classEvent'
+import {
+  EXAM_LEAD_DAYS,
+  type ClassEvent,
+  type ClassEventType,
+  type CountdownStart,
+  type ExamLeadDays,
+  type MakeupStatus,
+} from '../timetableEvents/classEvent'
+import { isValidHm, isValidYmd } from '../timetableEvents/eventDateValue'
 
 const TYPES: ClassEventType[] = ['cancel', 'makeup', 'roomChange', 'quiz', 'midterm', 'final', 'other']
 const STATUSES: MakeupStatus[] = ['has', 'none', 'undecided']
@@ -15,6 +23,25 @@ function str(v: unknown): string {
 }
 function strOrNull(v: unknown): string | null {
   return typeof v === 'string' ? v : null
+}
+
+/**
+ * 試験ごとの表示開始。形が正しい時だけ返す（壊れていれば undefined＝フィールドだけ落として予定は残す）。
+ * 'days' は 60/30/14/7 のどれか、'at' は実在する 'YYYY-MM-DD' と 'HH:mm'。
+ * 試験日との前後はここでは見ない（判定の examCountdown が見る＝壊れた値は全体の設定に従う）。
+ */
+function countdownStartOf(v: unknown): CountdownStart | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const o = v as Record<string, unknown>
+  if (o.kind === 'days') {
+    return (EXAM_LEAD_DAYS as readonly unknown[]).includes(o.days) ? { kind: 'days', days: o.days as ExamLeadDays } : undefined
+  }
+  if (o.kind === 'at') {
+    return typeof o.date === 'string' && isValidYmd(o.date) && typeof o.time === 'string' && isValidHm(o.time)
+      ? { kind: 'at', date: o.date, time: o.time }
+      : undefined
+  }
+  return undefined
 }
 
 export function deserializeClassEvents(raw: string | null): ClassEvent[] {
@@ -49,6 +76,10 @@ export function deserializeClassEvents(raw: string | null): ClassEvent[] {
     } else if (o.makeup === null) {
       e.makeup = null
     }
+    // 🔴 既知のフィールドだけで組み直しているので、ここで拾わないと、別の予定を1件保存・削除しただけで
+    // 全試験の表示開始が消える（mutateClassEvents は全件を読み込み→書き戻す＝設計 A 禁止事項3）。
+    const cs = countdownStartOf(o.countdownStart)
+    if (cs) e.countdownStart = cs
     out.push(e)
   }
   return out

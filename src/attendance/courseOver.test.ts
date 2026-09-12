@@ -13,6 +13,7 @@ import type { BulletinEventCandidate } from '../timetableEvents/bulletinEvents'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { parseBulletinDetail } from '../parsers/bulletinDetail'
 import { DETAIL_MAKEUP } from '../parsers/__fixtures__/loadEventDetails'
+import { buildExamCountdown } from '../home/examCountdown'
 
 const NOW = new Date(2026, 6, 14) // 2026-07-14
 
@@ -283,5 +284,25 @@ describe('🔴 学年暦のゲート（2026-08-28 ユーザー要望「学期間
 
   it('🔴 未来の期間が無い古い暦は効かせない（更新忘れで永久に黙らせない）', () => {
     expect(isCourseActiveOn({ ...base, dateKey: '2027-03-01', calendar: cal })).toBe(true)
+  })
+})
+
+describe('表示開始（countdownStart）は学期終了判定の追加予定を変えない（設計 A §7-2E）', () => {
+  // NOW=2026-07-14。期末は6日後（日時を指定＝まだ）、小テストは49日後（7日前から＝まだ）。
+  const base = [ev({ type: 'final', date: '2026-07-20' }), ev({ type: 'quiz', date: '2026-09-01' })]
+  const withStart: ClassEvent[] = [
+    { ...base[0], countdownStart: { kind: 'at', date: '2026-07-20', time: '09:00' } },
+    { ...base[1], countdownStart: { kind: 'days', days: 7 } },
+  ]
+
+  it('extraPlansFromEvents の出力が一致する（開始前の試験も「その日に授業がある予定」として数える）', () => {
+    const a = extraPlansFromEvents(base)
+    expect(a).toHaveLength(2)
+    expect(extraPlansFromEvents(withStart)).toEqual(a)
+  })
+
+  it('対照: 同じ入力で試験カウントダウンは変わる', () => {
+    expect(buildExamCountdown(base, NOW)).toHaveLength(2)
+    expect(buildExamCountdown(withStart, NOW)).toEqual([])
   })
 })

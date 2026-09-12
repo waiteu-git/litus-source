@@ -51,6 +51,16 @@ function subscribe(cb: () => void): () => void {
   return () => listeners.delete(cb)
 }
 
+/**
+ * 非 hook の購読。effect の中で張り、抜ける時に戻り値で外す（G1: 起動ゲートの接続エラー画面が
+ * 回線の復帰を契機に再確認するため＝src/auth/LoginGate.tsx）。NetInfo の listener は増やさず、
+ * 上の単一の購読に相乗りする（configure より前に張った listener が死ぬ罠を避ける）。
+ * cb が呼ばれるのは online/offline が変わった時だけ（同じ値の再通知では呼ばない）。
+ */
+export function subscribeConnectivity(cb: () => void): () => void {
+  return subscribe(cb)
+}
+
 export function useConnectivity(): boolean {
   return useSyncExternalStore(subscribe, isOnlineNow, isOnlineNow)
 }

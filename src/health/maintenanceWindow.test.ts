@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { maintenanceSystemAt, maintenanceWindowLabel, systemDisplayName } from './maintenanceWindow'
+import { maintenanceEndAt, maintenanceSystemAt, maintenanceWindowLabel, systemDisplayName } from './maintenanceWindow'
 
 // ローカル時刻で h:m の Date を作る（テストは端末ローカル＝実行環境のTZに依存しない: getHours/getMinutesで判定）。
 const at = (h: number, m = 0) => new Date(2026, 6, 12, h, m, 0)
@@ -38,5 +38,25 @@ describe('systemDisplayName', () => {
   })
   it("letus は 'LETUS'", () => {
     expect(systemDisplayName('letus')).toBe('LETUS')
+  })
+})
+
+describe('maintenanceEndAt（G1: メンテの帯の中は明けに1回だけ再確認する）', () => {
+  it('CLASS 帯の中（2:30）はその日の 4:00:00.000', () => {
+    const end = maintenanceEndAt(at(2, 30), 'class')
+    expect(end).not.toBeNull()
+    expect(end!.getTime()).toBe(new Date(2026, 6, 12, 4, 0, 0, 0).getTime())
+  })
+  it('帯の始まり（2:00）と終わり直前（3:59）も 4:00', () => {
+    expect(maintenanceEndAt(at(2, 0), 'class')!.getTime()).toBe(new Date(2026, 6, 12, 4, 0, 0, 0).getTime())
+    expect(maintenanceEndAt(at(3, 59), 'class')!.getTime()).toBe(new Date(2026, 6, 12, 4, 0, 0, 0).getTime())
+  })
+  it('陰性: 4:00（帯の終わりは含まない）と 1:59 は null', () => {
+    expect(maintenanceEndAt(at(4, 0), 'class')).toBeNull()
+    expect(maintenanceEndAt(at(1, 59), 'class')).toBeNull()
+  })
+  it('対照: 終わりの時刻は表から取る（LETUS 帯 4:30 → 5:30。4:00 の決め打ちなら落ちる）', () => {
+    expect(maintenanceEndAt(at(4, 30), 'letus')!.getTime()).toBe(new Date(2026, 6, 12, 5, 30, 0, 0).getTime())
+    expect(maintenanceEndAt(at(2, 30), 'letus')).toBeNull()
   })
 })

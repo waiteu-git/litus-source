@@ -116,3 +116,47 @@ describe('connectivity: オンライン判定', () => {
     expect(mod.isOnlineNow()).toBe(false)
   })
 })
+
+describe('connectivity: subscribeConnectivity（G1: 接続エラー画面の回線復帰の契機）', () => {
+  it('offline→online で listener が呼ばれる（陽性）', async () => {
+    const mod = await loadModule()
+    const cb = vi.fn()
+    mod.subscribeConnectivity(cb)
+    listener?.(state({ isConnected: false }))
+    expect(cb).toHaveBeenCalledTimes(1) // online→offline
+    expect(mod.isOnlineNow()).toBe(false)
+    listener?.(state({ isConnected: true }))
+    expect(cb).toHaveBeenCalledTimes(2) // offline→online
+    expect(mod.isOnlineNow()).toBe(true)
+  })
+
+  it('同じ値の再通知では呼ばれない（陰性）', async () => {
+    const mod = await loadModule()
+    const cb = vi.fn()
+    mod.subscribeConnectivity(cb)
+    // 既定は online（fail-open）。online の再通知は変化ではない。
+    listener?.(state({ isConnected: true }))
+    listener?.(state({ isConnected: true, isInternetReachable: false }))
+    expect(cb).not.toHaveBeenCalled()
+    listener?.(state({ isConnected: false }))
+    listener?.(state({ isConnected: false }))
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
+
+  it('解除した後は呼ばれない（陰性）', async () => {
+    const mod = await loadModule()
+    const cb = vi.fn()
+    const off = mod.subscribeConnectivity(cb)
+    off()
+    listener?.(state({ isConnected: false }))
+    listener?.(state({ isConnected: true }))
+    expect(cb).not.toHaveBeenCalled()
+  })
+
+  it('NetInfo の listener を増やさない（addEventListener は module ロード時の1回だけ）', async () => {
+    const mod = await loadModule()
+    mod.subscribeConnectivity(() => {})
+    mod.subscribeConnectivity(() => {})
+    expect(order).toEqual(['configure', 'addEventListener'])
+  })
+})

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, Pressable, StyleSheet, useColorScheme, View } from 'react-native'
+import { Animated, AppState, Pressable, StyleSheet, useColorScheme, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { WebView, type WebViewInstance } from '../ui/GuardedWebView'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -24,6 +24,13 @@ import { notificationPermissionAction } from '../notifications/permissionState'
 import { loadOnboardingDone, saveOnboardingDone } from '../storage/onboardingStore'
 import { canDeferLoginUi, classifyGatePage, isSpeculativeLogin, type GateVerdict } from './classifyGatePage'
 import { isRecoverPreserved, recoverPlan } from './gateRecovery'
+import { shouldMountGateProbe } from './gateProbeMount'
+import {
+  createConnErrorReprobe,
+  isForegroundAppState,
+  maintenanceReprobeDelayMs,
+  type ReprobeEvent,
+} from './gateReprobe'
 import { syncSession } from '../collect/syncSession'
 import LetusSyncEngine from '../collect/LetusSyncEngine'
 import OnboardingSlides from '../screens/OnboardingSlides'
@@ -34,6 +41,7 @@ import { BOOT_FADE_MS, bootChrome, bootLogoHtml, nativeSplashBg, needsBootFade }
 import { bootStatusBottom } from '../screens/bootFooterGeometry'
 import { isWarmBoot, loadLastAuthedAt, saveLastAuthedAt } from '../storage/bootMetaStore'
 import { useKillSwitch } from '../health/KillSwitchProvider'
+import { isOnlineNow, subscribeConnectivity } from '../health/connectivity'
 import { useDemo } from '../demo/DemoProvider'
 import { COLORS, useThemeVariant } from '../theme'
 
@@ -50,10 +58,6 @@ const SYNC_TIMEOUT_MS = 180000
 const BOOT_INTRO_MS = 4000
 // ループ(不定形バー)の1周期。dc.html の P=1.4s と一致。認証完了がループ中なら次の周期境界で入場する。
 const BOOT_LOOP_MS = 1400
-// CLASS定時メンテナンス中、明けを検知して自動復帰するための再probe間隔。
-const MAINTENANCE_REPROBE_MS = 60000
-// 接続エラー中、通信が戻ったら自動で入場/ログインへ進めるための静かな再probe間隔。
-const CONN_ERROR_REPROBE_MS = 15000
 /**
  * **推測的な** needsLogin でログインUIの描画を待つ猶予（ms）。
  *
@@ -75,6 +79,16 @@ const CONN_ERROR_REPROBE_MS = 15000
  * 構造的に小さくしてある。実機で詰める前提の初期値。
  */
 const SSO_AUTO_GRACE_MS = 1500
+
+/**
+ * 自動 probe（接続エラー・メンテの再確認）の開発ログ。__DEV__ のときだけ出す。
+ * 実機確認（設計 G1 §8）は wait／probe／stop の3種で判定する。stop の行も省かない
+ * （背面で probe が出ないだけなら変更前も同じになる＝止めたことは stop の行でしか見えない）。
+ */
+function reprobeDevLog(event: ReprobeEvent, ms: number) {
+  if (!__DEV__) return
+  console.log(event === 'wait' ? `[litus/gate] reprobe wait=${ms}ms` : `[litus/gate] reprobe ${event}`)
+}
 
 type GateState =
   | 'loading'
@@ -106,6 +120,10 @@ export function useLoginGate() {
  * ログイン完了後、時間割が未保存なら setup フェーズでゲートのWebView（この時点でアプリ唯一の
  * CLASS view）から時間割を自動取り込みしてから入場する（失敗しても入場は続行・手動収集で補える）。
  * 認証情報は保存しない。セッション切れは各画面が requireLogin() で再表示させる。
+ *
+ * 規約の同意が確定するまで（loading / needsConsent）は probe をマウントしない（shouldMountGateProbe）。
+ * 同意の前は CLASS にも大学のログイン基盤にも1回も出ない＝掲載文「利用規約に同意いただくまで、
+ * LETUSとCLASSからの情報の取得は始まりません」の実装（設計: docs/design/2026-09-12-v11-train1-PC.md）。
  */
 export function LoginGate({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets()
@@ -227,6 +245,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
         setBootMode(isWarmBoot(lastAuthedAt, ttAt) ? 'warm' : 'full')
         setState('checking')
       } catch {
+        // ここに来るのは規約の同意を確かめた後（オンボ・warm 判定の読み取りの失敗）だけ。
+        // 規約の読み取りは失敗しても投げずに 0（未同意）を返す（termsConsentStore・設計 PC）。
         setBootMode('full')
         setState('checking')
       }
@@ -235,8 +255,10 @@ export function LoginGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (state !== 'checking') return
-    // loading 中に probe のロードが既に完了していると onLoadEnd は再発火しない。checking 開始時に
-    // 判定を再取得して、loading 中に来た authed/needsLogin の取りこぼし（→CHECK_TIMEOUTでconnError）を防ぐ。
+    // firstRun（スライドの裏）で probe のロードが既に完了していると onLoadEnd は再発火しない。checking 開始時に
+    // 判定を再取得して、スライド中に来た判定の取りこぼし（→CHECK_TIMEOUTでconnError）を防ぐ。
+    // loading 中は probe をマウントしない（設計 PC）ので、以前の「loading 中に来た判定」はもう起きない。
+    // probe を作った直後（同意の直後・nonce+1 の直後）は空振りするが、判定は pending で捨てられ onLoadEnd が撃ち直す。
     webviewRef.current?.injectJavaScript(DETECT_PAGE_JS)
     // 12秒で判定が出ない＝通信不良でページ読込が完了していない（onLoadEnd未発火→DETECT未実行）。
     // これは「要ログイン」ではなく通信起因なので、CLASSログイン画面ではなく接続エラー表示へ。
@@ -267,25 +289,75 @@ export function LoginGate({ children }: { children: ReactNode }) {
     if (state === 'needsLogin') recoverTriesRef.current = 0
   }, [state])
 
-  // connError: 通信が戻ったら自動で復帰できるよう、静かに再probeする（メンテと同型）。
-  // recoverTries をリセットして nonce を上げ、probe WebView を作り直す（状態は connError のまま）。
+  // connError: 通信が戻ったら自動で復帰できるよう、静かに再probeする（状態は connError のまま）。
+  // recoverTries をリセットして nonce を上げ、probe WebView を作り直す。いつ撃つかは予定表
+  // （gateReprobe.ts）が決める＝15秒から倍々で上限5分・ジッタつき、probe 同士は必ず15秒以上空く。
+  // 回線の復帰（offline→online）と前面への復帰でやり直し、背面（'background'）では待ちを消す
+  // （'inactive' では止めない）。deps は [state] だけ＝nonce を入れると probe のたびに連鎖が頭へ戻る。
+  // AppState と回線の購読はこの effect の中でだけ張る（LoginGate に state を足すと、authed 中も
+  // LoginContext の消費者まで再描画が波及する）。
   useEffect(() => {
     if (state !== 'connError') return
-    const t = setInterval(() => {
-      recoverTriesRef.current = 0
-      setNonce((n) => n + 1)
-    }, CONN_ERROR_REPROBE_MS)
-    return () => clearInterval(t)
+    const r = createConnErrorReprobe(
+      () => {
+        recoverTriesRef.current = 0
+        setNonce((n) => n + 1)
+      },
+      { onEvent: reprobeDevLog },
+    )
+    if (isForegroundAppState(AppState.currentState)) r.start('enter')
+    const app = AppState.addEventListener('change', (s) => {
+      if (!isForegroundAppState(s)) r.stop()
+      else if (!r.isRunning()) r.start('resume') // 待ち中の重複イベントでは回数を戻さない
+    })
+    let wasOnline = isOnlineNow()
+    const unsubNet = subscribeConnectivity(() => {
+      const on = isOnlineNow()
+      // offline→online の時だけ。背面中（待ちが無い）は前面への復帰に任せる。
+      if (!wasOnline && on && r.isRunning()) r.start('resume')
+      wasOnline = on
+    })
+    return () => {
+      r.stop()
+      app.remove()
+      unsubNet()
+    }
   }, [state])
 
-  // maintenance: 定時メンテ（〜4:00）が明けたら自動で復帰できるよう、一定間隔で再probeする。
+  // maintenance: 定時メンテ（2:00〜4:00）が明けたら自動で復帰できるよう、再probeする。
+  // 端末時刻が帯の中なら明け（4:00＋0〜60秒のぶれ）に1回だけ、帯の外（臨時メンテ・明けの遅れ）は
+  // メンテに入った時刻から60秒後（変更前と同じ）。撃つ時は必ず nonce+1 と maintenance→checking を
+  // セットで行う（maintenance 状態には authed を受ける分岐が無い＝nonce だけ上げると明けても固まる）。
+  // 背面（'background'）では待ちを消し、前面で計算し直す（'inactive' では止めない）。回線の購読は張らない。
   useEffect(() => {
     if (state !== 'maintenance') return
-    const t = setInterval(() => {
-      setNonce((n) => n + 1)
-      setState((s) => (s === 'maintenance' ? 'checking' : s))
-    }, MAINTENANCE_REPROBE_MS)
-    return () => clearInterval(t)
+    const enteredAt = Date.now()
+    let t: ReturnType<typeof setTimeout> | null = null
+    const arm = () => {
+      const ms = maintenanceReprobeDelayMs(new Date(), enteredAt, Math.random())
+      reprobeDevLog('wait', ms)
+      t = setTimeout(() => {
+        t = null
+        reprobeDevLog('probe', 0)
+        setNonce((n) => n + 1)
+        setState((s) => (s === 'maintenance' ? 'checking' : s))
+      }, ms)
+    }
+    const disarm = () => {
+      if (t == null) return
+      clearTimeout(t)
+      t = null
+      reprobeDevLog('stop', 0)
+    }
+    if (isForegroundAppState(AppState.currentState)) arm()
+    const app = AppState.addEventListener('change', (s) => {
+      if (!isForegroundAppState(s)) disarm()
+      else if (t == null) arm()
+    })
+    return () => {
+      disarm()
+      app.remove()
+    }
   }, [state])
 
   // ログイン成功（setup/sync到達含む）＝チュートリアル完了として永続化。
@@ -319,6 +391,9 @@ export function LoginGate({ children }: { children: ReactNode }) {
   }, [state])
 
   function requireLogin() {
+    // 規約の同意が確定する前は何もしない。checking へ移すと規約画面を飛ばして probe が立つ（設計 PC）。
+    // 今は同意前に呼ぶ経路が無い（呼び出し元は同意後の画面と入場後の children だけ）＝将来の迂回を塞ぐ二重の防御。
+    if (!shouldMountGateProbe(stateRef.current)) return
     lastResultRef.current = null
     setBootMode('warm')
     setNonce((n) => n + 1)
@@ -332,7 +407,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
    */
   function recover() {
     const plan = recoverPlan(stateRef.current, recoverTriesRef.current)
-    // needsLogin（入力中）と connError（再probeは専用intervalが駆動）は触らない。
+    // needsLogin（入力中）と connError（再probeは予定表 gateReprobe.ts の createConnErrorReprobe が駆動）は触らない。
     if (plan === 'noop') return
     if (plan === 'toConnError') {
       // 通信起因の失敗が続いた＝ログイン切れではない。CLASSログイン画面ではなく接続エラー表示へ。
@@ -532,6 +607,8 @@ export function LoginGate({ children }: { children: ReactNode }) {
   const showLoginUi = state === 'needsLogin' && loginUiArmed
   // 猶予中。ここを掴んでおかないとブート画面が外れて空白になる（描画を止めただけでは足りない）。
   const inLoginGrace = state === 'needsLogin' && !loginUiArmed
+  // 規約の同意が確定するまで probe を作らない（判定は gateProbeMount.ts・設計 PC）。
+  const probeMounted = shouldMountGateProbe(state)
   const bootStatus =
     state === 'loading'
       ? '起動しています…'
@@ -564,25 +641,39 @@ export function LoginGate({ children }: { children: ReactNode }) {
           </View>
         ) : null}
         <View style={showLoginUi ? styles.webBox : styles.webHidden}>
-          <WebView
-            key={nonce}
-            ref={webviewRef}
-            // キャッシュ無効＋nonceのキャッシュバスター: ShibbolethAuthServletの302（SAMLRequest付き）が
-            // キャッシュ再生されると IdP が「過去のリクエスト」で恒久拒否するため（実機で確認）。
-            source={{ uri: `${CLASS_PC_LOGIN_URL}?litus=${nonce}` }}
-            cacheEnabled={false}
-            userAgent={DESKTOP_UA}
-            sharedCookiesEnabled
-            thirdPartyCookiesEnabled
-            onLoadEnd={onLoadEnd}
-            onMessage={(e) => onMessage(e.nativeEvent.data)}
-            onError={() => recover()}
-            onHttpError={(e) => {
-              if (e.nativeEvent.statusCode >= 500) recover()
-            }}
-            onRenderProcessGone={() => recover()}
-            style={styles.webviewFill}
-          />
+          {/* 🔴 同意の確定前（loading / needsConsent）は WebView そのものを作らない。隠す・source を差し替える・
+              onShouldStartLoadWithRequest で止める、では同意前の通信を止めきれない（設計 PC の禁止事項1）。 */}
+          {probeMounted ? (
+            <WebView
+              key={nonce}
+              ref={webviewRef}
+              // キャッシュ無効＋nonceのキャッシュバスター: ShibbolethAuthServletの302（SAMLRequest付き）が
+              // キャッシュ再生されると IdP が「過去のリクエスト」で恒久拒否するため（実機で確認）。
+              source={{ uri: `${CLASS_PC_LOGIN_URL}?litus=${nonce}` }}
+              cacheEnabled={false}
+              userAgent={DESKTOP_UA}
+              sharedCookiesEnabled
+              thirdPartyCookiesEnabled
+              // 開発時のみ: probe が読み込みを始めた時点の状態と行き先（検証の計器・設計 PC §8）。クエリは出さない。
+              // 1つの文字列で渡す（RN の console は logcat／os_log へ出す時に %s を置き換えない）。
+              onLoadStart={
+                __DEV__
+                  ? (e) =>
+                      console.log(
+                        `[litus/gate] probe loadStart state=${stateRef.current} origin=${e.nativeEvent.url.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/?#]*).*$/i, '$1')}`,
+                      )
+                  : undefined
+              }
+              onLoadEnd={onLoadEnd}
+              onMessage={(e) => onMessage(e.nativeEvent.data)}
+              onError={() => recover()}
+              onHttpError={(e) => {
+                if (e.nativeEvent.statusCode >= 500) recover()
+              }}
+              onRenderProcessGone={() => recover()}
+              style={styles.webviewFill}
+            />
+          ) : null}
         </View>
         {state === 'sync' ? (
           <LetusSyncEngine

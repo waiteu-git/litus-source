@@ -22,3 +22,48 @@ describe('classEventsSerialize', () => {
     expect(deserializeClassEvents(raw)).toEqual([e])
   })
 })
+
+describe('countdownStart（試験ごとの表示開始・設計 A §7-2B）', () => {
+  const exam = (o: Partial<ClassEvent> = {}): ClassEvent => ({
+    id: 'x1',
+    courseName: '線形代数学I',
+    courseCode: 'C1',
+    type: 'midterm',
+    date: '2026-07-20',
+    periods: [3],
+    room: null,
+    note: null,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    ...o,
+  })
+
+  it('days と at は往復で一致する', () => {
+    const list = [
+      exam({ id: 'd', countdownStart: { kind: 'days', days: 14 } }),
+      exam({ id: 'a', countdownStart: { kind: 'at', date: '2026-07-18', time: '08:30' } }),
+    ]
+    expect(deserializeClassEvents(serializeClassEvents(list))).toStrictEqual(list)
+  })
+
+  it('フィールドの無い予定は、往復後も countdownStart を持たない', () => {
+    const [back] = deserializeClassEvents(serializeClassEvents([exam()]))
+    expect('countdownStart' in back).toBe(false)
+  })
+
+  it.each([
+    { kind: 'days', days: 10 },
+    { kind: 'days', days: '7' },
+    { kind: 'weeks', days: 7 },
+    { kind: 'at', date: '2026-02-31', time: '09:00' },
+    { kind: 'at', date: '2026-07-18', time: '24:00' },
+    { kind: 'at', date: '2026-07-18' },
+    { kind: 'at', date: '2026/07/18', time: '09:00' },
+    null,
+    'days',
+  ])('壊れた値 %j はフィールドだけ落とし、予定は残す（件数は減らない）', (bad) => {
+    const raw = JSON.stringify([{ ...exam({ id: 'bad' }), countdownStart: bad }, exam({ id: 'ok' })])
+    const back = deserializeClassEvents(raw)
+    expect(back.map((e) => e.id)).toEqual(['bad', 'ok'])
+    expect('countdownStart' in back[0]).toBe(false)
+  })
+})

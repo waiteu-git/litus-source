@@ -38,3 +38,8 @@ export function ymdToDate(s: string, now: Date): Date {
 export function dateToYmd(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
+
+/** 'HH:mm'（ゼロ埋め・00:00〜23:59）として正しい時刻か。試験の表示開始（日時を指定）の検査に使う。 */
+export function isValidHm(s: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(s)
+}

@@ -1,8 +1,8 @@
 /**
  * デモモードの状態を持つ Context。
  *
- * **App.tsx で LoginGate より上位に置くこと。** LoginGate の WebView は
- * showLoginUi に関わらず常時マウントされており（セッション判定 probe を兼ねる）、
+ * **App.tsx で LoginGate より上位に置くこと。** LoginGate の WebView は、規約の同意が確定した後の
+ * ゲート画面では showLoginUi に関わらずマウントされており（セッション判定 probe を兼ねる）、
  * LoginGate を描画したままではデモ中も大学へ通信してしまう。デモ中は
  * LoginGate 自体をツリーから外すのが「通信ゼロ」の唯一の担保。
  */

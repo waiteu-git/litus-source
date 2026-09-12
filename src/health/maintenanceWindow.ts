@@ -25,6 +25,27 @@ export function maintenanceSystemAt(date: Date): MaintenanceSystem | null {
   return null
 }
 
+/**
+ * その系の帯の中なら、その日の帯の終わり（端末ローカル時刻）。帯の外なら null。
+ * 起動ゲートのメンテ再確認（src/auth/gateReprobe.ts）が「明けに1回だけ撃つ」ために使う。
+ * 終わりの時刻は WINDOWS から取る（4:00 を別の場所に二重に書かない）。
+ */
+export function maintenanceEndAt(date: Date, system: MaintenanceSystem): Date | null {
+  const w = WINDOWS.find((x) => x.system === system)
+  if (!w) return null
+  const min = date.getHours() * 60 + date.getMinutes()
+  if (min < w.startMin || min >= w.endMin) return null
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    Math.floor(w.endMin / 60),
+    w.endMin % 60,
+    0,
+    0,
+  )
+}
+
 /** 表示用の時間帯ラベル（例: '2:00–4:00'）。 */
 export function maintenanceWindowLabel(system: MaintenanceSystem): string {
   return WINDOWS.find((w) => w.system === system)?.label ?? ''

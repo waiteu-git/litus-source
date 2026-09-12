@@ -10,7 +10,20 @@ import type { TimetableStackParamList } from '../navigation/types'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { classBlockPeriods, nextDateForWeekday } from '../timetableEvents/classBlock'
 import { dateToYmd, isValidYmd, ymdToDate } from '../timetableEvents/eventDateValue'
-import { makeClassEventId, type ClassEvent, type ClassEventType, type MakeupStatus } from '../timetableEvents/classEvent'
+import { type ClassEventType, type MakeupStatus } from '../timetableEvents/classEvent'
+import {
+  buildClassEventFromForm,
+  COUNTDOWN_CHOICES,
+  countdownChoiceLabel,
+  countdownFormFromEvent,
+  countdownPickerValue,
+  dateToHm,
+  EMPTY_COUNTDOWN_FORM,
+  isExamType,
+  validateCountdownForm,
+  type CountdownFormValue,
+} from '../timetableEvents/classEventForm'
+import { useDisplaySettings } from '../displaySettings'
 import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { loadClassEvents, upsertClassEvent, removeClassEvent } from '../storage/classEventsStore'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
@@ -78,7 +91,11 @@ export default function ClassEventFormScreen() {
   const [mkPeriods, setMkPeriods] = useState<number[]>(initialMakeup?.periods ?? [])
   const [mkRoom, setMkRoom] = useState(initialMakeup?.room ?? '')
   const [error, setError] = useState<string | null>(null)
-  const [picker, setPicker] = useState<null | 'date' | 'mkDate'>(null)
+  const [picker, setPicker] = useState<null | 'date' | 'mkDate' | 'startDate' | 'startTime'>(null)
+  // 試験の表示開始（ホームのカウントダウンに出し始める時期）。既定は「全体の設定に従う」＝フィールドを付けない。
+  const [countdown, setCountdown] = useState<CountdownFormValue>(EMPTY_COUNTDOWN_FORM)
+  // 「全体の設定に従う（いま：○○）」の表示にだけ使う（判定には使わない）。
+  const { examCountdownStart } = useDisplaySettings()
 
   useEffect(() => {
     if (!editId) return
@@ -94,6 +111,8 @@ export default function ClassEventFormScreen() {
       setMkDate(e.makeup?.date ?? '')
       setMkPeriods(e.makeup?.periods ?? [])
       setMkRoom(e.makeup?.room ?? '')
+      // 🔴 戻さないと、メモだけ直して保存した時に表示開始が上書きで消える（設計 A 禁止事項3）。
+      setCountdown(countdownFormFromEvent(e))
     })
   }, [editId])
 
@@ -102,8 +121,27 @@ export default function ClassEventFormScreen() {
     // Androidはダイアログを閉じるたびにonChangeが来る。先に閉じてから反映（再表示ループ防止）。
     setPicker(null)
     if (!which) return
-    if (which === 'date') setDate(dateToYmd(d))
-    else setMkDate(dateToYmd(d))
+    // 状態ごとに明示で分ける。まとめて補講日へ流す書き方だと、足した状態の値が補講日の欄へ入る（設計 A §4-4）。
+    // 日付を確定しても時刻シートは自動で開かない（iOS の Modal が閉じ切る前に開くと出ないことがある＝設計 A §6 Q10）。
+    switch (which) {
+      case 'date':
+        setDate(dateToYmd(d))
+        return
+      case 'mkDate':
+        setMkDate(dateToYmd(d))
+        return
+      case 'startDate':
+        setCountdown((v) => ({ ...v, date: dateToYmd(d) }))
+        return
+      case 'startTime':
+        setCountdown((v) => ({ ...v, time: dateToHm(d) }))
+        return
+      default: {
+        // 状態を足して case を書き忘れると、ここで型エラーになる。
+        const unreachable: never = which
+        void unreachable
+      }
+    }
   }
 
   async function onSave() {
@@ -121,23 +159,17 @@ export default function ClassEventFormScreen() {
         return
       }
     }
-    const now = new Date()
-    const id = editId ?? makeClassEventId({ createdAt: now.toISOString(), courseName, type, date })
-    const ev: ClassEvent = {
-      id,
-      courseName,
-      courseCode,
-      type,
-      date,
-      periods,
-      room: type === 'roomChange' || type === 'makeup' ? room.trim() || null : null,
-      note: note.trim() || null,
-      createdAt: now.toISOString(),
+    // 表示開始の検査。種類が試験以外なら何もしない（フィールドも付かない）。
+    const countdownError = validateCountdownForm(type, date, countdown)
+    if (countdownError) {
+      setError(countdownError)
+      return
     }
-    if (type === 'cancel') {
-      ev.makeupStatus = makeupStatus
-      ev.makeup = makeupStatus === 'has' ? { date: mkDate, periods: mkPeriods, room: mkRoom.trim() || null } : null
-    }
+    // 組み立ては classEventForm.ts（純関数・vitest で固定）。ここへ戻さない（ラチェット R3）。
+    const ev = buildClassEventFromForm(
+      { editId, courseName, courseCode, type, date, periods, room, note, makeupStatus, mkDate, mkPeriods, mkRoom, countdown },
+      new Date(),
+    )
     await upsertClassEvent(ev)
     bump()
     refreshAllNotifications().catch(() => undefined)
@@ -311,6 +343,69 @@ export default function ClassEventFormScreen() {
           </View>
         ) : null}
 
+        {isExamType(type) ? (
+          <View style={[ui.card, styles.card]}>
+            {label('ホームのカウントダウンに出す時期')}
+            <View style={styles.chipRow}>
+              {COUNTDOWN_CHOICES.map((c) => {
+                const on = countdown.choice === c
+                return (
+                  <Pressable
+                    key={String(c)}
+                    onPress={() => setCountdown((v) => ({ ...v, choice: c }))}
+                    style={[styles.tchip, { borderColor: ui.colors.segBorder }, !on && darkChip, on && styles.tchipOn]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.tchipText, !on && darkChipText, on && styles.tchipTextOn]}>
+                      {countdownChoiceLabel(c, examCountdownStart)}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+            {countdown.choice === 'at' ? (
+              <View style={styles.dtRow}>
+                <DateField
+                  value={countdown.date}
+                  placeholder="日付を選択"
+                  onPress={() => setPicker('startDate')}
+                  valueColor={ui.valueColor}
+                  placeholderColor={phColor}
+                  boxStyle={[inputStyle, styles.dtDate]}
+                  a11yLabel="表示を始める日付を選択"
+                />
+                <DateField
+                  value={countdown.time}
+                  placeholder="00:00"
+                  onPress={() => setPicker('startTime')}
+                  valueColor={ui.valueColor}
+                  placeholderColor={phColor}
+                  boxStyle={[inputStyle, styles.dtTime]}
+                  a11yLabel="表示を始める時刻を選択"
+                />
+              </View>
+            ) : null}
+            <DateTimeSheet
+              open={picker === 'startDate'}
+              value={countdownPickerValue(countdown, new Date())}
+              mode="date"
+              title="表示を始める日"
+              onConfirm={onPicked}
+              onCancel={() => setPicker(null)}
+            />
+            <DateTimeSheet
+              open={picker === 'startTime'}
+              value={countdownPickerValue(countdown, new Date())}
+              mode="time"
+              is24Hour
+              title="表示を始める時刻"
+              onConfirm={onPicked}
+              onCancel={() => setPicker(null)}
+            />
+          </View>
+        ) : null}
+
         <View style={[ui.card, styles.card]}>
           {label('メモ（任意）')}
           <TextInput
@@ -349,6 +444,10 @@ const styles = StyleSheet.create({
   // 日付欄（Pressable）。TextInput の枠と同じ寸法にして行の高さを揃える。
   dateField: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, justifyContent: 'center' },
   dateFieldText: { fontSize: 15 },
+  // 表示開始の「日時を指定」。日付欄と時刻欄を横に並べる（DeadlineFields と同じ 2:1）。
+  dtRow: { flexDirection: 'row', gap: 8 },
+  dtDate: { flex: 2 },
+  dtTime: { flex: 1 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tchip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999, backgroundColor: COLORS.tint, borderWidth: 1 },
   tchipOn: { backgroundColor: COLORS.cta, borderColor: COLORS.cta },

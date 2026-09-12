@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildClassEventNotifications } from './eventSchedule'
 import type { ClassEvent } from './classEvent'
+import { buildExamCountdown } from '../home/examCountdown'
 
 const ev = (o: Partial<ClassEvent>): ClassEvent => ({
   id: 'e', courseName: '物理学実験A', courseCode: null, type: 'quiz', date: '2026-07-20',
@@ -70,5 +71,25 @@ describe('2段階通知の文面（前日と当日を読み分けられること
     const n = buildClassEventNotifications([ev({ type: 'cancel', date: '2026-07-20', makeupStatus: 'none' })], now)
     expect(n[0].body).toBe('2026-07-20')
     expect(n[0].body).not.toContain('本日')
+  })
+})
+
+describe('表示開始（countdownStart）は試験の通知を変えない（設計 A §7-2E）', () => {
+  // now=2026-07-14 12:00。小テストは6日後（日時を指定＝まだ始まっていない）、期末は37日後（7日前から＝まだ）。
+  const base = [ev({ id: 'q', type: 'quiz', date: '2026-07-20' }), ev({ id: 'f', type: 'final', date: '2026-08-20' })]
+  const withStart: ClassEvent[] = [
+    { ...base[0], countdownStart: { kind: 'at', date: '2026-07-20', time: '09:00' } },
+    { ...base[1], countdownStart: { kind: 'days', days: 7 } },
+  ]
+
+  it('countdownStart の有無で、通知の件数・時刻・文面が一致する', () => {
+    const a = buildClassEventNotifications(base, now)
+    expect(a).toHaveLength(4)
+    expect(buildClassEventNotifications(withStart, now)).toEqual(a)
+  })
+
+  it('対照: 同じ入力で試験カウントダウンは変わる（この入力で表示開始が効いている）', () => {
+    expect(buildExamCountdown(base, now)).toHaveLength(2)
+    expect(buildExamCountdown(withStart, now)).toEqual([])
   })
 })

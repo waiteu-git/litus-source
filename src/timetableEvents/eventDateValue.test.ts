@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dateToYmd, isValidYmd, ymdToDate } from './eventDateValue'
+import { dateToYmd, isValidHm, isValidYmd, ymdToDate } from './eventDateValue'
 import { nextDateForWeekday } from './classBlock'
 
 const NOW = new Date(2026, 6, 14, 13, 45, 30, 500) // 2026-07-14 火
@@ -76,5 +76,12 @@ describe('画面初期値との整合', () => {
         expect(isValidYmd(nextDateForWeekday(day, now))).toBe(true)
       }
     }
+  })
+})
+
+describe('isValidHm', () => {
+  it('ゼロ埋めの 00:00〜23:59 だけを通す', () => {
+    for (const s of ['00:00', '08:30', '23:59']) expect(isValidHm(s)).toBe(true)
+    for (const s of ['24:00', '9:00', '08:60', '', '0830', '08:30:00', ' 08:30']) expect(isValidHm(s)).toBe(false)
   })
 })
