@@ -70,7 +70,7 @@ const ALLOW: Record<string, string> = {}
 
 /**
  * ⚠走査は `src/` 全体。**`src/screens/` だけを見ていた頃、入力欄を持つ Modal
- * （`src/report/DiagReportSheet.tsx`）は素通りしていた**＝入力は画面の外にも生える。
+ * （`src/report/FeedbackSheet.tsx`）は素通りしていた**＝入力は画面の外にも生える。
  * 詰み方は画面と同じ（むしろ Modal は Android で activity の adjustResize が効かないぶん重い）。
  */
 const SRC_DIR = join(__dirname, '..')

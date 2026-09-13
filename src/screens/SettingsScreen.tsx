@@ -35,7 +35,7 @@ import { useDemo } from '../demo/DemoProvider'
 import { attendanceStatsDiagLine } from '../health/attendanceStatsDiag'
 import { CHANGELOG, formatChangelogHeading, getRecentChangelog } from '../changelog'
 import ChangelogModal from '../ui/ChangelogModal'
-import DiagReportSheet from '../report/DiagReportSheet'
+import FeedbackSheet from '../report/FeedbackSheet'
 
 type Course = { courseCode: string; name: string }
 
@@ -441,22 +441,14 @@ export default function SettingsScreen() {
           ) : null}
         </Accordion>
 
-        {/* 不具合報告は独立したセクションにする。「データ」の出席送信の記録の下にぶら下げていたため
-            「出席の話」と読まれ、時間割・掲示・ログインが壊れた人が辿り着けなかった。壊れやすさは
-            パース系（LETUSのDOM変化で真っ先に壊れる）のほうが高いのに、そこに受け皿が無く、行き先が
-            公開の場であるストアレビューしか無い状態だった。アプリからは送らず下書きを作るだけ・
-            送信前に本文を全部見せる、という設計は変えていない（memory litus-diag-report-path の裁定）。 */}
-        <Accordion title="不具合の報告" icon="bug-outline">
-          <Pressable style={[ui.card, styles.rowBetween]} onPress={() => setReportOpen(true)}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={[styles.rowLabel, { color: ui.valueColor }]}>不具合を開発者に送る</Text>
-              <Text style={[styles.note, { color: ui.labelColor, marginTop: 4, marginLeft: 0 }]}>
-                うまく動かなかった時に、メールの下書きを作ります。アプリの版・OS・機種と、出席送信の記録（あれば）を添えます。送信前に本文を全部お見せします。
-              </Text>
-            </View>
-            <Text style={[styles.rowAction, { color: ui.labelColor }]}>作成</Text>
-          </Pressable>
-        </Accordion>
+        <View style={{ marginTop: 12 }}>
+          <LinkRow
+            icon="chatbubble-ellipses-outline"
+            title="フィードバックを送る"
+            sub="不具合の報告・ご要望"
+            onPress={() => setReportOpen(true)}
+          />
+        </View>
 
         <Accordion title="アプリ情報" icon="information-circle-outline">
           <View style={ui.card}>
@@ -500,7 +492,7 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
       <ChangelogModal visible={changelogOpen} entries={CHANGELOG} onClose={() => setChangelogOpen(false)} />
-      <DiagReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} source="settings" />
+      <FeedbackSheet visible={reportOpen} onClose={() => setReportOpen(false)} />
     </ScreenBg>
   )
 }

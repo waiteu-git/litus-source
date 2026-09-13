@@ -14,7 +14,7 @@ import { useAttendanceEngine, useAttendanceNow } from '../attendance/AttendanceE
 import { submitFailureText, submitOutcome } from '../attendance/submitOutcome'
 import ScreenHint from '../tutorial/ScreenHint'
 import { PressableRow } from '../ui/Pressable'
-import DiagReportSheet from '../report/DiagReportSheet'
+import FeedbackSheet from '../report/FeedbackSheet'
 import { COLORS } from '../theme'
 
 /**
@@ -64,8 +64,8 @@ export default function AttendanceScreen() {
   const [reportOpen, setReportOpen] = useState(false)
   // 失敗カードの送信診断の開閉。**既定は閉じ**＝失敗のその場で利用者が読むべきは
   // 「出席は登録されていません／CLASSで登録してください」であって、btn や onclick ではない。
-  // ⚠ 畳んでよい根拠: 報告メール（`DiagReportSheet`）は保存済みの `SubmitDiag[]`
-  //   （`loadSubmitDiags()` → `buildDiagReportBody`）から本文を組んでおり、**この画面の
+  // ⚠ 畳んでよい根拠: 報告メール（`FeedbackSheet`）は保存済みの `SubmitDiag[]`
+  //   （`loadSubmitDiags()` → `buildFeedbackPreviewText`）から本文を組んでおり、**この画面の
   //   テキストを一切読んでいない**。⇒ 畳んでも開発者に届く情報は1バイトも減らない。
   const [diagOpen, setDiagOpen] = useState(false)
   const netTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -613,7 +613,7 @@ export default function AttendanceScreen() {
                   {/* 送信診断: 「発火しているのに登録されない」原因（process範囲など）の特定に要る。
                       **既定で畳む**（開けば内容は従来と同一）。
                       ⚠ かつてのコメント「作者が実機で読める唯一の経路」は**古い**。報告経路が
-                        育った今、`DiagReportSheet` は保存済みの `SubmitDiag[]` から本文を組んでおり
+                        育った今、`FeedbackSheet` は保存済みの `SubmitDiag[]` から本文を組んでおり
                         画面のテキストは読んでいない（上の diagOpen 宣言のコメント参照）。
                         ⇒ 畳んでも開発者に届く情報は減らない。失敗の場は退避動線を主役に保つ。
                       ⚠ 意味色は使わない（danger/warn は「異常」の合図。診断の開閉は異常ではない）。 */}
@@ -684,7 +684,7 @@ export default function AttendanceScreen() {
           )}
         </ScrollView>
       </ScreenBg>
-      <DiagReportSheet visible={reportOpen} onClose={() => setReportOpen(false)} />
+      <FeedbackSheet visible={reportOpen} onClose={() => setReportOpen(false)} initialKind="bug" initialTarget="attendance" />
     </View>
   )
 }
