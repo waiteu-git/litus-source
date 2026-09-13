@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest'
-import { type BulletinEventCandidate, parseBulletinEvents, reconcileCandidates, candidateToClassEvent } from './bulletinEvents'
+import { type BulletinEventCandidate, parseBulletinEvents, reconcileCandidates, candidateToClassEvent, countScheduleNotices, formatScheduleNoticeLabel, findSingleScheduleNotice, type ScheduleNoticeCounts } from './bulletinEvents'
 import { parseBulletinDetail } from '../parsers/bulletinDetail'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import type { ClassEvent } from './classEvent'
@@ -97,4 +97,71 @@ test('candidateToClassEvent: 休講＆補講→makeupStatus=has＋makeup', () =>
   expect(ev.makeup).toEqual({ date: '2026-09-23', periods: [3], room: '1211教室' })
   // ID決定論
   expect(candidateToClassEvent(cand, cand.sourceBulletinId).id).toBe(ev.id)
+})
+
+test('countScheduleNotices: 未読の休講/補講/教室変更を種別ごとに数える', () => {
+  const items = [
+    { category: '休講', unread: true },
+    { category: '休講', unread: true },
+    { category: '補講', unread: true },
+    { category: '教室変更', unread: true },
+    { category: 'お知らせ', unread: true },
+  ]
+  expect(countScheduleNotices(items)).toEqual({ cancel: 2, makeup: 1, roomChange: 1 })
+})
+
+test('countScheduleNotices: 既読は数えない', () => {
+  const items = [
+    { category: '休講', unread: false },
+    { category: '補講', unread: true },
+  ]
+  expect(countScheduleNotices(items)).toEqual({ cancel: 0, makeup: 1, roomChange: 0 })
+})
+
+test('countScheduleNotices: 該当カテゴリが無ければ全て0', () => {
+  const items = [{ category: 'お知らせ', unread: true }]
+  expect(countScheduleNotices(items)).toEqual({ cancel: 0, makeup: 0, roomChange: 0 })
+})
+
+test('formatScheduleNoticeLabel: 複数種別を「・」で連結する', () => {
+  const counts: ScheduleNoticeCounts = { cancel: 1, makeup: 2, roomChange: 0 }
+  expect(formatScheduleNoticeLabel(counts)).toBe('休講1件・補講2件のお知らせ')
+})
+
+test('formatScheduleNoticeLabel: 0件が混ざる時、その種別だけ文言に出ない', () => {
+  const counts: ScheduleNoticeCounts = { cancel: 0, makeup: 0, roomChange: 3 }
+  expect(formatScheduleNoticeLabel(counts)).toBe('教室変更3件のお知らせ')
+})
+
+test('formatScheduleNoticeLabel: 全て0件はnull', () => {
+  expect(formatScheduleNoticeLabel({ cancel: 0, makeup: 0, roomChange: 0 })).toBe(null)
+})
+
+test('findSingleScheduleNotice: 未読のスケジュール系掲示がちょうど1件ならそれを返す', () => {
+  const items = [
+    { category: '休講', unread: true, id: 'a' },
+    { category: 'お知らせ', unread: true, id: 'b' },
+  ]
+  expect(findSingleScheduleNotice(items)).toEqual({ category: '休講', unread: true, id: 'a' })
+})
+
+test('findSingleScheduleNotice: 0件はnull', () => {
+  const items = [{ category: 'お知らせ', unread: true, id: 'a' }]
+  expect(findSingleScheduleNotice(items)).toBe(null)
+})
+
+test('findSingleScheduleNotice: 2件以上はnull', () => {
+  const items = [
+    { category: '休講', unread: true, id: 'a' },
+    { category: '補講', unread: true, id: 'b' },
+  ]
+  expect(findSingleScheduleNotice(items)).toBe(null)
+})
+
+test('findSingleScheduleNotice: 既読は数えない', () => {
+  const items = [
+    { category: '休講', unread: false, id: 'a' },
+    { category: '休講', unread: true, id: 'b' },
+  ]
+  expect(findSingleScheduleNotice(items)).toEqual({ category: '休講', unread: true, id: 'b' })
 })

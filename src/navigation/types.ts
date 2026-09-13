@@ -60,7 +60,7 @@ export type HomeStackParamList = {
   HomeHome: undefined
   Attendance: undefined
   Info: undefined
-  Bulletin: undefined
+  Bulletin: { initialTab?: 'schedule' } | undefined
   BulletinDetail: { id: string }
   BulletinWeb: { id: string }
   Link: { url: string; title?: string; isClass?: boolean }

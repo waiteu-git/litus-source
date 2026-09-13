@@ -5,7 +5,8 @@ import { Text } from '../ui/Text'
 import { PressableRow } from '../ui/Pressable'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
 import ScreenHint from '../tutorial/ScreenHint'
-import { useFocusEffect, useNavigation } from '@react-navigation/native'
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native'
+import type { RouteProp } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { ScreenBg, useUi, useTabBarClearance } from '../ui/screen'
 import { useDemo } from '../demo/DemoProvider'
@@ -33,8 +34,9 @@ export default function BulletinListScreen() {
   const ui = useUi()
   const clearance = useTabBarClearance()
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>()
+  const route = useRoute<RouteProp<HomeStackParamList, 'Bulletin'>>()
   const [items, setItems] = useState<BulletinItem[]>([])
-  const [tab, setTab] = useState<Tab>('unread')
+  const [tab, setTab] = useState<Tab>(route.params?.initialTab ?? 'unread')
   const [health, setHealth] = useState<StoredHealth | null>(null)
   const [refreshedAt, setRefreshedAt] = useState(0)
   // 一覧の「既読にする」: 詳細を開かず openDetail アクションでCLASS側を既読化する。

@@ -25,6 +25,11 @@ import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import * as Application from 'expo-application'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
+import {
+  countScheduleNotices,
+  formatScheduleNoticeLabel,
+  findSingleScheduleNotice,
+} from '../timetableEvents/bulletinEvents'
 import { formatBuildTag } from '../appVersion'
 import { RELEASE_STAGE, shouldShowBuildTag } from '../releaseStage'
 import { assignmentScreenFor, isManualUrl } from '../assignments/manualAssignment'
@@ -238,6 +243,8 @@ export default function HomeScreen() {
   const remain = homeRemaining({ hero, saved: receptionWindow, today: todayKey(tick), now: tick })
   // ストアは全件（既読・フラグ付き含む）を持つため、ホームの「未読」スライドは未読のみに絞る。
   const unreadBulletin = bulletin.filter((b) => b.unread)
+  const scheduleNoticeCounts = countScheduleNotices(bulletin)
+  const scheduleNoticeLabel = formatScheduleNoticeLabel(scheduleNoticeCounts)
   // 未読0件時のカード分岐（純ロジック）。「取得済みで未読なし」と「未取得」を区別する。
   const bulletinEmpty = bulletinEmptyCard({
     syncing: sync.bulletinBusy,
@@ -331,6 +338,16 @@ export default function HomeScreen() {
   }
   function openBulletin() {
     navigation.navigate('Bulletin')
+  }
+  // 休講/補講/教室変更の通知タップ：該当がちょうど1件ならその掲示へ直接、
+  // それ以外（0件＝到達しないはずだが安全側／2件以上）は掲示一覧の「授業」タブへ。
+  function openScheduleNotice() {
+    const only = findSingleScheduleNotice(bulletin)
+    if (only) {
+      navigation.navigate('BulletinDetail', { id: only.id })
+      return
+    }
+    navigation.navigate('Bulletin', { initialTab: 'schedule' })
   }
   // 掲示カルーセルのスライドから、その掲示の詳細へ直接飛ぶ（「すべて見る」は一覧のまま）。
   function openBulletinDetail(id: string) {
@@ -529,6 +546,20 @@ export default function HomeScreen() {
               ) : null}
             </PressableCard>
           ) : null,
+              // 休講/補講/教室変更のお知らせ（独立セクション・fixedOn＝非表示不可、並べ替えは可）。
+              // 「CLASS掲示」をOFF/並べ替えしても埋もれないよう、bulletinsから独立させている（2026-09-14）。
+              scheduleNotice: scheduleNoticeLabel ? (
+                <PressableRow
+                  onPress={openScheduleNotice}
+                  style={[styles.scheduleNotice, { backgroundColor: ui.colors.infoBg }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={scheduleNoticeLabel}
+                >
+                  <Ionicons name="alert-circle-outline" size={18} color={ui.colors.info} />
+                  <Text style={[styles.scheduleNoticeText, { color: ui.colors.info }]}>{scheduleNoticeLabel}</Text>
+                  <Ionicons name="chevron-forward" size={16} color={ui.colors.info} />
+                </PressableRow>
+              ) : null,
               // 試験カウントダウン（手動登録の試験・近い順3件）。
               // 対象0件はここでnullにする（他セクションと同じく、空セクションの余白も出さないため）。
               examCountdown: countdownItems.length > 0 ? (
@@ -824,6 +855,15 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  scheduleNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  scheduleNoticeText: { flex: 1, fontSize: 13, fontWeight: '600' },
   wrap: { flex: 1 },
   scroll: { paddingBottom: 24 },
   // ホーム各セクション間の余白（カード同士が詰まらないよう区切る）。

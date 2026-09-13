@@ -25,10 +25,12 @@ describe('normalizeHomeLayout', () => {
     ]
     const out = normalizeHomeLayout(raw)
     // 欠けキーは「既定順で自分より前にある全キーの最後尾の直後」へ。deadlines(0)/nowClass(1)を
-    // アンカーに examCountdown→todayChanges→letusNews→bulletins が連なり、laterClasses/entries は末尾に落ちる。
+    // アンカーに scheduleNotice→examCountdown→todayChanges→letusNews→bulletins が連なり、
+    // laterClasses/entries は末尾に落ちる。
     expect(out.map((s) => s.key)).toEqual([
       'deadlines',
       'nowClass',
+      'scheduleNotice',
       'examCountdown',
       'todayChanges',
       'letusNews',
@@ -52,6 +54,7 @@ describe('normalizeHomeLayout', () => {
     const out = normalizeHomeLayout(saved)
     expect(out.map((s) => s.key)).toEqual([
       'nowClass',
+      'scheduleNotice',
       'examCountdown',
       'todayChanges',
       'letusNews',
@@ -75,9 +78,11 @@ describe('normalizeHomeLayout', () => {
     ]
     const out = normalizeHomeLayout(saved)
     // 新キーは既定順のアンカー（nowClassの直後）に入るだけで、既存キーの相対順序は不変。
+    // この保存値の時点では scheduleNotice も未登場なので、2つの新キーが並んで入る。
     expect(out.map((s) => s.key)).toEqual([
       'deadlines',
       'nowClass',
+      'scheduleNotice',
       'examCountdown',
       'todayChanges',
       'letusNews',
@@ -85,8 +90,53 @@ describe('normalizeHomeLayout', () => {
       'laterClasses',
       'entries',
     ])
-    expect(out.filter((s) => s.key !== 'examCountdown')).toEqual(saved)
+    expect(out.filter((s) => s.key !== 'examCountdown' && s.key !== 'scheduleNotice')).toEqual(saved)
     expect(out.find((s) => s.key === 'examCountdown')).toEqual({ key: 'examCountdown', enabled: true })
+  })
+
+  it('scheduleNotice 登場前の保存値へ非破壊にマージされる（既存の順序・表示状態を保つ）', () => {
+    // scheduleNotice追加前の既定順で保存されたレイアウト。
+    const saved: HomeSectionPref[] = [
+      { key: 'nowClass', enabled: true },
+      { key: 'examCountdown', enabled: true },
+      { key: 'todayChanges', enabled: false },
+      { key: 'letusNews', enabled: false },
+      { key: 'bulletins', enabled: true },
+      { key: 'deadlines', enabled: true },
+      { key: 'laterClasses', enabled: true },
+      { key: 'entries', enabled: true },
+    ]
+    const out = normalizeHomeLayout(saved)
+    // 新キーは既定順のアンカー（nowClassの直後）に入るだけで、既存キーの相対順序は不変。
+    expect(out.map((s) => s.key)).toEqual([
+      'nowClass',
+      'scheduleNotice',
+      'examCountdown',
+      'todayChanges',
+      'letusNews',
+      'bulletins',
+      'deadlines',
+      'laterClasses',
+      'entries',
+    ])
+    expect(out.filter((s) => s.key !== 'scheduleNotice')).toEqual(saved)
+    expect(out.find((s) => s.key === 'scheduleNotice')).toEqual({ key: 'scheduleNotice', enabled: true })
+  })
+
+  it('scheduleNoticeはfixedOn=trueなので、保存値でenabled:falseでも強制的にtrueになる', () => {
+    const saved: HomeSectionPref[] = [
+      { key: 'nowClass', enabled: true },
+      { key: 'scheduleNotice', enabled: false },
+      { key: 'examCountdown', enabled: true },
+      { key: 'todayChanges', enabled: true },
+      { key: 'letusNews', enabled: true },
+      { key: 'bulletins', enabled: true },
+      { key: 'deadlines', enabled: true },
+      { key: 'laterClasses', enabled: true },
+      { key: 'entries', enabled: true },
+    ]
+    const out = normalizeHomeLayout(saved)
+    expect(out.find((s) => s.key === 'scheduleNotice')).toEqual({ key: 'scheduleNotice', enabled: true })
   })
 
   it('ユーザーが並び替えた保存値でも、欠けキーは既定順の前後関係を尊重して挿入される', () => {
@@ -104,6 +154,7 @@ describe('normalizeHomeLayout', () => {
     expect(out.map((s) => s.key)).toEqual([
       'bulletins',
       'nowClass',
+      'scheduleNotice',
       'examCountdown',
       'todayChanges',
       'letusNews',
@@ -128,21 +179,25 @@ describe('normalizeHomeLayout', () => {
     expect(HOME_SECTION_ORDER[i + 1]).toBe('bulletins')
   })
 
-  it('既定順で examCountdown は nowClass の直後（主役カードを上位に置く）', () => {
-    expect(HOME_SECTION_ORDER.indexOf('examCountdown')).toBe(HOME_SECTION_ORDER.indexOf('nowClass') + 1)
+  it('既定順で nowClass→scheduleNotice→examCountdown と並ぶ（休講通知と主役カードを上位に置く）', () => {
+    // 2026-09-14: 休講/補講/教室変更の通知を bulletins から独立させ、nowClass の直後へ入れた。
+    // examCountdown（主役カード）はその直後＝上位のまま。
+    const i = HOME_SECTION_ORDER.indexOf('nowClass')
+    expect(HOME_SECTION_ORDER[i + 1]).toBe('scheduleNotice')
+    expect(HOME_SECTION_ORDER[i + 2]).toBe('examCountdown')
   })
 })
 
 describe('moveSection', () => {
-  // 既定順: [nowClass, examCountdown, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
+  // 既定順: [nowClass, scheduleNotice, examCountdown, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
   const base: HomeSectionPref[] = DEFAULT_HOME_LAYOUT
   it('上へ移動（隣と入替）', () => {
     const out = moveSection(base, 'todayChanges', -1)
-    expect(out.map((s) => s.key).slice(0, 3)).toEqual(['nowClass', 'todayChanges', 'examCountdown'])
+    expect(out.map((s) => s.key).slice(0, 4)).toEqual(['nowClass', 'scheduleNotice', 'todayChanges', 'examCountdown'])
   })
   it('下へ移動（隣と入替）', () => {
     const out = moveSection(base, 'nowClass', 1)
-    expect(out.map((s) => s.key).slice(0, 2)).toEqual(['examCountdown', 'nowClass'])
+    expect(out.map((s) => s.key).slice(0, 2)).toEqual(['scheduleNotice', 'nowClass'])
   })
   it('先頭を上・末尾を下はそのまま', () => {
     expect(moveSection(base, 'nowClass', -1)).toEqual(base)
@@ -156,14 +211,15 @@ describe('moveSection', () => {
 })
 
 describe('reorderHomeLayout', () => {
-  // 既定順: [nowClass, examCountdown, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
+  // 既定順: [nowClass, scheduleNotice, examCountdown, todayChanges, letusNews, bulletins, deadlines, laterClasses, entries]
   const base: HomeSectionPref[] = DEFAULT_HOME_LAYOUT
   it('下へ移動（0→2）', () => {
     const out = reorderHomeLayout(base, 0, 2)
     expect(out.map((s) => s.key)).toEqual([
+      'scheduleNotice',
       'examCountdown',
-      'todayChanges',
       'nowClass',
+      'todayChanges',
       'letusNews',
       'bulletins',
       'deadlines',
@@ -174,10 +230,11 @@ describe('reorderHomeLayout', () => {
   it('上へ移動（3→0）', () => {
     const out = reorderHomeLayout(base, 3, 0)
     expect(out.map((s) => s.key)).toEqual([
-      'letusNews',
-      'nowClass',
-      'examCountdown',
       'todayChanges',
+      'nowClass',
+      'scheduleNotice',
+      'examCountdown',
+      'letusNews',
       'bulletins',
       'deadlines',
       'laterClasses',

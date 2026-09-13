@@ -169,3 +169,39 @@ export function candidateToClassEvent(candidate: BulletinEventCandidate, created
   }
   return ev
 }
+
+export type ScheduleNoticeCounts = {
+  cancel: number
+  makeup: number
+  roomChange: number
+}
+
+/** 未読のスケジュール系掲示を種別ごとに数える（純粋・件数のみ、掲示の中身には立ち入らない）。 */
+export function countScheduleNotices(items: { category: string; unread: boolean }[]): ScheduleNoticeCounts {
+  const counts: ScheduleNoticeCounts = { cancel: 0, makeup: 0, roomChange: 0 }
+  for (const item of items) {
+    if (!item.unread) continue
+    const type = typeOf(item.category)
+    if (type) counts[type] += 1
+  }
+  return counts
+}
+
+/** 通知行に出す文言。0件はnull（呼び出し側で非表示にする）。 */
+export function formatScheduleNoticeLabel(counts: ScheduleNoticeCounts): string | null {
+  const parts = [
+    counts.cancel > 0 ? `休講${counts.cancel}件` : null,
+    counts.makeup > 0 ? `補講${counts.makeup}件` : null,
+    counts.roomChange > 0 ? `教室変更${counts.roomChange}件` : null,
+  ].filter((s): s is string => s !== null)
+  if (parts.length === 0) return null
+  return `${parts.join('・')}のお知らせ`
+}
+
+/** 未読のスケジュール系掲示がちょうど1件の時、その掲示を返す（それ以外はnull）。 */
+export function findSingleScheduleNotice<T extends { category: string; unread: boolean }>(
+  items: T[],
+): T | null {
+  const matches = items.filter((item) => item.unread && isScheduleCategory(item.category))
+  return matches.length === 1 ? matches[0] : null
+}
