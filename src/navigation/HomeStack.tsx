@@ -8,6 +8,8 @@ import BulletinWebScreen from '../screens/BulletinWebScreen'
 import LinkViewerScreen from '../screens/LinkViewerScreen'
 import PdfViewerScreen from '../screens/PdfViewerScreen'
 import SettingsScreen from '../screens/SettingsScreen'
+import SectionOrderScreen from '../screens/SectionOrderScreen'
+import LicenseScreen from '../screens/LicenseScreen'
 import type { HomeStackParamList } from './types'
 import { stackHeaderOptions } from './headerOptions'
 
@@ -26,6 +28,12 @@ export default function HomeStack() {
       <Stack.Screen name="Attendance" component={AttendanceScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Info" component={InfoScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
+      <Stack.Screen
+        name="SectionOrder"
+        component={SectionOrderScreen}
+        options={({ route }) => ({ title: route.params.target === 'home' ? 'ホームの並び' : '科目詳細の並び' })}
+      />
+      <Stack.Screen name="License" component={LicenseScreen} options={{ title: 'ライセンス' }} />
       <Stack.Screen name="Bulletin" component={BulletinListScreen} options={{ title: 'CLASS掲示' }} />
       <Stack.Screen name="BulletinDetail" component={BulletinDetailScreen} options={{ title: '掲示' }} />
       <Stack.Screen name="BulletinWeb" component={BulletinWebScreen} options={{ title: '掲示' }} />

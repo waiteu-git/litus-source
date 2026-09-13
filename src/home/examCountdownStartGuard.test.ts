@@ -99,9 +99,16 @@ describe('設定＞表示の配線（設計 A §9-1・§9-3）', () => {
   const s = read('screens/SettingsScreen.tsx')
 
   it('見出しは「課題の並び」と「ホームの並び」の間に置く', () => {
+    // 2026-09-13 declutter（docs/design/2026-09-13-settings-subject-declutter-design.md）で
+    // 「ホームの並び」はアコーディオン内の長い並べ替えUIごと SectionOrder 画面へ切り出され、
+    // ここには LinkRow の title プロパティ（`title="ホームの並び"`）としてのみ残る
+    // （素の見出しText `>ホームの並び<` はもう存在しない）。§9-3の理由付け（長い並べ替えUIの
+    // すぐ上に置かないと見つけにくい）はその並べ替えUIが画面外へ移ったことで解消済みだが、
+    // 「試験カウントダウンの表示開始のすぐ下にホームの並びへの入口を置く」という順序自体は
+    // 変えていないので、入口の位置で照合する。
     const a = s.indexOf('>課題の並び<')
     const x = s.indexOf('>試験カウントダウンの表示開始<')
-    const h = s.indexOf('>ホームの並び<')
+    const h = s.indexOf('title="ホームの並び"')
     expect(a).toBeGreaterThan(-1)
     expect(x).toBeGreaterThan(a)
     expect(h).toBeGreaterThan(x)

@@ -17,6 +17,13 @@ export type TimetableStackParamList = {
     teachers?: string[]
     isRemote?: boolean
   }
+  // 出欠の詳細（各回記録・総回数調整）と実施パターン編集を統合した低頻度項目の別画面。
+  // focus で初期スクロール位置を決める（別画面化・設計 2026-09-13-settings-subject-declutter-design.md）。
+  SubjectSchedule: {
+    courseCode: string
+    name: string
+    focus: 'attendance' | 'pattern'
+  }
   // 各回イベント（休講/補講等）の追加/編集。editId ありで既存を編集。
   // initial* は掲示候補からの新規追加時のプリフィル（editId 無しのときのみ反映）。
   ClassEventForm: {
@@ -59,4 +66,8 @@ export type HomeStackParamList = {
   Link: { url: string; title?: string; isClass?: boolean }
   PdfViewer: { url: string; title?: string }
   Settings: undefined
+  // 設定「表示」から: ホーム/科目詳細の並べ替えUI（低頻度・別画面化）。
+  SectionOrder: { target: 'home' | 'subject' }
+  // 設定「ライセンス」から: フォントライセンス全文（低頻度・別画面化）。
+  License: undefined
 }

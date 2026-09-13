@@ -4,6 +4,7 @@ import CollectTimetableScreen from '../screens/CollectTimetableScreen'
 import CollectCoursesScreen from '../screens/CollectCoursesScreen'
 import LetusCoursesScreen from '../screens/LetusCoursesScreen'
 import SubjectDetailScreen from '../screens/SubjectDetailScreen'
+import SubjectScheduleScreen from '../screens/SubjectScheduleScreen'
 import ClassEventFormScreen from '../screens/ClassEventFormScreen'
 import PersonalEventFormScreen from '../screens/PersonalEventFormScreen'
 import WebViewerScreen from '../screens/WebViewerScreen'
@@ -25,6 +26,7 @@ export default function TimetableStack() {
       {/* LETUS自前UI（Turn4で確定した4b）。ScreenHeaderを自前描画するためheaderShown:false。 */}
       <Stack.Screen name="LetusCourses" component={LetusCoursesScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SubjectDetail" component={SubjectDetailScreen} options={{ title: '科目' }} />
+      <Stack.Screen name="SubjectSchedule" component={SubjectScheduleScreen} options={{ title: '出欠・実施パターン' }} />
       <Stack.Screen
         name="ClassEventForm"
         component={ClassEventFormScreen}

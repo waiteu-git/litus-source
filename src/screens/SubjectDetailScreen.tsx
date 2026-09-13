@@ -1,5 +1,5 @@
 // app/src/screens/SubjectDetailScreen.tsx
-import { cloneElement, Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { cloneElement, Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
@@ -8,6 +8,7 @@ import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { SectionLabel, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
+import { LinkRow } from '../ui/LinkRow'
 import { joinA11yLabel } from '../ui/a11yState'
 import { loadTimetable } from '../storage/timetableStore'
 import { loadTimetableOverrides, saveTimetableOverride } from '../storage/timetableOverridesStore'
@@ -30,41 +31,18 @@ import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { useBulletinEventCandidates } from '../timetableEvents/useBulletinEventCandidates'
 import { candidateToClassEvent, type CandidateView } from '../timetableEvents/bulletinEvents'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
-import { loadWeeklyPatterns, saveWeeklyPattern } from '../storage/weeklyPatternStore'
-import {
-  mondayOf,
-  weekMondayKey,
-  isWeekOff,
-  toggleWeek,
-  applyBiweeklyPreset,
-  clearPattern,
-  weekList,
-  type WeeklyPattern,
-} from '../timetableEvents/weeklyPattern'
+import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
+import type { WeeklyPattern } from '../timetableEvents/weeklyPattern'
 import { loadAttendanceStats } from '../storage/attendanceStatsStore'
-import type { AttendanceMark } from '../parsers/attendanceStats'
-import { loadAttendanceOverrides, saveAttendanceOverride } from '../storage/attendanceOverridesStore'
+import { loadAttendanceOverrides } from '../storage/attendanceOverridesStore'
 import { computeAttendanceRisk, type AttendanceRisk } from '../attendance/attendanceRisk'
 import { useAttendanceVersion } from '../attendance/attendanceVersion'
-import { resolveTermDates, termWeeksFromSessions, deriveExcludedDates } from '../attendance/attendanceTerm'
+import { resolveTermDates, deriveExcludedDates } from '../attendance/attendanceTerm'
 import type { AttendanceCourseStats } from '../parsers/attendanceStats'
 import { loadBulletinDigest } from '../storage/bulletinDigestStore'
 import { courseUnreadCounts } from '../timetableEvents/courseUnread'
 
 type IconName = keyof typeof Ionicons.glyphMap
-
-// 各回リストの区分表示（CLASS凡例の記号＋文言。色単独禁止＝欠席の赤にも×と文言を必ず併記）。
-const MARK_LABEL: Record<AttendanceMark, string> = {
-  present: '〇 出席',
-  absent: '× 欠席',
-  late: '△ 遅刻',
-  earlyLeave: '▽ 早退',
-  official: '公欠',
-  canceled: '休講',
-  notInScope: '対象外',
-  examNotInScope: '試験対象外',
-  none: '未記録',
-}
 
 function InfoChip({ icon, label }: { icon: IconName; label: string }) {
   const ui = useUi()
@@ -155,26 +133,31 @@ export default function SubjectDetailScreen() {
   const [attCollected, setAttCollected] = useState(true)
   // 出欠収集の完了通知（この画面を開いたまま同期が完走したら再読込するため版数を購読）。
   const { version: attVersion } = useAttendanceVersion()
+  const attVersionRef = useRef(attVersion)
   const [unread, setUnread] = useState(0)
   // 出欠の各回日付を実日付へ解決（隔週の非実施週除外・実施パターンの週リスト生成に使う）。
   const resolvedSessions = useMemo(
     () => resolveTermDates(attStats?.sessions ?? [], new Date()),
     [attStats],
   )
-  // 実施パターン編集の週リスト。出欠データがある科目は全学期週（過去〜将来）、無い科目は従来の近未来範囲。
-  const weeks = useMemo(() => {
-    const tw = termWeeksFromSessions(resolvedSessions)
-    return tw.length ? tw : weekList(new Date(), 2, 16)
-  }, [resolvedSessions])
-  const thisKey = weekMondayKey(new Date())
-
   const syllabusUrl = buildSyllabusUrl(courseCode, new Date())
 
-  useEffect(() => {
-    loadWeeklyPatterns()
-      .then((m) => setPattern(m[courseCode] ?? {}))
-      .catch(() => undefined)
-  }, [courseCode])
+  // 実施パターンの唯一の書き手は SubjectSchedule 画面（updatePattern）になったため、マウント時
+  // 1回では編集して戻っても古い値が残る（native stack では push しても本画面はアンマウントされない）。
+  // pattern は LinkRow のサブタイトル・excludeDates→risk・resolveNextSession の「次回」行を駆動する
+  // ので、attStats と対称にフォーカス毎の再読込にする（courseNews と同じ形）。
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      ;(async () => {
+        const m = await loadWeeklyPatterns()
+        if (active) setPattern(m[courseCode] ?? {})
+      })().catch(() => undefined)
+      return () => {
+        active = false
+      }
+    }, [courseCode]),
+  )
 
   // 積みコマ検出＋現在の半期指定ロード（§9E）。CLASSは前半/後半を公開しないため手動指定のみが情報源。
   useEffect(() => {
@@ -192,23 +175,42 @@ export default function SubjectDetailScreen() {
     })().catch(() => undefined)
   }, [courseCode])
 
-  const updatePattern = (next: WeeklyPattern) => {
-    setPattern(next)
-    saveWeeklyPattern(courseCode, next).catch(() => undefined)
-  }
+  // SubjectSchedule 画面での総回数の手動調整（changeTotal）が戻ってきた時に反映されるよう、
+  // マウント時だけでなくフォーカス毎に再読込する（courseNews と同じ理由・設計からの調整2）。
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      ;(async () => {
+        const data = await loadAttendanceStats()
+        if (!active) return
+        setAttCollected(data !== null)
+        const found = data?.courses.find((c) => c.courseCode === courseCode) ?? null
+        setAttStats(found)
+        const ov = await loadAttendanceOverrides()
+        if (active) setAttTotal(ov[courseCode]?.total ?? null)
+      })().catch(() => undefined)
+      return () => {
+        active = false
+      }
+    }, [courseCode]),
+  )
 
+  // 画面に留まったままCLASS同期が完走した場合の即時反映（フォーカスの出入りが起きないため
+  // 上の useFocusEffect では拾えない）。版数が実際に変わった時だけ再読込する。
   useEffect(() => {
+    if (attVersionRef.current === attVersion) return
+    attVersionRef.current = attVersion
     ;(async () => {
       const data = await loadAttendanceStats()
       setAttCollected(data !== null)
       const found = data?.courses.find((c) => c.courseCode === courseCode) ?? null
       setAttStats(found)
-      const ov = await loadAttendanceOverrides()
-      setAttTotal(ov[courseCode]?.total ?? null)
     })().catch(() => undefined)
   }, [courseCode, attVersion])
 
   // 実施パターンで「休み」にした週の回を分子(欠席)・分母(総回数)の両方から除外する。
+  // 出欠の詳細UIは SubjectSchedule 画面へ移したが、risk はサマリカードの出欠行に使うため
+  // ここでも計算する（設計からの調整1）。
   const excludeDates = useMemo(
     () => deriveExcludedDates(pattern, resolvedSessions),
     [pattern, resolvedSessions],
@@ -223,13 +225,6 @@ export default function SubjectDetailScreen() {
         : null,
     [attStats, attTotal, excludeDates],
   )
-
-  const changeTotal = (delta: number) => {
-    const base = attTotal ?? risk?.scheduledTotal ?? 0
-    const next = Math.max(0, base + delta)
-    setAttTotal(next)
-    saveAttendanceOverride(courseCode, { total: next }).catch(() => undefined)
-  }
 
   // courseNews は他画面（ホーム/LETUSコース一覧）の markCourseSeen や背景同期でも変化するため、
   // マウント時1回でなくフォーカス毎に再読込する（この画面がスタックに残ったまま古い件数を出さない）。
@@ -379,61 +374,74 @@ export default function SubjectDetailScreen() {
         }
       >
         <Text style={{ color: ui.labelColor, fontSize: 12 }}>休講・補講・教室変更・小テスト等</Text>
-        {candidates.map((v) => (
-          <View key={`cand-${v.candidate.sourceBulletinId}`} style={[ui.card, styles.candRow]}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={styles.candHead}>
-                <View style={[styles.candTag, { backgroundColor: ui.pillBg }]}>
-                  <Text style={[styles.candTagText, { color: ui.pillText }]}>掲示より</Text>
-                </View>
-                <Text style={[styles.eventText, { color: ui.valueColor }]} numberOfLines={1}>
-                  {cellBadgeText(candidateToClassEvent(v.candidate, v.candidate.sourceBulletinId))}
-                </Text>
-              </View>
-              <Text style={[styles.eventSub, { color: ui.labelColor }]}>
-                {v.candidate.date} ・ {v.candidate.periods.join('・')}限
-                {v.candidate.makeup ? ` ・ 補講 ${v.candidate.makeup.date}` : ''}
-              </Text>
-            </View>
-            {v.state === 'added' ? (
-              <Text style={[styles.candDone, { color: ui.labelColor }]}>追加済み</Text>
-            ) : v.state === 'makeupAppend' ? (
-              <Pressable style={styles.candBtn} onPress={() => appendMakeup(v)}>
-                <Text style={styles.candBtnText}>補講を追記</Text>
-              </Pressable>
-            ) : (
-              <Pressable style={styles.candBtn} onPress={() => addCandidate(v)}>
-                <Text style={styles.candBtnText}>追加</Text>
-              </Pressable>
-            )}
-          </View>
-        ))}
-        {events.length === 0 ? (
+        {candidates.length === 0 && events.length === 0 ? (
           <Text style={{ color: ui.labelColor, fontSize: 13, marginTop: 8 }}>
             休講・補講・教室変更・小テスト・中間・期末などを登録できます。
           </Text>
         ) : (
-          events.map((e) => (
-            <Pressable
-              key={e.id}
-              style={[ui.card, styles.eventRow]}
-              onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey, editId: e.id })}
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.eventText, { color: ui.valueColor }]}>{cellBadgeText(e)}</Text>
-                <Text style={[styles.eventSub, { color: ui.labelColor }]}>
-                  {e.periods.join('・')}限{e.note ? ` ・ ${e.note}` : ''}
-                </Text>
-              </View>
-              {e.type === 'cancel' && e.makeupStatus === 'undecided' ? (
-                <View style={styles.makeupPill}>
-                  <Text style={styles.makeupPillText}>補講を入力</Text>
+          <View style={ui.card}>
+            {/* 区切り線（実線・水平）と候補行の目印（破線・垂直の左境界）は View を分ける。
+                borderStyle は辺ごとに指定できないため、同じ View に両方を置くと区切り線まで破線になり、
+                Android では辺ごとに幅の違う破線ボーダーの描画自体が不安定になる。 */}
+            {candidates.map((v, i) => (
+              <View
+                key={`cand-${v.candidate.sourceBulletinId}`}
+                style={[i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor }]}
+              >
+                <View style={styles.candRow}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={styles.candHead}>
+                      <View style={[styles.candTag, { backgroundColor: ui.pillBg }]}>
+                        <Text style={[styles.candTagText, { color: ui.pillText }]}>掲示より</Text>
+                      </View>
+                      <Text style={[styles.eventText, { color: ui.valueColor }]} numberOfLines={1}>
+                        {cellBadgeText(candidateToClassEvent(v.candidate, v.candidate.sourceBulletinId))}
+                      </Text>
+                    </View>
+                    <Text style={[styles.eventSub, { color: ui.labelColor }]}>
+                      {v.candidate.date} ・ {v.candidate.periods.join('・')}限
+                      {v.candidate.makeup ? ` ・ 補講 ${v.candidate.makeup.date}` : ''}
+                    </Text>
+                  </View>
+                  {v.state === 'added' ? (
+                    <Text style={[styles.candDone, { color: ui.labelColor }]}>追加済み</Text>
+                  ) : v.state === 'makeupAppend' ? (
+                    <Pressable style={styles.candBtn} onPress={() => appendMakeup(v)}>
+                      <Text style={styles.candBtnText}>補講を追記</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable style={styles.candBtn} onPress={() => addCandidate(v)}>
+                      <Text style={styles.candBtnText}>追加</Text>
+                    </Pressable>
+                  )}
                 </View>
-              ) : (
-                <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
-              )}
-            </Pressable>
-          ))
+              </View>
+            ))}
+            {events.map((e, i) => (
+              <Pressable
+                key={e.id}
+                style={[
+                  styles.eventRow,
+                  (i > 0 || candidates.length > 0) && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor },
+                ]}
+                onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey, editId: e.id })}
+              >
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.eventText, { color: ui.valueColor }]}>{cellBadgeText(e)}</Text>
+                  <Text style={[styles.eventSub, { color: ui.labelColor }]}>
+                    {e.periods.join('・')}限{e.note ? ` ・ ${e.note}` : ''}
+                  </Text>
+                </View>
+                {e.type === 'cancel' && e.makeupStatus === 'undecided' ? (
+                  <View style={styles.makeupPill}>
+                    <Text style={styles.makeupPillText}>補講を入力</Text>
+                  </View>
+                ) : (
+                  <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
+                )}
+              </Pressable>
+            ))}
+          </View>
         )}
       </Accordion>
     ),
@@ -500,123 +508,34 @@ export default function SubjectDetailScreen() {
       </View>
     ),
     // 出欠: trackable→数値UI / 未収集→「未取得」案内 / 収集済み未記録・対象外→中立の「記録なし」。標準は折りたたみ。
-    attendance:
-      risk && risk.trackable ? (
-        <Accordion
-          title="出欠"
+    attendance: (
+      <View style={{ marginTop: 12 }}>
+        <LinkRow
           icon="checkmark-done-outline"
-          subtitle={risk.remaining > 0 ? `あと${risk.remaining}回休める（欠席${risk.absent}/上限${risk.allowedAbsences}）` : '危険ライン到達'}
-        >
-          <Text style={[styles.attSub, { color: ui.labelColor }]}>
-            欠席{risk.absent} / 上限{risk.allowedAbsences}（全{risk.scheduledTotal}回）
-          </Text>
-          <Text style={[styles.attSub, { color: ui.labelColor, marginTop: 6 }]}>
-            出席{risk.attended}・欠席{risk.absent}
-            {risk.late ? `・遅刻${risk.late}` : ''}
-            {risk.earlyLeave ? `・早退${risk.earlyLeave}` : ''}
-            {risk.official ? `・公欠${risk.official}` : ''}
-            {risk.canceled ? `・休講${risk.canceled}` : ''}
-          </Text>
-          {attStats && attStats.sessions.some((s) => s.date) ? (
-            // 各回の出欠（フラット行＋区切り線・高密度面）。実施パターンで休みにした週の回は「休み週」表示。
-            <View style={[styles.attSessionList, { borderTopColor: ui.dividerColor }]}>
-              {attStats.sessions
-                .filter((s) => s.date)
-                .map((s, i) => {
-                  const excluded = excludeDates.includes(s.date as string)
-                  const markColor = excluded
-                    ? ui.labelColor
-                    : s.mark === 'absent'
-                      ? ui.colors.danger
-                      : s.mark === 'none'
-                        ? ui.labelColor
-                        : ui.valueColor
-                  return (
-                    <View key={`${s.date}-${i}`} style={[styles.attSessionRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor }]}>
-                      <Text style={[styles.attSessionDate, { color: excluded ? ui.labelColor : ui.valueColor }]}>
-                        第{i + 1}回 ・ {s.date}
-                      </Text>
-                      <Text style={[styles.attSessionMark, { color: markColor }]}>
-                        {excluded ? '休み週・除外' : MARK_LABEL[s.mark]}
-                      </Text>
-                    </View>
-                  )
-                })}
-            </View>
-          ) : null}
-          <View style={[styles.attStepper, { borderTopColor: ui.dividerColor }]}>
-            <Text style={[styles.attSub, { color: ui.labelColor }]}>総回数（隔週などで手動調整）</Text>
-            <View style={styles.attStepBtns}>
-              <Pressable style={[styles.attStepBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => changeTotal(-1)}>
-                <Ionicons name="remove" size={16} color={ui.accentSoft} />
-              </Pressable>
-              <Text style={[styles.attTotalNum, { color: ui.valueColor }]}>{attTotal ?? risk.scheduledTotal}</Text>
-              <Pressable style={[styles.attStepBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => changeTotal(1)}>
-                <Ionicons name="add" size={16} color={ui.accentSoft} />
-              </Pressable>
-            </View>
-          </View>
-        </Accordion>
-      ) : !attCollected ? (
-        // 未収集: まだ一度も収集していない → 取得方法を案内する。
-        <Accordion title="出欠" icon="checkmark-done-outline" subtitle="未取得">
-          <Text style={[styles.attSub, { color: ui.labelColor }]}>
-            出欠データはまだ取得できていません。時間割タブで下に引いて同期すると、CLASSの「学生出欠状況確認」から自動で取得します。
-          </Text>
-        </Accordion>
-      ) : (
-        // 収集済みだが当該科目に出欠データが無い（未記録／出席管理対象外／集中講義等でCLASS出欠に載らない）。
-        // 0マーク科目に「あと◯回休める」を出すと誤情報になるため数値UIは出さず、中立の「記録なし」案内にする。
-        // これで学期序盤の全科目未記録でも機能が消えて見えず、収集失敗（=未取得）とも区別できる。
-        <Accordion title="出欠" icon="checkmark-done-outline" subtitle="記録なし">
-          <Text style={[styles.attSub, { color: ui.labelColor }]}>
-            この科目はまだCLASS出欠の記録がありません。担当教員がCLASSで出欠を取らない科目や、学期序盤で記録がない場合は数字が表示されません。
-          </Text>
-        </Accordion>
-      ),
+          title="出欠"
+          sub={
+            risk && risk.trackable
+              ? risk.remaining > 0
+                ? `あと${risk.remaining}回休める（欠席${risk.absent}/上限${risk.allowedAbsences}）`
+                : '危険ライン到達'
+              : !attCollected
+                ? '未取得'
+                : '記録なし'
+          }
+          onPress={() => navigation.navigate('SubjectSchedule', { courseCode, name, focus: 'attendance' })}
+        />
+      </View>
+    ),
     // 実施パターン: 隔週・変則スケジュールの週別 実施/休み 編集。
     pattern: (
-      <Accordion
-        title="実施パターン"
-        icon="repeat-outline"
-        subtitle={pattern.off && Object.keys(pattern.off).length ? '隔週・変則あり' : '全週実施'}
-      >
-        <Text style={[styles.patHint, { color: ui.labelColor, marginBottom: 8, marginTop: 0 }]}>
-          実施する週を選びます。既定は全週実施。隔週は「プリセット」で入れて、ずれた週だけタップで切り替えてください。
-        </Text>
-        <View style={styles.segRow}>
-          <Pressable style={[styles.presetBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => updatePattern(applyBiweeklyPreset(mondayOf(new Date()), weeks))}>
-            <Ionicons name="repeat-outline" size={15} color={ui.accentSoft} />
-            <Text style={[styles.presetText, { color: ui.accentSoft }]}>隔週プリセット</Text>
-          </Pressable>
-          <Pressable style={[styles.presetBtn, { backgroundColor: ui.softBoxBg }]} onPress={() => updatePattern(clearPattern())}>
-            <Ionicons name="checkmark-done-outline" size={15} color={ui.accentSoft} />
-            <Text style={[styles.presetText, { color: ui.accentSoft }]}>全週実施に戻す</Text>
-          </Pressable>
-        </View>
-        <View style={{ marginTop: 8 }}>
-          {weeks.map((w) => {
-            const off = isWeekOff(pattern, w)
-            const isThis = weekMondayKey(w) === thisKey
-            return (
-              <Pressable
-                key={weekMondayKey(w)}
-                onPress={() => updatePattern(toggleWeek(pattern, w))}
-                style={[styles.weekRow, { borderBottomColor: ui.dividerColor }]}
-              >
-                <Text style={[styles.weekLabel, { color: off ? ui.labelColor : ui.valueColor, fontWeight: isThis ? '800' : '500' }]}>
-                  {w.getMonth() + 1}/{w.getDate()} の週{isThis ? ' ・ 今週' : ''}
-                </Text>
-                <View style={[styles.weekPill, { backgroundColor: off ? ui.colors.patternOffBg : ui.pillBg }]}>
-                  <Text style={{ color: off ? ui.colors.patternOffText : ui.pillText, fontSize: 12, fontWeight: '700' }}>
-                    {off ? '休み' : '実施'}
-                  </Text>
-                </View>
-              </Pressable>
-            )
-          })}
-        </View>
-      </Accordion>
+      <View style={{ marginTop: 12 }}>
+        <LinkRow
+          icon="repeat-outline"
+          title="実施パターン"
+          sub={pattern.off && Object.keys(pattern.off).length ? '隔週・変則あり' : '全週実施'}
+          onPress={() => navigation.navigate('SubjectSchedule', { courseCode, name, focus: 'pattern' })}
+        />
+      </View>
     ),
   }
 
@@ -707,10 +626,20 @@ const styles = StyleSheet.create({
   summaryText: { flex: 1, fontSize: 13, fontWeight: '500' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
   addBtnText: { fontSize: 13, fontWeight: '600' },
-  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   eventText: { fontSize: 14, fontWeight: '600' },
   eventSub: { fontSize: 12, marginTop: 2 },
-  candRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: COLORS.emerald },
+  // 掲示由来の候補行は破線の縦帯で区別する（区切り線と併用可能な左境界だけに残す）。
+  candRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.emerald,
+    borderStyle: 'dashed',
+  },
   candHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   candTag: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   candTagText: { fontSize: 10, fontWeight: '800' },
@@ -719,38 +648,11 @@ const styles = StyleSheet.create({
   candBtnText: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
   makeupPill: { backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   makeupPillText: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
-  segRow: { flexDirection: 'row', gap: 8 },
-  presetBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 9,
-    borderRadius: 12,
-  },
-  presetText: { fontSize: 12.5, fontWeight: '700' },
-  weekRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  weekLabel: { fontSize: 14 },
-  weekPill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, minWidth: 52, alignItems: 'center' },
-  patRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
-  reanchor: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  // 出欠・実施パターンのUIは SubjectSchedule 画面へ移した（Task 4）。それに紐づく15件
+  // （segRow/presetBtn/presetText/weekRow/weekLabel/weekPill/attSub/attSessionList/attSessionRow/
+  // attSessionDate/attSessionMark/attStepper/attStepBtns/attStepBtn/attTotalNum）は、この画面から
+  // 参照されなくなったので削除済み＝現在の定義は SubjectScheduleScreen.tsx 側にだけある
+  // （写しを2箇所に残すと片方だけ腐る）。patRow/reanchor/attRow/attRemain の4件はそれ以前から
+  // 死んでいたもので、どこにも定義は残っていない。
   patHint: { fontSize: 12, lineHeight: 18, marginTop: 10 },
-  attRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
-  attRemain: { fontSize: 17, fontWeight: '800' },
-  attSub: { fontSize: 12.5 },
-  attSessionList: { marginTop: 10, paddingTop: 4, borderTopWidth: StyleSheet.hairlineWidth },
-  attSessionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
-  attSessionDate: { fontSize: 13 },
-  attSessionMark: { fontSize: 13, fontWeight: '600' },
-  attStepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  attStepBtns: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  attStepBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  attTotalNum: { fontSize: 16, fontWeight: '700', minWidth: 28, textAlign: 'center' },
 })
