@@ -845,6 +845,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
           required: reactionRequiredRef.current,
           courseNameMatches: rec.courseName === reactionCourseNameRef.current,
           reactionSubmitted: rec.reactionSubmitted,
+          resubmit: reactionWasSubmittedRef.current,
         })
       ) {
         reactionLastFailOutcomeRef.current = null

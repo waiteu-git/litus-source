@@ -191,7 +191,14 @@ describe('joinReactionNote', () => {
 })
 
 describe('shouldReconcileFirstSubmit', () => {
-  const base = { lastFailOutcome: 'unconfirmed' as const, busy: false, required: false, courseNameMatches: true, reactionSubmitted: true }
+  const base = {
+    lastFailOutcome: 'unconfirmed' as const,
+    busy: false,
+    required: false,
+    courseNameMatches: true,
+    reactionSubmitted: true,
+    resubmit: false,
+  }
   it('全条件が揃えば訂正する', () => {
     expect(shouldReconcileFirstSubmit(base)).toBe(true)
   })
@@ -212,6 +219,9 @@ describe('shouldReconcileFirstSubmit', () => {
   })
   it('CLASS側がまだ未提出なら訂正しない', () => {
     expect(shouldReconcileFirstSubmit({ ...base, reactionSubmitted: false })).toBe(false)
+  })
+  it('再提出は対象外（経路Bの担当）', () => {
+    expect(shouldReconcileFirstSubmit({ ...base, resubmit: true })).toBe(false)
   })
 })
 

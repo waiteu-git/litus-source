@@ -111,6 +111,9 @@ export function joinReactionNote(base: string | undefined, extra: string | undef
  * 経路A（初回の任意提出）の訂正条件（純粋）。バックグラウンド復帰で確認タイマーが早まり
  * 「unconfirmed」で確定した後、汎用の出席状態検知が同じ科目の「提出済み」を後から拾った時に真になる。
  * 必須フローの成功確定は別経路（attended分岐）が担うため対象外。
+ * 再提出も対象外: `reactionSubmitted`はCLASS側の「提出済み」フラグで、再提出では編集前から
+ * 既に真＝この編集自体がCLASSへ届いたかを検証できない。その検証は`shouldReconcileResubmit`
+ * （ajax受理という、その提出固有の証拠）の役割。
  */
 export function shouldReconcileFirstSubmit(input: {
   lastFailOutcome: ReactionOutcome | null
@@ -118,13 +121,15 @@ export function shouldReconcileFirstSubmit(input: {
   required: boolean
   courseNameMatches: boolean
   reactionSubmitted: boolean
+  resubmit: boolean
 }): boolean {
   return (
     input.lastFailOutcome === 'unconfirmed' &&
     !input.busy &&
     !input.required &&
     input.courseNameMatches &&
-    input.reactionSubmitted
+    input.reactionSubmitted &&
+    !input.resubmit
   )
 }
 
