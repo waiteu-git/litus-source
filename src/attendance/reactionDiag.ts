@@ -101,6 +101,46 @@ export function formatReactionNote(fillTries: number, trail: readonly string[]):
   return parts.length > 0 ? parts.join('・') : undefined
 }
 
+/** 通常の補足欄と、訂正時などの追加メモを結合する（純粋）。両方無ければ undefined。 */
+export function joinReactionNote(base: string | undefined, extra: string | undefined): string | undefined {
+  const parts = [base, extra].filter((x): x is string => !!x)
+  return parts.length > 0 ? parts.join('・') : undefined
+}
+
+/**
+ * 経路A（初回の任意提出）の訂正条件（純粋）。バックグラウンド復帰で確認タイマーが早まり
+ * 「unconfirmed」で確定した後、汎用の出席状態検知が同じ科目の「提出済み」を後から拾った時に真になる。
+ * 必須フローの成功確定は別経路（attended分岐）が担うため対象外。
+ */
+export function shouldReconcileFirstSubmit(input: {
+  lastFailOutcome: ReactionOutcome | null
+  busy: boolean
+  required: boolean
+  courseNameMatches: boolean
+  reactionSubmitted: boolean
+}): boolean {
+  return (
+    input.lastFailOutcome === 'unconfirmed' &&
+    !input.busy &&
+    !input.required &&
+    input.courseNameMatches &&
+    input.reactionSubmitted
+  )
+}
+
+/**
+ * 経路B（再提出）の訂正条件（純粋）。再提出はCLASS側の「提出済み」フラグが変化しないため、
+ * 唯一の確定点は提出ajaxの受理そのもの（fillOk）。busy解除後に遅れて届いたfillメッセージを
+ * 救済する呼び出し側と組み合わせて使う。
+ */
+export function shouldReconcileResubmit(input: {
+  lastFailOutcome: ReactionOutcome | null
+  courseNameMatches: boolean
+  fillOk: boolean
+}): boolean {
+  return input.lastFailOutcome === 'unconfirmed' && input.courseNameMatches && input.fillOk
+}
+
 /** リアペ提出の診断を、出席送信と同じ器（SubmitDiag）へ変換する（純粋・nowIso は注入）。 */
 export function toReactionDiag(
   r: ReactionDiagInput,

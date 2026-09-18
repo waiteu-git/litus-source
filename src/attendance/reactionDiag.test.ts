@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { toReactionDiag, reactionFailLabel, appendReactionTrail, formatReactionNote, REACTION_TRAIL_MAX } from './reactionDiag'
+import {
+  toReactionDiag,
+  reactionFailLabel,
+  appendReactionTrail,
+  formatReactionNote,
+  joinReactionNote,
+  shouldReconcileFirstSubmit,
+  shouldReconcileResubmit,
+  REACTION_TRAIL_MAX,
+} from './reactionDiag'
 import { formatSubmitDiag } from './submitDiag'
 
 const ctx = { nowIso: '2026-07-20T04:56:42.060Z', courseName: '法学１ （月３）' }
@@ -163,5 +172,61 @@ describe('提出中に通ったページの記録（appendReactionTrail / format
       { ...ctx, note: formatReactionNote(8, ['portal:Xua00102', 'attendance:Xut12401']) },
     )
     expect(d.note).toBe('必須・②待ち8回・遷移=portal:Xua00102>attendance:Xut12401')
+  })
+})
+
+describe('joinReactionNote', () => {
+  it('両方あれば・で結合する', () => {
+    expect(joinReactionNote('②待ち2回', '訂正(遅延検知)')).toBe('②待ち2回・訂正(遅延検知)')
+  })
+  it('baseだけならbaseのみ', () => {
+    expect(joinReactionNote('②待ち2回', undefined)).toBe('②待ち2回')
+  })
+  it('extraだけならextraのみ', () => {
+    expect(joinReactionNote(undefined, '訂正(遅延fill)')).toBe('訂正(遅延fill)')
+  })
+  it('両方無ければundefined', () => {
+    expect(joinReactionNote(undefined, undefined)).toBeUndefined()
+  })
+})
+
+describe('shouldReconcileFirstSubmit', () => {
+  const base = { lastFailOutcome: 'unconfirmed' as const, busy: false, required: false, courseNameMatches: true, reactionSubmitted: true }
+  it('全条件が揃えば訂正する', () => {
+    expect(shouldReconcileFirstSubmit(base)).toBe(true)
+  })
+  it('unconfirmed以外は訂正しない', () => {
+    expect(shouldReconcileFirstSubmit({ ...base, lastFailOutcome: 'open-failed' })).toBe(false)
+  })
+  it('lastFailOutcomeがnull（そもそも失敗していない）なら訂正しない', () => {
+    expect(shouldReconcileFirstSubmit({ ...base, lastFailOutcome: null })).toBe(false)
+  })
+  it('busy中（別の提出が進行中）は訂正しない', () => {
+    expect(shouldReconcileFirstSubmit({ ...base, busy: true })).toBe(false)
+  })
+  it('必須フローは対象外', () => {
+    expect(shouldReconcileFirstSubmit({ ...base, required: true })).toBe(false)
+  })
+  it('科目名が一致しなければ訂正しない', () => {
+    expect(shouldReconcileFirstSubmit({ ...base, courseNameMatches: false })).toBe(false)
+  })
+  it('CLASS側がまだ未提出なら訂正しない', () => {
+    expect(shouldReconcileFirstSubmit({ ...base, reactionSubmitted: false })).toBe(false)
+  })
+})
+
+describe('shouldReconcileResubmit', () => {
+  const base = { lastFailOutcome: 'unconfirmed' as const, courseNameMatches: true, fillOk: true }
+  it('全条件が揃えば訂正する', () => {
+    expect(shouldReconcileResubmit(base)).toBe(true)
+  })
+  it('unconfirmed以外は訂正しない', () => {
+    expect(shouldReconcileResubmit({ ...base, lastFailOutcome: 'verify-failed' })).toBe(false)
+  })
+  it('科目名が一致しなければ訂正しない', () => {
+    expect(shouldReconcileResubmit({ ...base, courseNameMatches: false })).toBe(false)
+  })
+  it('fillがokでなければ訂正しない', () => {
+    expect(shouldReconcileResubmit({ ...base, fillOk: false })).toBe(false)
   })
 })
