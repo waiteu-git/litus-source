@@ -30,6 +30,7 @@ import { cellBadgeText } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { useBulletinEventCandidates } from '../timetableEvents/useBulletinEventCandidates'
 import { candidateToClassEvent, type CandidateView } from '../timetableEvents/bulletinEvents'
+import BulletinCandidateRow from '../timetableEvents/BulletinCandidateRow'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPattern } from '../timetableEvents/weeklyPattern'
@@ -388,33 +389,7 @@ export default function SubjectDetailScreen() {
                 key={`cand-${v.candidate.sourceBulletinId}`}
                 style={[i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor }]}
               >
-                <View style={styles.candRow}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={styles.candHead}>
-                      <View style={[styles.candTag, { backgroundColor: ui.pillBg }]}>
-                        <Text style={[styles.candTagText, { color: ui.pillText }]}>掲示より</Text>
-                      </View>
-                      <Text style={[styles.eventText, { color: ui.valueColor }]} numberOfLines={1}>
-                        {cellBadgeText(candidateToClassEvent(v.candidate, v.candidate.sourceBulletinId))}
-                      </Text>
-                    </View>
-                    <Text style={[styles.eventSub, { color: ui.labelColor }]}>
-                      {v.candidate.date} ・ {v.candidate.periods.join('・')}限
-                      {v.candidate.makeup ? ` ・ 補講 ${v.candidate.makeup.date}` : ''}
-                    </Text>
-                  </View>
-                  {v.state === 'added' ? (
-                    <Text style={[styles.candDone, { color: ui.labelColor }]}>追加済み</Text>
-                  ) : v.state === 'makeupAppend' ? (
-                    <Pressable style={styles.candBtn} onPress={() => appendMakeup(v)}>
-                      <Text style={styles.candBtnText}>補講を追記</Text>
-                    </Pressable>
-                  ) : (
-                    <Pressable style={styles.candBtn} onPress={() => addCandidate(v)}>
-                      <Text style={styles.candBtnText}>追加</Text>
-                    </Pressable>
-                  )}
-                </View>
+                <BulletinCandidateRow view={v} onAdd={() => addCandidate(v)} onAppendMakeup={() => appendMakeup(v)} />
               </View>
             ))}
             {events.map((e, i) => (
@@ -629,23 +604,6 @@ const styles = StyleSheet.create({
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   eventText: { fontSize: 14, fontWeight: '600' },
   eventSub: { fontSize: 12, marginTop: 2 },
-  // 掲示由来の候補行は破線の縦帯で区別する（区切り線と併用可能な左境界だけに残す）。
-  candRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingLeft: 8,
-    borderLeftWidth: 2,
-    borderLeftColor: COLORS.emerald,
-    borderStyle: 'dashed',
-  },
-  candHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  candTag: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  candTagText: { fontSize: 10, fontWeight: '800' },
-  candDone: { fontSize: 12, fontWeight: '700' },
-  candBtn: { backgroundColor: COLORS.emerald, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
-  candBtnText: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
   makeupPill: { backgroundColor: COLORS.cta, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   makeupPillText: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
   // 出欠・実施パターンのUIは SubjectSchedule 画面へ移した（Task 4）。それに紐づく15件
