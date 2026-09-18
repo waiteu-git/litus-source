@@ -33,7 +33,7 @@ import { buildSubmitReactionJs } from '../collect/reactionSubmit.private'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { parseReactionMessage, reactionSubmitAccepted } from '../collect/reactionMessage'
 import { canSubmitReaction, REACTION_FILL_MAX_TRIES, REACTION_FILL_RETRY_MS } from './reactionPaper'
-import { appendReactionTrail, formatReactionNote, toReactionDiag, type ReactionOutcome } from './reactionDiag'
+import { appendReactionTrail, formatReactionNote, joinReactionNote, toReactionDiag, type ReactionOutcome } from './reactionDiag'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage, portalAction } from './classifyClassPage'
 import { isInActiveClassPeriod, attendedClassEndMin } from './classPeriod'
@@ -205,6 +205,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const reactionFillTriesRef = useRef(0)
   // 提出中に非表示WebViewが通ったページ（診断用。`portal:Xua00102` の形・本文やクエリは持たない）。
   const reactionTrailRef = useRef<string[]>([])
+  /** 直前のリアペ失敗理由（訂正の起点）。新しい提出開始・訂正成立のたびに null へ戻す。 */
+  const reactionLastFailOutcomeRef = useRef<ReactionOutcome | null>(null)
+  /** 提出時点の科目名（訂正時に別科目のポーリングへ誤反応しないための照合用）。 */
+  const reactionCourseNameRef = useRef<string | null>(null)
   // この提出が「必須」だったか（submitReaction 時点の状態で確定させる。提出後は状態が変わるため
   // 都度参照だと判定がぶれる）。必須=.attendSuc 待ち／任意=リアペが提出済みになるのを待つ。
   const reactionRequiredRef = useRef(false)
@@ -551,7 +555,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
    * （2026-07-20 実機報告）。全終端（成功・各失敗・確認タイムアウト）から必ず呼ぶこと。
    * 本文そのものは渡さない（長さだけ）。
    */
-  function recordReactionDiag(outcome: ReactionOutcome) {
+  function recordReactionDiag(outcome: ReactionOutcome, extraNote?: string) {
     addSubmitDiag(
       toReactionDiag(
         {
@@ -570,7 +574,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
           courseName: state.reception?.courseName ?? null,
           // ②フォーム待ちのポーリング回数（form-missing で落ちた時に「何秒待ったか」）と、提出中に通ったページ
           // （「②へ着いてから戻された」のか「②が来なかった」のかを見分ける）。
-          note: formatReactionNote(reactionFillTriesRef.current, reactionTrailRef.current),
+          note: joinReactionNote(formatReactionNote(reactionFillTriesRef.current, reactionTrailRef.current), extraNote),
         },
       ),
     ).catch(() => undefined)
@@ -578,6 +582,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   function failReaction(message: string, outcome: ReactionOutcome) {
     clearReactionTimers()
+    reactionLastFailOutcomeRef.current = outcome
     reactionBusyRef.current = false
     recordReactionDiag(outcome)
     setReactionSubmitState({ status: 'failed', message })
@@ -608,6 +613,8 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     // （提出後は状態が変わるので後から見ない）。
     reactionRequiredRef.current = receptionStatusRef.current === 'reaction_pending'
     reactionWasSubmittedRef.current = reactionSubmittedRef.current
+    reactionLastFailOutcomeRef.current = null
+    reactionCourseNameRef.current = state.reception?.courseName ?? null
     reactionAjaxOkRef.current = false
     // 観測値は1回の提出に閉じる（前回の失敗理由を次の記録へ持ち越さない）。
     reactionAjaxRef.current = {}
