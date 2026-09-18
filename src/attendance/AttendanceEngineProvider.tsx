@@ -729,8 +729,19 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
             lastFailOutcome: reactionLastFailOutcomeRef.current,
             courseNameMatches: state.reception?.courseName === reactionCourseNameRef.current,
             fillOk: m.kind === 'fill' && m.ok === true && reactionSubmitAccepted(m),
+            required: reactionRequiredRef.current,
           })
         ) {
+          // 訂正の根拠になったajax受理そのものを診断へ残す（fill成功時の通常経路と同じ形）。
+          if (m.kind === 'fill' && m.ok === true) {
+            reactionAjaxRef.current = {
+              done: m.ajaxDone,
+              status: m.ajaxStatus,
+              error: m.ajaxError,
+              invalid: m.ajaxInvalid,
+              serverError: m.ajaxServerError,
+            }
+          }
           reactionLastFailOutcomeRef.current = null
           recordReactionDiag('ok', '訂正(遅延fill)')
           resetReaction()
@@ -1005,6 +1016,10 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
   function retry() {
     setCode('')
+    // 利用者が明示的に再試行した＝新しい試み。直前の失敗理由を訂正対象として引きずらない
+    // （resetReaction() 側では消さない。resetReaction() は autoRestart 経由のエラー復旧からも
+    // 呼ばれ、そこで消すと利用者が何もしていないのに後から届く正当な訂正を握り潰しうるため）。
+    reactionLastFailOutcomeRef.current = null
     resetReaction()
     setRevealClass(false)
     clearConflictTimer()

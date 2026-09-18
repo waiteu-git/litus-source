@@ -132,13 +132,20 @@ export function shouldReconcileFirstSubmit(input: {
  * 経路B（再提出）の訂正条件（純粋）。再提出はCLASS側の「提出済み」フラグが変化しないため、
  * 唯一の確定点は提出ajaxの受理そのもの（fillOk）。busy解除後に遅れて届いたfillメッセージを
  * 救済する呼び出し側と組み合わせて使う。
+ *
+ * 必須フローは対象外（経路Aの`!input.required`と同じ理由）: この codebase 自身の`doneNow()`が、
+ * 必須フローの成功を`.attendSuc`（`receptionStatusRef.current === 'attended'`）でしか認めていない。
+ * ajax受理はその条件を満たさない＝必須提出では「ajax受理された」だけでは学生が実際に出席扱いに
+ * なっている保証がない。ここで訂正してしまうと、確認できていない必須提出の警告を誤って消し、
+ * 学生に「大丈夫」と誤解させる（このアプリで避けるべき害の方向）。
  */
 export function shouldReconcileResubmit(input: {
   lastFailOutcome: ReactionOutcome | null
   courseNameMatches: boolean
   fillOk: boolean
+  required: boolean
 }): boolean {
-  return input.lastFailOutcome === 'unconfirmed' && input.courseNameMatches && input.fillOk
+  return input.lastFailOutcome === 'unconfirmed' && input.courseNameMatches && input.fillOk && !input.required
 }
 
 /** リアペ提出の診断を、出席送信と同じ器（SubmitDiag）へ変換する（純粋・nowIso は注入）。 */

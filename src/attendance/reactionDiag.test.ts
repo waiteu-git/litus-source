@@ -216,7 +216,7 @@ describe('shouldReconcileFirstSubmit', () => {
 })
 
 describe('shouldReconcileResubmit', () => {
-  const base = { lastFailOutcome: 'unconfirmed' as const, courseNameMatches: true, fillOk: true }
+  const base = { lastFailOutcome: 'unconfirmed' as const, courseNameMatches: true, fillOk: true, required: false }
   it('全条件が揃えば訂正する', () => {
     expect(shouldReconcileResubmit(base)).toBe(true)
   })
@@ -228,5 +228,8 @@ describe('shouldReconcileResubmit', () => {
   })
   it('fillがokでなければ訂正しない', () => {
     expect(shouldReconcileResubmit({ ...base, fillOk: false })).toBe(false)
+  })
+  it('必須フローは対象外（ajax受理だけでは.attendSuc確定にならない）', () => {
+    expect(shouldReconcileResubmit({ ...base, required: true })).toBe(false)
   })
 })
