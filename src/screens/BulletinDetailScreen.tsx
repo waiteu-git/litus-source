@@ -9,6 +9,10 @@ import { RADIUS } from '../ui/scale'
 import { COLORS } from '../theme'
 import type { HomeStackParamList } from '../navigation/types'
 import { loadBulletinDigest, loadBulletinDetailDiag, updateBulletinItem } from '../storage/bulletinDigestStore'
+import { loadClassEvents, upsertClassEvent } from '../storage/classEventsStore'
+import { parseBulletinEvents, reconcileCandidates, candidateToClassEvent, type CandidateView } from '../timetableEvents/bulletinEvents'
+import { refreshAllNotifications } from '../notifications/notificationRefresh'
+import BulletinCandidateRow from '../timetableEvents/BulletinCandidateRow'
 import { useDemo } from '../demo/DemoProvider'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
@@ -33,6 +37,7 @@ export default function BulletinDetailScreen() {
   const { active: demo } = useDemo()
   const [fetchFailed, setFetchFailed] = useState(false)
   const [detailDiag, setDetailDiag] = useState('')
+  const [candidate, setCandidate] = useState<CandidateView | null>(null)
   const [flagBusy, setFlagBusy] = useState(false)
   const startedRef = useRef(false)
   const isOnline = useConnectivity()
@@ -58,6 +63,43 @@ export default function BulletinDetailScreen() {
     const items = await loadBulletinDigest()
     setItem(items.find((i) => i.id === route.params.id) ?? null)
   }, [route.params.id])
+
+  // この掲示1件分の予定候補を計算する（科目横断のuseBulletinEventCandidatesとは別に、
+  // 開いている掲示だけを対象にする軽い経路）。休講/補講/教室変更でない掲示は常にnull。
+  const reloadCandidate = useCallback(async () => {
+    if (!item?.body) {
+      setCandidate(null)
+      return
+    }
+    const parsed = parseBulletinEvents(item)
+    if (parsed.length === 0) {
+      setCandidate(null)
+      return
+    }
+    const events = await loadClassEvents()
+    const [view] = reconcileCandidates(parsed, events)
+    setCandidate(view)
+  }, [item])
+
+  useEffect(() => {
+    reloadCandidate()
+  }, [reloadCandidate])
+
+  const addCandidate = useCallback(async () => {
+    if (!candidate) return
+    await upsertClassEvent(candidateToClassEvent(candidate.candidate, candidate.candidate.sourceBulletinId))
+    refreshAllNotifications().catch(() => undefined)
+    reloadCandidate()
+  }, [candidate, reloadCandidate])
+
+  const appendMakeup = useCallback(async () => {
+    if (!candidate?.matchedEventId || !candidate.candidate.makeup) return
+    const target = (await loadClassEvents()).find((e) => e.id === candidate.matchedEventId)
+    if (!target) return
+    await upsertClassEvent({ ...target, makeupStatus: 'has', makeup: candidate.candidate.makeup })
+    refreshAllNotifications().catch(() => undefined)
+    reloadCandidate()
+  }, [candidate, reloadCandidate])
 
   useEffect(() => {
     reload()
@@ -231,6 +273,12 @@ export default function BulletinDetailScreen() {
           )}
         </View>
 
+        {b && candidate ? (
+          <View style={[styles.candidateCard, { backgroundColor: ui.colors.readingSurface, borderColor: ui.colors.readingBorder }]}>
+            <BulletinCandidateRow view={candidate} onAdd={addCandidate} onAppendMakeup={appendMakeup} />
+          </View>
+        ) : null}
+
         {/* 副ボタン: 元ページで開く（添付DL/原本確認はCLASS本物ページで完結）。全幅・読書面の下。
             本文取得中は押させない。裏で走っている収集WebViewがCLASSを掴んでいる最中に
             可視WebViewで再入場すると、排他リースの奪い合いでエラーになる（実機報告 2026-07-22）。 */}
@@ -270,6 +318,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   body: { paddingTop: 12, paddingBottom: 24 },
   card: { borderWidth: 1, borderRadius: RADIUS.card, padding: 16 },
+  candidateCard: { borderWidth: 1, borderRadius: RADIUS.card, padding: 16, marginTop: 12 },
   tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   important: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 3 },
   importantText: { fontSize: 12, fontWeight: '700' },
