@@ -33,7 +33,14 @@ import { buildSubmitReactionJs } from '../collect/reactionSubmit.private'
 import { parseAttendanceMessage, type AttendanceReception, type AttendanceStatus } from '../collect/attendanceMessage'
 import { parseReactionMessage, reactionSubmitAccepted } from '../collect/reactionMessage'
 import { canSubmitReaction, REACTION_FILL_MAX_TRIES, REACTION_FILL_RETRY_MS } from './reactionPaper'
-import { appendReactionTrail, formatReactionNote, joinReactionNote, toReactionDiag, type ReactionOutcome } from './reactionDiag'
+import {
+  appendReactionTrail,
+  formatReactionNote,
+  joinReactionNote,
+  shouldReconcileFirstSubmit,
+  toReactionDiag,
+  type ReactionOutcome,
+} from './reactionDiag'
 import { clearReactionDraft } from '../storage/reactionDraftStore'
 import { classifyClassPage, portalAction } from './classifyClassPage'
 import { isInActiveClassPeriod, attendedClassEndMin } from './classPeriod'
@@ -803,6 +810,19 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       // dispatch前のrefは遷移前status（refは各レンダーで更新されるため、このハンドラ内では旧値）。
       const prevStatus = receptionStatusRef.current
       dispatch({ kind: 'reception', reception: rec })
+      if (
+        shouldReconcileFirstSubmit({
+          lastFailOutcome: reactionLastFailOutcomeRef.current,
+          busy: reactionBusyRef.current,
+          required: reactionRequiredRef.current,
+          courseNameMatches: rec.courseName === reactionCourseNameRef.current,
+          reactionSubmitted: rec.reactionSubmitted,
+        })
+      ) {
+        reactionLastFailOutcomeRef.current = null
+        recordReactionDiag('ok', '訂正(遅延検知)')
+        resetReaction()
+      }
       // 受付時間を見たら保存する（**出席する前から**）。ホームは大学へ追加アクセスせずに
       // 「出席の受付があと何分か」を出せるようになる（従来は時限終了までを一律「残り」と表示し、
       // その面のタップ先が出席登録＝受付が先に閉じる授業で誤読を生んでいた）。
