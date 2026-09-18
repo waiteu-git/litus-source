@@ -13,6 +13,7 @@ import { loadClassEvents, upsertClassEvent } from '../storage/classEventsStore'
 import { parseBulletinEvents, reconcileCandidates, candidateToClassEvent, type CandidateView } from '../timetableEvents/bulletinEvents'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import BulletinCandidateRow from '../timetableEvents/BulletinCandidateRow'
+import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { useDemo } from '../demo/DemoProvider'
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import BulletinActionEngine from '../collect/BulletinActionEngine'
@@ -41,6 +42,10 @@ export default function BulletinDetailScreen() {
   const [flagBusy, setFlagBusy] = useState(false)
   const startedRef = useRef(false)
   const isOnline = useConnectivity()
+  // 他画面（科目詳細等）と同じ購読の仕組みに乗る。科目詳細の候補行はフォーカス毎ではなく
+  // この version 経由でのみ再計算されるため、ここで bump しないと科目詳細側が古い「追加」表示の
+  // まま取り残される（レビュー指摘）。
+  const { version: classEventsVersion, bump: bumpClassEvents } = useClassEventsVersion()
 
   // 「CLASSで開く」は可視WebViewビューアへの遷移なのでブロックしない。帯内/オフライン時のみ
   // 確認ダイアログを挟み、続行はユーザーの選択に委ねる。
@@ -76,30 +81,51 @@ export default function BulletinDetailScreen() {
       setCandidate(null)
       return
     }
+    const c = parsed[0]
+    // 本文に「授業名：」形式の行が無いと courseCode も courseName も取れないことがある
+    // （parseBulletinEvents は日付行の存在は必須にしているが、授業名行は必須にしていない）。
+    // その場合は候補として出さない＝空の courseName を持つ ClassEvent が作られ、どの科目詳細
+    // 画面からも編集・削除できないまま無題の通知だけが飛ぶ事故を防ぐ（レビュー指摘）。
+    if (!c.courseCode && !c.courseName) {
+      setCandidate(null)
+      return
+    }
     const events = await loadClassEvents()
+    // parseBulletinEvents は現状「0件または1件」しか返さない契約（同関数のJSDoc参照）。
+    // 契約が変わって2件以上返るようになった場合、ここは先頭だけを使い残りを黙って捨てる。
     const [view] = reconcileCandidates(parsed, events)
     setCandidate(view)
-  }, [item])
+  }, [item, classEventsVersion])
 
   useEffect(() => {
-    reloadCandidate()
+    reloadCandidate().catch(() => undefined)
   }, [reloadCandidate])
 
   const addCandidate = useCallback(async () => {
     if (!candidate) return
-    await upsertClassEvent(candidateToClassEvent(candidate.candidate, candidate.candidate.sourceBulletinId))
-    refreshAllNotifications().catch(() => undefined)
-    reloadCandidate()
-  }, [candidate, reloadCandidate])
+    try {
+      await upsertClassEvent(candidateToClassEvent(candidate.candidate, candidate.candidate.sourceBulletinId))
+      bumpClassEvents()
+      refreshAllNotifications().catch(() => undefined)
+      reloadCandidate().catch(() => undefined)
+    } catch {
+      // 追加に失敗した場合は他の非同期呼び出しと同様、黙って諦める（新規のエラーUIは追加しない）。
+    }
+  }, [candidate, reloadCandidate, bumpClassEvents])
 
   const appendMakeup = useCallback(async () => {
     if (!candidate?.matchedEventId || !candidate.candidate.makeup) return
-    const target = (await loadClassEvents()).find((e) => e.id === candidate.matchedEventId)
-    if (!target) return
-    await upsertClassEvent({ ...target, makeupStatus: 'has', makeup: candidate.candidate.makeup })
-    refreshAllNotifications().catch(() => undefined)
-    reloadCandidate()
-  }, [candidate, reloadCandidate])
+    try {
+      const target = (await loadClassEvents()).find((e) => e.id === candidate.matchedEventId)
+      if (!target) return
+      await upsertClassEvent({ ...target, makeupStatus: 'has', makeup: candidate.candidate.makeup })
+      bumpClassEvents()
+      refreshAllNotifications().catch(() => undefined)
+      reloadCandidate().catch(() => undefined)
+    } catch {
+      // 同上。
+    }
+  }, [candidate, reloadCandidate, bumpClassEvents])
 
   useEffect(() => {
     reload()

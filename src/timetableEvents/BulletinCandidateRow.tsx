@@ -48,6 +48,9 @@ export default function BulletinCandidateRow(props: {
 }
 
 const styles = StyleSheet.create({
+  // 左辺のみの破線ボーダー: 呼び出し側が引く水平の区切り線（実線）と同じ View に同居させない設計。
+  // borderStyle は辺ごとに指定できず、Androidでは辺ごとに幅の違う破線ボーダーの描画自体が不安定になる
+  // （詳細は SubjectDetailScreen.tsx の候補行呼び出し箇所のコメント参照）。
   candRow: {
     flexDirection: 'row',
     alignItems: 'center',
