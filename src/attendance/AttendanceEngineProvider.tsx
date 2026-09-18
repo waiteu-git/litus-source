@@ -38,6 +38,7 @@ import {
   formatReactionNote,
   joinReactionNote,
   shouldReconcileFirstSubmit,
+  shouldReconcileResubmit,
   toReactionDiag,
   type ReactionOutcome,
 } from './reactionDiag'
@@ -719,7 +720,23 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     }
     if (parsed.type === 'reaction') {
       const m = parseReactionMessage(data)
-      if (!m || !reactionBusyRef.current) return
+      if (!m) return
+      if (!reactionBusyRef.current) {
+        // busy解除後に遅れて届いた fill/ok は、直前が「確認できませんでした」だった時だけ訂正扱いにする
+        // （バックグラウンド復帰で確認タイマーが早まり、本来の受理応答を待たずに unconfirmed 確定した場合の救済）。
+        if (
+          shouldReconcileResubmit({
+            lastFailOutcome: reactionLastFailOutcomeRef.current,
+            courseNameMatches: state.reception?.courseName === reactionCourseNameRef.current,
+            fillOk: m.kind === 'fill' && m.ok === true && reactionSubmitAccepted(m),
+          })
+        ) {
+          reactionLastFailOutcomeRef.current = null
+          recordReactionDiag('ok', '訂正(遅延fill)')
+          resetReaction()
+        }
+        return
+      }
       if (m.kind === 'open') {
         if (!m.ok) {
           failReaction('リアクションペーパーの画面を開けませんでした。「CLASSの画面で書く」から提出してください', 'open-failed')
