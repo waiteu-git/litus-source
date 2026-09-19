@@ -1,9 +1,9 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Animated, Dimensions, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '../ui/Text'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import Ionicons from '@expo/vector-icons/Ionicons'
-import { Carousel, ScreenBg, ScreenHeader, SectionLabel, useUi, useTabBarClearance } from '../ui/screen'
+import { ScreenBg, ScreenHeader, useUi, useTabBarClearance } from '../ui/screen'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { computeHomeBanner } from '../attendance/homeBanner'
 import { useCourseActive } from '../attendance/useCourseActive'
@@ -11,17 +11,14 @@ import { homeRemaining } from '../attendance/receptionWindow'
 import { todayKey } from '../attendance/attendedState'
 import { todayRemainingClasses, type FocusClass } from '../home/focusClass'
 import { bulletinEmptyCard } from '../home/bulletinEmptyCard'
-import { homeDeadlines, type HomeDeadlineBand } from '../home/homeDeadlines'
+import { homeDeadlines } from '../home/homeDeadlines'
 import { buildExamCountdown, type ExamCountdownItem } from '../home/examCountdown'
-import ExamCountdownCard from '../home/ExamCountdownCard'
-import { formatDeadlineRich, deadlineMagnitude, urgencyTone } from '../assignments/deadline'
 import { loadAssignments } from '../storage/assignmentsStore'
 import type { Assignment } from '../storage/assignmentsSerialize'
 import { useAssignmentsVersion } from '../assignments/assignmentsVersion'
 import { loadClassEvents } from '../storage/classEventsStore'
-import { todaySchedule, type TodayScheduleItem } from '../timetableEvents/eventSelectors'
+import { todaySchedule } from '../timetableEvents/eventSelectors'
 import type { ClassEvent } from '../timetableEvents/classEvent'
-import { eventTypeLabel } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import * as Application from 'expo-application'
 import { loadBulletinDigest, loadBulletinDiag } from '../storage/bulletinDigestStore'
@@ -32,10 +29,6 @@ import {
 } from '../timetableEvents/bulletinEvents'
 import { formatBuildTag } from '../appVersion'
 import { RELEASE_STAGE, shouldShowBuildTag } from '../releaseStage'
-import { assignmentScreenFor, isManualUrl } from '../assignments/manualAssignment'
-import { Tag } from '../ui/Tag'
-import { reservedLineBoxHeight } from '../ui/reservedLineBox'
-import { Badge } from '../ui/Badge'
 import { loadWeeklyPatterns } from '../storage/weeklyPatternStore'
 import type { WeeklyPatternMap } from '../storage/weeklyPatternSerialize'
 import { isClassOnDate } from '../timetableEvents/weeklyPattern'
@@ -56,34 +49,13 @@ import { SPACE } from '../ui/scale'
 import { DUR, EASE, SHIFT, SPRING } from '../ui/motion'
 import { reducedShift, reducedStagger, shouldAnimateAmbient } from '../ui/reducedMotion'
 import { useReducedMotion } from '../ui/useReducedMotion'
-import { seeAllHitSlop } from '../home/seeAllHitSlop'
 import { PressableCard, PressableRow } from '../ui/Pressable'
 import { useDisplaySettings } from '../displaySettings'
 import type { HomeSectionKey } from '../home/homeSections'
+import QuickTilesSection from '../home/QuickTilesSection'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
-
-// CLASS掲示カルーセルのタイトル。行数が変わるとカード高さ＝以降のセクション位置が動くので、
-// 常に BULLETIN_TITLE_LINES 行分を確保する。値の正典はここだけ（styles と minHeight が同じ数を見る）。
-const BULLETIN_TITLE_LINE_HEIGHT = 21
-const BULLETIN_TITLE_LINES = 2
-
-// 今日の予定タグの色（タイプ別）。
-const EVENT_TONE: Record<string, string> = {
-  makeup: COLORS.cta, quiz: COLORS.eventQuiz, midterm: COLORS.eventExam, final: COLORS.eventExam, other: COLORS.eventNeutral,
-}
-
-// 直近の締切の時間帯バンド見出し（This Evening型）。
-const BAND_LABEL: Record<HomeDeadlineBand, string> = { evening: '夕方 — 18:00まで', tonight: '今夜 — 23:59まで', thisWeek: '今週', later: 'それ以降' }
-
-/** 今日の予定1件のサブ行（時限＋教室/補足）。教室変更は「→ 教室」、それ以外は「・ 教室」で付す。 */
-function eventSubText(it: TodayScheduleItem): string {
-  const base = `${it.periods.join('・')}限`
-  const room = it.room ? (it.kind === 'roomChange' ? ` → ${it.room}` : ` ・ ${it.room}`) : ''
-  const note = it.note ? ` ・ ${it.note}` : ''
-  return `${base}${room}${note}`
-}
 
 /**
  * ホーム画面。起点として「今やること」（次の授業＋直近の未提出課題）を最上部に集約し、続いて CLASS掲示、
@@ -96,9 +68,6 @@ export default function HomeScreen() {
   const clearance = useTabBarClearance()
   const { homeLayout, examCountdownStart } = useDisplaySettings()
   const { reception, timetable, running, attendedNow, receptionWindow } = useAttendanceEngine()
-  // 掲示タイトルの確保高さを端末の文字サイズ設定に追随させる。PixelRatio.getFontScale() は
-  // 同じ値を読むが変更時に再レンダーしないので、useWindowDimensions を使う。
-  const { fontScale } = useWindowDimensions()
 
   // 「今やること」・出席バナー用の現在時刻。分単位で更新して次の授業/締切を追随させる
   // （秒精度のエンジンクロックは購読しない＝出席カウントダウン中にホームが毎秒再レンダーされない。
@@ -230,7 +199,11 @@ export default function HomeScreen() {
   const classes = todayRemainingClasses(ttQ, tick, (code) => isClassOnDate(weeklyPatterns[code], tick), cq)
   const hero = classes[0] ?? null
   const laterClasses = classes.slice(1)
-  const deadlineGroups = homeDeadlines(assignments, tick)
+  // 直近の締切タイルの件数＝上限なし・未提出のみ（他の件数タイルと同じ意味に揃える）。
+  const deadlineCount = homeDeadlines(assignments, tick, Infinity).reduce(
+    (n, g) => n + g.items.filter((it) => !it.done).length,
+    0,
+  )
   // 試験カウントダウン（手動登録の試験のみ。課題の締切は「直近の締切」が担う）。純ロジックがTDD済み。
   // periodTimes を渡すと当日の試験は時限終了で消える。CLASSの時限表は学期をまたいで共通（jigen 1つを
   // 全collectionに配る）ため、最初に取れたものを使う。未取得なら null＝日付のみの判定へフォールバック。
@@ -348,16 +321,6 @@ export default function HomeScreen() {
       return
     }
     navigation.navigate('Bulletin', { initialTab: 'schedule' })
-  }
-  // 掲示カルーセルのスライドから、その掲示の詳細へ直接飛ぶ（「すべて見る」は一覧のまま）。
-  function openBulletinDetail(id: string) {
-    navigation.navigate('BulletinDetail', { id })
-  }
-  // 「今やること」の課題カードから、その課題の詳細（課題タブ内）へ直接飛ぶ。
-  function openAssignment(url: string) {
-    const screen = assignmentScreenFor(url)
-    // initial:false でタブ未訪問時も一覧を下に敷き、詳細から戻れるようにする（stuck防止）。
-    navigation.navigate('課題', { screen, params: { url }, initial: false })
   }
   // 「今やること」の授業カードから、その科目の詳細（時間割タブ内）へ飛ぶ。
   function openSubject(f: FocusClass) {
@@ -560,233 +523,32 @@ export default function HomeScreen() {
                   <Ionicons name="chevron-forward" size={16} color={ui.colors.info} />
                 </PressableRow>
               ) : null,
-              // 試験カウントダウン（手動登録の試験・近い順3件）。
-              // 対象0件はここでnullにする（他セクションと同じく、空セクションの余白も出さないため）。
-              examCountdown: countdownItems.length > 0 ? (
-                <ExamCountdownCard items={countdownItems} onPressItem={openCountdown} />
-              ) : null,
-              // このあとの授業（フラット行＋区切り線）。
-              laterClasses: laterClasses.length > 0 ? (
-            <View style={[ui.card, styles.listCard]}>
-              <View style={styles.cardHead}>
-                <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>このあとの授業</Text>
-                <View style={[styles.countPill, { backgroundColor: ui.pillBg }]}>
-                  <Text style={[styles.countPillText, { color: ui.pillText }]}>{laterClasses.length}件</Text>
-                </View>
-              </View>
-              {laterClasses.map((c, i) => (
-                <PressableRow
-                  key={`lc-${c.courseCode || c.name}-${c.period}`}
-                  onPress={() => openSubject(c)}
-                  style={[styles.hrow, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
-                >
-                  <View style={styles.slot}>
-                    <Text style={[styles.slotPer, { color: ui.valueColor }]}>{c.period}限</Text>
-                    <Text style={[styles.slotTime, { color: ui.labelColor }]}>{c.start}</Text>
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[styles.hrowTitle, { color: ui.valueColor }]} numberOfLines={1}>{c.name}</Text>
-                    <Text style={[styles.hrowSub, { color: ui.labelColor }]} numberOfLines={1}>
-                      {c.room}{c.room ? ' ・ ' : ''}〜{c.end}{c.isRemote ? ' ・ 遠隔' : ''}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={ui.chevron} />
-                </PressableRow>
-              ))}
-            </View>
-          ) : null,
-              // 直近の締切（This Evening型・時間帯バンド＋意味色チップ）。
-              deadlines: deadlineGroups.length > 0 ? (
-            <View style={[ui.card, styles.listCard]}>
-              <View style={styles.cardHead}>
-                <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>直近の締切</Text>
-                <View style={[styles.countPill, { backgroundColor: ui.pillBg }]}>
-                  <Text style={[styles.countPillText, { color: ui.pillText }]}>{deadlineGroups.reduce((n, g) => n + g.items.length, 0)}件</Text>
-                </View>
-              </View>
-              {deadlineGroups.map((g) => (
-                <View key={g.band}>
-                  <View style={styles.band}>
-                    <Text style={[styles.bandText, { color: ui.labelColor }]}>{BAND_LABEL[g.band]}</Text>
-                    <View style={[styles.bandLine, { backgroundColor: ui.dividerColor }]} />
-                  </View>
-                  {g.items.map(({ a, done }) => {
-                    const t = done ? null : urgencyTone(a, tick)
-                    return (
-                      <PressableRow key={a.url} onPress={() => openAssignment(a.url)} style={styles.hrow}>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={[styles.hrowTitle, { color: ui.valueColor }]} numberOfLines={1}>{a.title}</Text>
-                          <Text style={[styles.hrowSub, { color: ui.labelColor }]} numberOfLines={1}>
-                            {a.courseName || '科目'} ・ {formatDeadlineRich(a.deadline, tick)}
-                          </Text>
-                        </View>
-                        {done ? (
-                          <View style={[styles.chip, { backgroundColor: ui.colors.successBg }]}>
-                            <Ionicons name="checkmark" size={11} color={ui.colors.success} />
-                            <Text style={[styles.chipText, { color: ui.colors.success }]}>提出済み</Text>
-                          </View>
-                        ) : (
-                          <View style={[styles.chip, { backgroundColor: t === 'red' ? ui.colors.dangerBg : t === 'amber' ? ui.colors.warnBg : ui.softBoxBg }]}>
-                            <Text style={[styles.chipText, { color: t === 'red' ? ui.colors.danger : t === 'amber' ? ui.colors.warn : ui.labelColor }]}>
-                              {deadlineMagnitude(a.deadline, tick)}
-                            </Text>
-                          </View>
-                        )}
-                        <Ionicons name="chevron-forward" size={16} color={ui.chevron} />
-                      </PressableRow>
-                    )
-                  })}
-                </View>
-              ))}
-            </View>
-          ) : null,
-              // 今日の変更（休講/補講/教室変更/小テスト等・アプリ固有）。
-              todayChanges: todayItems.length > 0 ? (
-            <View style={[ui.card, styles.listCard]}>
-              <View style={styles.cardHead}>
-                <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>今日の変更</Text>
-              </View>
-              <View style={styles.todayGroup}>
-                {todayItems.map((it, i) => (
-                  <View key={`te-${i}`} style={styles.todayEvRow}>
-                    <View style={[styles.todayEvTag, { backgroundColor: (it.kind === 'cancel' || it.kind === 'roomChange') ? ui.colors.info : (EVENT_TONE[it.kind] ?? COLORS.eventNeutral) }]}>
-                      <Text style={[styles.todayEvTagText, { color: (it.kind === 'cancel' || it.kind === 'roomChange') ? ui.pick(COLORS.white, COLORS.white, COLORS.ink) : COLORS.white }]}>{eventTypeLabel(it.kind)}</Text>
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.todayEvTitle, { color: ui.valueColor }]} numberOfLines={1}>{it.courseName}</Text>
-                      <Text style={[styles.todayEvSub, { color: ui.labelColor }]} numberOfLines={1}>{eventSubText(it)}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null,
-              // LETUS新着（コース活動の増分・見るまで残る）。どのコースに何件かを列挙し、
-              // 行タップでそのコースを開いて既読化する。未読ゼロならセクションごと消える。
-              letusNews: newsRows.length > 0 ? (
-                <View style={[ui.card, styles.listCard]}>
-                  <View style={styles.cardHead}>
-                    <Text style={[styles.cardHeadLabel, { color: ui.labelColor }]}>LETUS新着</Text>
-                    <View style={[styles.countPill, { backgroundColor: ui.pillBg }]}>
-                      <Text style={[styles.countPillText, { color: ui.pillText }]}>{newsTotal}件</Text>
-                    </View>
-                  </View>
-                  {newsRows.map((r, i) => (
-                    <PressableRow
-                      key={r.url}
-                      onPress={() => openCourseNews(r)}
-                      style={[styles.hrow, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
-                    >
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={[styles.hrowTitle, { color: ui.valueColor }]} numberOfLines={1}>
-                          {r.name || 'LETUSコース'}
-                        </Text>
-                        <Text style={[styles.hrowSub, { color: ui.labelColor }]} numberOfLines={1}>
-                          {r.latestTitle}
-                        </Text>
-                      </View>
-                      <View style={[styles.chip, { backgroundColor: ui.pillBg }]}>
-                        <Text style={[styles.chipText, { color: ui.pillText }]}>{r.count}件</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={ui.chevron} />
-                    </PressableRow>
-                  ))}
-                </View>
-              ) : null,
-              // CLASS掲示（インフォから移設）。カード外の見出し・更新ボタン・鮮度/ヘルス表示は撤去し
-              // 上部の統合同期バーへ集約（カード内の文字だけにする方針・2026-07-14）。
-              bulletins: (
-                <Fragment>
-                  {unreadBulletin.length > 0 ? (
-            <View style={[ui.card, styles.bulletinCard]}>
-              <View style={styles.bulletinHead}>
-                <Ionicons name="megaphone-outline" size={18} color={ui.accent} />
-                <Text style={[styles.bulletinHeadText, { color: ui.valueColor }]}>CLASS掲示</Text>
-                <Badge variant="count" label="未読" count={unreadBulletin.length} />
-              </View>
-              <Carousel
-                intervalMs={3500}
-                items={unreadBulletin.map((b) => (
-                  <Pressable key={b.id} onPress={() => openBulletinDetail(b.id)} style={styles.bulletinSlide} accessibilityRole="button">
-                    <View style={{ marginBottom: 6 }}>
-                      <Tag label={b.category} size="sm" />
-                    </View>
-                    <Text
-                      style={[styles.bulletinTitle, {
-                        color: ui.valueColor,
-                        minHeight: reservedLineBoxHeight({
-                          lineHeight: BULLETIN_TITLE_LINE_HEIGHT,
-                          lines: BULLETIN_TITLE_LINES,
-                          fontScale,
-                          itemCount: unreadBulletin.length,
-                        }),
-                      }]}
-                      numberOfLines={BULLETIN_TITLE_LINES}
-                    >
-                      {b.title}
-                    </Text>
-                    <Text style={[styles.bulletinMeta, { color: ui.labelColor }]}>{b.meta}</Text>
-                  </Pressable>
-                ))}
-              />
-              <PressableRow
-                onPress={openBulletin}
-                // 押せる範囲だけを上下へ（見た目不変・カードの内側だけ＝E0 H2）。名前は ↗ を読ませない（A9・§9-2）。
-                hitSlop={seeAllHitSlop(unreadBulletin.length)}
-                accessibilityRole="button"
-                accessibilityLabel="掲示をすべて見る"
-              >
-                <Text style={[styles.bulletinMore, { color: ui.accentSoft }]}>すべて見る ↗</Text>
-              </PressableRow>
-            </View>
-          ) : (
-            // 未読0件でも、取得済みなら「新着・未読なし」を明示しつつ一覧（フラグ付き/授業タブ）への
-            // 導線を残す。未取得の時だけタップで取得を促す。
-            <PressableCard
-              style={[ui.card, styles.bulletinCta]}
-              onPress={bulletinEmpty.action === 'list' ? openBulletin : requestFullSync}
-            >
-              <Ionicons name="megaphone-outline" size={20} color={ui.accent} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.bulletinCtaText, { color: ui.valueColor }]}>{bulletinEmpty.text}</Text>
-                {__DEV__ && bulletinDiag ? (
-                  <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 4 }}>診断: {bulletinDiag}</Text>
-                ) : null}
-              </View>
-              {bulletinEmpty.showAllLink ? (
-                <Text style={[styles.bulletinEmptyLink, { color: ui.accentSoft }]}>すべて見る ↗</Text>
-              ) : null}
-            </PressableCard>
-          )}
-                </Fragment>
-              ),
-              // その他（出席登録・インフォ）＝常時表示。
-              entries: (
-                <Fragment>
-                  <SectionLabel>その他</SectionLabel>
-          <Pressable style={[ui.card, styles.entry]} onPress={openAttendance}>
-            <View style={[styles.entryIcon, { backgroundColor: ui.pillBg }]}>
-              <Ionicons name="flash-outline" size={20} color={ui.accent} />
-            </View>
-            <View style={styles.entryBody}>
-              <Text style={[styles.entryTitle, { color: ui.valueColor }]}>出席登録</Text>
-              <Text style={[styles.entrySub, { color: ui.labelColor }]}>
-                {banner.active ? banner.text : 'CLASSの出席コードを入力'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
-          </Pressable>
-          <PressableCard style={[ui.card, styles.entry]} onPress={() => navigation.navigate('Info')}>
-            <View style={[styles.entryIcon, { backgroundColor: ui.pillBg }]}>
-              <Ionicons name="newspaper-outline" size={20} color={ui.accent} />
-            </View>
-            <View style={styles.entryBody}>
-              <Text style={[styles.entryTitle, { color: ui.valueColor }]}>インフォ</Text>
-              <Text style={[styles.entrySub, { color: ui.labelColor }]}>学食・キャンパス情報</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={ui.chevron} />
-          </PressableCard>
-                </Fragment>
+              quickTiles: (
+                <>
+                  <QuickTilesSection
+                    todayItems={todayItems}
+                    newsRows={newsRows}
+                    newsTotal={newsTotal}
+                    onPressNews={openCourseNews}
+                    countdownItems={countdownItems}
+                    onPressCountdown={openCountdown}
+                    bulletinCount={unreadBulletin.length}
+                    bulletinEmptyText={bulletinEmpty.text}
+                    onPressBulletin={
+                      unreadBulletin.length > 0 || bulletinEmpty.action === 'list' ? openBulletin : requestFullSync
+                    }
+                    deadlineCount={deadlineCount}
+                    onPressDeadlines={() => navigation.navigate('課題')}
+                    laterClassesCount={laterClasses.length}
+                    onPressLaterClasses={() => navigation.navigate('時間割')}
+                    attendanceSubtitle={banner.active ? banner.text : 'CLASSの出席コードを入力'}
+                    onPressAttendance={openAttendance}
+                    onPressInfo={() => navigation.navigate('Info')}
+                  />
+                  {__DEV__ && bulletinDiag ? (
+                    <Text style={{ color: ui.labelColor, fontSize: 10, marginTop: 8 }}>診断: {bulletinDiag}</Text>
+                  ) : null}
+                </>
               ),
             }
             return homeLayout
@@ -794,7 +556,7 @@ export default function HomeScreen() {
               .map((s) => {
                 const node = sectionNodes[s.key]
                 // 各セクションを marginBottom で区切る（カード＝ui.card は余白ゼロで、
-                // hero/listCard/bulletinCard も margin 無し＝隣接して詰まって見えるため）。
+                // hero等の各セクションのコンテナも margin 無し＝隣接して詰まって見えるため）。
                 // 該当データ無しの null セクションは余白も出さない（空きの間延び防止）。
                 return node ? (
                   <View key={s.key} style={styles.sectionGap}>
@@ -913,48 +675,6 @@ const styles = StyleSheet.create({
   // 残り時間面の「タップで出席登録」導線（タップ可能であることを示す）。
   remainCta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   remainCtaText: { fontSize: 12, fontWeight: '600' },
-  // このあと/締切カード共通
-  listCard: {},
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  cardHeadLabel: { fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
-  countPill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 },
-  countPillText: { fontSize: 11, fontWeight: '700' },
-  hrow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  slot: { width: 46 },
-  slotPer: { fontSize: 12, fontWeight: '700' },
-  slotTime: { fontSize: 11, marginTop: 1 },
-  hrowTitle: { fontSize: 14, lineHeight: 18 },
-  hrowSub: { fontSize: 11, lineHeight: 15, marginTop: 2 },
-  band: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 10, paddingBottom: 2 },
-  bandText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4 },
-  bandLine: { flex: 1, height: 1 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  chipText: { fontSize: 11, fontWeight: '700' },
-
-  bulletinCard: { paddingBottom: 12 },
-  bulletinHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  bulletinHeadText: { fontSize: 15, fontWeight: '600', flex: 1 },
-  // タイトルが常に2行分を確保するので内容高さは常にこれを上回る＝この minHeight は現状非拘束。
-  // 文字サイズ設定を極端に小さくした場合の下限としてだけ残す。
-  bulletinSlide: { minHeight: 76 },
-  bulletinTitle: { fontSize: 15, fontWeight: '600', lineHeight: BULLETIN_TITLE_LINE_HEIGHT },
-  bulletinMeta: { fontSize: 11, marginTop: 5 },
-  bulletinMore: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 4 },
-  bulletinCta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  bulletinEmptyLink: { fontSize: 13, fontWeight: '600' },
-  bulletinCtaText: { flex: 1, fontSize: 15, fontWeight: '500' },
-
-  entry: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  entryIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  entryBody: { flex: 1 },
-  entryTitle: { fontSize: 15, fontWeight: '600' },
-  entrySub: { fontSize: 12, marginTop: 2 },
-  todayGroup: { gap: 8, paddingVertical: 12 },
-  todayEvRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  todayEvTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, minWidth: 52, alignItems: 'center' },
-  todayEvTagText: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
-  todayEvTitle: { fontSize: 14, fontWeight: '600' },
-  todayEvSub: { fontSize: 12, marginTop: 1 },
   edgeLine: { position: 'absolute', right: 4, width: 4, height: 26, borderRadius: 2 },
   miniPillHit: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   miniPill: {

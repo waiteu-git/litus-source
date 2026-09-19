@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { reservedLineBoxHeight } from './reservedLineBox'
 
@@ -36,20 +35,9 @@ describe('reservedLineBoxHeight', () => {
   })
 })
 
-describe('HomeScreen の掲示タイトル（値の二重管理を機械的に止める）', () => {
-  const src = readFileSync(new URL('../screens/HomeScreen.tsx', import.meta.url), 'utf8')
-
-  it('bulletinTitle の lineHeight は定数を参照する', () => {
-    const m = src.match(/bulletinTitle:\s*\{[^}]*\}/)
-    expect(m, 'styles.bulletinTitle が見つからない').toBeTruthy()
-    expect(m![0]).toContain('lineHeight: BULLETIN_TITLE_LINE_HEIGHT')
-    // 42 も 21 も直書きしない（正典は定数1箇所）
-    expect(m![0]).not.toMatch(/\b(21|42)\b/)
-  })
-
-  it('確保高さは reservedLineBoxHeight 経由で与える（42 の直書き禁止）', () => {
-    expect(src).toContain('reservedLineBoxHeight')
-    expect(src).toMatch(/const BULLETIN_TITLE_LINE_HEIGHT = 21\b/)
-    expect(src).toMatch(/const BULLETIN_TITLE_LINES = 2\b/)
-  })
-})
+// 旧「HomeScreen の掲示タイトル（値の二重管理を機械的に止める）」ガードはここにあったが、
+// ホームのクイックタイル化（2026-09-18 home-cognitive-load-quicktiles）で CLASS掲示カードは
+// カルーセル＋2行タイトル表示から件数のみの半幅タイル（QuickTilesSection の BulletinTile）へ
+// 置き換わり、HomeScreen.tsx から bulletinTitle / BULLETIN_TITLE_LINE_HEIGHT /
+// BULLETIN_TITLE_LINES / reservedLineBoxHeight 呼び出しが消えた。ガードが守っていた対象自体が
+// 無くなったため撤去。reservedLineBoxHeight 自体は今どこからも呼ばれていない（2026-09-18時点）。

@@ -21,7 +21,7 @@ describe('displaySettingsSerialize（現行挙動の固定・設計 A §7-1）',
       ...DEFAULT_DISPLAY_SETTINGS,
       timetableView: 'grid',
       assignmentsView: 'flat',
-      homeLayout: toggleSection(DEFAULT_HOME_LAYOUT, 'examCountdown'),
+      homeLayout: toggleSection(DEFAULT_HOME_LAYOUT, 'quickTiles'),
       subjectLayout: reorderSubjectLayout(DEFAULT_SUBJECT_LAYOUT, 0, 2),
     }
     // 対照: 既定と違う値で往復させている（既定どうしの一致で緑になっていない）
