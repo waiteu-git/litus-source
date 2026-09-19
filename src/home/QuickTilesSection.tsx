@@ -108,7 +108,7 @@ function buildTiles(props: QuickTilesSectionProps): Tile[] {
           node: (
             <HalfTile
               icon="time-outline"
-              title="このあとの授業"
+              title={'このあとの\n授業'} // 15pt×7字=105pt＞文字列幅(390pt級≈103pt)。自然折り返しだと「授/業」と1字孤立するため語で改行
               subtitle={`${props.laterClassesCount}件`}
               onPress={props.onPressLaterClasses}
             />
@@ -130,7 +130,7 @@ function buildTiles(props: QuickTilesSectionProps): Tile[] {
     {
       key: 'info',
       wide: false,
-      node: <HalfTile icon="newspaper-outline" title="インフォ" subtitle="学食・キャンパス情報" onPress={props.onPressInfo} />,
+      node: <HalfTile icon="newspaper-outline" title="インフォ" subtitle={'学食・キャンパス\n情報'} onPress={props.onPressInfo} />,
     },
   ]
   return tiles.filter((t): t is Tile => t !== null)
@@ -297,7 +297,7 @@ function ExamCountdownTile({
                   {it.daysLabel}
                 </Text>
               </View>
-              <Text style={[qtStyles.examMeta, { color: ui.labelColor }]} numberOfLines={1}>
+              <Text style={[qtStyles.examMeta, { color: ui.labelColor }]}>
                 {it.typeLabel} {it.dateLabel}
               </Text>
             </View>
@@ -328,7 +328,7 @@ function ExamCountdownTile({
   )
 }
 
-/** 半幅タイルの共通形（アイコン＋太字の名称＋小さい副題）。副題は半幅の狭さに合わせて最大3行まで折り返す。
+/** 半幅タイルの共通形（アイコン＋太字の名称＋小さい副題）。名称は最大2行・副題は最大3行まで、半幅の狭さに合わせて折り返す。
  * 行内の2枚の高さを揃えるため flexGrow を持つ（スロットの高さまで伸びる）。chevronは狭い幅を優先して置かない。 */
 function HalfTile({
   icon,
@@ -348,7 +348,7 @@ function HalfTile({
         <Ionicons name={icon} size={20} color={ui.accent} />
       </View>
       <View style={qtStyles.halfTileBody}>
-        <Text style={[qtStyles.halfTileTitle, { color: ui.valueColor }]} numberOfLines={1}>
+        <Text style={[qtStyles.halfTileTitle, { color: ui.valueColor }]} numberOfLines={2}>
           {title}
         </Text>
         <Text style={[qtStyles.halfTileSub, { color: ui.labelColor }]} numberOfLines={3}>
@@ -389,7 +389,7 @@ const qtStyles = StyleSheet.create({
   examCard: { flexGrow: 1 },
   examHead: { ...TYPE.caption, fontWeight: '500', marginBottom: SPACE.s1 },
   examRow: { paddingVertical: SPACE.s2, gap: 2 },
-  examTopLine: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s2 },
+  examTopLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: SPACE.s2, rowGap: 2 },
   examDaysBox: { borderRadius: RADIUS.md, paddingHorizontal: SPACE.s2, paddingVertical: 2 },
   examDaysText: { ...TYPE.dense, fontWeight: '700' },
   examMeta: { ...TYPE.caption, flexShrink: 1 },
