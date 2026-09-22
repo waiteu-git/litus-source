@@ -640,7 +640,10 @@ export function LoginGate({ children }: { children: ReactNode }) {
             {demoEntry(false)}
           </View>
         ) : null}
-        <View style={showLoginUi ? styles.webBox : styles.webHidden}>
+        <View
+          style={showLoginUi ? styles.webBox : styles.webHidden}
+          pointerEvents={showLoginUi ? 'auto' : 'none'}
+        >
           {/* 🔴 同意の確定前（loading / needsConsent）は WebView そのものを作らない。隠す・source を差し替える・
               onShouldStartLoadWithRequest で止める、では同意前の通信を止めきれない（設計 PC の禁止事項1）。 */}
           {probeMounted ? (
@@ -887,8 +890,11 @@ const styles = StyleSheet.create({
   },
   demoBtnCardText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
   webBox: { flex: 1 },
-  // 判定用に読み込みは続けるが画面には出さない（サイズ0だと読み込まれない端末があるため1x1）。
-  webHidden: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
+  // 判定用に読み込みは続けるが画面には出さない。webBoxと同じ実寸のまま透明にする＝
+  // 表示に切り替わる瞬間にWebViewの内部レイアウト幅が変わらない（1x1で読み込ませた後に
+  // フルサイズへ広げると、Androidが読込完了時点の極小幅で計算した拡大率を引きずり、
+  // 表示に切り替わった瞬間だけ大きくズームされたように見える不具合の原因だった＝2026-09-22実機報告）。
+  webHidden: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0 },
   webviewFill: { flex: 1 },
   boot: {
     position: 'absolute',
