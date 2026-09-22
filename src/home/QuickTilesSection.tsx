@@ -1,5 +1,5 @@
 import { useState, type ComponentProps, type ReactNode } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, useWindowDimensions, View } from 'react-native'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { Text } from '../ui/Text'
 import { useUi } from '../ui/screen'
@@ -48,98 +48,134 @@ export type QuickTilesSectionProps = {
   onPressInfo: () => void
 }
 
-type Tile = { key: string; wide: boolean; node: ReactNode }
+type TileMeta = { key: string; wide: boolean }
+type Tile = TileMeta & { node: ReactNode }
 
-function buildTiles(props: QuickTilesSectionProps): Tile[] {
-  const tiles: (Tile | null)[] = [
-    props.todayItems.length > 0
-      ? { key: 'todayChanges', wide: true, node: <TodayChangesTile items={props.todayItems} /> }
-      : null,
-    props.newsRows.length > 0
-      ? {
-          key: 'letusNews',
-          wide: true,
-          node: (
-            <LetusNewsTile
-              top={props.newsRows[0]}
-              total={props.newsTotal}
-              onPress={() => props.onPressNews(props.newsRows[0])}
-            />
-          ),
-        }
-      : null,
-    props.countdownItems.length > 0
-      ? {
-          key: 'examCountdown',
-          wide: false,
-          node: <ExamCountdownTile items={props.countdownItems} onPressItem={props.onPressCountdown} />,
-        }
-      : null,
-    {
-      key: 'bulletins',
-      wide: false,
-      node: (
+/** どのタイルが今日存在するか＋横長/半幅だけを決める（中身は作らない）。中身は伸び判定が
+ * 出そろってから renderTileNode で作る＝手動改行を伸びた日だけ外せるようにするため。 */
+function buildTileMeta(props: QuickTilesSectionProps): TileMeta[] {
+  const tiles: (TileMeta | null)[] = [
+    props.todayItems.length > 0 ? { key: 'todayChanges', wide: true } : null,
+    props.newsRows.length > 0 ? { key: 'letusNews', wide: true } : null,
+    props.countdownItems.length > 0 ? { key: 'examCountdown', wide: false } : null,
+    { key: 'bulletins', wide: false },
+    props.deadlineCount > 0 ? { key: 'deadlines', wide: false } : null,
+    props.laterClassesCount > 0 ? { key: 'laterClasses', wide: false } : null,
+    { key: 'attendance', wide: false },
+    { key: 'info', wide: false },
+  ]
+  return tiles.filter((t): t is TileMeta => t !== null)
+}
+
+// 手動改行が要るか判定するための実寸見積り。列幅＝画面幅 - 両端余白(SPACE.s4×2)を、伸びていない
+// 半幅タイルなら2枚+タイル間隙(SPACE.s2)で割り、伸びた（単独行の）タイルならそのまま使う。
+// そこからタイル自身の内側余白(ui.cardのpadding=14×2)・アイコン幅(36)・アイコンと文字の間隙(SPACE.s2)
+// を引いたものが、文字を置ける実際の幅。全角(CJK)前提で1文字≈フォントサイズ(px)と見積る
+// （実機実測: 15pt×7字=105pt が 390pt級の半幅列とほぼ一致・詳細はexam/laterClassesの各コメント）。
+// 見積りには8%の余裕を持たせ、境界付近では改行する側に倒す（孤立1文字より、余白が少し多い方がまし）。
+const TILE_CARD_PADDING = 14
+const TILE_ICON_WIDTH = 36
+
+function halfTileTextColumnWidth(windowWidth: number, stretched: boolean): number {
+  const outer = windowWidth - SPACE.s4 * 2
+  const columnOuter = stretched ? outer : (outer - SPACE.s2) / 2
+  return columnOuter - TILE_CARD_PADDING * 2 - TILE_ICON_WIDTH - SPACE.s2
+}
+
+function fitsOneLine(text: string, fontSize: number, windowWidth: number, stretched: boolean): boolean {
+  const required = [...text].length * fontSize * 1.08
+  return required <= halfTileTextColumnWidth(windowWidth, stretched)
+}
+
+/** 半幅タイルのうち、その日は自分が奇数の余りで単独行へ伸びている（＝横長として描画される）か。
+ * 伸びていなくても、実際の列幅（端末幅から算出）に文字が収まるなら手動改行は使わない。 */
+function renderTileNode(key: string, stretched: boolean, windowWidth: number, props: QuickTilesSectionProps): ReactNode {
+  switch (key) {
+    case 'todayChanges':
+      return <TodayChangesTile items={props.todayItems} />
+    case 'letusNews':
+      return (
+        <LetusNewsTile
+          top={props.newsRows[0]}
+          total={props.newsTotal}
+          onPress={() => props.onPressNews(props.newsRows[0])}
+        />
+      )
+    case 'examCountdown':
+      return <ExamCountdownTile items={props.countdownItems} onPressItem={props.onPressCountdown} />
+    case 'bulletins':
+      return (
         <HalfTile
           icon="megaphone-outline"
           title="CLASS掲示"
           subtitle={props.bulletinCount > 0 ? `未読${props.bulletinCount}件` : props.bulletinEmptyText}
           onPress={props.onPressBulletin}
         />
-      ),
-    },
-    props.deadlineCount > 0
-      ? {
-          key: 'deadlines',
-          wide: false,
-          node: (
-            <HalfTile
-              icon="alert-circle-outline"
-              title="直近の締切"
-              subtitle={`${props.deadlineCount}件`}
-              onPress={props.onPressDeadlines}
-            />
-          ),
-        }
-      : null,
-    props.laterClassesCount > 0
-      ? {
-          key: 'laterClasses',
-          wide: false,
-          node: (
-            <HalfTile
-              icon="time-outline"
-              title={'このあとの\n授業'} // 15pt×7字=105pt＞文字列幅(390pt級≈103pt)。自然折り返しだと「授/業」と1字孤立するため語で改行
-              subtitle={`${props.laterClassesCount}件`}
-              onPress={props.onPressLaterClasses}
-            />
-          ),
-        }
-      : null,
-    {
-      key: 'attendance',
-      wide: false,
-      node: (
+      )
+    case 'deadlines':
+      return (
+        <HalfTile
+          icon="alert-circle-outline"
+          title="直近の締切"
+          subtitle={`${props.deadlineCount}件`}
+          onPress={props.onPressDeadlines}
+        />
+      )
+    case 'laterClasses':
+      return (
+        <HalfTile
+          icon="time-outline"
+          // 実際の列幅に「このあとの授業」(7字・15pt)が収まるなら改行しない。収まらない狭い端末
+          // （390pt級）では自然折り返しだと「授/業」と1字孤立するため語で改行する。
+          title={fitsOneLine('このあとの授業', 15, windowWidth, stretched) ? 'このあとの授業' : 'このあとの\n授業'}
+          subtitle={`${props.laterClassesCount}件`}
+          onPress={props.onPressLaterClasses}
+        />
+      )
+    case 'attendance':
+      return (
         <HalfTile
           icon="flash-outline"
           title="出席登録"
           subtitle={props.attendanceSubtitle}
           onPress={props.onPressAttendance}
         />
-      ),
-    },
-    {
-      key: 'info',
-      wide: false,
-      node: <HalfTile icon="newspaper-outline" title="インフォ" subtitle={'学食・キャンパス\n情報'} onPress={props.onPressInfo} />,
-    },
-  ]
-  return tiles.filter((t): t is Tile => t !== null)
+      )
+    case 'info':
+      return (
+        <HalfTile
+          icon="newspaper-outline"
+          title="インフォ"
+          // laterClassesと同じ理由。「学食・キャンパス情報」(10字・12pt)が実際の列幅に収まらない
+          // 場合だけ、語中で折れる自然折り返し（「…情」/「報」）を避けて語で改行する。
+          subtitle={
+            fitsOneLine('学食・キャンパス情報', 12, windowWidth, stretched)
+              ? '学食・キャンパス情報'
+              : '学食・キャンパス\n情報'
+          }
+          onPress={props.onPressInfo}
+        />
+      )
+    default:
+      return null
+  }
 }
 
 export default function QuickTilesSection(props: QuickTilesSectionProps) {
-  const tiles = buildTiles(props)
-  if (tiles.length === 0) return null
+  const { width: windowWidth } = useWindowDimensions()
+  const meta = buildTileMeta(props)
+  if (meta.length === 0) return null
 
+  // 1回目: 横長/半幅の並びだけで行割付し、半幅のうち単独行（＝奇数の余りで伸びた）タイルを特定する。
+  const metaRows = computeTileRows(meta.map((t) => ({ wide: t.wide, item: t })))
+  const stretchedKeys = new Set(metaRows.filter((row) => row.length === 1 && !row[0].wide).map((row) => row[0].key))
+
+  const tiles: Tile[] = meta.map((t) => ({
+    ...t,
+    node: renderTileNode(t.key, stretchedKeys.has(t.key), windowWidth, props),
+  }))
+  // 2回目: 実際に描画するタイル（伸び判定込みの中身）で同じ並びを行割付する。wideの並びは不変なので
+  // 行の切れ目は1回目と必ず一致する。
   const rows = computeTileRows(tiles.map((t) => ({ wide: t.wide, item: t })))
 
   return (
