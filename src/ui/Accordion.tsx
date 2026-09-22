@@ -3,6 +3,7 @@ import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, UIManager, 
 import { Text } from './Text'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { useUi } from './screen'
+import { RADIUS, SPACE } from './scale'
 import { DUR } from './motion'
 import { useReducedMotion } from './useReducedMotion'
 import { disclosureA11yProps } from './disclosureA11y'
@@ -86,7 +87,7 @@ export function Accordion({
   return (
     <View style={styles.wrap}>
       <Pressable
-        style={[ui.card, styles.head]}
+        style={[ui.card, styles.head, open && styles.headOpen]}
         onPress={toggle}
         {...disclosure}
         accessibilityLabel={accessibilityLabel ?? joinA11yLabel(title, subtitle)}
@@ -118,18 +119,43 @@ export function Accordion({
         </View>
       </Pressable>
       {open ? (
-        <Animated.View style={[styles.body, { opacity: bodyOpacity }]}>{children}</Animated.View>
+        <Animated.View
+          style={[
+            styles.body,
+            {
+              opacity: bodyOpacity,
+              borderLeftColor: ui.colors.cardBorder,
+              borderRightColor: ui.colors.cardBorder,
+              borderBottomColor: ui.colors.cardBorder,
+              borderTopColor: ui.dividerColor,
+            },
+          ]}
+        >
+          {children}
+        </Animated.View>
       ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 12 },
+  wrap: { marginTop: SPACE.s6 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headOpen: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 },
   headLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
   title: { fontSize: 15, fontWeight: '600' },
   subtitle: { fontSize: 12, marginTop: 2 },
   headRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  body: { marginTop: 8, gap: 8 },
+  body: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomLeftRadius: RADIUS.card,
+    borderBottomRightRadius: RADIUS.card,
+    paddingHorizontal: SPACE.s4,
+    paddingTop: SPACE.s2,
+    paddingBottom: SPACE.s4,
+    gap: SPACE.s2,
+  },
 })
