@@ -25,6 +25,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 217,
+    version: '1.0.3',
+    date: '2026/09/22',
+    items: [
+      '初回ログイン画面で、大学のサインイン画面が大きくズームされたまま表示され、読みづらかった問題を直しました',
+    ],
+  },
+  {
     build: 216,
     version: '1.0.3',
     date: '2026/09/19',
