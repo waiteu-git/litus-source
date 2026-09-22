@@ -25,6 +25,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    build: 218,
+    version: '1.0.3',
+    date: '2026/09/23',
+    items: [
+      'ホームの「このあとの授業」「インフォ」タイルで、余裕があるのに文字が2行になってしまうことがあった表示を直しました',
+    ],
+  },
+  {
     build: 217,
     version: '1.0.3',
     date: '2026/09/22',
