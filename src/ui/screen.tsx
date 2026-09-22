@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Animated, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from './Text'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle, G } from 'react-native-svg'
@@ -7,11 +7,9 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, DARK, useThemeVariant } from '../theme'
 import { resolveUiColors } from '../theme.tokens'
-import { DUR, EASE, SHIFT } from './motion'
-import { classifySwipe, shouldCaptureSwipe, stepIndex } from './carouselSwipe'
-import { AMBIENT_STATIC_FRAME, autoAdvanceAllowed, reducedShift, shouldAnimateAmbient } from './reducedMotion'
+import { EASE } from './motion'
+import { AMBIENT_STATIC_FRAME, shouldAnimateAmbient } from './reducedMotion'
 import { useReducedMotion } from './useReducedMotion'
-import { useScreenReaderEnabled } from './useScreenReaderEnabled'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -87,7 +85,7 @@ export function ActionButton({ label, onPress, ghost }: { label: string; onPress
   if (ghost) {
     return (
       <Pressable
-        style={[ui.action, { backgroundColor: green ? 'rgba(255,255,255,0.5)' : dark ? DARK.softBox : '#dce9e3' }]}
+        style={[ui.action, { backgroundColor: green ? 'rgba(255,255,255,0.5)' : dark ? DARK.softBox : '#dce9e3' }]} // design-allow 未トークン化（既存）
         onPress={onPress}
       >
         <Text style={[ui.actionText, { color: dark ? COLORS.emeraldLight : COLORS.emeraldDark }]}>{label}</Text>
@@ -104,7 +102,7 @@ export function ActionButton({ label, onPress, ghost }: { label: string; onPress
 /** セクション見出し（薄い翠ラベル）。 */
 export function SectionLabel({ children }: { children: ReactNode }) {
   const { variant } = useThemeVariant()
-  const color = variant === 'green' ? '#eafff7' : variant === 'dark' ? DARK.label : COLORS.emeraldDark
+  const color = variant === 'green' ? '#eafff7' : variant === 'dark' ? DARK.label : COLORS.emeraldDark // design-allow 未トークン化（既存）
   return <Text style={[ui.section, { color }]}>{children}</Text>
 }
 
@@ -165,7 +163,7 @@ export function StepList({ steps }: { steps: Step[] }) {
   const ui2 = useUi()
   const { variant } = useThemeVariant()
   const green = variant === 'green'
-  const trackColor = green ? 'rgba(255,255,255,0.22)' : variant === 'dark' ? 'rgba(255,255,255,0.12)' : '#e3ece8'
+  const trackColor = green ? 'rgba(255,255,255,0.22)' : variant === 'dark' ? 'rgba(255,255,255,0.12)' : '#e3ece8' // design-allow 未トークン化（既存）
   return (
     <View>
       {steps.map((s, i) => {
@@ -176,8 +174,8 @@ export function StepList({ steps }: { steps: Step[] }) {
           <View key={i} style={ui.stepRow}>
             <View style={ui.stepDotCol}>
               <View style={[ui.stepDot, { backgroundColor: dotBg }]}>
-                {s.state === 'done' ? <Ionicons name="checkmark" size={14} color="#ffffff" /> : null}
-                {s.state === 'error' ? <Ionicons name="close" size={14} color="#ffffff" /> : null}
+                {s.state === 'done' ? <Ionicons name="checkmark" size={14} color={COLORS.white} /> : null}
+                {s.state === 'error' ? <Ionicons name="close" size={14} color={COLORS.white} /> : null}
                 {s.state === 'active' ? <View style={ui.stepDotInner} /> : null}
               </View>
               {!last ? (
@@ -237,10 +235,10 @@ export function CountdownRing({
   const circ = 2 * Math.PI * r
   const p = progress == null ? 1 : Math.max(0, Math.min(1, progress))
   const cx = size / 2
-  const arcColor = accent ?? (green ? '#ffffff' : dark ? COLORS.emeraldLight : COLORS.cta)
-  const trackColor = green ? 'rgba(255,255,255,0.22)' : dark ? 'rgba(255,255,255,0.12)' : '#e3ebe7'
-  const textColor = green ? '#ffffff' : dark ? DARK.heading : COLORS.emeraldDark
-  const subColor = green ? '#eafff7' : dark ? DARK.label : '#8a968f'
+  const arcColor = accent ?? (green ? '#ffffff' : dark ? COLORS.emeraldLight : COLORS.cta) // design-allow 未トークン化（既存）
+  const trackColor = green ? 'rgba(255,255,255,0.22)' : dark ? 'rgba(255,255,255,0.12)' : '#e3ebe7' // design-allow 未トークン化（既存）
+  const textColor = green ? '#ffffff' : dark ? DARK.heading : COLORS.emeraldDark // design-allow 未トークン化（既存）
+  const subColor = green ? '#eafff7' : dark ? DARK.label : '#8a968f' // design-allow 未トークン化（既存）
   return (
     <View style={{ width: size, height: size, alignSelf: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
@@ -350,177 +348,6 @@ export function IndeterminateBar({
   )
 }
 
-/** カルーセルのアクティブドット（幅 6⇄18px を micro でアニメ。色は cta/薄地で出し分け）。 */
-function CarouselDot({ active, inactiveColor }: { active: boolean; inactiveColor: string }) {
-  const w = useRef(new Animated.Value(active ? 18 : 6)).current
-  useEffect(() => {
-    Animated.timing(w, { toValue: active ? 18 : 6, duration: DUR.micro, easing: EASE.move, useNativeDriver: false }).start()
-  }, [active, w])
-  return (
-    <Animated.View
-      style={[ui.dot, { width: w, backgroundColor: active ? COLORS.cta : inactiveColor }]}
-    />
-  )
-}
-
-/**
- * 汎用の自動スライドカルーセル（一定間隔でクロスディゾルブ）。インフォタブのCLASS掲示など、
- * 今後アイテム数が増減するモジュールをそのまま差し替えられるよう中身は ReactNode[] で受け取る。
- * 切替は旧スライドの exit フェードと新スライドの enter フェード＋微ドリフト(6→0)を重ね、空白を作らない。
- * 横スワイプで手動送りにも対応（左=次・右=前）。スライドがタップ遷移の Pressable でも共存できるよう、
- * 横移動がスロップ超えのときだけレスポンダを奪う（判定は carouselSwipe.ts の純ロジック）。
- * 前提: スライドは移動ジェスチャを親に譲れること（Pressable は可）。レスポンダを離さない
- * 横ScrollView等をスライドに入れると、そのスライド上ではスワイプ送りが効かない。
- * Reduce Motion オンの時と読み上げ（VoiceOver／TalkBack）中は自動送りしない（E0 M3・S1）。Reduce Motion では
- * ドリフトも0にしてクロスフェードだけ残す（M4）。手でのスワイプ送りは残す。props は変えない。
- */
-export function Carousel({ items, intervalMs = 4000 }: { items: ReactNode[]; intervalMs?: number }) {
-  const [idx, setIdx] = useState(0)
-  // 出ていく旧スライドを重ねるためのオーバーレイ（クロスディゾルブ中だけ描画）。
-  const [outgoing, setOutgoing] = useState<{ node: ReactNode; key: number } | null>(null)
-  const inOpacity = useRef(new Animated.Value(1)).current
-  // ドリフトは自動送り=縦(6→0)・スワイプ=横(スワイプ方向から±SHIFT.small→0)で軸を使い分ける。
-  const inShift = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current
-  const outOpacity = useRef(new Animated.Value(0)).current
-  // タイマー/ジェスチャのクロージャ陳腐化を避けるため、最新の items と idx を ref で参照する。
-  const itemsRef = useRef(items)
-  itemsRef.current = items
-  const idxRef = useRef(idx)
-  idxRef.current = idx
-  // 指が触れている間は自動送りを見送る。押下中にスライドが差し替わってタップが
-  // 飲み込まれるのを防ぎ、スワイプ確定と自動送りの二重進行も避ける。
-  const touchActiveRef = useRef(false)
-  // Reduce Motion と読み上げの状態（E0 M3・M4・S1）。タイマーと PanResponder は初回に1回だけ作るので、
-  // 直接読まず ref で読む（useReducedMotion の初期値 false のまま固まるのを防ぐ＝E0 禁止事項3）。
-  const reduce = useReducedMotion()
-  const screenReader = useScreenReaderEnabled()
-  const a11yRef = useRef({ reduce, screenReader })
-  a11yRef.current = { reduce, screenReader }
-
-  // 自動送り・スワイプ共通の切替。参照するのは ref と Animated 値（すべて安定）のみ。
-  const goTo = useCallback(
-    (delta: 1 | -1, drift: { x: number; y: number }) => {
-      const list = itemsRef.current
-      if (list.length <= 1) return
-      const cur = idxRef.current
-      const next = stepIndex(cur, delta, list.length)
-      setOutgoing({ node: list[cur] ?? null, key: cur })
-      outOpacity.setValue(1)
-      inOpacity.setValue(0)
-      inShift.setValue(drift)
-      setIdx(next)
-      // 旧スライドは新より速く抜く（fast<base）。同じ長さでクロスフェードすると新旧が重なって
-      // 半透明で二重に見え「前の掲示が消えるのが遅く見づらい」ため、旧を先に消して重なりを減らす。
-      Animated.parallel([
-        Animated.timing(outOpacity, { toValue: 0, duration: DUR.fast, easing: EASE.exit, useNativeDriver: true }),
-        Animated.timing(inOpacity, { toValue: 1, duration: DUR.base, easing: EASE.enter, useNativeDriver: true }),
-        Animated.timing(inShift, {
-          toValue: { x: 0, y: 0 },
-          duration: DUR.base,
-          easing: EASE.enter,
-          useNativeDriver: true,
-        }),
-      ]).start(({ finished }) => {
-        if (finished) setOutgoing(null)
-      })
-    },
-    [inOpacity, inShift, outOpacity],
-  )
-
-  // 自動送りタイマーは ref で持ち、手動操作時は「同期的に」止めてから仕切り直す。
-  // state 経由で effect を再実行させる方式だと旧タイマーの破棄が描画後になり、
-  // 離した直後に旧 tick が発火してスワイプと二重に進む競合窓ができる。
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const stopAuto = useCallback(() => {
-    if (timerRef.current !== null) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-  }, [])
-  const startAuto = useCallback(() => {
-    stopAuto()
-    if (itemsRef.current.length <= 1) return
-    timerRef.current = setInterval(() => {
-      if (touchActiveRef.current) return
-      // Reduce Motion・読み上げ中は送らない。タイマーは作り直さず毎 tick で判定する＝設定を戻せば次の tick で再開する。
-      const { reduce: rm, screenReader: sr } = a11yRef.current
-      if (!autoAdvanceAllowed(itemsRef.current.length, rm, sr)) return
-      goTo(1, { x: 0, y: reducedShift(rm, 6) })
-    }, intervalMs)
-  }, [goTo, intervalMs, stopAuto])
-  useEffect(() => {
-    startAuto()
-    return stopAuto
-  }, [items.length, startAuto, stopAuto])
-
-  // 横スワイプで手動送り。タップは子 Pressable に譲る（スロップ以内は奪わない）。
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => itemsRef.current.length > 1 && shouldCaptureSwipe(g.dx, g.dy),
-        // 横優勢と判定して奪ったジェスチャは、親の縦ScrollView等に奪い返させない
-        // （常時応諾だと確定距離を超えたスワイプでも斜めドリフトで打ち切られ無反応になる）。
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderRelease: (_, g) => {
-          const delta = classifySwipe(g.dx, g.vx)
-          if (!delta) return
-          // 手動で切り替えたら自動送りを仕切り直す（直後の自動送りで操作感を壊さない）。
-          stopAuto()
-          // 新スライドはスワイプの進行方向から入る（左スワイプ=次は右から、右スワイプ=前は左から）。
-          // Reduce Motion ではドリフト0＝クロスフェードだけ残す（E0 M4）。
-          goTo(delta, { x: reducedShift(a11yRef.current.reduce, delta * SHIFT.small), y: 0 })
-          startAuto()
-        },
-      }),
-    [goTo, startAuto, stopAuto],
-  )
-  useEffect(() => {
-    if (idx >= items.length) setIdx(0)
-  }, [items.length, idx])
-  const { variant } = useThemeVariant()
-  const dotInactive =
-    variant === 'green' ? 'rgba(255,255,255,0.45)' : variant === 'dark' ? 'rgba(255,255,255,0.2)' : '#cfe0d9'
-  return (
-    <View>
-      <View
-        {...panResponder.panHandlers}
-        onTouchStart={() => {
-          touchActiveRef.current = true
-        }}
-        onTouchEnd={() => {
-          touchActiveRef.current = false
-        }}
-        onTouchCancel={() => {
-          touchActiveRef.current = false
-        }}
-      >
-        {/* 新スライドは通常フローで高さを決める（enter フェード＋微ドリフト）。
-            クロスディゾルブ中は透明な新スライドが旧スライド（pointerEvents:none）越しに
-            タップを受け、見ていない掲示の詳細を開いてしまうため、遷移完了まで無効化する。 */}
-        <Animated.View
-          pointerEvents={outgoing ? 'none' : 'auto'}
-          style={{ opacity: inOpacity, transform: inShift.getTranslateTransform() }}
-        >
-          {items[idx] ?? null}
-        </Animated.View>
-        {/* 旧スライドは絶対配置で重ね、exit フェードで抜ける（空白を作らない）。 */}
-        {outgoing ? (
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: outOpacity }]}>
-            {outgoing.node}
-          </Animated.View>
-        ) : null}
-      </View>
-      {items.length > 1 ? (
-        <View style={ui.dotsRow}>
-          {items.map((_, i) => (
-            <CarouselDot key={i} active={i === idx} inactiveColor={dotInactive} />
-          ))}
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
 /**
  * テーマ別の色トークン片を返すフック（画面側で自由に組む）。翠/白/暗の3variantを解決する。
  * green/white の値は従来と一致（回帰なし）、dark のみ実配色を新規に返す。
@@ -562,7 +389,7 @@ const ui = StyleSheet.create({
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   action: { backgroundColor: COLORS.emerald, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 11, alignItems: 'center' },
-  actionText: { color: '#ffffff', fontSize: 14, fontWeight: '500' },
+  actionText: { color: '#ffffff', fontSize: 14, fontWeight: '500' }, // design-allow 未トークン化（既存）
   chipBase: {
     borderWidth: 1,
     borderRadius: 999,
@@ -573,24 +400,22 @@ const ui = StyleSheet.create({
   segRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
   seg: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 16, borderWidth: 1 },
   cardGlass: {
-    backgroundColor: 'rgba(255,255,255,0.36)',
+    backgroundColor: 'rgba(255,255,255,0.36)', // design-allow 未トークン化（既存）
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.55)',
+    borderColor: 'rgba(255,255,255,0.55)', // design-allow 未トークン化（既存）
     borderRadius: 18,
     padding: 14,
   },
   cardSolid: {
     backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: '#e3ece8',
+    borderColor: '#e3ece8', // design-allow 未トークン化（既存）
     borderRadius: 18,
     padding: 14,
   },
   stepRow: { flexDirection: 'row', gap: 12 },
   stepDotCol: { alignItems: 'center' },
   stepDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  stepDotInner: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#ffffff' },
+  stepDotInner: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#ffffff' }, // design-allow 未トークン化（既存）
   stepLine: { width: 2, flex: 1, minHeight: 20, marginVertical: 4 },
-  dotsRow: { flexDirection: 'row', gap: 6, marginTop: 10, justifyContent: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3 },
 })

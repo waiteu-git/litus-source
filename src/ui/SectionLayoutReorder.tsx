@@ -13,7 +13,7 @@ const ROW_H = 48
 /**
  * セクション並び替えのドラッグ UI（ホーム/科目詳細で共用の汎用版・旧 HomeLayoutReorder）。
  * 各行のグリップ（≡）から縦ドラッグして順序を変更する。
- * 機構は素の PanResponder + Animated（新規依存なし・Carousel と同じ手法）。掴んだ行は指に追従し、
+ * 機構は素の PanResponder + Animated（新規依存なし）。掴んだ行は指に追従し、
  * 他行は行高ぶんずれて挿入位置を示す。離すと確定スロットへ吸い込んでから onChange で確定する。
  * スクリーンリーダー向けにはグリップの accessibilityActions（上へ/下へ）で ops.move を提供する。
  * ドラッグ中は onDragActive(true) を通知し、親の ScrollView スクロールを止めてもらう。

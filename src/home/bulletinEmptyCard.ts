@@ -10,8 +10,6 @@ export type BulletinEmptyCard = {
   text: string
   /** カードタップ時の挙動。list=掲示一覧を開く / sync=取得を開始 */
   action: 'list' | 'sync'
-  /** 一覧への導線「すべて見る」を表示するか */
-  showAllLink: boolean
 }
 
 export function bulletinEmptyCard({
@@ -35,5 +33,5 @@ export function bulletinEmptyCard({
           // 「授業後に取得できます」と断言すると、同じタップで出る確認ダイアログと矛盾する。
           '授業中のため控えています。タップすると確認のうえ取得できます。'
         : 'まだ取得できていません。タップで取得します。'
-  return { text, action: collected ? 'list' : 'sync', showAllLink: collected }
+  return { text, action: collected ? 'list' : 'sync' }
 }

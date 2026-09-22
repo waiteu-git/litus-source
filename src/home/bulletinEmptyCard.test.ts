@@ -2,11 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { bulletinEmptyCard } from './bulletinEmptyCard'
 
 describe('bulletinEmptyCard', () => {
-  it('未取得: タップで取得を促し、一覧導線は出さない', () => {
+  it('未取得: タップで取得を促す', () => {
     expect(bulletinEmptyCard({ syncing: false, running: false, collected: false })).toEqual({
       text: 'まだ取得できていません。タップで取得します。',
       action: 'sync',
-      showAllLink: false,
     })
   })
 
@@ -16,7 +15,6 @@ describe('bulletinEmptyCard', () => {
     expect(bulletinEmptyCard({ syncing: false, running: true, collected: false })).toEqual({
       text: '授業中のため控えています。タップすると確認のうえ取得できます。',
       action: 'sync',
-      showAllLink: false,
     })
   })
 
@@ -24,7 +22,6 @@ describe('bulletinEmptyCard', () => {
     expect(bulletinEmptyCard({ syncing: false, running: false, collected: true })).toEqual({
       text: '新着・未読の掲示はありません',
       action: 'list',
-      showAllLink: true,
     })
   })
 
@@ -34,12 +31,10 @@ describe('bulletinEmptyCard', () => {
     )
   })
 
-  it('取得中は取得中テキスト。取得済みなら一覧導線は維持', () => {
+  it('取得中は取得中テキスト。取得済みなら一覧導線（action=list）は維持', () => {
     expect(bulletinEmptyCard({ syncing: true, running: false, collected: true })).toEqual({
       text: '掲示を取得しています…',
       action: 'list',
-      showAllLink: true,
     })
-    expect(bulletinEmptyCard({ syncing: true, running: false, collected: false }).showAllLink).toBe(false)
   })
 })

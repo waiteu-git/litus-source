@@ -5,7 +5,6 @@ import {
   shouldAnimateAmbient,
   reducedPressScale,
   AMBIENT_STATIC_FRAME,
-  autoAdvanceAllowed,
 } from './reducedMotion'
 
 describe('Reduce Motion 純マッピング', () => {
@@ -22,19 +21,6 @@ describe('Reduce Motion 純マッピング', () => {
   it('reduce時は押下スケールを1にする（opacityは別管理のため対象外）', () => {
     expect(reducedPressScale(true, 0.97)).toBe(1)
     expect(reducedPressScale(false, 0.97)).toBe(0.97)
-  })
-})
-
-describe('autoAdvanceAllowed（E0 M3・S1）', () => {
-  it('陽性: 2枚以上・Reduce Motion オフ・読み上げオフの時だけ自動送りする', () => {
-    expect(autoAdvanceAllowed(2, false, false)).toBe(true)
-    expect(autoAdvanceAllowed(5, false, false)).toBe(true)
-  })
-  it('陰性: Reduce Motion オン／読み上げオン／1枚以下では送らない', () => {
-    expect(autoAdvanceAllowed(2, true, false)).toBe(false)
-    expect(autoAdvanceAllowed(2, false, true)).toBe(false)
-    expect(autoAdvanceAllowed(1, false, false)).toBe(false)
-    expect(autoAdvanceAllowed(0, false, false)).toBe(false)
   })
 })
 

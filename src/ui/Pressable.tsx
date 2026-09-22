@@ -10,8 +10,6 @@ const PRESS_OPACITY = 0.92
 
 export type PressFeedbackProps = PressableProps & {
   style?: StyleProp<ViewStyle>
-  /** 親ジェスチャ（Carousel等）が握っている間、押下演出とタップを無効化する口。 */
-  disableGesture?: boolean
 }
 
 function usePressFeedback() {
@@ -34,13 +32,13 @@ function usePressFeedback() {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
-function Feedback({ style, disableGesture, onPressIn: userPressIn, onPressOut: userPressOut, ...props }: PressFeedbackProps) {
+function Feedback({ style, onPressIn: userPressIn, onPressOut: userPressOut, ...props }: PressFeedbackProps) {
   const { scale, opacity, onPressIn, onPressOut } = usePressFeedback()
   return (
     <AnimatedPressable
       onPressIn={(e) => { onPressIn(); userPressIn?.(e) }}
       onPressOut={(e) => { onPressOut(); userPressOut?.(e) }}
-      style={[style, { transform: [{ scale }], opacity }, disableGesture ? { pointerEvents: 'none' } : null]}
+      style={[style, { transform: [{ scale }], opacity }]}
       {...props}
     />
   )

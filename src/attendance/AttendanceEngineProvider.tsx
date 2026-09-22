@@ -1213,7 +1213,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
 
 const styles = StyleSheet.create({
   webviewHiddenBox: { position: 'absolute', width: 1, height: 1, top: -1000, left: -1000, opacity: 0 },
-  webviewOverlayBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 56, backgroundColor: '#ffffff' },
+  webviewOverlayBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 56, backgroundColor: '#ffffff' }, // design-allow 未トークン化（既存）
   webviewFill: { flex: 1 },
   overlayBar: {
     position: 'absolute',
@@ -1221,13 +1221,13 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: 56,
-    backgroundColor: '#0a6650',
+    backgroundColor: '#0a6650', // design-allow 未トークン化（既存）
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
   },
-  overlayText: { color: '#ffffff', fontSize: 13, flex: 1 },
-  overlayBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
-  overlayBtnText: { color: '#ffffff', fontSize: 13 },
+  overlayText: { color: '#ffffff', fontSize: 13, flex: 1 }, // design-allow 未トークン化（既存）
+  overlayBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }, // design-allow 未トークン化（既存）
+  overlayBtnText: { color: '#ffffff', fontSize: 13 }, // design-allow 未トークン化（既存）
 })

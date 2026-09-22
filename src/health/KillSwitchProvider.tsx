@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#ffffff', // design-allow 未トークン化（既存）
     borderRadius: 18,
     padding: 22,
     width: '100%',
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: { color: COLORS.emeraldDark, fontSize: 18, fontWeight: '700' },
-  body: { color: '#3a4b45', fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  body: { color: '#3a4b45', fontSize: 14, lineHeight: 21, textAlign: 'center' }, // design-allow 未トークン化（既存）
   primary: {
     marginTop: 4,
     backgroundColor: COLORS.cta,
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     minWidth: 160,
     alignItems: 'center',
   },
-  primaryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  primaryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' }, // design-allow 未トークン化（既存）
   secondary: {
     borderRadius: 12,
     paddingHorizontal: 18,

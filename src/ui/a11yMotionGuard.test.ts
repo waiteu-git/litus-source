@@ -156,12 +156,6 @@ describe('E0 ラチェット R4（選択状態）', () => {
   })
 })
 
-describe('E0 ラチェット R3（変位は reducedShift を通す）: ui/screen.tsx', () => {
-  it('カルーセルのドリフトは reducedShift を通す（M4）', () => {
-    expect(codeRefers(read('ui/screen.tsx'), 'reducedShift')).toBe(true)
-  })
-})
-
 describe('E0 ラチェット R4（開閉は disclosureA11yProps を通す）', () => {
   it('Accordion の見出しは disclosureA11yProps を通している', () => {
     expect(countCalls(read('ui/Accordion.tsx'), 'disclosureA11yProps(')).toBeGreaterThanOrEqual(1)

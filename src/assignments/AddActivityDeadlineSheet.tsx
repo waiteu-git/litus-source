@@ -52,8 +52,8 @@ export default function AddActivityDeadlineSheet({
         <DeadlineFields
           value={value}
           onChange={setValue}
-          valueColor={dark ? DARK.value : '#123'}
-          labelColor={dark ? DARK.label : '#5a6b64'}
+          valueColor={dark ? DARK.value : '#123'} // design-allow 未トークン化（既存）
+          labelColor={dark ? DARK.label : '#5a6b64'} // design-allow 未トークン化（既存）
         />
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable style={styles.saveBtn} onPress={save}>
@@ -73,15 +73,15 @@ export default function AddActivityDeadlineSheet({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 30, gap: 10 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }, // design-allow 未トークン化（既存）
+  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 30, gap: 10 }, // design-allow 未トークン化（既存）
   course: { fontSize: 12, color: COLORS.emeraldDark, fontWeight: '600' },
-  title: { fontSize: 17, fontWeight: '700', color: '#123', lineHeight: 24 },
-  hint: { fontSize: 12, color: '#5a6b64' },
-  error: { color: '#c0392b', fontSize: 13 },
+  title: { fontSize: 17, fontWeight: '700', color: '#123', lineHeight: 24 }, // design-allow 未トークン化（既存）
+  hint: { fontSize: 12, color: '#5a6b64' }, // design-allow 未トークン化（既存）
+  error: { color: '#c0392b', fontSize: 13 }, // design-allow 未トークン化（既存）
   saveBtn: { backgroundColor: COLORS.cta, borderRadius: 14, height: 50, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  saveText: { color: '#fff', fontSize: 16, fontWeight: '700' }, // design-allow 未トークン化（既存）
   subRow: { flexDirection: 'row' },
   skipBtn: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
-  skipText: { color: '#5a6b64', fontSize: 14, fontWeight: '600' },
+  skipText: { color: '#5a6b64', fontSize: 14, fontWeight: '600' }, // design-allow 未トークン化（既存）
 })

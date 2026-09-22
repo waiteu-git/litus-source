@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: '600' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   presetRow: { flexDirection: 'row', gap: 8 },
-  preset: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#cfe0d9' },
+  preset: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#eef5f2', borderWidth: 1, borderColor: '#cfe0d9' }, // design-allow 未トークン化（既存）
   presetText: { fontSize: 12, color: COLORS.emeraldDark, fontWeight: '600' },
   dtRow: { flexDirection: 'row', gap: 8 },
   dtDate: { flex: 2 },

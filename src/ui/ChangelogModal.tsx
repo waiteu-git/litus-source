@@ -45,7 +45,7 @@ export default function ChangelogModal({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }, // design-allow 未トークン化（既存）
   sheet: { maxHeight: '75%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderBottomWidth: 0, padding: 18 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   headTitle: { fontSize: 17, fontWeight: '700' },

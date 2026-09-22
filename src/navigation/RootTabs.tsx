@@ -41,7 +41,7 @@ export default function RootTabs() {
     borderTopWidth: dark ? 1 : 0,
     borderColor: DARK.cardBorder,
     elevation: 8,
-    shadowColor: dark ? '#000000' : '#0a6650',
+    shadowColor: dark ? '#000000' : '#0a6650', // design-allow 未トークン化（既存）
     shadowOpacity: dark ? 0.4 : 0.18,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -64,7 +64,7 @@ export default function RootTabs() {
         headerShown: false,
         sceneStyle: { backgroundColor: 'transparent' },
         tabBarActiveTintColor: COLORS.white,
-        tabBarInactiveTintColor: dark ? DARK.label : '#0b5c48',
+        tabBarInactiveTintColor: dark ? DARK.label : '#0b5c48', // design-allow 未トークン化（既存）
         tabBarStyle,
         // タブラベルは共通Textラッパーを通らないため、fontFamily を直指定して本文と揃える。
         // fontSize/lineHeight も明示: Plex JP の既定行高だとラベルがアクセント板の下端からはみ出す。

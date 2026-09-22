@@ -37,13 +37,13 @@ export const SPRING = { from: 0.9, over: 1.03, to: 1, upMs: 240, downMs: 150 } a
  * ── タブ切替(3タブ): 無 or 120msクロスフェード（高頻度動線＝動かさない）
  * ── カード出現(ホーム初期): fade+translateY SHIFT.small(8) / DUR.fast(180) / EASE.enter / stagger40ms / 上限3枚
  * ── リスト(課題一覧=仮想化): スクロール入場アニメ禁止。増減は Accordion系(非仮想化)のみ LayoutAnimation
- * ── スワイプ(掲示カルーセル/曜日): SPRING_SPATIAL.base + フリック速度引き継ぎ(pxPerMsToPxPerSec)。現行timing crossfadeを指追従springへ新設
+ * ── スワイプ(曜日): SPRING_SPATIAL.base + フリック速度引き継ぎ(pxPerMsToPxPerSec)。現行timing crossfadeを指追従springへ新設
  * ── 押下: scale(0.97)+opacity0.92 / DUR.micro(120)。共通 PressableCard/Row で全Pressableへ(P2)
  * ── 完了: 課題チェック=軽haptic+180msチェック描画 / リアペ提出確定・出席確定のみSuccess haptic+360ms上限の祝福1回 / 既読=無音
  * ── pull-to-refresh: ネイティブRefreshControl。iOS=tintColor / Android=colors+progressBackgroundColor
  * ── Reduce Motion: SHIFT/stagger/springバウンス無効化＋ambientループ停止(reducedMotion.ts)
- *    配線（v1.1 E0）: カルーセル＝自動送りなし（読み上げ中も）・ドリフト0／出席バナー＝変位0・線なし・円は待ちとバネなし／
+ *    配線（v1.1 E0）: 出席バナー＝変位0・線なし・円は待ちとバネなし／
  *    NowPulse・IndeterminateBar＝中間フレーム(AMBIENT_STATIC_FRAME)で静止／Accordion＝高さアニメなし・山括弧は即反転／
- *    SwipeToHide の戻り＝DUR.fast の timing／曜日スワイプ＝fade のみ。残す＝ドット幅・押下opacity・本文fade・クロスフェード。
+ *    SwipeToHide の戻り＝DUR.fast の timing／曜日スワイプ＝fade のみ。残す＝押下opacity・本文fade・クロスフェード。
  *    PanResponder/setInterval の中では ref で読む。強制は src/ui/a11yMotionGuard.test.ts（R1〜R3）。
  */

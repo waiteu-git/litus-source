@@ -809,7 +809,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#ffffff' },
+  root: { flex: 1, backgroundColor: '#ffffff' }, // design-allow 未トークン化（既存）
   maintFill: {
     position: 'absolute',
     top: 0,
@@ -822,7 +822,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   maintCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#ffffff', // design-allow 未トークン化（既存）
     borderRadius: 18,
     padding: 22,
     width: '100%',
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   maintTitle: { color: COLORS.emeraldDark, fontSize: 18, fontWeight: '700' },
-  maintBody: { color: '#3a4b45', fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  maintBody: { color: '#3a4b45', fontSize: 14, lineHeight: 21, textAlign: 'center' }, // design-allow 未トークン化（既存）
   maintPrimary: {
     marginTop: 4,
     backgroundColor: COLORS.cta,
@@ -841,45 +841,45 @@ const styles = StyleSheet.create({
     minWidth: 160,
     alignItems: 'center',
   },
-  maintPrimaryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  maintPrimaryText: { color: '#ffffff', fontSize: 15, fontWeight: '700' }, // design-allow 未トークン化（既存）
   maintGhost: {
-    backgroundColor: '#eef5f2',
+    backgroundColor: '#eef5f2', // design-allow 未トークン化（既存）
     borderWidth: 1,
-    borderColor: '#b9ddcd',
+    borderColor: '#b9ddcd', // design-allow 未トークン化（既存）
     borderRadius: 12,
     paddingHorizontal: 18,
     paddingVertical: 11,
     alignItems: 'center',
   },
   maintGhostText: { color: COLORS.emeraldDark, fontSize: 13, fontWeight: '600' },
-  maintNote: { color: '#7c8b85', fontSize: 11, textAlign: 'center' },
+  maintNote: { color: '#7c8b85', fontSize: 11, textAlign: 'center' }, // design-allow 未トークン化（既存）
   header: { backgroundColor: COLORS.emerald, paddingHorizontal: 16, paddingBottom: 14 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerText: { flex: 1 },
-  title: { color: '#ffffff', fontSize: 20, fontWeight: '600' },
-  sub: { color: '#eafff7', fontSize: 13, marginTop: 4 },
+  title: { color: '#ffffff', fontSize: 20, fontWeight: '600' }, // design-allow 未トークン化（既存）
+  sub: { color: '#eafff7', fontSize: 13, marginTop: 4 }, // design-allow 未トークン化（既存）
   reloadBtn: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.22)', // design-allow 未トークン化（既存）
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  reloadBtnText: { color: '#ffffff', fontSize: 13 },
+  reloadBtnText: { color: '#ffffff', fontSize: 13 }, // design-allow 未トークン化（既存）
   demoBtn: {
     marginTop: 12,
     alignSelf: 'flex-start',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.45)',
+    borderColor: 'rgba(255,255,255,0.45)', // design-allow 未トークン化（既存）
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  demoBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
+  demoBtnText: { color: '#ffffff', fontSize: 13, fontWeight: '600' }, // design-allow 未トークン化（既存）
   // メンテ/接続エラーの白カード内で使う版（翠ヘッダー用の白文字だと見えないため）。
   demoBtnCard: {
-    backgroundColor: '#eef5f2',
+    backgroundColor: '#eef5f2', // design-allow 未トークン化（既存）
     borderWidth: 1,
-    borderColor: '#b9ddcd',
+    borderColor: '#b9ddcd', // design-allow 未トークン化（既存）
     borderRadius: 12,
     paddingHorizontal: 18,
     paddingVertical: 11,
