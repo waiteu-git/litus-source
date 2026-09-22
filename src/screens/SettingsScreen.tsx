@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { useNavigation, type NavigationProp } from '@react-navigation/native'
 import type { HomeStackParamList } from '../navigation/types'
@@ -22,6 +22,7 @@ import { ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '..
 import { Accordion } from '../ui/Accordion'
 import { LinkRow } from '../ui/LinkRow'
 import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
+import { TYPE, SPACE } from '../ui/scale'
 import { FONT_LICENSE_TITLE } from '../legal/fontLicense'
 import { useDisplaySettings } from '../displaySettings'
 import { toExamCountdownStart } from '../storage/displaySettingsSerialize'
@@ -38,6 +39,21 @@ import ChangelogModal from '../ui/ChangelogModal'
 import FeedbackSheet from '../report/FeedbackSheet'
 
 type Course = { courseCode: string; name: string }
+
+// アコーディオン本文内の小セクションを区切る。2番目以降は上に区切り線を足す
+// （tier③＝設定「データ」の行・科目詳細の予定リストと同じ規約）。最初のセクションは境界なし。
+function SubSection({ first, children }: { first?: boolean; children: ReactNode }) {
+  const ui = useUi()
+  return (
+    <View
+      style={[
+        !first && { marginTop: SPACE.s3, paddingTop: SPACE.s3, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor },
+      ]}
+    >
+      {children}
+    </View>
+  )
+}
 
 export default function SettingsScreen() {
   const navigation = useNavigation<NavigationProp<HomeStackParamList>>()
@@ -197,171 +213,189 @@ export default function SettingsScreen() {
         {/* 設定は初期状態ですべて閉じる（ユーザー指定 2026-07-22）。開いた状態が既定だと
             画面を開いた瞬間に長い並べ替えUIが占有し、下のカードが見えない。 */}
         <Accordion title="表示" icon="grid-outline">
-          <Text style={[styles.subHead, { color: ui.valueColor }]}>テーマ</Text>
-          <Segmented
-            options={[
-              { key: 'green', label: '翠' },
-              { key: 'white', label: '白' },
-              { key: 'dark', label: 'ダーク' },
-              { key: 'system', label: '自動' },
-            ]}
-            value={preference}
-            onChange={(k) => setPreference(k as ThemePreference)}
-          />
-          <Text style={[styles.note, { color: ui.labelColor }]}>
-            UIと起動アニメーションが選んだテーマに合わせて切り替わります。「自動」は端末のダークモード設定に追従します。
-          </Text>
-
-          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>時間割の表示</Text>
-          <Segmented
-            options={[
-              { key: 'list', label: 'リスト' },
-              { key: 'grid', label: 'グリッド' },
-            ]}
-            value={timetableView}
-            onChange={setTimetableView}
-          />
-
-          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>課題の並び</Text>
-          <Segmented
-            options={[
-              { key: 'bucket', label: 'バケット別' },
-              { key: 'flat', label: '締切順' },
-            ]}
-            value={assignmentsView}
-            onChange={setAssignmentsView}
-          />
-
-          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>試験カウントダウンの表示開始</Text>
-          {/* Segmented は折り返さず等分するので、ラベルは「から」を省いて短くする（設計 A §6 Q9・§9-1）。
-              キーは文字列なので 60 などは '60' に写して渡し、戻す時は toExamCountdownStart で検める。 */}
-          <Segmented
-            options={[
-              { key: 'always', label: 'いつでも' },
-              { key: '60', label: '60日前' },
-              { key: '30', label: '30日前' },
-              { key: '14', label: '14日前' },
-              { key: '7', label: '7日前' },
-            ]}
-            value={String(examCountdownStart)}
-            onChange={(k) => setExamCountdownStart(toExamCountdownStart(k === 'always' ? k : Number(k)))}
-          />
-          <Text style={[styles.note, { color: ui.labelColor }]}>
-            ホームの試験カウントダウンに、試験の何日前から出すかを選べます。試験ごとの設定は各回の予定の編集で変えられます。試験の通知（前日20:00・当日8:00）は、この設定では変わりません。
-          </Text>
-
-          <View style={[styles.divider, { borderTopColor: ui.dividerColor, marginTop: 18 }]}>
-            <LinkRow
-              icon="swap-vertical-outline"
-              title="ホームの並び"
-              sub="表示するセクションと順序を変更"
-              onPress={() => navigation.navigate('SectionOrder', { target: 'home' })}
+          <SubSection first>
+            <Text style={[styles.subHead, { color: ui.labelColor }]}>テーマ</Text>
+            <Segmented
+              options={[
+                { key: 'green', label: '翠' },
+                { key: 'white', label: '白' },
+                { key: 'dark', label: 'ダーク' },
+                { key: 'system', label: '自動' },
+              ]}
+              value={preference}
+              onChange={(k) => setPreference(k as ThemePreference)}
             />
-            <LinkRow
-              icon="swap-vertical-outline"
-              title="科目詳細の並び"
-              sub="表示するセクションと順序を変更"
-              onPress={() => navigation.navigate('SectionOrder', { target: 'subject' })}
+            <Text style={[styles.note, { color: ui.labelColor }]}>
+              UIと起動アニメーションが選んだテーマに合わせて切り替わります。「自動」は端末のダークモード設定に追従します。
+            </Text>
+          </SubSection>
+
+          <SubSection>
+            <Text style={[styles.subHead, { color: ui.labelColor }]}>時間割の表示</Text>
+            <Segmented
+              options={[
+                { key: 'list', label: 'リスト' },
+                { key: 'grid', label: 'グリッド' },
+              ]}
+              value={timetableView}
+              onChange={setTimetableView}
             />
-          </View>
+          </SubSection>
+
+          <SubSection>
+            <Text style={[styles.subHead, { color: ui.labelColor }]}>課題の並び</Text>
+            <Segmented
+              options={[
+                { key: 'bucket', label: 'バケット別' },
+                { key: 'flat', label: '締切順' },
+              ]}
+              value={assignmentsView}
+              onChange={setAssignmentsView}
+            />
+          </SubSection>
+
+          <SubSection>
+            <Text style={[styles.subHead, { color: ui.labelColor }]}>試験カウントダウンの表示開始</Text>
+            {/* Segmented は折り返さず等分するので、ラベルは「から」を省いて短くする（設計 A §6 Q9・§9-1）。
+                キーは文字列なので 60 などは '60' に写して渡し、戻す時は toExamCountdownStart で検める。 */}
+            <Segmented
+              options={[
+                { key: 'always', label: 'いつでも' },
+                { key: '60', label: '60日前' },
+                { key: '30', label: '30日前' },
+                { key: '14', label: '14日前' },
+                { key: '7', label: '7日前' },
+              ]}
+              value={String(examCountdownStart)}
+              onChange={(k) => setExamCountdownStart(toExamCountdownStart(k === 'always' ? k : Number(k)))}
+            />
+            <Text style={[styles.note, { color: ui.labelColor }]}>
+              ホームの試験カウントダウンに、試験の何日前から出すかを選べます。試験ごとの設定は各回の予定の編集で変えられます。試験の通知（前日20:00・当日8:00）は、この設定では変わりません。
+            </Text>
+          </SubSection>
+
+          <SubSection>
+            <View style={{ gap: SPACE.s2 }}>
+              <LinkRow
+                icon="swap-vertical-outline"
+                title="ホームの並び"
+                sub="表示するセクションと順序を変更"
+                onPress={() => navigation.navigate('SectionOrder', { target: 'home' })}
+              />
+              <LinkRow
+                icon="swap-vertical-outline"
+                title="科目詳細の並び"
+                sub="表示するセクションと順序を変更"
+                onPress={() => navigation.navigate('SectionOrder', { target: 'subject' })}
+              />
+            </View>
+          </SubSection>
         </Accordion>
 
         <Accordion title="通知" icon="notifications-outline">
           {/* OS側で通知が塞がれている間、以下のトグルは全部空振りする。
               アプリ内トグルだけを出していた頃は「設定はONなのに何も来ない」としか観測できなかった。 */}
           <NotificationPermissionNotice />
-          <Text style={[styles.subHead, { color: ui.valueColor }]}>新着掲示</Text>
-          <View style={styles.row}>
-            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>新着掲示を通知</Text>
-            <Switch
-              value={bulletinNotify.enabled}
-              onValueChange={(v) => updateBulletinNotify({ ...bulletinNotify, enabled: v })}
-              trackColor={{
-                true: COLORS.emerald,
-                false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
-              }}
-              thumbColor={COLORS.white}
-            />
-          </View>
-          {bulletinNotify.enabled && (
-            <>
-              <Text style={[styles.fieldLabel, { color: ui.labelColor, marginTop: 10 }]}>通知する掲示</Text>
-              <Segmented
-                options={[
-                  { key: 'all', label: 'すべて' },
-                  { key: 'importantOnly', label: '重要のみ' },
-                ]}
-                value={bulletinNotify.mode}
-                onChange={(k) => updateBulletinNotify({ ...bulletinNotify, mode: k as BulletinNotifySettings['mode'] })}
+          <SubSection first>
+            <Text style={[styles.subHead, { color: ui.labelColor }]}>新着掲示</Text>
+            <View style={styles.row}>
+              <Text style={[styles.rowLabel, { color: ui.valueColor }]}>新着掲示を通知</Text>
+              <Switch
+                value={bulletinNotify.enabled}
+                onValueChange={(v) => updateBulletinNotify({ ...bulletinNotify, enabled: v })}
+                trackColor={{
+                  true: COLORS.emerald,
+                  false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
+                }}
+                thumbColor={COLORS.white}
               />
-            </>
-          )}
-          <Text style={[styles.note, { color: ui.labelColor }]}>
-            新着掲示の通知はアプリを開いたときに確認されます。バックグラウンド自動取得は今後対応予定です。
-          </Text>
-
-          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>LETUS更新</Text>
-          <View style={styles.row}>
-            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>コースの新着を通知</Text>
-            <Switch
-              value={letusNewsNotify.enabled}
-              onValueChange={(v) => updateLetusNewsNotify({ enabled: v })}
-              trackColor={{
-                true: COLORS.emerald,
-                false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
-              }}
-              thumbColor={COLORS.white}
-            />
-          </View>
-          <Text style={[styles.note, { color: ui.labelColor }]}>
-            LETUSのコースに新しい教材・課題などが追加されたときに通知します。同期のタイミングで確認されます。
-          </Text>
-
-          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>出席アラーム（科目別）</Text>
-          <Text style={[styles.note, { color: ui.labelColor }]}>
-            授業の開始時と終了前にお知らせします。リタスで出席済みと確認できた授業には送りません。OFFにした科目は、出席の受付が始まったときのお知らせも止まります。
-          </Text>
-          {courses.length === 0 ? (
-            <View style={ui.card}>
-              <Text style={{ color: ui.valueColor }}>時間割を収集すると科目が表示されます。</Text>
             </View>
-          ) : (
-            <View style={ui.card}>
-              {courses.map((c, i) => (
-                <View
-                  key={c.courseCode}
-                  style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
-                >
-                  <Text style={[styles.rowLabel, { color: ui.valueColor }]} numberOfLines={1}>
-                    {c.name}
-                  </Text>
-                  <Switch
-                    value={settings[c.courseCode] !== false}
-                    onValueChange={(v) => toggle(c.courseCode, v)}
-                    trackColor={{
-                      true: COLORS.emerald,
-                      false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
-                    }}
-                    thumbColor={COLORS.white}
-                  />
-                </View>
-              ))}
+            {bulletinNotify.enabled && (
+              <>
+                <Text style={[styles.fieldLabel, { color: ui.labelColor, marginTop: 10 }]}>通知する掲示</Text>
+                <Segmented
+                  options={[
+                    { key: 'all', label: 'すべて' },
+                    { key: 'importantOnly', label: '重要のみ' },
+                  ]}
+                  value={bulletinNotify.mode}
+                  onChange={(k) => updateBulletinNotify({ ...bulletinNotify, mode: k as BulletinNotifySettings['mode'] })}
+                />
+              </>
+            )}
+            <Text style={[styles.note, { color: ui.labelColor }]}>
+              新着掲示の通知はアプリを開いたときに確認されます。バックグラウンド自動取得は今後対応予定です。
+            </Text>
+          </SubSection>
+
+          <SubSection>
+            <Text style={[styles.subHead, { color: ui.labelColor }]}>LETUS更新</Text>
+            <View style={styles.row}>
+              <Text style={[styles.rowLabel, { color: ui.valueColor }]}>コースの新着を通知</Text>
+              <Switch
+                value={letusNewsNotify.enabled}
+                onValueChange={(v) => updateLetusNewsNotify({ enabled: v })}
+                trackColor={{
+                  true: COLORS.emerald,
+                  false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
+                }}
+                thumbColor={COLORS.white}
+              />
             </View>
-          )}
+            <Text style={[styles.note, { color: ui.labelColor }]}>
+              LETUSのコースに新しい教材・課題などが追加されたときに通知します。同期のタイミングで確認されます。
+            </Text>
+          </SubSection>
+
+          <SubSection>
+            <Text style={[styles.subHead, { color: ui.labelColor }]}>出席アラーム（科目別）</Text>
+            <Text style={[styles.note, { color: ui.labelColor }]}>
+              授業の開始時と終了前にお知らせします。リタスで出席済みと確認できた授業には送りません。OFFにした科目は、出席の受付が始まったときのお知らせも止まります。
+            </Text>
+            {courses.length === 0 ? (
+              <View style={ui.card}>
+                <Text style={{ color: ui.valueColor }}>時間割を収集すると科目が表示されます。</Text>
+              </View>
+            ) : (
+              <View style={ui.card}>
+                {courses.map((c, i) => (
+                  <View
+                    key={c.courseCode}
+                    style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: ui.dividerColor }]}
+                  >
+                    <Text style={[styles.rowLabel, { color: ui.valueColor }]} numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                    <Switch
+                      value={settings[c.courseCode] !== false}
+                      onValueChange={(v) => toggle(c.courseCode, v)}
+                      trackColor={{
+                        true: COLORS.emerald,
+                        false: ui.pick(ui.colors.softBoxBg, ui.colors.softBoxBg, ui.colors.inputBorder),
+                      }}
+                      thumbColor={COLORS.white}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+          </SubSection>
 
           {/* 出欠状況の取得ぐあいを可視化する。収集ヘルスは保存していたのにUIに出ておらず、
               「授業時間外でも取れない」の原因（競合／ログイン切れ／構造変化）をユーザーも開発者も
               確認できなかった（2026-07-18）。ここで前回取得時刻と失敗理由を1行で示す。 */}
-          <Text style={[styles.subHead, { color: ui.valueColor, marginTop: 18 }]}>出欠状況の取得</Text>
-          <View style={ui.card}>
-            <Text style={[styles.rowLabel, { color: ui.valueColor }]}>
-              {attendanceStatsDiagLine({
-                health: attendanceStatsHealth?.health ?? null,
-                lastSuccessAt: lastAttendanceStatsAt,
-                now: new Date(),
-              })}
-            </Text>
-          </View>
+          <SubSection>
+            <Text style={[styles.subHead, { color: ui.labelColor }]}>出欠状況の取得</Text>
+            <View style={ui.card}>
+              <Text style={[styles.rowLabel, { color: ui.valueColor }]}>
+                {attendanceStatsDiagLine({
+                  health: attendanceStatsHealth?.health ?? null,
+                  lastSuccessAt: lastAttendanceStatsAt,
+                  now: new Date(),
+                })}
+              </Text>
+            </View>
+          </SubSection>
         </Accordion>
 
         <Accordion title="データ" icon="server-outline">
@@ -512,11 +546,10 @@ const styles = StyleSheet.create({
   // 集約アコーディオン内の小見出し（表示=テーマ/時間割/課題/試験カウントダウン、
   // 通知=新着掲示/LETUS更新/出席アラーム/出欠状況の取得）。
   // 「ホームの並び」「科目詳細の並び」は subHead ではなく LinkRow（別画面 SectionOrder への導線）。
-  subHead: { fontSize: 13, fontWeight: '700', marginLeft: 2, marginBottom: 6 },
+  subHead: { ...TYPE.label, letterSpacing: 0.3, marginLeft: 2, marginBottom: 6 },
   changelogHeading: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
   changelogEntry: { marginBottom: 10 },
   changelogEntryTitle: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
   changelogItem: { fontSize: 12, lineHeight: 17 },
   changelogMore: { fontSize: 13, fontWeight: '600', marginTop: 4 },
-  divider: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 8 },
 })
