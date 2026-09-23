@@ -39,7 +39,11 @@ export type SubmitDiag = {
   /** サーバ側の例外（200 + partial-response の `<error>`。ViewExpired 等）。 */
   ajaxServerError?: string
   hint?: string
-  /** ok=true を出した根拠（一致文言＋前後）。誤報の再現時にこれだけで原因が確定できる。 */
+  /**
+   * ok=true を出した根拠（一致文言＋DOM上どの要素で一致したかの構造情報）。誤報の再現時に
+   * これだけで原因が確定できる。要素のタグ/id/classだけを残し、ページの生テキストは含まない
+   * （CLASSはヘッダー領域に利用者の氏名を描画するため。2026-09-23、actuator側で修正）。
+   */
   okBy?: string
   /** 応答本文が「受付中の授業なし」を示していたか。ok と両立しない＝誤報検知の決め手。 */
   noneNow?: boolean
