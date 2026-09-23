@@ -2,7 +2,7 @@
   "expo": {
     "name": "リタス",
     "slug": "litus",
-    "version": "1.0.3",
+    "version": "1.1.0",
     "scheme": "litus",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -11,7 +11,7 @@
       "supportsTablet": true,
       "requireFullScreen": true,
       "bundleIdentifier": "dev.waiteu.litus",
-      "buildNumber": "219",
+      "buildNumber": "220",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ja"],
@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "dev.waiteu.litus",
-      "versionCode": 219,
+      "versionCode": 220,
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
       "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
