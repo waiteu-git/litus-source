@@ -11,7 +11,7 @@
       "supportsTablet": true,
       "requireFullScreen": true,
       "bundleIdentifier": "dev.waiteu.litus",
-      "buildNumber": "220",
+      "buildNumber": "221",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ja"],
@@ -43,7 +43,7 @@
     },
     "android": {
       "package": "dev.waiteu.litus",
-      "versionCode": 220,
+      "versionCode": 221,
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
       "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
