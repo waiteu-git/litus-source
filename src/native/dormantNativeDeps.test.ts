@@ -30,8 +30,15 @@ const DORMANT = ['expo-haptics', 'expo-store-review'] as const
  */
 const DETECTOR_MODULES = ['expo-haptics', 'expo-store-review'] as const
 
-/** src/ からの相対パス → 参照を許すモジュール名。NATIVE の時点では空。 */
-const ALLOW: Record<string, string> = {}
+/**
+ * src/ からの相対パス → 参照を許すモジュール名。理由を書いて1行ずつ足す。
+ * expo-haptics は触覚の設計1枚が出るまで空のまま。
+ */
+const ALLOW: Record<string, string> = {
+  // F（アプリ内ストア評価依頼・docs/design/2026-09-24-F-store-review-prompt.md §4.6）の唯一の解禁点。
+  // ここ以外から expo-store-review を触ると、ボタン等の操作から依頼 API に届く経路を作りうる。
+  'review/requestStoreReview.ts': 'expo-store-review',
+}
 
 const SRC = join(__dirname, '..')
 const ROOT = join(__dirname, '..', '..')
@@ -125,6 +132,12 @@ describe('休眠ラチェット（実物の src/・index.ts・App.tsx）', () =>
   it('許可は1モジュールにつき1ファイルまで', () => {
     for (const mod of DORMANT) {
       expect(Object.values(ALLOW).filter((m) => m === mod).length).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('許可した各ファイルは実際にそのモジュールを参照している（使われなくなった許可を残さない）', () => {
+    for (const [file, mod] of Object.entries(ALLOW)) {
+      expect(findRuntimeReferencesOf(readFileSync(join(SRC, file), 'utf8'), [mod]), file).toEqual([mod])
     }
   })
 })
