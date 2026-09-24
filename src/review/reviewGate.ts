@@ -33,6 +33,8 @@ export type ReviewGateInput = {
   offline: boolean
   /** 授業時限内・受付中・出席画面の表示中（出席エンジンが稼働している）。 */
   attendanceRunning: boolean
+  /** 授業の前後の余白の中（開始の25分前〜終了の10分後）。コマ間・授業の直後に当たらない。 */
+  nearClass: boolean
   /** 掲示・出欠・課題のいずれかの収集が動いている。 */
   syncBusy: boolean
   homeFocused: boolean
@@ -56,6 +58,7 @@ export type ReviewVeto =
   | 'maintenance'
   | 'offline'
   | 'attendance'
+  | 'near_class'
   | 'sync_busy'
   | 'not_home'
   | 'app_inactive'
@@ -86,6 +89,7 @@ export function decideReview(i: ReviewGateInput): ReviewDecision {
   if (i.maintenance) return no('maintenance')
   if (i.offline) return no('offline')
   if (i.attendanceRunning) return no('attendance')
+  if (i.nearClass) return no('near_class')
   if (i.syncBusy) return no('sync_busy')
   if (!i.homeFocused) return no('not_home')
   if (!i.appActive) return no('app_inactive')

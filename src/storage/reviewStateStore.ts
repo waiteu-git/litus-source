@@ -23,7 +23,15 @@ async function readAndRepair(now: number): Promise<LoadedReviewState> {
   const parsed = parseReviewState(raw, now)
   // 壊れた保存は「今が初回・今が直近の依頼」へ直して書き戻す。読むたびに壊れたままだと、
   // 壊れた時刻ではなく読んだ時刻が毎回の「今」になり、待ちが永久に終わらない。
-  if (parsed.health === 'corrupt') await Storage.setItem(REVIEW_STATE_KEY, serializeReviewState(parsed.state))
+  if (parsed.health === 'corrupt') {
+    await Storage.setItem(REVIEW_STATE_KEY, serializeReviewState(parsed.state))
+  } else if (parsed.health === 'ok' && raw !== null) {
+    // 読む側で丸めた値（未来の時刻・今日より後の価値日）と正規化した並びを書き戻す。書かないと、
+    // 保存された未来の時刻が残り続けて、時計のずれの分だけ待ちが終わらない。正規形の保存は
+    // serialize の結果と一致するので、通常は書かない（読むたびの書き込みにならない）。
+    const canonical = serializeReviewState(parsed.state)
+    if (canonical !== raw) await Storage.setItem(REVIEW_STATE_KEY, canonical)
+  }
   return parsed
 }
 

@@ -3,14 +3,18 @@
  * 設計: docs/design/2026-09-24-F-store-review-prompt.md §4.3・§4.4・§10
  */
 import type { CollectionHealthMap } from '../storage/collectionHealthSerialize'
+import type { CollectionHealth } from '../health/collectionHealth'
 import type { KillSwitchStatus } from '../health/killSwitch'
+import type { TimetableCollection } from '../collect/timetableMessage'
+import type { ClassActivePredicate } from '../attendance/homeBanner'
+import { isInActiveClassPeriod } from '../attendance/classPeriod'
 import { localDayKey } from './reviewState'
 
 /**
  * 収集の健全性のうち、失敗として数える状態。maintenance・not_logged_in（大学側の事情）と
  * ok・empty_valid（正常）は数えない。
  */
-const FAILURE_STATUSES: readonly string[] = ['structure_drift', 'blocked']
+const FAILURE_STATUSES: readonly CollectionHealth['status'][] = ['structure_drift', 'blocked']
 
 /**
  * 出席・リアペ送信の失敗（ok:false）のうち最新の時刻。入力コードの誤りも数える（待つ側へ倒す）。
@@ -71,4 +75,24 @@ export function reviewKillStatus(status: KillSwitchStatus | null): ReviewKillSta
   if (status.disabledAll || status.disabled.length > 0) return 'stopped'
   if ((status.message ?? '').trim() !== '') return 'notice'
   return 'clear'
+}
+
+/** 授業が始まる何分前から出さないか。時間割を確かめに来るコマ間・授業の直前を避ける。 */
+export const CLASS_MARGIN_BEFORE_MIN = 25
+/** 授業が終わって何分後まで出さないか。授業直後の移動・次の教室の確認を避ける。 */
+export const CLASS_MARGIN_AFTER_MIN = 10
+
+/**
+ * 授業の前後の余白の中か（授業中・開始の25分前〜終了の10分後）。
+ * 授業中・開始5分前は出席エンジンの稼働（attendanceRunning）でも否決されるが、コマ間の休み時間や
+ * 授業の直後は稼働の外で、時間割・教室を確かめに来た人に当たる。既存の isInActiveClassPeriod を
+ * 前は preMinutes を広げ、後ろは「10分前の時刻」で見て使い回す（科目の終了済み判定も同じ述語）。
+ */
+export function nearClassPeriod(
+  timetable: TimetableCollection[],
+  now: Date,
+  isActive: ClassActivePredicate,
+): boolean {
+  if (isInActiveClassPeriod(timetable, now, isActive, CLASS_MARGIN_BEFORE_MIN)) return true
+  return isInActiveClassPeriod(timetable, new Date(now.getTime() - CLASS_MARGIN_AFTER_MIN * 60_000), isActive, 0)
 }

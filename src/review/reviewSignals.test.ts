@@ -1,13 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import {
+  CLASS_MARGIN_AFTER_MIN,
+  CLASS_MARGIN_BEFORE_MIN,
   failureAtFromHealth,
   failureAtFromSubmitDiags,
   hadValueToday,
   latestFailureAt,
+  nearClassPeriod,
   reviewKillStatus,
 } from './reviewSignals'
 import type { CollectionHealthMap } from '../storage/collectionHealthSerialize'
 import type { KillSwitchStatus } from '../health/killSwitch'
+import type { TimetableCollection } from '../collect/timetableMessage'
 
 const local = (m: number, d: number, h = 12, min = 0) => new Date(2026, m - 1, d, h, min, 0).getTime()
 
@@ -147,5 +151,63 @@ describe('reviewKillStatus（停止指示・お知らせの否決用の結論）
 
   it('停止とお知らせが両方ある時は stopped が先', () => {
     expect(reviewKillStatus({ ...base, disabledAll: true, message: 'x' })).toBe('stopped')
+  })
+})
+
+describe('nearClassPeriod（授業の前後の余白＝コマ間・授業直後に出さない）', () => {
+  // 2026-07-06 は月曜。1限 9:00〜10:30、2限 10:40〜12:10。
+  const periodTimes = {
+    campus: '野田',
+    periods: [
+      { period: 1, start: '9:00', end: '10:30' },
+      { period: 2, start: '10:40', end: '12:10' },
+    ],
+  }
+  const col = (day: 'mon' | 'tue', period: number, hasClass = true): TimetableCollection => ({
+    slots: [
+      {
+        day,
+        period,
+        classes: hasClass
+          ? [{ courseCode: 'AB1234', name: '線形代数', teachers: [], room: '', isRemote: false, credits: null, badges: [] }]
+          : [],
+      },
+    ],
+    periodTimes,
+  })
+  const ACTIVE = () => true
+  const at = (h: number, m: number) => new Date(2026, 6, 6, h, m)
+
+  it('余白の大きさは授業の25分前から・終了の10分後まで', () => {
+    expect(CLASS_MARGIN_BEFORE_MIN).toBe(25)
+    expect(CLASS_MARGIN_AFTER_MIN).toBe(10)
+  })
+
+  it('授業が始まる25分前までは true・26分前は false（前の余白の境界）', () => {
+    expect(nearClassPeriod([col('mon', 1)], at(8, 35), ACTIVE)).toBe(true)
+    expect(nearClassPeriod([col('mon', 1)], at(8, 34), ACTIVE)).toBe(false)
+  })
+
+  it('授業中は true', () => {
+    expect(nearClassPeriod([col('mon', 1)], at(9, 30), ACTIVE)).toBe(true)
+  })
+
+  it('授業が終わって10分後までは true・11分後は false（後ろの余白の境界）', () => {
+    expect(nearClassPeriod([col('mon', 1)], at(10, 40), ACTIVE)).toBe(true)
+    expect(nearClassPeriod([col('mon', 1)], at(10, 41), ACTIVE)).toBe(false)
+  })
+
+  it('休み時間（1限終了直後〜2限開始前）は true', () => {
+    expect(nearClassPeriod([col('mon', 1), col('mon', 2)], at(10, 35), ACTIVE)).toBe(true)
+  })
+
+  it('曜日が違う・その時限に授業が無い・科目が終了済みなら false（陰性対照）', () => {
+    expect(nearClassPeriod([col('tue', 1)], at(9, 30), ACTIVE)).toBe(false)
+    expect(nearClassPeriod([col('mon', 1, false)], at(9, 30), ACTIVE)).toBe(false)
+    expect(nearClassPeriod([col('mon', 1)], at(9, 30), () => false)).toBe(false)
+  })
+
+  it('時間割が空なら false', () => {
+    expect(nearClassPeriod([], at(9, 30), ACTIVE)).toBe(false)
   })
 })

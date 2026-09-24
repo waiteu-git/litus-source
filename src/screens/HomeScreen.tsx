@@ -94,7 +94,7 @@ export default function HomeScreen() {
   const sync = useSync()
   const requestFullSync = useClassSyncConfirm()
   // アプリ内ストア評価依頼（F）。ゲートが通った時だけ OS の標準の依頼を出す自動判定で、ホームだけが1回呼ぶ。
-  useStoreReviewPrompt()
+  useStoreReviewPrompt(courseActive)
   // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用。開発ビルドでのみ読み書き・表示する。
   const [bulletinDiag, setBulletinDiag] = useState('')
   // LETUS新着（コース活動の増分・見るまで残る累積）。ホームカード用。

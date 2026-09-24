@@ -74,13 +74,23 @@ export function parseReviewState(
     return corrupt(now)
   }
   if (lastFailureAt !== null && !isTime(lastFailureAt)) return corrupt(now)
+  // 未来の時刻は今へ丸める。端末の時計が進んだ間に書いた値が残ると、待ちが時計のずれの分だけ
+  // 永続する（「今から14日」ではなく「未来の日付から14日」になる）。丸めても待つ側＝しつこくない側に
+  // 倒れ、期間は有限になる。呼び出し側（reviewStateStore）が丸めた結果を書き戻して自己回復させる。
+  const today = localDayKey(now)
   return {
     state: {
-      firstSeenAt: firstSeenAt as number | null,
-      valueDays: [...new Set(valueDays as string[])].sort().slice(-VALUE_DAYS_KEEP),
-      requests: [...(requests as number[])].sort((a, b) => a - b).slice(-REQUESTS_KEEP),
+      firstSeenAt: firstSeenAt === null ? null : Math.min(firstSeenAt as number, now),
+      valueDays: [...new Set(valueDays as string[])]
+        .filter((d) => d <= today)
+        .sort()
+        .slice(-VALUE_DAYS_KEEP),
+      requests: (requests as number[])
+        .map((t) => Math.min(t, now))
+        .sort((a, b) => a - b)
+        .slice(-REQUESTS_KEEP),
       lastBuild: lastBuild as number | null,
-      lastFailureAt: lastFailureAt as number | null,
+      lastFailureAt: lastFailureAt === null ? null : Math.min(lastFailureAt as number, now),
     },
     health: 'ok',
   }

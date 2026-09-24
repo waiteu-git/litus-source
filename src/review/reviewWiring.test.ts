@@ -32,6 +32,9 @@ const strip = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\
 const REQUEST = 'review/requestStoreReview.ts'
 const HOOK = 'review/useStoreReviewPrompt.ts'
 
+/** requestStoreReview の読み込み（静的 import・動的 import()・require のすべて）。 */
+const IMPORTS_REQUEST = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"][^'"]*requestStoreReview['"]/
+
 describe('評価依頼の配線（ラチェット）', () => {
   it('計器の陽性対照: 実物の src/ を読めていて、依頼のラッパーと入口の hook が在る', () => {
     expect(files.length).toBeGreaterThan(100)
@@ -47,7 +50,7 @@ describe('評価依頼の配線（ラチェット）', () => {
   it('requestStoreReview を読み込むのは useStoreReviewPrompt.ts だけ（画面・ボタンから依頼に届かない）', () => {
     const hits = files
       .filter((f) => f.rel !== REQUEST)
-      .filter((f) => /from\s+['"][^'"]*requestStoreReview['"]/.test(strip(f.text)))
+      .filter((f) => IMPORTS_REQUEST.test(strip(f.text)))
       .map((f) => f.rel)
     expect(hits).toEqual([HOOK])
   })
@@ -89,7 +92,31 @@ describe('評価依頼の配線（ラチェット）', () => {
     expect(link).toContain('action=write-review')
     expect(link).not.toContain('market://')
     const settings = strip(files.find((f) => f.rel === 'screens/SettingsScreen.tsx')!.text)
+    expect(settings).toContain('showStoreReviewLink(')
     expect(settings).toContain('storeReviewUrl(')
     expect(settings).not.toMatch(/requestStoreReview|expo-store-review|requestReview/)
+  })
+})
+
+describe('検出器の対照（実物にまだ無い違反の形を、確かに拾える）', () => {
+  it.each([
+    "import { requestStoreReview } from '../review/requestStoreReview'",
+    "import { requestStoreReview } from './requestStoreReview'",
+    "const m = await import('../review/requestStoreReview')",
+    "import('../review/requestStoreReview').then((m) => m.requestStoreReview(async () => true))",
+    "const m = require('../review/requestStoreReview')",
+    'import { requestStoreReview } from "../review/requestStoreReview"',
+  ])('陽性: %s', (src) => {
+    expect(IMPORTS_REQUEST.test(strip(src))).toBe(true)
+  })
+
+  it.each([
+    "import { requestStoreReviewer } from '../review/other'",
+    "// import { requestStoreReview } from '../review/requestStoreReview'",
+    "/* const m = require('../review/requestStoreReview') */",
+    "import { decideReview } from '../review/reviewGate'",
+    "const name = 'requestStoreReview'",
+  ])('陰性: %s', (src) => {
+    expect(IMPORTS_REQUEST.test(strip(src))).toBe(false)
   })
 })

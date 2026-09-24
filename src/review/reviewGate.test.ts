@@ -27,6 +27,7 @@ const ELIGIBLE: ReviewGateInput = {
   maintenance: false,
   offline: false,
   attendanceRunning: false,
+  nearClass: false,
   syncBusy: false,
   homeFocused: true,
   appActive: true,
@@ -58,6 +59,7 @@ const VETOES: Array<[ReviewVeto, (i: ReviewGateInput) => ReviewGateInput]> = [
   ['maintenance', (i) => ({ ...i, maintenance: true })],
   ['offline', (i) => ({ ...i, offline: true })],
   ['attendance', (i) => ({ ...i, attendanceRunning: true })],
+  ['near_class', (i) => ({ ...i, nearClass: true })],
   ['sync_busy', (i) => ({ ...i, syncBusy: true })],
   ['not_home', (i) => ({ ...i, homeFocused: false })],
   ['app_inactive', (i) => ({ ...i, appActive: false })],
@@ -218,10 +220,37 @@ describe('decideReview — 強制（開発・ベータの確認用）', () => {
     })
   })
 
-  it('force でも安全側の否決（デモ・停止・お知らせ・バナー・授業・収集の稼働・前面・静止・セッション）は効く', () => {
+  it('force でも安全側の否決は効く（production の否決・適格・上限だけを飛ばす）', () => {
+    const SAFETY: ReviewVeto[] = [
+      'demo',
+      'status_unknown',
+      'stopped',
+      'notice',
+      'diagnostics',
+      'maintenance',
+      'offline',
+      'attendance',
+      'near_class',
+      'sync_busy',
+      'not_home',
+      'app_inactive',
+      'not_settled',
+      'session_requested',
+      'state_unreadable',
+    ]
     const base = with_({ stage: 'dev', force: true, ...EMPTY })
-    for (const [reason, make] of VETOES.slice(1, 14)) {
+    const covered = VETOES.filter(([reason]) => SAFETY.includes(reason))
+    expect(covered.map(([r]) => r).sort()).toEqual([...SAFETY].sort())
+    for (const [reason, make] of covered) {
       expect(decideReview(make(base)), reason).toEqual({ ok: false, reason })
+    }
+  })
+
+  it('force は適格・上限の否決だけを飛ばす（飛ばす側の対照）', () => {
+    const SKIPPED: ReviewVeto[] = ['build_unknown', 'too_new', 'recent_failure', 'few_value_days', 'same_build', 'recent_request', 'yearly_limit']
+    const base = with_({ stage: 'dev', force: true, ...EMPTY })
+    for (const [reason, make] of VETOES.filter(([r]) => SKIPPED.includes(r))) {
+      expect(decideReview(make(base)), reason).toEqual({ ok: true })
     }
   })
 

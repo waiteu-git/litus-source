@@ -66,6 +66,35 @@ describe('reviewStateStore', () => {
     expect(second.state.firstSeenAt).toBe(NOW)
   })
 
+  it('未来の時刻が残っていたら、今へ丸めて書き戻す（時計ずれで待ちが永続しない）。丸めた後は書かない', async () => {
+    const FUTURE = NOW + 400 * DAY_MS
+    mockStore[REVIEW_STATE_KEY] = JSON.stringify({
+      ...EMPTY_REVIEW_STATE,
+      firstSeenAt: FUTURE,
+      lastFailureAt: FUTURE,
+      requests: [FUTURE],
+    })
+    const first = await loadReviewState(NOW)
+    expect(first.health).toBe('ok')
+    expect(first.state.firstSeenAt).toBe(NOW)
+    // 保存された生の JSON で確かめる（stored() は読む側でも丸めるので、書き戻しの有無を区別できない）
+    const raw = JSON.parse(mockStore[REVIEW_STATE_KEY])
+    expect(raw.firstSeenAt).toBe(NOW)
+    expect(raw.lastFailureAt).toBe(NOW)
+    expect(raw.requests).toEqual([NOW])
+
+    setItem.mockClear()
+    await loadReviewState(NOW + DAY_MS)
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
+  it('正規形の保存は、読むだけでは書き戻さない（書き込みの増幅を起こさない）', async () => {
+    mockStore[REVIEW_STATE_KEY] = serializeReviewState({ ...EMPTY_REVIEW_STATE, firstSeenAt: NOW - DAY_MS, valueDays: ['20260930'] })
+    await loadReviewState(NOW)
+    await loadReviewState(NOW)
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
   it('mutate は変えた時だけ書き、同じオブジェクトを返す変更では書かない', async () => {
     const r1 = await mutateReviewState(NOW, (s) => ({ ...s, firstSeenAt: NOW }))
     expect(r1.state.firstSeenAt).toBe(NOW)
@@ -88,12 +117,12 @@ describe('reviewStateStore', () => {
 
   it('同時に走らせた変更は直列に適用され、どちらも失われない', async () => {
     await Promise.all([
+      mutateReviewState(NOW, (s) => addValueDay(s, '20260930')),
       mutateReviewState(NOW, (s) => addValueDay(s, '20261001')),
-      mutateReviewState(NOW, (s) => addValueDay(s, '20261002')),
       mutateReviewState(NOW, (s) => ({ ...s, lastFailureAt: 42 })),
     ])
     const s = stored()
-    expect(s.valueDays).toEqual(['20261001', '20261002'])
+    expect(s.valueDays).toEqual(['20260930', '20261001'])
     expect(s.lastFailureAt).toBe(42)
   })
 

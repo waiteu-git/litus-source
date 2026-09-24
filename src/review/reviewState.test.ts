@@ -79,6 +79,35 @@ describe('parseReviewState', () => {
   })
 })
 
+describe('parseReviewState — 未来の時刻は今へ丸める（時計ずれで抑止が永続しない）', () => {
+  const FUTURE = NOW + 400 * DAY_MS
+
+  it('firstSeenAt・lastFailureAt・requests が未来なら、今へ丸める（待つ側に倒れるが、期間は有限）', () => {
+    const raw = JSON.stringify({
+      firstSeenAt: FUTURE,
+      valueDays: [],
+      requests: [FUTURE, NOW - DAY_MS],
+      lastBuild: 221,
+      lastFailureAt: FUTURE,
+    })
+    const r = parseReviewState(raw, NOW)
+    expect(r.health).toBe('ok')
+    expect(r.state.firstSeenAt).toBe(NOW)
+    expect(r.state.lastFailureAt).toBe(NOW)
+    expect(r.state.requests).toEqual([NOW - DAY_MS, NOW])
+  })
+
+  it('今日より後の価値日キーは捨てる', () => {
+    const raw = JSON.stringify({ ...EMPTY_REVIEW_STATE, valueDays: ['20260923', '20260924', '20260925', '20270101'] })
+    expect(parseReviewState(raw, NOW).state.valueDays).toEqual(['20260923', '20260924'])
+  })
+
+  it('過去・現在の値は変えない（陰性対照）', () => {
+    const s = state({ firstSeenAt: NOW, lastFailureAt: NOW - DAY_MS, requests: [NOW - 5 * DAY_MS], valueDays: ['20260924'] })
+    expect(parseReviewState(serializeReviewState(s), NOW).state).toEqual(s)
+  })
+})
+
 describe('localDayKey', () => {
   it('端末ローカルの日付を YYYYMMDD で返す（月日をゼロ埋め）', () => {
     expect(localDayKey(new Date(2026, 0, 5, 3, 4, 5).getTime())).toBe('20260105')
