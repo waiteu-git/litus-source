@@ -37,6 +37,7 @@ import { attendanceStatsDiagLine } from '../health/attendanceStatsDiag'
 import { CHANGELOG, formatChangelogHeading, getRecentChangelog } from '../changelog'
 import ChangelogModal from '../ui/ChangelogModal'
 import FeedbackSheet from '../report/FeedbackSheet'
+import { showStoreReviewLink, storeReviewUrl } from '../review/storeReviewLink'
 
 type Course = { courseCode: string; name: string }
 
@@ -63,6 +64,8 @@ export default function SettingsScreen() {
   // 出欠状況の取得ぐあい（前回成功時刻・失敗理由）を診断行に出すため。
   const { attendanceStatsHealth, lastAttendanceStatsAt } = useSync()
   const { active: demo, enter: enterDemo } = useDemo()
+  // 「ストアで評価する」は production かつデモでない時だけ。通常の URL を開くだけで、評価依頼の API は呼ばない。
+  const reviewUrl = showStoreReviewLink(RELEASE_STAGE, demo) ? storeReviewUrl(Platform.OS) : null
   const {
     timetableView,
     assignmentsView,
@@ -493,6 +496,11 @@ export default function SettingsScreen() {
             <Pressable onPress={() => Linking.openURL('https://litus.waiteu.dev/')}>
               <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
             </Pressable>
+            {reviewUrl ? (
+              <Pressable onPress={() => Linking.openURL(reviewUrl).catch(() => undefined)} accessibilityRole="link">
+                <Text style={[styles.link, { color: ui.labelColor }]}>ストアで評価する ↗</Text>
+              </Pressable>
+            ) : null}
           </View>
           <View style={[ui.card, { marginTop: 8 }]}>
             <Text style={[styles.changelogHeading, { color: ui.valueColor }]}>変更履歴</Text>

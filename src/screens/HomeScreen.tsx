@@ -53,6 +53,7 @@ import { PressableCard, PressableRow } from '../ui/Pressable'
 import { useDisplaySettings } from '../displaySettings'
 import type { HomeSectionKey } from '../home/homeSections'
 import QuickTilesSection from '../home/QuickTilesSection'
+import { useStoreReviewPrompt } from '../review/useStoreReviewPrompt'
 
 // 展開表示から端の小アイコンへ収縮するまでの時間。
 const COLLAPSE_AFTER_MS = 5000
@@ -92,6 +93,8 @@ export default function HomeScreen() {
   // 同期の状態・実行は SyncProvider が単独所有（掲示アニメ・鮮度・スキップ理由は上部同期バーに集約）。
   const sync = useSync()
   const requestFullSync = useClassSyncConfirm()
+  // アプリ内ストア評価依頼（F）。ゲートが通った時だけ OS の標準の依頼を出す自動判定で、ホームだけが1回呼ぶ。
+  useStoreReviewPrompt()
   // 掲示収集の診断（着地ページ・件数）。取得できない原因の切り分け用。開発ビルドでのみ読み書き・表示する。
   const [bulletinDiag, setBulletinDiag] = useState('')
   // LETUS新着（コース活動の増分・見るまで残る累積）。ホームカード用。
