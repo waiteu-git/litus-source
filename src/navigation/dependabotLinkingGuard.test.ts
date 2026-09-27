@@ -26,11 +26,21 @@ const REASON =
   'decode-uri-component@0.5.0 への pnpm overrides を入れること。' +
   '根拠＝メモリ litus-expo-version-policy の2026-09-25節。'
 
-function findNavigationContainerLinkingProp(src: string): boolean {
-  const start = src.indexOf('<NavigationContainer')
-  if (start === -1) return false
-  const end = src.indexOf('>', start)
-  const tag = src.slice(start, end === -1 ? undefined : end + 1)
+/** ファイル内の `<NavigationContainer …>` 開始タグを全件返す（1ファイルに複数あっても取りこぼさない）。 */
+function findNavigationContainerTags(src: string): string[] {
+  const tags: string[] = []
+  let from = 0
+  while (true) {
+    const start = src.indexOf('<NavigationContainer', from)
+    if (start === -1) break
+    const end = src.indexOf('>', start)
+    tags.push(src.slice(start, end === -1 ? undefined : end + 1))
+    from = end === -1 ? src.length : end + 1
+  }
+  return tags
+}
+
+function hasLinkingProp(tag: string): boolean {
   return /\blinking\s*=/.test(tag)
 }
 
@@ -61,16 +71,27 @@ function listSources(dir: string): string[] {
 
 describe('検出ロジック', () => {
   it('NavigationContainer の linking prop を検出する', () => {
-    expect(findNavigationContainerLinkingProp('<NavigationContainer linking={config}>')).toBe(true)
-    expect(
-      findNavigationContainerLinkingProp('<NavigationContainer\n  ref={r}\n  linking={config}\n>'),
-    ).toBe(true)
+    expect(hasLinkingProp('<NavigationContainer linking={config}>')).toBe(true)
+    expect(hasLinkingProp('<NavigationContainer\n  ref={r}\n  linking={config}\n>')).toBe(true)
   })
 
   it('linking の無い NavigationContainer では検出しない', () => {
-    expect(
-      findNavigationContainerLinkingProp('<NavigationContainer ref={r} theme={t}>'),
-    ).toBe(false)
+    expect(hasLinkingProp('<NavigationContainer ref={r} theme={t}>')).toBe(false)
+  })
+
+  it('1ファイルに複数の NavigationContainer があっても全件を個別に検出する（最初の1つだけを見て見逃さない）', () => {
+    const src = [
+      '<NavigationContainer ref={r1} theme={t1}>',
+      '  <Stack.Navigator />',
+      '</NavigationContainer>',
+      '<NavigationContainer ref={r2} linking={config}>',
+      '  <Stack.Navigator />',
+      '</NavigationContainer>',
+    ].join('\n')
+    const tags = findNavigationContainerTags(src)
+    expect(tags).toHaveLength(2)
+    expect(hasLinkingProp(tags[0])).toBe(false)
+    expect(hasLinkingProp(tags[1])).toBe(true)
   })
 
   it('useLinkTo / Link の named import を検出する', () => {
@@ -104,9 +125,21 @@ describe('検出ロジック', () => {
 })
 
 describe('Dependabot dismiss 前提のガード（ラチェット）', () => {
-  it(`NavigationContainer に linking を渡さない。${REASON}`, () => {
-    const appTsx = readFileSync(join(ROOT, 'App.tsx'), 'utf8')
-    expect(findNavigationContainerLinkingProp(appTsx)).toBe(false)
+  it(`NavigationContainer に linking を渡さない（src 全体・App.tsx・index.ts の全 NavigationContainer が対象）。${REASON}`, () => {
+    const offenders: string[] = []
+    for (const file of listSources(join(ROOT, 'src'))) {
+      const rel = file.replace(/\\/g, '/').split('/src/')[1]
+      for (const tag of findNavigationContainerTags(readFileSync(file, 'utf8'))) {
+        if (hasLinkingProp(tag)) offenders.push(`${rel} → linking`)
+      }
+    }
+    for (const name of ['App.tsx', 'index.ts']) {
+      const p = join(ROOT, name)
+      for (const tag of findNavigationContainerTags(readFileSync(p, 'utf8'))) {
+        if (hasLinkingProp(tag)) offenders.push(`${name} → linking`)
+      }
+    }
+    expect(offenders).toEqual([])
   })
 
   it(`expo-router を依存に入れない。${REASON}`, () => {
