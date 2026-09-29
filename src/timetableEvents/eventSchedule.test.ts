@@ -93,3 +93,40 @@ describe('表示開始（countdownStart）は試験の通知を変えない（�
     expect(buildExamCountdown(withStart, now)).toEqual([])
   })
 })
+
+describe('内包補講に覆われた単独補講は通知しない（補講の二重登録・設計 2026-09-29）', () => {
+  // now=2026-07-14 12:00。休講 7/20 に補講 7/27 3限を内包した休講と、同じ補講の単独補講。
+  const carrier = ev({
+    id: 'c1', type: 'cancel', date: '2026-07-20', courseCode: '9973415', courseName: '図学・製図',
+    makeupStatus: 'has', makeup: { date: '2026-07-27', periods: [3], room: null },
+  })
+  const dup = ev({ id: 's1', type: 'makeup', date: '2026-07-27', periods: [3], courseCode: '9973415', courseName: '図学・製図' })
+  const ids = (events: ClassEvent[]) => buildClassEventNotifications(events, now).map((n) => n.id).sort()
+
+  it('内包側の補講の前夜・当日の1組だけが残り、単独側の通知は出ない', () => {
+    expect(ids([carrier, dup])).toEqual(['c1:day', 'c1:mk:day', 'c1:mk:eve'])
+  })
+
+  it('保存順に依らない', () => {
+    expect(ids([dup, carrier])).toEqual(ids([carrier, dup]))
+  })
+
+  it('休講を消すと、単独補講の前夜・当日の通知に戻る（データは保たれている）', () => {
+    expect(ids([dup])).toEqual(['s1:day', 's1:eve'])
+  })
+
+  it('覆われない単独補講（別の日・別のコマ・別の授業）は従来どおり通知する', () => {
+    for (const other of [
+      ev({ id: 's2', type: 'makeup', date: '2026-07-28', periods: [3], courseCode: '9973415' }),
+      ev({ id: 's3', type: 'makeup', date: '2026-07-27', periods: [4], courseCode: '9973415' }),
+      ev({ id: 's4', type: 'makeup', date: '2026-07-27', periods: [3], courseCode: '1111111', courseName: '別の授業' }),
+    ]) {
+      expect(ids([carrier, other])).toEqual(expect.arrayContaining([`${other.id}:eve`, `${other.id}:day`]))
+    }
+  })
+
+  it('補講が未定(undecided)の休講は覆わない（単独補講の通知は残る）', () => {
+    const undecided = { ...carrier, makeupStatus: 'undecided' as const, makeup: null }
+    expect(ids([undecided, dup])).toEqual(['c1:day', 's1:day', 's1:eve'])
+  })
+})

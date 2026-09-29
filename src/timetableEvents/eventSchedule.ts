@@ -1,5 +1,5 @@
 import { eventTypeLabel } from './eventLabels'
-import type { ClassEvent } from './classEvent'
+import { coveredStandaloneMakeups, type ClassEvent } from './classEvent'
 
 export type EventNotification = { id: string; title: string; body: string; fireAt: Date }
 
@@ -34,6 +34,9 @@ export function buildClassEventNotifications(events: ClassEvent[], now: Date): E
     push(`${id}:eve`, title, body ? `明日 ${body}` : '明日', dayBefore(ymd, 20, 0))
     push(`${id}:day`, title, body ? `本日 ${body}` : '本日', at(ymd, 8, 0))
   }
+  // 内包補講に覆われた単独補講（同じ補講を休講が内包している）は通知しない。内包側の :mk の1組だけが残る。
+  // 予約済みの古い二重は refreshAllNotifications（全取り消し→貼り直し）で消える。
+  const covered = coveredStandaloneMakeups(events)
   for (const e of events) {
     const name = e.courseName
     if (e.type === 'quiz' || e.type === 'midterm' || e.type === 'final') {
@@ -44,6 +47,7 @@ export function buildClassEventNotifications(events: ClassEvent[], now: Date): E
         twoStage(`${e.id}:mk`, `${name} 補講`, `${e.makeup.date} ${e.makeup.periods.join('・')}限`, e.makeup.date)
       }
     } else if (e.type === 'makeup') {
+      if (covered.has(e.id)) continue
       twoStage(e.id, `${name} 補講`, `${e.date} ${e.periods.join('・')}限`, e.date)
     } else if (e.type === 'roomChange') {
       push(`${e.id}:day`, `${name} 教室変更`, `${e.date} → ${e.room ?? ''}`, at(e.date, 8, 0))
