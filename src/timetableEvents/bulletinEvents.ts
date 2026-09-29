@@ -1,6 +1,6 @@
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { firstCourseCode } from '../parsers/courseCode'
-import { makeClassEventId, type ClassEvent } from './classEvent'
+import { makeClassEventId, periodsKey, sameCourse, type ClassEvent } from './classEvent'
 
 /** 掲示本文から起こす「各回イベント候補」。単日のみ。makeup は「休講&補講」掲示の内包補講。 */
 export type BulletinEventCandidate = {
@@ -121,14 +121,10 @@ export function parseBulletinEvents(item: BulletinItem): BulletinEventCandidate[
   }]
 }
 
-const normCourseName = (s: string) => s.replace(/[\s　]/g, '')
-const periodsKey = (p: number[]) => [...p].sort((a, b) => a - b).join(',')
-
 /** 候補と既存イベントが同一授業・同一種別・同日・同コマか。コードがあればコード、無ければ名称で突合。 */
 function sameSlot(c: BulletinEventCandidate, e: ClassEvent): boolean {
   if (c.type !== e.type || c.date !== e.date || periodsKey(c.periods) !== periodsKey(e.periods)) return false
-  if (c.courseCode && e.courseCode) return c.courseCode === e.courseCode
-  return normCourseName(c.courseName) === normCourseName(e.courseName)
+  return sameCourse(c, e)
 }
 
 /**

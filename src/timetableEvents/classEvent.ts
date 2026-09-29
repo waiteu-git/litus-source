@@ -47,14 +47,69 @@ export type MakeupOccurrence = {
   sourceId: string
 }
 
-/** 休講内包の補講(makeupStatus=has)＋単独補講(type=makeup) を「補講オカレンス」に平坦化する。 */
+export const normCourseName = (s: string) => s.replace(/[\s　]/g, '')
+export const periodsKey = (p: number[]) => [...p].sort((a, b) => a - b).join(',')
+
+/** 同一授業か。コードが両方あればコード、無ければ空白除去した名称で比べる。 */
+export function sameCourse(
+  a: { courseCode: string | null; courseName: string },
+  b: { courseCode: string | null; courseName: string },
+): boolean {
+  if (a.courseCode && b.courseCode) return a.courseCode === b.courseCode
+  return normCourseName(a.courseName) === normCourseName(b.courseName)
+}
+
+/**
+ * 「覆われた単独補講」＝同じ補講（同一授業・同日・同コマ集合）を、補講が確定した休講に内包した補講が持っている
+ * 単独補講(type=makeup)。冗長なので内包側を正とする。戻り値は 単独補講の id → 覆う休講の id。
+ *
+ * 【休講＆補講】の掲示と【補講】の掲示が別々に出ると、候補の突合が種別の一致を要求するため両方が別々に登録され、
+ * 補講の発生・通知が二重になっていた（2026-09-29 の本人報告）。データは書き換えず、派生側でここを通して畳む。
+ * 表記ゆれで一致しない時は畳まない＝二重が残るだけで、本物の補講が消える誤爆はしない。
+ */
+export function coveredStandaloneMakeups(events: ClassEvent[]): Map<string, string> {
+  const covered = new Map<string, string>()
+  const carriers = events.filter((e) => e.type === 'cancel' && e.makeupStatus === 'has' && e.makeup)
+  if (carriers.length === 0) return covered
+  for (const s of events) {
+    if (s.type !== 'makeup') continue
+    const carrier = carriers.find(
+      (c) => c.makeup!.date === s.date && periodsKey(c.makeup!.periods) === periodsKey(s.periods) && sameCourse(c, s),
+    )
+    if (carrier) covered.set(s.id, carrier.id)
+  }
+  return covered
+}
+
+/** 教室の突き合わせ。片方 null なら他方。一方が他方を含む（キャンパス接頭辞つき）なら長い方。食い違いは primary。 */
+function mergeRoom(primary: string | null, other: string | null): string | null {
+  if (!primary) return other
+  if (!other || primary === other) return primary
+  if (other.endsWith(primary)) return other
+  return primary
+}
+
+/**
+ * 休講内包の補講(makeupStatus=has)＋単独補講(type=makeup) を「補講オカレンス」に平坦化する。
+ * 内包補講に覆われた単独補講は出さない（内包側の教室が欠けていれば単独側の教室で補う）。
+ */
 export function makeupOccurrences(events: ClassEvent[]): MakeupOccurrence[] {
+  const covered = coveredStandaloneMakeups(events)
+  const byId = new Map(events.map((e) => [e.id, e]))
+  const coveredRooms = new Map<string, (string | null)[]>()
+  for (const [sid, cid] of covered) {
+    const list = coveredRooms.get(cid) ?? []
+    list.push(byId.get(sid)?.room ?? null)
+    coveredRooms.set(cid, list)
+  }
   const out: MakeupOccurrence[] = []
   for (const e of events) {
     if (e.type === 'makeup') {
+      if (covered.has(e.id)) continue
       out.push({ courseName: e.courseName, date: e.date, periods: e.periods, room: e.room, sourceId: e.id })
     } else if (e.type === 'cancel' && e.makeupStatus === 'has' && e.makeup) {
-      out.push({ courseName: e.courseName, date: e.makeup.date, periods: e.makeup.periods, room: e.makeup.room, sourceId: e.id })
+      const room = (coveredRooms.get(e.id) ?? []).reduce<string | null>((acc, r) => mergeRoom(acc, r), e.makeup.room)
+      out.push({ courseName: e.courseName, date: e.makeup.date, periods: e.makeup.periods, room, sourceId: e.id })
     }
   }
   return out
