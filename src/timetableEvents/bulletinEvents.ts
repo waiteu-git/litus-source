@@ -1,6 +1,6 @@
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { firstCourseCode } from '../parsers/courseCode'
-import { makeClassEventId, periodsKey, sameCourse, type ClassEvent } from './classEvent'
+import { carriesMakeup, makeClassEventId, periodsKey, sameCourse, type ClassEvent } from './classEvent'
 
 /** 掲示本文から起こす「各回イベント候補」。単日のみ。makeup は「休講&補講」掲示の内包補講。 */
 export type BulletinEventCandidate = {
@@ -133,6 +133,13 @@ function sameSlot(c: BulletinEventCandidate, e: ClassEvent): boolean {
  */
 export function reconcileCandidates(candidates: BulletinEventCandidate[], existing: ClassEvent[]): CandidateView[] {
   return candidates.map((candidate) => {
+    // 単独補講の候補は、まず「休講に内包された同じ補講」に一致させる（内包側を正とする）。
+    // 【休講＆補講】と【補講】の掲示が別々に出ても、片方を追加した時点でもう一方は追加済みになり、順序に依らず
+    // matchedEventId が覆う休講になる（単独側に一致させると、その行が一覧から隠れて畳みが効かない）。
+    if (candidate.type === 'makeup') {
+      const carrier = existing.find((e) => carriesMakeup(e, candidate))
+      if (carrier) return { candidate, state: 'added' as const, matchedEventId: carrier.id }
+    }
     const match = existing.find((e) => sameSlot(candidate, e))
     if (!match) return { candidate, state: 'new' as const, matchedEventId: null }
     if (candidate.makeup && match.type === 'cancel' && match.makeupStatus !== 'has') {

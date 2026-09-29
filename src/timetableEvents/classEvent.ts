@@ -73,12 +73,28 @@ export function coveredStandaloneMakeups(events: ClassEvent[]): Map<string, stri
   if (carriers.length === 0) return covered
   for (const s of events) {
     if (s.type !== 'makeup') continue
-    const carrier = carriers.find(
-      (c) => c.makeup!.date === s.date && periodsKey(c.makeup!.periods) === periodsKey(s.periods) && sameCourse(c, s),
-    )
+    const carrier = carriers.find((c) => carriesMakeup(c, s))
     if (carrier) covered.set(s.id, carrier.id)
   }
   return covered
+}
+
+/**
+ * 休講 e が、この補講（同一授業・同日・同コマ集合）を内包しているか。補講が確定(has)した休講だけが持つ。
+ * 単独補講の畳み（coveredStandaloneMakeups）と、単独補講の候補の突合（reconcileCandidates）で共用する。
+ */
+export function carriesMakeup(
+  e: ClassEvent,
+  m: { courseCode: string | null; courseName: string; date: string; periods: number[] },
+): boolean {
+  return (
+    e.type === 'cancel' &&
+    e.makeupStatus === 'has' &&
+    !!e.makeup &&
+    e.makeup.date === m.date &&
+    periodsKey(e.makeup.periods) === periodsKey(m.periods) &&
+    sameCourse(e, m)
+  )
 }
 
 /** 教室の突き合わせ。片方 null なら他方。一方が他方を含む（キャンパス接頭辞つき）なら長い方。食い違いは primary。 */
