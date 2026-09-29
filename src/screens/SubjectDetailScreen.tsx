@@ -28,6 +28,7 @@ import { loadClassEvents, upsertClassEvent } from '../storage/classEventsStore'
 import type { ClassEvent } from '../timetableEvents/classEvent'
 import { cellBadgeText } from '../timetableEvents/eventLabels'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
+import { subjectEventRows } from '../timetableEvents/subjectEventRows'
 import { useBulletinEventCandidates } from '../timetableEvents/useBulletinEventCandidates'
 import { candidateToClassEvent, type CandidateView } from '../timetableEvents/bulletinEvents'
 import BulletinCandidateRow from '../timetableEvents/BulletinCandidateRow'
@@ -279,12 +280,15 @@ export default function SubjectDetailScreen() {
     [dayKey, period, room, pattern, events],
   )
   const attention = useMemo(() => pickAttentionEvent(events, now), [events]) // eslint-disable-line react-hooks/exhaustive-deps
+  // 「各回の予定」に出す行。追加済みの掲示候補と、内包補講に覆われた単独補講は畳む（データは書き換えない）。
+  // 見出しの件数・空状態・区切り線は全てこの結果から出す（隠した後の件数）。
+  const eventRows = useMemo(() => subjectEventRows(candidates, events), [candidates, events])
   const eventsSlots = subjectEventsHeaderSlots(attention)
   // 「各回の予定」見出しのサブタイトル（表示と読み上げ名で同じ値を使う＝E0 A4）。
   const eventsSubtitle = attention
     ? `直近: ${Number(attention.date.split('-')[1])}/${Number(attention.date.split('-')[2])} ${attention.type === 'cancel' ? '休講' : '教室変更'}`
-    : events.length
-      ? `${events.length}件`
+    : eventRows.events.length
+      ? `${eventRows.events.length}件`
       : undefined
   // 予定の追加フォームへ（見出しの「追加」ボタンと、読み上げの操作「予定を追加」で共用）。
   const openAddEvent = () => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey })
@@ -375,7 +379,7 @@ export default function SubjectDetailScreen() {
         }
       >
         <Text style={{ color: ui.labelColor, fontSize: 12 }}>休講・補講・教室変更・小テスト等</Text>
-        {candidates.length === 0 && events.length === 0 ? (
+        {eventRows.candidates.length === 0 && eventRows.events.length === 0 ? (
           <Text style={{ color: ui.labelColor, fontSize: 13, marginTop: 8 }}>
             休講・補講・教室変更・小テスト・中間・期末などを登録できます。
           </Text>
@@ -384,7 +388,7 @@ export default function SubjectDetailScreen() {
             {/* 区切り線（実線・水平）と候補行の目印（破線・垂直の左境界）は View を分ける。
                 borderStyle は辺ごとに指定できないため、同じ View に両方を置くと区切り線まで破線になり、
                 Android では辺ごとに幅の違う破線ボーダーの描画自体が不安定になる。 */}
-            {candidates.map((v, i) => (
+            {eventRows.candidates.map((v, i) => (
               <View
                 key={`cand-${v.candidate.sourceBulletinId}`}
                 style={[i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor }]}
@@ -392,12 +396,12 @@ export default function SubjectDetailScreen() {
                 <BulletinCandidateRow view={v} onAdd={() => addCandidate(v)} onAppendMakeup={() => appendMakeup(v)} />
               </View>
             ))}
-            {events.map((e, i) => (
+            {eventRows.events.map((e, i) => (
               <Pressable
                 key={e.id}
                 style={[
                   styles.eventRow,
-                  (i > 0 || candidates.length > 0) && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor },
+                  (i > 0 || eventRows.candidates.length > 0) && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor },
                 ]}
                 onPress={() => navigation.navigate('ClassEventForm', { courseName: name, courseCode, dayKey, editId: e.id })}
               >
