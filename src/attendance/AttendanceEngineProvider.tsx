@@ -27,6 +27,7 @@ import {
   ENTER_CLASS_PC_JS,
   OPEN_ATTENDANCE_JS,
   OPEN_REACTION_FORM_JS,
+  REDISPLAY_ATTENDANCE_JS,
 } from '../collect/injectedScripts'
 import { buildSubmitAttendanceJs } from '../collect/attendanceSubmit.private'
 import { buildSubmitReactionJs } from '../collect/reactionSubmit.private'
@@ -108,9 +109,12 @@ export type AttendanceEngineValue = {
   setCode: (s: string) => void
   submit: () => void
   retry: () => void
-  /** 出席ページを取り直して受付状態（学内/学外判定含む）を再抽出する。学外警告の「再確認」用。
-      WebView再作成の retry() より軽量（メニューから出席ページを再オープン→再検出）。 */
+  /** 出席ページを取り直して受付状態を再抽出する（着地済みなら画面の古いDOMを読み直すだけ＝CLASSへは送らない）。
+      定期ポーリング・前面復帰用。学内/学外の判定は**これでは更新されない**ので、学外警告の再確認は recheckNetwork を使う。 */
   refreshAttendance: () => void
+  /** 学外警告の「再確認」用。出席ページ自身の「再表示する」を押してサーバーから取り直し、再検出する
+      （学内Wi-Fiへ切り替えた後の表示更新）。ボタンが無ければ WebView を作り直す。利用者が押した時だけ撃つ。 */
+  recheckNetwork: () => void
   /** アプリ内リアペ提出（reaction_pending時のみ有効）。②フォームへの流し込み→提出→出席確定まで進める。 */
   reactionSubmit: ReactionSubmitState
   submitReaction: (text: string) => void
@@ -170,6 +174,9 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
   const { active: demo } = useDemo()
   const { collectActive, setAttendanceFocused: arbiterSetFocused } = useClassView()
   const collectActiveRef = useRef(false)
+  // 学外警告の「再確認」を押した直後か（redisplay-missing で WebView を作り直してよい期間を絞る）。
+  const recheckPendingRef = useRef(false)
+  const recheckPendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   collectActiveRef.current = collectActive
   const onAttendanceRef = useRef(false)
   const attendedRef = useRef(false)
@@ -544,6 +551,22 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
     setTimeout(() => inject(DETECT_ATTENDANCE_JS), 1600)
   }
 
+  // 学外警告の「再確認」。refreshAttendance は着地済みだとCLASSへ何も送らない（着地ガード）ので、
+  // 学内/学外ラベル（サーバーが描画時のIPで出す）は取り直されない。出席ページ自身の「再表示する」
+  // （PrimeFaces.ab u:"@all"）を押してサーバーから再描画させ、AJAX の完了を待って再検出する。
+  // ボタンが無い（構造が違う・出席ページでない）と redisplay-missing が届き、nav ハンドラが WebView を
+  // 作り直す。recheckPendingRef は「再確認の直後だけ」作り直しを許す印（遅れて届いた通知で作り直さない）。
+  function recheckNetwork() {
+    recheckPendingRef.current = true
+    if (recheckPendingTimerRef.current) clearTimeout(recheckPendingTimerRef.current)
+    recheckPendingTimerRef.current = setTimeout(() => {
+      recheckPendingRef.current = false
+    }, 4000)
+    inject(REDISPLAY_ATTENDANCE_JS)
+    setTimeout(() => inject(DETECT_ATTENDANCE_JS), 2500)
+    setTimeout(() => inject(DETECT_ATTENDANCE_JS), 6000)
+  }
+
   // ---- アプリ内リアペ提出フロー（reaction_pending → ②フォーム遷移 → 流し込み+提出 → ③検知で確定）----
   // タイミング制御（JSF postbackのAJAX再描画待ち）はここに集約し、判定は純粋関数
   // （parseReactionMessage / parseAttendanceMessage）に寄せる。全タイマーは reactionTimersRef で
@@ -716,6 +739,23 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       return
     }
     if (parsed.type === 'nav') {
+      if (parsed.stage === 'redisplay-click' || parsed.stage === 'redisplay-error') {
+        recheckPendingRef.current = false
+      } else if (parsed.stage === 'redisplay-missing' && recheckPendingRef.current) {
+        // 「再表示する」が見つからない＝取り直せない。再確認を押した直後に限り WebView を作り直す（最終手段）。
+        // 利用者の操作中・送信中・競合中は奪わない（onNavTimeout / portal と同じ守り）。
+        recheckPendingRef.current = false
+        if (
+          shouldRenderRef.current &&
+          !collectActiveRef.current &&
+          !conflictRef.current &&
+          !revealClassRef.current &&
+          !reactionBusyRef.current &&
+          phaseRef.current !== 'submitting'
+        ) {
+          rebootWebview()
+        }
+      }
       return
     }
     if (parsed.type === 'reaction') {
@@ -1111,6 +1151,7 @@ export function AttendanceEngineProvider({ children }: { children: ReactNode }) 
       submit,
       retry,
       refreshAttendance,
+      recheckNetwork,
       reactionSubmit: reactionSubmitState,
       submitReaction,
       running,

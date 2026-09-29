@@ -41,7 +41,6 @@ export default function AttendanceScreen() {
     setCode,
     submit,
     retry,
-    refreshAttendance,
     reactionSubmit,
     submitReaction,
     failCount,
@@ -75,7 +74,8 @@ export default function AttendanceScreen() {
     // 「再確認」(retry) に委ねる（非出席ページへの検出注入で reception を壊さない）。
     if (netChecking || !engine.running || conflict) return
     setNetChecking(true)
-    refreshAttendance()
+    // refreshAttendance は着地済みだとCLASSへ何も送らず古いDOMを読み直すだけで、学内/学外ラベルが更新されない。
+    engine.recheckNetwork()
     if (netTimerRef.current) clearTimeout(netTimerRef.current)
     netTimerRef.current = setTimeout(() => setNetChecking(false), 10000)
   }

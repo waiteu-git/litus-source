@@ -257,6 +257,41 @@ export const OPEN_ATTENDANCE_JS = `(function(){
 })();`
 
 /**
+ * 出席ページ自身の「再表示する」ボタンを押し、サーバーから全体を再描画させる（学外ネットワーク警告の「再確認」用）。
+ *
+ * 「学内/学外ネットワークからのアクセス」はサーバーがページ描画時のIPで出すラベル。OPEN_ATTENDANCE_JS の
+ * 着地ガードは「既に出席ページに居るならCLASSへ何も送らない」ので、学内Wi-Fiへ切り替えても画面のラベルは
+ * 取り直されない（実機報告 2026-09-29）。このボタンは PrimeFaces.ab(u:"@all") でサーバーへ再取得して
+ * 全体を再描画する。**利用者が「再確認」を押した時だけ**撃つ（30秒ポーリングでは撃たない＝CLASS負荷）。
+ * ボタンが無ければ redisplay-missing を通知し、RN 側が WebView の作り直しへ切り替える。
+ * ボタン特定は表示文言で行い、他のボタン（出席登録する・前後の授業）は押さない。
+ */
+export const REDISPLAY_ATTENDANCE_JS = `(function(){
+  function post(o){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); }
+  try {
+    var btns = Array.prototype.slice.call(document.querySelectorAll('button,input[type=submit]'));
+    var target = null;
+    for (var i = 0; i < btns.length; i++) {
+      var t = (((btns[i].textContent || btns[i].value) || '').replace(/\\s+/g, ''));
+      if (t.indexOf('再表示する') >= 0) { target = btns[i]; break; }
+    }
+    if (!target) { post({ type: 'nav', ok: false, stage: 'redisplay-missing' }); return; }
+    var oc = target.getAttribute('onclick');
+    var method = 'click';
+    try {
+      if (oc) { new Function('event', oc).call(target, new MouseEvent('click', { bubbles: true })); method = 'onclick'; }
+      else { target.click(); }
+    } catch (e) {
+      try { target.click(); method = 'click-fb'; } catch (e2) { post({ type: 'nav', ok: false, stage: 'redisplay-error' }); return; }
+    }
+    post({ type: 'nav', ok: true, stage: 'redisplay-click', method: method });
+  } catch (e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: String(e) }));
+  }
+  true;
+})();`
+
+/**
  * 出席ページの受付状態テキストを抽出して postMessage する（抽出のみ）。
  * 受付なしのときは本文に「出席確認中の履修授業はありません」が含まれる。
  * 受付中科目名の厳密なセレクタは実DOMで確認して調整する（まずは本文innerTextで判定可能）。
