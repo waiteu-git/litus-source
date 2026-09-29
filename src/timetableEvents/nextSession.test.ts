@@ -98,6 +98,23 @@ describe('resolveNextSession', () => {
     expect(r).toEqual({ date: '2026-07-15', period: 4, room: 'S305', note: '補講' })
   })
 
+  it('内包補講と同じ補講の単独補講が並んでも、次回の教室は保存順に依らず同じ（補講の二重登録・設計 2026-09-29）', () => {
+    // 内包側は「S305」、単独側は同じ教室のキャンパス接頭辞つき「野：S305」。以前は先に保存した方の表記が次回に出ていた。
+    const carrier = ev({
+      id: 'c1',
+      type: 'cancel',
+      date: '2026-07-13',
+      makeupStatus: 'has',
+      makeup: { date: '2026-07-15', periods: [4], room: 'S305' },
+    })
+    const standalone = ev({ id: 's1', type: 'makeup', date: '2026-07-15', periods: [4], room: '野：S305' })
+    const args = { day: 'mon' as const, period: 3, baseRoom: 'K404', pattern: {}, now: new Date(2026, 6, 13, 8, 0) }
+    const a = resolveNextSession({ ...args, events: [carrier, standalone] })
+    const b = resolveNextSession({ ...args, events: [standalone, carrier] })
+    expect(a).toEqual({ date: '2026-07-15', period: 4, room: '野：S305', note: '補講' })
+    expect(b).toEqual(a)
+  })
+
   it('day 未指定かつ補講も無ければ null', () => {
     const r = resolveNextSession({
       pattern: {},
