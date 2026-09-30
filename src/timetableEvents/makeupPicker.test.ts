@@ -127,14 +127,26 @@ describe('makeupFormValues / isMakeupPicked', () => {
     expect(s.periods).toEqual([3, 4])
   })
 
-  it('選択中は値から導出する: 補講あり・日付一致・コマ集合一致（順序は問わない）', () => {
+  it('選択中は値から導出する: 補講あり・日付一致・コマ集合一致（順序は問わない）・教室一致', () => {
     const s = standalone({ periods: [3, 4] })
-    const f = { makeupStatus: 'has' as const, mkDate: '2026-09-23', mkPeriods: [4, 3] }
+    const f = { makeupStatus: 'has' as const, mkDate: '2026-09-23', mkPeriods: [4, 3], mkRoom: '野：1211教室' }
     expect(isMakeupPicked(f, s)).toBe(true)
     expect(isMakeupPicked({ ...f, mkDate: '2026-09-24' }, s)).toBe(false)
     expect(isMakeupPicked({ ...f, mkPeriods: [3] }, s)).toBe(false)
     expect(isMakeupPicked({ ...f, makeupStatus: 'undecided' }, s)).toBe(false)
     expect(isMakeupPicked({ ...f, makeupStatus: 'none' }, s)).toBe(false)
+  })
+
+  it('教室が違えば選択中でない（手入力の教室が候補と違うのに、選んだように見えて食い違うのを防ぐ）。前後の空白と null≒空は同じ', () => {
+    const s = standalone({ periods: [3] })
+    const f = { makeupStatus: 'has' as const, mkDate: '2026-09-23', mkPeriods: [3], mkRoom: '野：1211教室' }
+    expect(isMakeupPicked({ ...f, mkRoom: 'K404' }, s)).toBe(false)
+    expect(isMakeupPicked({ ...f, mkRoom: '' }, s)).toBe(false)
+    expect(isMakeupPicked({ ...f, mkRoom: ' 野：1211教室 ' }, s)).toBe(true)
+    const noRoom = standalone({ room: null })
+    expect(isMakeupPicked({ ...f, mkRoom: '' }, noRoom)).toBe(true)
+    expect(isMakeupPicked({ ...f, mkRoom: '   ' }, noRoom)).toBe(true)
+    expect(isMakeupPicked({ ...f, mkRoom: 'K404' }, noRoom)).toBe(false)
   })
 
   it('選んだ値は、その補講が選択中になる（写し→導出の往復）', () => {
@@ -145,7 +157,7 @@ describe('makeupFormValues / isMakeupPicked', () => {
 
 describe('initialMakeupMode: 開いた時の補講欄のモード', () => {
   const cands = [standalone()]
-  const empty = { makeupStatus: 'undecided' as const, mkDate: '', mkPeriods: [] as number[] }
+  const empty = { makeupStatus: 'undecided' as const, mkDate: '', mkPeriods: [] as number[], mkRoom: '' }
 
   it('候補が0件なら手入力（今と同じ画面）', () => {
     expect(initialMakeupMode([], empty)).toBe('manual')
@@ -163,16 +175,28 @@ describe('initialMakeupMode: 開いた時の補講欄のモード', () => {
   })
 
   it('手入力の日程が入っていて、どの候補にも当たらなければ手入力を尊重する', () => {
-    expect(initialMakeupMode(cands, { makeupStatus: 'has', mkDate: '2026-09-30', mkPeriods: [4] })).toBe('manual')
+    expect(initialMakeupMode(cands, { makeupStatus: 'has', mkDate: '2026-09-30', mkPeriods: [4], mkRoom: '' })).toBe('manual')
     // 日付だけ・時限だけ入っている途中の手入力も尊重
-    expect(initialMakeupMode(cands, { makeupStatus: 'has', mkDate: '2026-09-30', mkPeriods: [] })).toBe('manual')
-    expect(initialMakeupMode(cands, { makeupStatus: 'has', mkDate: '', mkPeriods: [3] })).toBe('manual')
+    expect(initialMakeupMode(cands, { makeupStatus: 'has', mkDate: '2026-09-30', mkPeriods: [], mkRoom: '' })).toBe('manual')
+    expect(initialMakeupMode(cands, { makeupStatus: 'has', mkDate: '', mkPeriods: [3], mkRoom: '' })).toBe('manual')
+  })
+
+  it('日付・時限が候補と一致しても教室が違う手入力は、手入力のまま開く（選んだように見えて食い違うのを防ぐ）', () => {
+    // 実データ: 休講＆補講の掲示で保存した休講は教室が「1211教室」、単独補講は「野：1211教室」
+    const saved = { makeupStatus: 'has' as const, mkDate: '2026-09-23', mkPeriods: [3], mkRoom: '1211教室' }
+    expect(initialMakeupMode(cands, saved)).toBe('manual')
+    expect(initialMakeupMode(cands, { ...saved, mkRoom: '野：1211教室' })).toBe('pick')
+  })
+
+  it('補講あり以外なら、日程の値が残っていても候補から選ぶ（補講なし・未定の値は保存されない）', () => {
+    expect(initialMakeupMode(cands, { makeupStatus: 'none', mkDate: '2026-09-30', mkPeriods: [4], mkRoom: '' })).toBe('pick')
+    expect(initialMakeupMode(cands, { makeupStatus: 'undecided', mkDate: '2026-09-30', mkPeriods: [], mkRoom: '' })).toBe('pick')
   })
 })
 
 describe('makeupSelectionError: 候補から選ぶモードの未選択', () => {
   const cands = [standalone()]
-  const has = (mkDate: string, mkPeriods: number[]) => ({ makeupStatus: 'has' as const, mkDate, mkPeriods })
+  const has = (mkDate: string, mkPeriods: number[], mkRoom = '') => ({ makeupStatus: 'has' as const, mkDate, mkPeriods, mkRoom })
 
   it('選ぶモード・補講あり・未選択だけがエラー', () => {
     expect(makeupSelectionError('pick', has('', []), cands)).toBe('補講を選んでください')
@@ -180,14 +204,15 @@ describe('makeupSelectionError: 候補から選ぶモードの未選択', () => 
     expect(makeupSelectionError('pick', has('2026-09-30', [4]), cands)).toBe('補講を選んでください')
   })
 
-  it('選択済みなら null', () => {
+  it('選択済みなら null。日付・時限が同じでも教室が違えば未選択（保存されるのは選んだ補講の教室でなければならない）', () => {
     expect(makeupSelectionError('pick', makeupFormValues(standalone()), cands)).toBeNull()
+    expect(makeupSelectionError('pick', has('2026-09-23', [3], 'K404'), cands)).toBe('補講を選んでください')
   })
 
   it('手入力モード・補講あり以外・候補0件は対象外', () => {
     expect(makeupSelectionError('manual', has('', []), cands)).toBeNull()
-    expect(makeupSelectionError('pick', { makeupStatus: 'none', mkDate: '', mkPeriods: [] }, cands)).toBeNull()
-    expect(makeupSelectionError('pick', { makeupStatus: 'undecided', mkDate: '', mkPeriods: [] }, cands)).toBeNull()
+    expect(makeupSelectionError('pick', { makeupStatus: 'none', mkDate: '', mkPeriods: [], mkRoom: '' }, cands)).toBeNull()
+    expect(makeupSelectionError('pick', { makeupStatus: 'undecided', mkDate: '', mkPeriods: [], mkRoom: '' }, cands)).toBeNull()
     expect(makeupSelectionError('pick', has('', []), [])).toBeNull()
   })
 })
@@ -247,7 +272,7 @@ describe('性質: 選べる補講は、保存後に必ず休講に覆われる',
     expect(pickedCount).toBeGreaterThan(20) // 空振り（何も検証していない）を防ぐ
   })
 
-  it('選べない補講は、そもそも別授業（コード不一致・名称も違う）だけ', () => {
+  it('別授業（コード不一致・名称も違う）の補講は選べない', () => {
     const s = standalone({ courseCode: '1111111' })
     const at = { date: '2026-10-21' }
     expect(pickableMakeups([s], { ...route('図学・製図', '9973415'), ...at })).toEqual([])
@@ -275,5 +300,10 @@ describe('eventLabels: 曜日つきの日付・行の文言・読み上げ名', 
   it('makeupPickA11yLabel: 名詞で終える（選択状態と重複読みしない）', () => {
     expect(makeupPickA11yLabel(standalone())).toBe('9月23日 3限 野：1211教室 の補講')
     expect(makeupPickA11yLabel(standalone({ room: null, periods: [3, 4] }))).toBe('9月23日 3・4限 の補講')
+  })
+
+  it('makeupPickA11yLabel: メモがある行はそれが読み上げでも分かる（見た目では2行目に出ているため）', () => {
+    expect(makeupPickA11yLabel(standalone({ note: '持ち物: 定規' }))).toBe('9月23日 3限 野：1211教室 の補講（メモあり）')
+    expect(makeupPickA11yLabel(standalone({ note: '   ' }))).toBe('9月23日 3限 野：1211教室 の補講')
   })
 })

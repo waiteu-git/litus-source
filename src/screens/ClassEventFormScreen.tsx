@@ -102,6 +102,8 @@ export default function ClassEventFormScreen() {
   const [mkMode, setMkMode] = useState<MakeupMode>('manual')
   // 選べる補講の元になる、保存済みの全予定（科目では絞らない。絞りは pickableMakeups が sameCourse で行う）。
   const [events, setEvents] = useState<ClassEvent[]>([])
+  // 読み込み完了まで補講の入力欄・候補を描かない（初回の1フレームだけ手入力欄が出てから候補リストに変わる、を防ぐ）。
+  const [eventsLoaded, setEventsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [picker, setPicker] = useState<null | 'date' | 'mkDate' | 'startDate' | 'startTime'>(null)
   // 試験の表示開始（ホームのカウントダウンに出し始める時期）。既定は「全体の設定に従う」＝フィールドを付けない。
@@ -109,30 +111,58 @@ export default function ClassEventFormScreen() {
   // 「全体の設定に従う（いま：○○）」の表示にだけ使う（判定には使わない）。
   const { examCountdownStart } = useDisplaySettings()
 
+  // 補講欄へ寄せる（初回だけ）。補講欄は初期表示の約500pt下にあり、寄せないと候補に気づけない。animated: false＝モーション規約に触れない。
+  // 判定は読み込み完了の直後に1回だけ（種類や補講の状態をあとから触った時には発火させない）。
+  const scrollRef = useRef<ScrollView>(null)
+  const makeupCardY = useRef<number | null>(null)
+  const focusPending = useRef(false)
+  const focusMakeupCard = () => {
+    if (makeupCardY.current == null) return false
+    scrollRef.current?.scrollTo({ y: Math.max(0, makeupCardY.current - 8), animated: false })
+    return true
+  }
+
   useEffect(() => {
-    loadClassEvents().then((list) => {
-      setEvents(list)
-      const e = editId ? list.find((x) => x.id === editId) : undefined
-      if (e) {
-        setType(e.type)
-        setDate(e.date)
-        setPeriods(e.periods.length ? e.periods : [1])
-        setRoom(e.room ?? '')
-        setNote(e.note ?? '')
-        setMakeupStatus(e.makeupStatus ?? 'undecided')
-        setMkDate(e.makeup?.date ?? '')
-        setMkPeriods(e.makeup?.periods ?? [])
-        setMkRoom(e.makeup?.room ?? '')
-        // 🔴 戻さないと、メモだけ直して保存した時に表示開始が上書きで消える（設計 A 禁止事項3）。
-        setCountdown(countdownFormFromEvent(e))
-      }
-      // モードは編集値（無ければ新規の初期値）と候補から、同じ .then で1回だけ決める（1回の描画に揃える）。
-      const form = e
-        ? { makeupStatus: e.makeupStatus ?? 'undecided', mkDate: e.makeup?.date ?? '', mkPeriods: e.makeup?.periods ?? [] }
-        : { makeupStatus: initialMakeup ? 'has' : 'undecided', mkDate: initialMakeup?.date ?? '', mkPeriods: initialMakeup?.periods ?? [] }
-      const cands = pickableMakeups(list, { courseName, courseCode, date: e ? e.date : date }, editId)
-      setMkMode(initialMakeupMode(cands, form as { makeupStatus: MakeupStatus; mkDate: string; mkPeriods: number[] }))
-    })
+    loadClassEvents()
+      .then((list) => {
+        setEvents(list)
+        const e = editId ? list.find((x) => x.id === editId) : undefined
+        if (e) {
+          setType(e.type)
+          setDate(e.date)
+          setPeriods(e.periods.length ? e.periods : [1])
+          setRoom(e.room ?? '')
+          setNote(e.note ?? '')
+          setMakeupStatus(e.makeupStatus ?? 'undecided')
+          setMkDate(e.makeup?.date ?? '')
+          setMkPeriods(e.makeup?.periods ?? [])
+          setMkRoom(e.makeup?.room ?? '')
+          // 🔴 戻さないと、メモだけ直して保存した時に表示開始が上書きで消える（設計 A 禁止事項3）。
+          setCountdown(countdownFormFromEvent(e))
+        }
+        // モードは編集値（無ければ新規の初期値）と候補から、同じ .then で1回だけ決める（1回の描画に揃える）。
+        const form: { makeupStatus: MakeupStatus; mkDate: string; mkPeriods: number[]; mkRoom: string } = e
+          ? {
+              makeupStatus: e.makeupStatus ?? 'undecided',
+              mkDate: e.makeup?.date ?? '',
+              mkPeriods: e.makeup?.periods ?? [],
+              mkRoom: e.makeup?.room ?? '',
+            }
+          : {
+              makeupStatus: initialMakeup ? 'has' : 'undecided',
+              mkDate: initialMakeup?.date ?? '',
+              mkPeriods: initialMakeup?.periods ?? [],
+              mkRoom: initialMakeup?.room ?? '',
+            }
+        const cands = pickableMakeups(list, { courseName, courseCode, date: e ? e.date : date }, editId)
+        setMkMode(initialMakeupMode(cands, form))
+        if (e && shouldFocusMakeupCard({ editId, type: e.type, makeupStatus: form.makeupStatus, candidateCount: cands.length })) {
+          // カードの位置が未計測なら、計測できた時（onLayout）に寄せる。
+          if (!focusMakeupCard()) focusPending.current = true
+        }
+      })
+      .catch(() => undefined) // 読めなければ手入力のまま（今までの編集画面と同じ）
+      .then(() => setEventsLoaded(true))
   }, [editId])
 
   // 選べる補講（休講の値は保存時と同じルート引数の科目名・コード）。日付は休講日に近い順に並べるためだけに使う。
@@ -140,19 +170,6 @@ export default function ClassEventFormScreen() {
     () => pickableMakeups(events, { courseName, courseCode, date }, editId),
     [events, courseName, courseCode, date, editId],
   )
-
-  // 補講を入力しに来た人（編集・休講・補講未定）で選べる候補がある時だけ、開いた直後に1回だけ補講欄へ寄せる。
-  // 補講欄は初期表示の約500pt下にあり、寄せないと候補に気づけない。animated: false＝モーション規約に触れない。
-  const scrollRef = useRef<ScrollView>(null)
-  const makeupCardY = useRef<number | null>(null)
-  const focusedMakeup = useRef(false)
-  const tryFocusMakeupCard = () => {
-    if (focusedMakeup.current || makeupCardY.current == null) return
-    if (!shouldFocusMakeupCard({ editId, type, makeupStatus, candidateCount: candidates.length })) return
-    focusedMakeup.current = true
-    scrollRef.current?.scrollTo({ y: Math.max(0, makeupCardY.current - 8), animated: false })
-  }
-  useEffect(tryFocusMakeupCard, [editId, type, makeupStatus, candidates.length])
 
   function onPicked(d: Date) {
     const which = picker
@@ -192,7 +209,7 @@ export default function ClassEventFormScreen() {
       return
     }
     // 候補から選ぶモードで未選択のまま保存させない（既存の「補講の日付と時限を入力してください」は手入力の文言なので先に止める）。
-    const selectionError = type === 'cancel' ? makeupSelectionError(mkMode, { makeupStatus, mkDate, mkPeriods }, candidates) : null
+    const selectionError = type === 'cancel' ? makeupSelectionError(mkMode, { makeupStatus, mkDate, mkPeriods, mkRoom }, candidates) : null
     if (selectionError) {
       setError(selectionError)
       return
@@ -239,7 +256,7 @@ export default function ClassEventFormScreen() {
 
   /** 追加済みの補講を選ぶ＝その補講の日付・時限・教室を補講欄へ写す（保存は「保存」ボタン）。選択中の行の再タップは何もしない。 */
   function pickMakeup(s: ClassEvent) {
-    if (isMakeupPicked({ makeupStatus, mkDate, mkPeriods }, s)) return
+    if (isMakeupPicked({ makeupStatus, mkDate, mkPeriods, mkRoom }, s)) return
     const v = makeupFormValues(s)
     setMakeupStatus(v.makeupStatus)
     setMkDate(v.mkDate)
@@ -351,7 +368,10 @@ export default function ClassEventFormScreen() {
             style={[ui.card, styles.card]}
             onLayout={(ev) => {
               makeupCardY.current = ev.nativeEvent.layout.y
-              tryFocusMakeupCard()
+              if (focusPending.current) {
+                focusPending.current = false
+                focusMakeupCard()
+              }
             }}
           >
             {label('補講')}
@@ -372,7 +392,12 @@ export default function ClassEventFormScreen() {
                 )
               })}
             </View>
-            {makeupStatus === 'has' ? (
+            {eventsLoaded && candidates.length > 0 && makeupStatus !== 'has' ? (
+              <Text style={[styles.hint, { color: ui.labelColor }]}>
+                追加済みの補講が{candidates.length}件あります。「補講あり」を選ぶと、そこから選べます。
+              </Text>
+            ) : null}
+            {eventsLoaded && makeupStatus === 'has' ? (
               <View style={{ gap: 8, marginTop: 4 }}>
                 {candidates.length > 0 ? (
                   <View style={styles.chipRow}>
@@ -381,7 +406,10 @@ export default function ClassEventFormScreen() {
                       return (
                         <Pressable
                           key={m}
-                          onPress={() => setMkMode(m)}
+                          onPress={() => {
+                            setMkMode(m)
+                            setError(null)
+                          }}
                           accessibilityRole="button"
                           accessibilityState={{ selected: on }}
                           style={[styles.tchip, { borderColor: ui.colors.segBorder }, !on && darkChip, on && styles.tchipOn]}
@@ -399,7 +427,7 @@ export default function ClassEventFormScreen() {
                     {label('追加済みの補講')}
                     {/* 選ぶと日程は変更不可（入力欄を出さない）。変えたい時は「自分で入力」へ切り替える。行はフラット行＋区切り線。 */}
                     {candidates.map((c, i) => {
-                      const on = isMakeupPicked({ makeupStatus, mkDate, mkPeriods }, c)
+                      const on = isMakeupPicked({ makeupStatus, mkDate, mkPeriods, mkRoom }, c)
                       return (
                         <Pressable
                           key={c.id}
@@ -422,14 +450,16 @@ export default function ClassEventFormScreen() {
                           </View>
                           {on ? (
                             <View style={styles.pickOn}>
-                              <Ionicons name="checkmark-circle" size={18} color={ui.accent} />
-                              <Text style={[styles.pickOnText, { color: ui.accent }]}>選択中</Text>
+                              <Ionicons name="checkmark-circle" size={18} color={ui.valueColor} />
+                              <Text style={[styles.pickOnText, { color: ui.valueColor }]}>選択中</Text>
                             </View>
                           ) : null}
                         </Pressable>
                       )
                     })}
-                    <Text style={[styles.hint, { color: ui.labelColor, marginTop: 8 }]}>選んだら、下の「保存」で確定します。</Text>
+                    <Text style={[styles.hint, { color: ui.labelColor, marginTop: 8 }]}>
+                      選んだら、下の「{editId ? '保存' : '追加'}」で確定します。
+                    </Text>
                   </View>
                 ) : (
                   <View style={{ gap: 8 }}>

@@ -43,9 +43,9 @@ export function makeupPickRowText(e: { date: string; periods: number[]; room: st
   return `${shortDateWithWeekday(e.date)} ${periodsText(e.periods)}${e.room ? `・${e.room}` : ''}`
 }
 
-/** 同じ行の読み上げ名。名詞で終える（「選択中」の状態と重複して読まれない・見えている語と合わせる）。 */
-export function makeupPickA11yLabel(e: { date: string; periods: number[]; room: string | null }): string {
+/** 同じ行の読み上げ名。名詞で終える（「選択中」の状態と重複して読まれない）。メモは見た目では2行目に出るので「メモあり」だけ添える。 */
+export function makeupPickA11yLabel(e: { date: string; periods: number[]; room: string | null; note?: string | null }): string {
   const m = e.date.match(/^\d{4}-(\d{2})-(\d{2})$/)
   const d = m ? `${Number(m[1])}月${Number(m[2])}日` : e.date
-  return `${d} ${periodsText(e.periods)}${e.room ? ` ${e.room}` : ''} の補講`
+  return `${d} ${periodsText(e.periods)}${e.room ? ` ${e.room}` : ''} の補講${e.note?.trim() ? '（メモあり）' : ''}`
 }

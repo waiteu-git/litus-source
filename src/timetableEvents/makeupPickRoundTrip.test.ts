@@ -4,7 +4,14 @@ import { DETAIL_CANCEL_MAKEUP, DETAIL_MAKEUP } from '../parsers/__fixtures__/loa
 import type { BulletinItem } from '../storage/bulletinDigestSerialize'
 import { candidateToClassEvent, parseBulletinEvents, reconcileCandidates } from './bulletinEvents'
 import { makeupOccurrences, pickableMakeups, type ClassEvent } from './classEvent'
-import { buildClassEventFromForm, EMPTY_COUNTDOWN_FORM, makeupFormValues } from './classEventForm'
+import { deserializeClassEvents, serializeClassEvents } from '../storage/classEventsSerialize'
+import {
+  buildClassEventFromForm,
+  EMPTY_COUNTDOWN_FORM,
+  initialMakeupMode,
+  isMakeupPicked,
+  makeupFormValues,
+} from './classEventForm'
 import { buildClassEventNotifications } from './eventSchedule'
 import { pickAttentionEvent } from './nextSession'
 import { subjectEventRows } from './subjectEventRows'
@@ -149,5 +156,47 @@ describe('同じ補講は2つの休講に選べない', () => {
     const cur = (id: string, date: string) => pickableMakeups(picked, { courseName: c1.courseName, courseCode: c1.courseCode, date }, id)
     expect(cur('c2', '2026-11-04')).toEqual([])
     expect(cur(c1.id, c1.date).map((e) => e.date)).toEqual(['2026-09-23'])
+  })
+})
+
+describe('保存→保存データの往復→再度開く（画面が開いた時に読む経路）', () => {
+  it('選んで保存した休講を、シリアライズの往復を通して開き直すと、候補から選ぶモードで選択中になる（日程は変更不可の状態）', () => {
+    const before = tapAdd(tapAdd([], X0), Y)
+    const c = cancelOf(before)
+    const reloaded = deserializeClassEvents(serializeClassEvents(pickAndSave(before, c)))
+    const saved = reloaded.find((e) => e.id === c.id)!
+    const cands = pickableMakeups(reloaded, { courseName: saved.courseName, courseCode: saved.courseCode, date: saved.date }, saved.id)
+    // 覆っている補講は、編集中の休講の候補として残る（選択中として出る）
+    expect(cands.map((e) => e.type)).toEqual(['makeup'])
+    const form = {
+      makeupStatus: saved.makeupStatus!, mkDate: saved.makeup!.date, mkPeriods: saved.makeup!.periods, mkRoom: saved.makeup!.room ?? '',
+    }
+    expect(initialMakeupMode(cands, form)).toBe('pick')
+    expect(isMakeupPicked(form, cands[0])).toBe(true)
+  })
+
+  it('掲示の【休講＆補講】から保存した休講（教室が「1211教室」・単独補講は「野：1211教室」）は、手入力のまま開く（選んだように見せない）', () => {
+    // 実採取どおり: 休講＆補講の内包補講の教室は接頭辞なし、単独の補講は「野：」つき。日付・時限は同じ。
+    const both = itemFromHtml('b-both', '休講', '【休講＆補講】…図学・製図', DETAIL_CANCEL_MAKEUP)
+    const events = tapAdd(tapAdd([], Y), both)
+    const saved = events.find((e) => e.type === 'cancel')!
+    expect(saved.makeup?.room).toBe('1211教室')
+    const cands = pickableMakeups(events, { courseName: saved.courseName, courseCode: saved.courseCode, date: saved.date }, saved.id)
+    const form = { makeupStatus: saved.makeupStatus!, mkDate: saved.makeup!.date, mkPeriods: saved.makeup!.periods, mkRoom: saved.makeup!.room ?? '' }
+    expect(cands).toHaveLength(1) // 覆われている単独補講が、この休講の候補として残る
+    expect(initialMakeupMode(cands, form)).toBe('manual')
+  })
+})
+
+describe('補講日が「未定」と書かれた休講の掲示', () => {
+  it('補講日の行が「未定」でも、補講なしの休講の候補になり、補講を選べる', () => {
+    const html = DETAIL_CANCEL_MAKEUP.replace(/<br>補講日：[^<]*/, '<br>補講日：未定')
+    const item = itemFromHtml('b-undecided', '休講', '【休講】…図学・製図', html)
+    const cand = parseBulletinEvents(item)[0]
+    expect(cand).toMatchObject({ type: 'cancel', date: '2026-10-21', makeup: null })
+    const events = tapAdd(tapAdd([], item), Y)
+    const c = cancelOf(events)
+    expect(c.makeupStatus).toBe('undecided')
+    expect(pickAttentionEvent(pickAndSave(events, c), NOW)).toBeNull()
   })
 })

@@ -145,16 +145,25 @@ export function dateToHm(d: Date): string {
 
 /** 補講欄のモード。'pick' は候補から選ぶ（日付・時限・教室の入力欄を出さない＝選ぶと変更不可）、'manual' は今までの手入力。 */
 export type MakeupMode = 'manual' | 'pick'
-type MakeupForm = { makeupStatus: MakeupStatus; mkDate: string; mkPeriods: number[] }
+type MakeupForm = { makeupStatus: MakeupStatus; mkDate: string; mkPeriods: number[]; mkRoom: string }
 
 /** 選んだ補講をフォームへ写す値。教室はそのまま（null は空文字）。保存は既存の保存ボタン。 */
 export function makeupFormValues(s: ClassEvent): { makeupStatus: 'has'; mkDate: string; mkPeriods: number[]; mkRoom: string } {
   return { makeupStatus: 'has', mkDate: s.date, mkPeriods: [...s.periods], mkRoom: s.room ?? '' }
 }
 
-/** この補講が今のフォームで選択中か。値から導出する（選択の状態を別に持たない）。 */
+/**
+ * この補講が今のフォームで選択中か。値から導出する（選択の状態を別に持たない）。
+ * 日付・コマ集合に**教室も**含める＝候補から選ぶモードでは入力欄が見えないので、行に出る教室と保存される教室が
+ * 食い違うのを防ぐ（手入力で教室だけ違う休講は、選んだように見せず手入力のまま開く）。前後の空白と null≒空は同じ。
+ */
 export function isMakeupPicked(form: MakeupForm, s: ClassEvent): boolean {
-  return form.makeupStatus === 'has' && form.mkDate === s.date && periodsKey(form.mkPeriods) === periodsKey(s.periods)
+  return (
+    form.makeupStatus === 'has' &&
+    form.mkDate === s.date &&
+    periodsKey(form.mkPeriods) === periodsKey(s.periods) &&
+    form.mkRoom.trim() === (s.room ?? '').trim()
+  )
 }
 
 /**
@@ -164,7 +173,8 @@ export function isMakeupPicked(form: MakeupForm, s: ClassEvent): boolean {
  */
 export function initialMakeupMode(candidates: ClassEvent[], form: MakeupForm): MakeupMode {
   if (candidates.length === 0) return 'manual'
-  const typed = form.mkDate !== '' || form.mkPeriods.length > 0
+  // 補講あり以外は、日程の値が残っていても保存されない（buildClassEventFromForm が makeup=null にする）＝入力済みとみなさない。
+  const typed = form.makeupStatus === 'has' && (form.mkDate !== '' || form.mkPeriods.length > 0)
   if (!typed) return 'pick'
   return candidates.some((c) => isMakeupPicked(form, c)) ? 'pick' : 'manual'
 }
