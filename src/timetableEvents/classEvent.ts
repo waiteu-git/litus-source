@@ -1,3 +1,5 @@
+import { isValidYmd } from './eventDateValue'
+
 export type ClassEventType = 'cancel' | 'makeup' | 'roomChange' | 'quiz' | 'midterm' | 'final' | 'other'
 export type MakeupStatus = 'has' | 'none' | 'undecided'
 export type MakeupInfo = { date: string; periods: number[]; room: string | null }
@@ -77,6 +79,46 @@ export function coveredStandaloneMakeups(events: ClassEvent[]): Map<string, stri
     if (carrier) covered.set(s.id, carrier.id)
   }
   return covered
+}
+
+/** 休講の編集画面が選べる補講の時限。フォームの時限チップが 1〜6 限だけなので、外を含む補講は選んでも見えず外せない。 */
+const PICKABLE_PERIODS = [1, 2, 3, 4, 5, 6]
+
+const dayNumber = (ymd: string): number => {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return Date.UTC(y, m - 1, d) / 86400000
+}
+
+/**
+ * 休講の編集画面で「追加済みの補講から選ぶ」の候補（設計 2026-09-30）。休講 cancel（フォームの値＝ルート引数の
+ * 科目名・コード）に対して、同一授業の単独補講のうち、**他の休講にまだ覆われていない**ものを、休講日に近い順で返す。
+ *
+ * - editId の休講を除いた events で覆いを取る＝自分が覆っている補講は残す（選択中として出す）／他の休講が覆うものは出さない
+ *   （同じ補講を2つの休講が持つと発生・通知が二重になる）。編集中の予定自身も候補に出さない。
+ * - 日付の前後では絞らない（実データは補講が休講より前）。日付が不正・時限が空か 1〜6 限の外を含む補講は出さない。
+ * - 選べる補講は、フォームがルート引数の科目名・コードで保存すれば必ず coveredStandaloneMakeups に入る（sameCourse が同じ規則）。
+ */
+export function pickableMakeups(
+  events: ClassEvent[],
+  cancel: { courseName: string; courseCode: string | null; date: string },
+  editId?: string,
+): ClassEvent[] {
+  const others = editId ? events.filter((e) => e.id !== editId) : events
+  const covered = coveredStandaloneMakeups(others)
+  const list = events.filter(
+    (e) =>
+      e.type === 'makeup' &&
+      e.id !== editId &&
+      !covered.has(e.id) &&
+      sameCourse(cancel, e) &&
+      isValidYmd(e.date) &&
+      e.periods.length > 0 &&
+      e.periods.every((p) => PICKABLE_PERIODS.includes(p)),
+  )
+  const byDate = (a: ClassEvent, b: ClassEvent) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+  if (!isValidYmd(cancel.date)) return list.sort(byDate)
+  const base = dayNumber(cancel.date)
+  return list.sort((a, b) => Math.abs(dayNumber(a.date) - base) - Math.abs(dayNumber(b.date) - base) || byDate(a, b))
 }
 
 /**

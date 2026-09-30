@@ -5,6 +5,7 @@
  */
 import {
   makeClassEventId,
+  periodsKey,
   type ClassEvent,
   type ClassEventType,
   type CountdownStart,
@@ -138,4 +139,48 @@ export function countdownPickerValue(v: CountdownFormValue, now: Date): Date {
 export function dateToHm(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// ---- 休講の補講欄: 「自分で入力」と「追加済みの補講から選ぶ」（設計 2026-09-30） ----
+
+/** 補講欄のモード。'pick' は候補から選ぶ（日付・時限・教室の入力欄を出さない＝選ぶと変更不可）、'manual' は今までの手入力。 */
+export type MakeupMode = 'manual' | 'pick'
+type MakeupForm = { makeupStatus: MakeupStatus; mkDate: string; mkPeriods: number[] }
+
+/** 選んだ補講をフォームへ写す値。教室はそのまま（null は空文字）。保存は既存の保存ボタン。 */
+export function makeupFormValues(s: ClassEvent): { makeupStatus: 'has'; mkDate: string; mkPeriods: number[]; mkRoom: string } {
+  return { makeupStatus: 'has', mkDate: s.date, mkPeriods: [...s.periods], mkRoom: s.room ?? '' }
+}
+
+/** この補講が今のフォームで選択中か。値から導出する（選択の状態を別に持たない）。 */
+export function isMakeupPicked(form: MakeupForm, s: ClassEvent): boolean {
+  return form.makeupStatus === 'has' && form.mkDate === s.date && periodsKey(form.mkPeriods) === periodsKey(s.periods)
+}
+
+/**
+ * 開いて読み込んだ時の補講欄のモード（1回だけ決める＝入力中に値が候補と一致してモードが変わり入力欄が消えるのを防ぐ）。
+ * 候補が無ければ手入力／日程が未入力なら候補から選ぶ／入力済みで候補のどれかと一致していれば選ぶ（選択中・変更不可で開く）、
+ * どれにも当たらなければ手入力を尊重する。
+ */
+export function initialMakeupMode(candidates: ClassEvent[], form: MakeupForm): MakeupMode {
+  if (candidates.length === 0) return 'manual'
+  const typed = form.mkDate !== '' || form.mkPeriods.length > 0
+  if (!typed) return 'pick'
+  return candidates.some((c) => isMakeupPicked(form, c)) ? 'pick' : 'manual'
+}
+
+/** 候補から選ぶモードで、補講あり・未選択のまま保存しようとした時のエラー。手入力モード・補講あり以外・候補0件は対象外。 */
+export function makeupSelectionError(mode: MakeupMode, form: MakeupForm, candidates: ClassEvent[]): string | null {
+  if (mode !== 'pick' || form.makeupStatus !== 'has' || candidates.length === 0) return null
+  return candidates.some((c) => isMakeupPicked(form, c)) ? null : '補講を選んでください'
+}
+
+/** 開いた直後に補講欄へ寄せるか。補講を入力しに来た人（編集・休講・補講未定）で、選べる候補がある時だけ。 */
+export function shouldFocusMakeupCard(p: {
+  editId: string | undefined
+  type: ClassEventType
+  makeupStatus: MakeupStatus
+  candidateCount: number
+}): boolean {
+  return !!p.editId && p.type === 'cancel' && p.makeupStatus === 'undecided' && p.candidateCount > 0
 }
