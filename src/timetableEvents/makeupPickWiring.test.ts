@@ -212,6 +212,34 @@ describe('補講欄へ寄せる（初回だけ）', () => {
   })
 })
 
+describe('編集中の注記（保存を止めない・導出）', () => {
+  it('makeupFormNotices は、ルート引数の科目名・コードと editId・モードで呼ぶ（保存済みの値を使わない）', () => {
+    const s = src()
+    const cs = calls(s, 'makeupFormNotices')
+    expect(cs).toHaveLength(1)
+    expect(cs[0]).toMatch(/courseName/)
+    expect(cs[0]).toMatch(/courseCode/)
+    expect(cs[0]).toMatch(/editId/)
+    expect(cs[0]).toMatch(/mkMode/)
+    expect(cs[0]).not.toMatch(/\.courseName|\.courseCode/)
+    // 注記は useMemo（導出）で、onPicked より前に置く（既存ラチェットの切り出し区間を守る）
+    const memo = s.indexOf('const notices = useMemo(')
+    expect(memo).toBeGreaterThan(-1)
+    expect(memo).toBeLessThan(s.indexOf('function onPicked('))
+  })
+
+  it('注記は読み込み完了後だけ、アイコンと文言で出す（色単独にしない）。保存の経路には触れない', () => {
+    const s = src()
+    const at = s.indexOf('eventsLoaded && notices.length > 0')
+    expect(at).toBeGreaterThan(-1)
+    const w = s.slice(at, at + 600)
+    expect(w).toMatch(/information-circle/)
+    expect(w).toMatch(/makeupNoticeText\(notices, makeupStatus\)/)
+    // 保存（onSave）は注記で止めない
+    expect(body(s, 'async function onSave(')).not.toMatch(/notices/)
+  })
+})
+
 describe('既存ラチェットを壊さない置き場', () => {
   it('onPicked と onSave の間に、フック・ハンドラを置かない（classEventForm.test.ts の切り出しを守る）', () => {
     const s = src()

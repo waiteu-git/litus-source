@@ -4,8 +4,10 @@
  * 保存の後ろ（upsert → bump → 通知の再予約 → 戻る）と削除は画面に残す。
  */
 import {
+  carriesMakeup,
   makeClassEventId,
   periodsKey,
+  pickableMakeups,
   type ClassEvent,
   type ClassEventType,
   type CountdownStart,
@@ -193,4 +195,44 @@ export function shouldFocusMakeupCard(p: {
   candidateCount: number
 }): boolean {
   return !!p.editId && p.type === 'cancel' && p.makeupStatus === 'undecided' && p.candidateCount > 0
+}
+
+/**
+ * 編集中の注記（設計 2026-09-30 §2.4）。今のフォームの値で保存すると、**追加済みの補講が別の補講として再び現れる**
+ * （覆いが外れて元に戻る）ものを返す。保存は止めない＝知らせるだけ。
+ *
+ * 対象は「選べる補講」（同一授業・他の休講に覆われていない・編集中の予定自身でない）のうち、次のどちらかで、
+ * かつ今のフォームの値では覆われないもの:
+ *   ⓐ 保存済みのこの休講（editId）が今は覆っている（選んだあと・日程を変える／補講なし・未定へ戻す／別の補講を選び直す）
+ *   ⓑ 補講ありで、補講日が同じ（時限が違う）＝同じ補講のつもりの手入力が別の補講になる
+ * 候補から選ぶモードで補講あり・未選択の間は保存できない状態なので出さない。
+ * 覆いは日付・コマ集合だけを見る（教室・メモは見ない）ので、教室だけの変更では出ない。
+ */
+export function makeupFormNotices(
+  events: ClassEvent[],
+  editId: string | undefined,
+  form: MakeupForm & { courseName: string; courseCode: string | null; date: string },
+  mode: MakeupMode,
+): ClassEvent[] {
+  const cands = pickableMakeups(events, { courseName: form.courseName, courseCode: form.courseCode, date: form.date }, editId)
+  if (mode === 'pick' && form.makeupStatus === 'has' && !cands.some((c) => isMakeupPicked(form, c))) return []
+  const savedCancel = editId ? events.find((e) => e.id === editId && e.type === 'cancel') : undefined
+  const inForm: ClassEvent = {
+    id: editId ?? '',
+    courseName: form.courseName,
+    courseCode: form.courseCode,
+    type: 'cancel',
+    date: form.date,
+    periods: [],
+    room: null,
+    note: null,
+    createdAt: '',
+    makeupStatus: form.makeupStatus,
+    makeup: form.makeupStatus === 'has' ? { date: form.mkDate, periods: form.mkPeriods, room: null } : null,
+  }
+  return cands.filter((s) => {
+    const wasCovered = !!savedCancel && carriesMakeup(savedCancel, s)
+    const nearMiss = form.makeupStatus === 'has' && s.date === form.mkDate
+    return (wasCovered || nearMiss) && !carriesMakeup(inForm, s)
+  })
 }

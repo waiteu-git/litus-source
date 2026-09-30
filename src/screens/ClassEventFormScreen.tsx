@@ -23,6 +23,7 @@ import {
   initialMakeupMode,
   isExamType,
   isMakeupPicked,
+  makeupFormNotices,
   makeupFormValues,
   makeupSelectionError,
   shouldFocusMakeupCard,
@@ -31,7 +32,7 @@ import {
   type MakeupMode,
 } from '../timetableEvents/classEventForm'
 import { useDisplaySettings } from '../displaySettings'
-import { eventTypeLabel, makeupPickA11yLabel, makeupPickRowText } from '../timetableEvents/eventLabels'
+import { eventTypeLabel, makeupNoticeText, makeupPickA11yLabel, makeupPickRowText } from '../timetableEvents/eventLabels'
 import { loadClassEvents, upsertClassEvent, removeClassEvent } from '../storage/classEventsStore'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
@@ -169,6 +170,13 @@ export default function ClassEventFormScreen() {
   const candidates = useMemo(
     () => pickableMakeups(events, { courseName, courseCode, date }, editId),
     [events, courseName, courseCode, date, editId],
+  )
+
+  // 編集中の注記（設計 2026-09-30 §2.4）。今の値で保存すると、追加済みの補講が別の補講として再び現れる時に予告する。
+  // 導出のみ（保存は止めない）。休講の値は保存時と同じルート引数の科目名・コード。
+  const notices = useMemo(
+    () => makeupFormNotices(events, editId, { courseName, courseCode, date, makeupStatus, mkDate, mkPeriods, mkRoom }, mkMode),
+    [events, editId, courseName, courseCode, date, makeupStatus, mkDate, mkPeriods, mkRoom, mkMode],
   )
 
   function onPicked(d: Date) {
@@ -495,6 +503,12 @@ export default function ClassEventFormScreen() {
                 )}
               </View>
             ) : null}
+            {eventsLoaded && notices.length > 0 ? (
+              <View style={styles.noticeRow}>
+                <Ionicons name="information-circle-outline" size={18} color={ui.valueColor} />
+                <Text style={[styles.noticeText, { color: ui.valueColor }]}>{makeupNoticeText(notices, makeupStatus)}</Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -618,6 +632,9 @@ const styles = StyleSheet.create({
   pickText: { fontSize: 15 },
   pickOn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   pickOnText: { fontSize: 13, fontWeight: '600' },
+  // 編集中の注記（追加済みの補講が別の補講として再び現れる時の予告）。
+  noticeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 4 },
+  noticeText: { flex: 1, fontSize: 13 },
   error: { fontSize: 13, marginHorizontal: 4 },
   saveBtn: { backgroundColor: COLORS.cta, borderRadius: 14, height: 52, alignItems: 'center', justifyContent: 'center' },
   saveText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },

@@ -49,3 +49,18 @@ export function makeupPickA11yLabel(e: { date: string; periods: number[]; room: 
   const d = m ? `${Number(m[1])}月${Number(m[2])}日` : e.date
   return `${d} ${periodsText(e.periods)}${e.room ? ` ${e.room}` : ''} の補講${e.note?.trim() ? '（メモあり）' : ''}`
 }
+
+/**
+ * 編集中の注記の文言（設計 2026-09-30 §2.4）。追加済みの補講が別の補講として表示・通知されることを予告する。
+ * 補講あり＝日付・時限が一致しないため／補講なし・未定＝この休講の補講から外れるため。複数なら先頭＋「ほかN件」。
+ */
+export function makeupNoticeText(
+  list: { date: string; periods: number[] }[],
+  makeupStatus: 'has' | 'none' | 'undecided',
+): string {
+  if (list.length === 0) return ''
+  const first = `${shortDateWithWeekday(list[0].date)} ${periodsText(list[0].periods)}`
+  const label = list.length > 1 ? `${first}ほか${list.length - 1}件` : first
+  const why = makeupStatus === 'has' ? 'この休講の補講と日付・時限が一致しないため' : 'この休講の補講から外れるため'
+  return `追加済みの補講（${label}）は、${why}、別の補講として表示・通知されます。`
+}
