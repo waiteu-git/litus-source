@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import DateTimeSheet from '../ui/DateTimeSheet'
 import { Text, TextInput } from '../ui/Text'
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native'
@@ -10,7 +11,7 @@ import type { TimetableStackParamList } from '../navigation/types'
 import { useAttendanceEngine } from '../attendance/AttendanceEngineProvider'
 import { classBlockPeriods, nextDateForWeekday } from '../timetableEvents/classBlock'
 import { dateToYmd, isValidYmd, ymdToDate } from '../timetableEvents/eventDateValue'
-import { type ClassEventType, type MakeupStatus } from '../timetableEvents/classEvent'
+import { pickableMakeups, type ClassEvent, type ClassEventType, type MakeupStatus } from '../timetableEvents/classEvent'
 import {
   buildClassEventFromForm,
   COUNTDOWN_CHOICES,
@@ -19,12 +20,18 @@ import {
   countdownPickerValue,
   dateToHm,
   EMPTY_COUNTDOWN_FORM,
+  initialMakeupMode,
   isExamType,
+  isMakeupPicked,
+  makeupFormValues,
+  makeupSelectionError,
+  shouldFocusMakeupCard,
   validateCountdownForm,
   type CountdownFormValue,
+  type MakeupMode,
 } from '../timetableEvents/classEventForm'
 import { useDisplaySettings } from '../displaySettings'
-import { eventTypeLabel } from '../timetableEvents/eventLabels'
+import { eventTypeLabel, makeupPickA11yLabel, makeupPickRowText } from '../timetableEvents/eventLabels'
 import { loadClassEvents, upsertClassEvent, removeClassEvent } from '../storage/classEventsStore'
 import { useClassEventsVersion } from '../timetableEvents/classEventsVersion'
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
@@ -90,6 +97,11 @@ export default function ClassEventFormScreen() {
   const [mkDate, setMkDate] = useState(initialMakeup?.date ?? '')
   const [mkPeriods, setMkPeriods] = useState<number[]>(initialMakeup?.periods ?? [])
   const [mkRoom, setMkRoom] = useState(initialMakeup?.room ?? '')
+  // 補講欄のモード（設計 2026-09-30）。'pick'＝追加済みの補講から選ぶ（日程は変更不可＝入力欄を出さない）、'manual'＝手入力。
+  // 開いて読み込んだ時に initialMakeupMode で1回だけ決め、以後は切り替えのタップだけが変える（値から毎回導出しない＝入力中に入力欄が消えるため）。
+  const [mkMode, setMkMode] = useState<MakeupMode>('manual')
+  // 選べる補講の元になる、保存済みの全予定（科目では絞らない。絞りは pickableMakeups が sameCourse で行う）。
+  const [events, setEvents] = useState<ClassEvent[]>([])
   const [error, setError] = useState<string | null>(null)
   const [picker, setPicker] = useState<null | 'date' | 'mkDate' | 'startDate' | 'startTime'>(null)
   // 試験の表示開始（ホームのカウントダウンに出し始める時期）。既定は「全体の設定に従う」＝フィールドを付けない。
@@ -98,23 +110,49 @@ export default function ClassEventFormScreen() {
   const { examCountdownStart } = useDisplaySettings()
 
   useEffect(() => {
-    if (!editId) return
     loadClassEvents().then((list) => {
-      const e = list.find((x) => x.id === editId)
-      if (!e) return
-      setType(e.type)
-      setDate(e.date)
-      setPeriods(e.periods.length ? e.periods : [1])
-      setRoom(e.room ?? '')
-      setNote(e.note ?? '')
-      setMakeupStatus(e.makeupStatus ?? 'undecided')
-      setMkDate(e.makeup?.date ?? '')
-      setMkPeriods(e.makeup?.periods ?? [])
-      setMkRoom(e.makeup?.room ?? '')
-      // 🔴 戻さないと、メモだけ直して保存した時に表示開始が上書きで消える（設計 A 禁止事項3）。
-      setCountdown(countdownFormFromEvent(e))
+      setEvents(list)
+      const e = editId ? list.find((x) => x.id === editId) : undefined
+      if (e) {
+        setType(e.type)
+        setDate(e.date)
+        setPeriods(e.periods.length ? e.periods : [1])
+        setRoom(e.room ?? '')
+        setNote(e.note ?? '')
+        setMakeupStatus(e.makeupStatus ?? 'undecided')
+        setMkDate(e.makeup?.date ?? '')
+        setMkPeriods(e.makeup?.periods ?? [])
+        setMkRoom(e.makeup?.room ?? '')
+        // 🔴 戻さないと、メモだけ直して保存した時に表示開始が上書きで消える（設計 A 禁止事項3）。
+        setCountdown(countdownFormFromEvent(e))
+      }
+      // モードは編集値（無ければ新規の初期値）と候補から、同じ .then で1回だけ決める（1回の描画に揃える）。
+      const form = e
+        ? { makeupStatus: e.makeupStatus ?? 'undecided', mkDate: e.makeup?.date ?? '', mkPeriods: e.makeup?.periods ?? [] }
+        : { makeupStatus: initialMakeup ? 'has' : 'undecided', mkDate: initialMakeup?.date ?? '', mkPeriods: initialMakeup?.periods ?? [] }
+      const cands = pickableMakeups(list, { courseName, courseCode, date: e ? e.date : date }, editId)
+      setMkMode(initialMakeupMode(cands, form as { makeupStatus: MakeupStatus; mkDate: string; mkPeriods: number[] }))
     })
   }, [editId])
+
+  // 選べる補講（休講の値は保存時と同じルート引数の科目名・コード）。日付は休講日に近い順に並べるためだけに使う。
+  const candidates = useMemo(
+    () => pickableMakeups(events, { courseName, courseCode, date }, editId),
+    [events, courseName, courseCode, date, editId],
+  )
+
+  // 補講を入力しに来た人（編集・休講・補講未定）で選べる候補がある時だけ、開いた直後に1回だけ補講欄へ寄せる。
+  // 補講欄は初期表示の約500pt下にあり、寄せないと候補に気づけない。animated: false＝モーション規約に触れない。
+  const scrollRef = useRef<ScrollView>(null)
+  const makeupCardY = useRef<number | null>(null)
+  const focusedMakeup = useRef(false)
+  const tryFocusMakeupCard = () => {
+    if (focusedMakeup.current || makeupCardY.current == null) return
+    if (!shouldFocusMakeupCard({ editId, type, makeupStatus, candidateCount: candidates.length })) return
+    focusedMakeup.current = true
+    scrollRef.current?.scrollTo({ y: Math.max(0, makeupCardY.current - 8), animated: false })
+  }
+  useEffect(tryFocusMakeupCard, [editId, type, makeupStatus, candidates.length])
 
   function onPicked(d: Date) {
     const which = picker
@@ -151,6 +189,12 @@ export default function ClassEventFormScreen() {
     }
     if (periods.length === 0) {
       setError('時限を1つ以上選んでください')
+      return
+    }
+    // 候補から選ぶモードで未選択のまま保存させない（既存の「補講の日付と時限を入力してください」は手入力の文言なので先に止める）。
+    const selectionError = type === 'cancel' ? makeupSelectionError(mkMode, { makeupStatus, mkDate, mkPeriods }, candidates) : null
+    if (selectionError) {
+      setError(selectionError)
       return
     }
     if (type === 'cancel' && makeupStatus === 'has') {
@@ -193,6 +237,17 @@ export default function ClassEventFormScreen() {
     ])
   }
 
+  /** 追加済みの補講を選ぶ＝その補講の日付・時限・教室を補講欄へ写す（保存は「保存」ボタン）。選択中の行の再タップは何もしない。 */
+  function pickMakeup(s: ClassEvent) {
+    if (isMakeupPicked({ makeupStatus, mkDate, mkPeriods }, s)) return
+    const v = makeupFormValues(s)
+    setMakeupStatus(v.makeupStatus)
+    setMkDate(v.mkDate)
+    setMkPeriods(v.mkPeriods)
+    setMkRoom(v.mkRoom)
+    setError(null)
+  }
+
   const inputStyle = { backgroundColor: ui.inputBg, borderColor: ui.colors.inputBorder }
   const phColor = ui.subMuted
   const darkChip = ui.dark ? { backgroundColor: DARK.softBox, borderColor: DARK.inputBorder } : null
@@ -222,6 +277,7 @@ export default function ClassEventFormScreen() {
       {/* automaticallyAdjustKeyboardInsets は iOS のみ有効。iOS は キーボードで window が
           縮まないため、これが無いと入力欄より下の保存ボタンがスクロールしても出てこない。 */}
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.list, { paddingBottom: clearance }]}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
@@ -291,7 +347,13 @@ export default function ClassEventFormScreen() {
         ) : null}
 
         {type === 'cancel' ? (
-          <View style={[ui.card, styles.card]}>
+          <View
+            style={[ui.card, styles.card]}
+            onLayout={(ev) => {
+              makeupCardY.current = ev.nativeEvent.layout.y
+              tryFocusMakeupCard()
+            }}
+          >
             {label('補講')}
             <View style={styles.chipRow}>
               {(['has', 'none', 'undecided'] as MakeupStatus[]).map((s) => {
@@ -301,6 +363,8 @@ export default function ClassEventFormScreen() {
                   <Pressable
                     key={s}
                     onPress={() => setMakeupStatus(s)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
                     style={[styles.tchip, { borderColor: ui.colors.segBorder }, !on && darkChip, on && styles.tchipOn]}
                   >
                     <Text style={[styles.tchipText, !on && darkChipText, on && styles.tchipTextOn]}>{t}</Text>
@@ -310,34 +374,95 @@ export default function ClassEventFormScreen() {
             </View>
             {makeupStatus === 'has' ? (
               <View style={{ gap: 8, marginTop: 4 }}>
-                {label('補講日')}
-                <DateField
-                  value={mkDate}
-                  placeholder="日付を選択"
-                  onPress={() => setPicker('mkDate')}
-                  valueColor={ui.valueColor}
-                  placeholderColor={phColor}
-                  boxStyle={inputStyle}
-                  a11yLabel="補講日を選択"
-                />
-                <DateTimeSheet
-                  open={picker === 'mkDate'}
-                  value={ymdToDate(mkDate, new Date())}
-                  mode="date"
-                  title="補講日"
-                  onConfirm={onPicked}
-                  onCancel={() => setPicker(null)}
-                />
-                {label('補講の時限')}
-                <PeriodChips sel={mkPeriods} onToggle={(p) => setMkPeriods((v) => toggle(v, p))} />
-                {label('補講の教室（任意）')}
-                <TextInput
-                  style={[styles.input, inputStyle, { color: ui.valueColor }]}
-                  value={mkRoom}
-                  onChangeText={setMkRoom}
-                  placeholder="例: K404"
-                  placeholderTextColor={phColor}
-                />
+                {candidates.length > 0 ? (
+                  <View style={styles.chipRow}>
+                    {(['manual', 'pick'] as MakeupMode[]).map((m) => {
+                      const on = mkMode === m
+                      return (
+                        <Pressable
+                          key={m}
+                          onPress={() => setMkMode(m)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          style={[styles.tchip, { borderColor: ui.colors.segBorder }, !on && darkChip, on && styles.tchipOn]}
+                        >
+                          <Text style={[styles.tchipText, !on && darkChipText, on && styles.tchipTextOn]}>
+                            {m === 'manual' ? '自分で入力' : '候補から選ぶ'}
+                          </Text>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                ) : null}
+                {candidates.length > 0 && mkMode === 'pick' ? (
+                  <View>
+                    {label('追加済みの補講')}
+                    {/* 選ぶと日程は変更不可（入力欄を出さない）。変えたい時は「自分で入力」へ切り替える。行はフラット行＋区切り線。 */}
+                    {candidates.map((c, i) => {
+                      const on = isMakeupPicked({ makeupStatus, mkDate, mkPeriods }, c)
+                      return (
+                        <Pressable
+                          key={c.id}
+                          onPress={() => pickMakeup(c)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={makeupPickA11yLabel(c)}
+                          style={[
+                            styles.pickRow,
+                            i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.dividerColor },
+                          ]}
+                        >
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[styles.pickText, { color: ui.valueColor }]}>{makeupPickRowText(c)}</Text>
+                            {c.note ? (
+                              <Text style={[styles.hint, { color: ui.labelColor }]} numberOfLines={1}>
+                                {c.note}
+                              </Text>
+                            ) : null}
+                          </View>
+                          {on ? (
+                            <View style={styles.pickOn}>
+                              <Ionicons name="checkmark-circle" size={18} color={ui.accent} />
+                              <Text style={[styles.pickOnText, { color: ui.accent }]}>選択中</Text>
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      )
+                    })}
+                    <Text style={[styles.hint, { color: ui.labelColor, marginTop: 8 }]}>選んだら、下の「保存」で確定します。</Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {label('補講日')}
+                    <DateField
+                      value={mkDate}
+                      placeholder="日付を選択"
+                      onPress={() => setPicker('mkDate')}
+                      valueColor={ui.valueColor}
+                      placeholderColor={phColor}
+                      boxStyle={inputStyle}
+                      a11yLabel="補講日を選択"
+                    />
+                    <DateTimeSheet
+                      open={picker === 'mkDate'}
+                      value={ymdToDate(mkDate, new Date())}
+                      mode="date"
+                      title="補講日"
+                      onConfirm={onPicked}
+                      onCancel={() => setPicker(null)}
+                    />
+                    {label('補講の時限')}
+                    <PeriodChips sel={mkPeriods} onToggle={(p) => setMkPeriods((v) => toggle(v, p))} />
+                    {label('補講の教室（任意）')}
+                    <TextInput
+                      style={[styles.input, inputStyle, { color: ui.valueColor }]}
+                      value={mkRoom}
+                      onChangeText={setMkRoom}
+                      placeholder="例: K404"
+                      placeholderTextColor={phColor}
+                    />
+                  </View>
+                )}
               </View>
             ) : null}
           </View>
@@ -458,6 +583,11 @@ const styles = StyleSheet.create({
   pchipText: { fontSize: 13, color: COLORS.emeraldDark, fontWeight: '600' },
   pchipTextOn: { color: COLORS.white },
   hint: { fontSize: 12 },
+  // 「追加済みの補講から選ぶ」の行（フラット行＋区切り線）。タッチ高さ 44pt 以上。
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingVertical: 8 },
+  pickText: { fontSize: 15 },
+  pickOn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  pickOnText: { fontSize: 13, fontWeight: '600' },
   error: { fontSize: 13, marginHorizontal: 4 },
   saveBtn: { backgroundColor: COLORS.cta, borderRadius: 14, height: 52, alignItems: 'center', justifyContent: 'center' },
   saveText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
