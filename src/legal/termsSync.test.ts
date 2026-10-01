@@ -73,6 +73,21 @@ describe('規約文言の3者同期', () => {
     expect(appClause).toBe(docClause)
   })
 
+  it('事前登録の説明は過去形（受付は終了）で、Web の規約 v7 の正文と一字一句そろっている（TERMS_BODY・terms-ja.md）', () => {
+    // 事前登録の受付は終了し、LP にフォームは無い（waiteu.dev/litus/terms の v7 が正。2026-10-01 統合管理ハブの取り決め・本人裁定
+    // 「事前登録の過去形化は次の規約改定にまとめる」の執行）。現在形の旧文（…のフォームです。ご自身で登録された場合に限り…）は偽になった。
+    const WEB_V7 =
+      '公開前に実施していたお知らせメールの事前登録は、本アプリの機能ではなくWebページ（litus.waiteu.dev）のフォームでした（受付は終了しています）。' +
+      'ご登録いただいた方については、入力されたメールアドレスが自前バックエンド（api.waiteu.dev）へ送信・保存されています' +
+      '（保存するのはメールアドレス・登録元・登録日時のみで、IPアドレスは保存しません）。詳細はプライバシーポリシーをご覧ください。'
+    for (const rel of ['src/screens/TermsConsentScreen.tsx', 'docs/legal/terms-ja.md']) {
+      const src = readSource(rel)
+      const line = stripMarkdownDecoration(findLineContaining(src, ['事前登録', 'Webページ']))
+      expect(line, rel).toBe(WEB_V7)
+      expect(src, rel).not.toContain('ご自身で登録された場合に限り')
+    }
+  })
+
   it('TERMS_VERSIONが、アプリ内の定数とterms-ja.mdの版番号で一致する', () => {
     const docBody = readSource('docs/legal/terms-ja.md')
     const match = docBody.match(/版（TERMS_VERSION）:\s*\*\*(\d+)\*\*/)
