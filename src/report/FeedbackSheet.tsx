@@ -290,7 +290,7 @@ export default function FeedbackSheet({
           ) : (
             <>
               <Text style={[styles.lead, { color: ui.labelColor }]}>
-                この内容がそのまま送信されます。学籍番号・氏名は含まれていません。
+                この内容がそのまま送信されます。アプリが自動で付ける情報に、学籍番号・氏名は含まれていません。
               </Text>
               <View style={[styles.bodyBox, { backgroundColor: ui.inputBg, borderColor: ui.inputBorder }]}>
                 <Text selectable style={[styles.body, { color: ui.valueColor }]}>

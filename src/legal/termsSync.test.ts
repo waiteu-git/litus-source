@@ -31,8 +31,22 @@ describe('規約文言の3者同期', () => {
     const docBody = readSource('docs/legal/terms-ja.md')
     for (const src of [appBody, docBody]) {
       expect(src).toMatch(/フィードバックを送る/)
-      expect(src).toMatch(/学籍番号・氏名は含まれません/)
+      // v7（2026-10-01 本人裁定）: 「学籍番号・氏名は含まれません」はアプリが自動で付ける情報に限る。
+      // ご入力のコメント・返信先に利用者が書けばそのまま送られるので、無条件の断定は偽になる。
+      expect(src).toContain('アプリが自動で付ける情報には、学籍番号・氏名は含まれません（ご入力いただいたコメント・返信先は、そのまま送られます）。')
     }
+  })
+
+  it('「学籍番号・氏名は含まれません」を無条件に断定する旧文言（v6）が、アプリ内・規約・送信前の確認画面のどこにも残っていない', () => {
+    const appBody = readSource('src/screens/TermsConsentScreen.tsx')
+    const docBody = readSource('docs/legal/terms-ja.md')
+    for (const src of [appBody, docBody]) {
+      expect(src).not.toMatch(/に限られ、学籍番号・氏名は含まれません/)
+    }
+    const sheet = readSource('src/report/FeedbackSheet.tsx')
+    // 送信前に全文を見せる確認画面の一文も同じ方針（自動で付ける情報に限る）
+    expect(sheet).toContain('この内容がそのまま送信されます。アプリが自動で付ける情報に、学籍番号・氏名は含まれていません。')
+    expect(sheet).not.toContain('この内容がそのまま送信されます。学籍番号・氏名は含まれていません。')
   })
 
   it('自前バックエンドへ個人特定情報を送らない、という断定はもう単独では存在しない（例外句とセットになっている）', () => {
