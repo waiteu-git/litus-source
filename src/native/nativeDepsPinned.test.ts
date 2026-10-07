@@ -9,8 +9,9 @@ const lock = readFileSync(join(ROOT, 'pnpm-lock.yaml'), 'utf8')
 
 /**
  * 固定ラチェット（docs/design/2026-09-12-v11-train1-NATIVE.md §7 T1）。
- * expo-haptics と expo-store-review を、package.json に範囲記号なしの 57.0.1 で書き、
+ * expo-haptics と expo-store-review を、package.json に範囲記号なしの版（PINNED）で書き、
  * lockfile もその1版だけにする（オーナー承認 2026-09-12・設計 §9-1 と §9-2）。
+ * 固定版は 2026-10-07 のパッチ追随で 57.0.1 → 57.0.3 に上げた（下の「動かす条件」を参照）。
  *
  * 固定の理由（設計 §3）
  * - expo-store-review 57.0.2 以降の iOS は、expo-modules-core 57.0.11 で入った SceneGeometry を呼ぶ。
@@ -25,13 +26,22 @@ const lock = readFileSync(join(ROOT, 'pnpm-lock.yaml'), 'utf8')
  * 動かす条件（設計 §4-7・日付でなく条件）
  * expo-modules-core が 57.0.11 以上に上がる版（＝Expo パッチ追随をした版・設計 §9-6）までは、
  * 2つとも 57.0.1 から動かさない。その版で「範囲指定へ戻すか、固定のまま版を上げるか」を
- * パッチ追随の設計で決め、このテストを書き換える。下の計器の陽性対照（expo-modules-core＝57.0.7）は、
- * lockfile の作り直しで core が上がった時にも落ちるので、この条件の見張りを兼ねる
- * （expo 側の指定は ~57.0.7 で、押さえているのは lockfile だけ）。
+ * パッチ追随の設計で決め、このテストを書き換える。
+ *
+ * 決定（2026-10-07・expo 57.0.26 の推奨版の組へ追随・expo-modules-core 57.0.7 → 57.0.20）
+ * 条件は成立した（SceneGeometry を持つ 57.0.11 以上）。**範囲指定へは戻さず、固定のまま
+ * expo の推奨版（bundledNativeModules）に上げた**＝57.0.3。固定の理由のうち SceneGeometry の罠は
+ * 解けたが、範囲指定だと lockfile を作り直すだけで package.json の差分ゼロのままネイティブが動く
+ * （range の罠）のは残る。固定した版の置き場所は「expo の推奨版」＝次のパッチ追随でも、
+ * 2つを expo install --check の期待版に手で合わせ（pnpm install は1回）、PINNED を同時に書き換える。
+ *
+ * 下の計器の陽性対照（expo-modules-core）は、lockfile の作り直しで core が動いた時にも落ちる。
+ * パッチ追随（＝2つの固定版を見直すタイミング）の見張りを兼ねるので、追随のたびに更新する
+ * （expo 側の指定は ~57.0.x で、押さえているのは lockfile だけ）。
  */
 const PINNED = {
-  'expo-haptics': '57.0.1',
-  'expo-store-review': '57.0.1',
+  'expo-haptics': '57.0.3',
+  'expo-store-review': '57.0.3',
 } as const
 
 /**
@@ -81,13 +91,13 @@ describe('isExactVersion', () => {
 })
 
 describe('lockfile の読み取り（計器）', () => {
-  it('陽性対照: 実物の lockfile で expo-modules-core は 57.0.7 の1件だけ（§4-7 の見張りを兼ねる）', () => {
-    expect(lockPackageVersionsOf(lock, 'expo-modules-core')).toEqual(['57.0.7'])
+  it('陽性対照: 実物の lockfile で expo-modules-core は 57.0.20 の1件だけ（パッチ追随の見張りを兼ねる）', () => {
+    expect(lockPackageVersionsOf(lock, 'expo-modules-core')).toEqual(['57.0.20'])
   })
 
   it('陽性対照: 実物の lockfile で完全固定と範囲指定の specifier を読み分ける', () => {
     expect(importerSpecifierOf(lock, 'react-native-webview')).toBe('13.16.1')
-    expect(importerSpecifierOf(lock, 'expo-linear-gradient')).toBe('~57.0.1')
+    expect(importerSpecifierOf(lock, 'expo-linear-gradient')).toBe('~57.0.2')
   })
 
   it('陰性対照: 名前が前方一致するだけの別パッケージは数えない', () => {
