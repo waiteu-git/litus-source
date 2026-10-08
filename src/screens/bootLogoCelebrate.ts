@@ -15,8 +15,8 @@
  * 各 HTML を**文字列変換で派生**し、足すだけで既存を1文字も変えない（bootLogoCelebrate.test.ts が復元で確認）。
  *
  * 配置: ロゴの入れ物（144x144・boltRise で上昇する要素）の**子**で、**入れ物の真上**（bottom:100%＋余白）。
- * 上から 葉の弧（∩）→ 2行 → 葉の弧（∪）の順に積み、全体の高さは約 96px（360x640 の小さい端末でもロゴの上端まで
- * 状態バーの下に収まる＝ロゴの上端は画面の上から (画面の高さ−379)/2。実測は design doc）。
+ * 上から 葉の弧（∩）→ 2行 → 葉の弧（∪）の順に積み、全体の高さは約 112px（ロゴの上端は画面の上から (画面の高さ−379)/2。
+ * 360x640 の小さい端末では状態バーの高さ（24dp）にわずかに掛かるが、掛かる位置は画面中央＝時計・アイコンのある左右の端ではない）。
  * ロゴと一緒に動くので位置がずれず、ロゴ列の流れ（縦中央寄せ・boltRise の 121.2px は列の高さの実測値）を変えない。
  * ロゴの上は、フルイントロでも何も来ない空き（CLASS・LETUS はロゴの下に集まる）なので、飾りがロゴや文字に重ならない。
  * 本人の指示（2026-10-08）: 「飾りはアイコンの上。ロゴと被せたくない」。ロゴを**囲まない**。
@@ -43,9 +43,9 @@ const SVG_H = 25
 /** 葉の中心の上端（頂点の葉）の余白。 */
 const PAD_TOP = 7
 /** 文言と葉の弧との間（px）。 */
-const GAP_TEXT_TO_ORNAMENT = 1
+const GAP_TEXT_TO_ORNAMENT = 6
 /** 下の葉の弧の下端とロゴの入れ物の上端との間（px）。 */
-const GAP_TO_LOGO = 10
+const GAP_TO_LOGO = 14
 
 const PALETTE: Record<CelebrateVariant, { leaves: [string, string]; dot: string }> = {
   // 白地: 翠の濃淡（象牙は白に溶けるので葉には使わない）
@@ -108,8 +108,8 @@ function celebrateBlock(variant: CelebrateVariant): string {
     'display:flex;flex-direction:column;align-items:center;text-align:center;white-space:nowrap;pointer-events:none;' +
     'animation:celebIn 0.36s cubic-bezier(0.16,1,0.3,1) 0.75s both;">' +
     ornamentSvg(variant, 'up') +
-    `<span style="font-family:system-ui,sans-serif;font-size:14px;font-weight:700;line-height:1.4;letter-spacing:0.04em;color:${c.bootTitle};">${escapeHtml(CELEBRATION_COPY.bootTitle)}</span>` +
-    `<span style="font-family:system-ui,sans-serif;font-size:12px;font-weight:500;line-height:1.4;letter-spacing:0.06em;color:${c.bootName};">${escapeHtml(CELEBRATION_COPY.bootName)}</span>` +
+    `<span style="font-family:system-ui,sans-serif;font-size:14px;font-weight:700;line-height:1.5;letter-spacing:0.04em;color:${c.bootTitle};">${escapeHtml(CELEBRATION_COPY.bootTitle)}</span>` +
+    `<span style="font-family:system-ui,sans-serif;font-size:12px;font-weight:500;line-height:1.5;letter-spacing:0.06em;color:${c.bootName};">${escapeHtml(CELEBRATION_COPY.bootName)}</span>` +
     ornamentSvg(variant, 'down') +
     '</div>'
   )
