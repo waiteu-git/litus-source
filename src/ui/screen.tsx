@@ -7,6 +7,8 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { COLORS, DARK, useThemeVariant } from '../theme'
 import { resolveUiColors } from '../theme.tokens'
+import { celebrationColors } from '../theme.celebration'
+import { useCelebration } from '../celebration/CelebrationProvider'
 import { EASE } from './motion'
 import { AMBIENT_STATIC_FRAME, shouldAnimateAmbient } from './reducedMotion'
 import { useReducedMotion } from './useReducedMotion'
@@ -46,15 +48,26 @@ export function ScreenBg({ children }: { children: ReactNode }) {
   return <View style={[ui.root, pad, { backgroundColor: c.screenSolid }]}>{children}</View>
 }
 
+/** 題名の左端＝アイコン（22）＋gap（7）。お祝いの線を題名の真下から始めるために使う（hLeft の寸法と合わせる）。 */
+const TITLE_OFFSET_WITH_ICON = 29
+
 /** ヘッダー行（アイコン＋タイトル＋右側のアクションチップ群）。 */
 export function ScreenHeader({ title, icon, right }: { title: string; icon?: IconName; right?: ReactNode }) {
   const { variant } = useThemeVariant()
   const color = resolveUiColors(variant).heading
+  const { active: celebrating } = useCelebration()
   return (
     <View style={ui.header}>
       <View style={ui.hLeft}>
         {icon ? <Ionicons name={icon} size={22} color={color} /> : null}
         <Text style={[ui.hTitle, { color }]}>{title}</Text>
+        {/* お祝いデザイン: 題名の下の細い線。絶対配置＝見出し行の下の余白（marginBottom 6）に収まり、レイアウトを動かさない。 */}
+        {celebrating ? (
+          <View
+            pointerEvents="none"
+            style={[ui.celebLine, { left: icon ? TITLE_OFFSET_WITH_ICON : 0, backgroundColor: celebrationColors(variant).headerLine }]}
+          />
+        ) : null}
       </View>
       {right ? <View style={ui.headerRight}>{right}</View> : null}
     </View>
@@ -385,6 +398,7 @@ const ui = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 14 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   hLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  celebLine: { position: 'absolute', left: 0, bottom: -4, width: 28, height: 2, borderRadius: 1 },
   hTitle: { fontSize: 20, fontWeight: '600' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },

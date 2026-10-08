@@ -38,6 +38,10 @@ import TermsConsentScreen from '../screens/TermsConsentScreen'
 import { TERMS_VERSION } from '../legal/termsVersion'
 import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
 import { BOOT_FADE_MS, bootChrome, bootLogoHtml, nativeSplashBg, needsBootFade } from './bootTheme'
+import { BootCelebration } from './BootCelebration'
+import { isCelebrationActive } from '../celebration/celebration'
+import { loadCelebrationChoice } from '../storage/celebrationStore'
+import { useCelebration } from '../celebration/CelebrationProvider'
 import { bootStatusBottom } from '../screens/bootFooterGeometry'
 import { isWarmBoot, loadLastAuthedAt, saveLastAuthedAt } from '../storage/bootMetaStore'
 import { useKillSwitch } from '../health/KillSwitchProvider'
@@ -187,6 +191,12 @@ export function LoginGate({ children }: { children: ReactNode }) {
   // 起動モード: 決定するまで（null）は起動ロゴをマウントせず下地色のみ表示する。
   // warm=その日2回目以降（セッション生存・同期不要）→ループのみ版。full=フルイントロ。
   const [bootMode, setBootMode] = useState<'full' | 'warm' | null>(null)
+  // お祝いデザイン（起動画面の輪と2行）。bootMode と同じ起動処理で、bootMode より先に確定させる（WebView が誤った HTML で先にマウントされないように）。
+  const [bootCelebrate, setBootCelebrate] = useState(false)
+  // Provider が ready になったら、そちらの値に従う（設定でオフ/オンを切り替えた後の再ログイン＝requireLogin の起動画面にも
+  // 届く。起動時の直読み値を使い続けると、オフにしたのに再ログインの起動画面だけお祝いが出る）。ready 前だけ直読み値。
+  const celebration = useCelebration()
+  const celebrateNow = celebration.ready ? celebration.active : bootCelebrate
 
   useEffect(() => {
     if (bootMode == null) return
@@ -223,6 +233,9 @@ export function LoginGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     ;(async () => {
       try {
+        // お祝いデザイン: 先に読む（store は読めなくても投げず null＝未選択を返す＝規約判定に影響しない）。
+        // 未選択は期間内ならオン＝更新後の初回起動から出る。bootMode の決定（setBootMode）より前に確定する。
+        setBootCelebrate(isCelebrationActive(await loadCelebrationChoice(), new Date()))
         // 規約同意を最優先で判定（未同意/旧版なら規約 → オンボ → ログインの順）。
         const accepted = await loadAcceptedTermsVersion()
         if (accepted < TERMS_VERSION) {
@@ -695,7 +708,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
             {bootMode != null ? (
               <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <WebView
-                  source={{ html: bootLogoHtml(variant, bootMode) }}
+                  source={{ html: bootLogoHtml(variant, bootMode, celebrateNow) }}
                   scrollEnabled={false}
                   showsVerticalScrollIndicator={false}
                   overScrollMode="never"
@@ -704,6 +717,9 @@ export function LoginGate({ children }: { children: ReactNode }) {
                 />
               </View>
             ) : null}
+            {/* お祝いの2行（静止）。WebView の輪と同じ bootCelebrate・bootMode 決定後だけ。スプラッシュ色の被せより下＝
+                クロスフェードと一緒に現れる。 */}
+            {celebrateNow && bootMode != null ? <BootCelebration variant={variant} topInset={insets.top} /> : null}
             {/* フラッシュ抑制: ネイティブスプラッシュが出していた色を被せ、BOOT_FADE_MS で消す。
                 スプラッシュはOSスキーム固定なのでテーマと食い違うことがあり（例: テーマ=ダーク/OS=ライト）、
                 そのままだと白→暗が瞬間的に飛ぶ。色が一致していれば被せない（fadeNeeded=false）。

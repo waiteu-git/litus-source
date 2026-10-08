@@ -42,6 +42,7 @@ import HomeSyncButton from '../home/HomeSyncButton'
 import { loadCourseNews, mutateCourseNews } from '../storage/courseNewsStore'
 import { markCourseSeen, type CourseNewsMap } from '../updates/courseNews'
 import ScreenHint from '../tutorial/ScreenHint'
+import { CelebrationCard } from '../home/CelebrationCard'
 import NotificationPermissionNotice from '../notifications/NotificationPermissionNotice'
 import DiagnosticsBanner from '../health/DiagnosticsBanner'
 import { COLORS } from '../theme'
@@ -398,6 +399,8 @@ export default function HomeScreen() {
           ) : null}
           {/* 同期の状況＋操作はヘッダー右の HomeSyncButton へ集約（鮮度・スキップ理由・ヘルス注意）。 */}
           {/* 初回ヒント（×で永続的に消える・設定から再表示可）。 */}
+          {/* お祝いデザイン（オフ・期限後は null）。ホームの並び設定（homeLayout）の外側＝移行コード不要。 */}
+          <CelebrationCard />
           <ScreenHint hintKey="home" />
           {/* OS で通知が塞がれている間の回復導線。拒否した人は設定画面に来ないのでここにも出す。
               ただし常駐させない: 時間割も課題も無い＝通知が仕事をしていない状態では出さない

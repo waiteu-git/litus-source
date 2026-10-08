@@ -7,6 +7,7 @@
  * バリアントは3つあるので、分岐も3つ持つ。
  */
 import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from '../screens/bootLogoHtml'
+import { toCelebrateBootHtml } from '../screens/bootLogoCelebrate'
 import { BOOT_LOGO_DARK } from '../screens/bootLogoDark'
 import {
   WARM_BOOT_LOGO_GREEN,
@@ -62,7 +63,21 @@ export function needsBootFade(
   return nativeSplashBg(scheme) !== bootChrome(variant).bg
 }
 
-export function bootLogoHtml(variant: ResolvedVariant, mode: BootMode): string {
+export function bootLogoHtml(variant: ResolvedVariant, mode: BootMode, celebrate = false): string {
+  const base = baseBootLogoHtml(variant, mode)
+  if (!celebrate) return base
+  // お祝いの輪は 6 通り（3テーマ×full/warm）を使われた時に一度だけ派生してキャッシュ（190KB の置換を毎回しない）。
+  const key = `${variant}/${mode}`
+  const hit = CELEBRATE_CACHE.get(key)
+  if (hit) return hit
+  const made = toCelebrateBootHtml(base, variant)
+  CELEBRATE_CACHE.set(key, made)
+  return made
+}
+
+const CELEBRATE_CACHE = new Map<string, string>()
+
+function baseBootLogoHtml(variant: ResolvedVariant, mode: BootMode): string {
   if (mode === 'warm') {
     if (variant === 'dark') return WARM_BOOT_LOGO_DARK
     return variant === 'white' ? WARM_BOOT_LOGO_WHITE : WARM_BOOT_LOGO_GREEN

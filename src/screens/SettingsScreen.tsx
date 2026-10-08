@@ -25,6 +25,8 @@ import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
 import { TYPE, SPACE } from '../ui/scale'
 import { FONT_LICENSE_TITLE } from '../legal/fontLicense'
 import { useDisplaySettings } from '../displaySettings'
+import { useCelebration } from '../celebration/CelebrationProvider'
+import { CELEBRATION_COPY } from '../celebration/celebration'
 import { toExamCountdownStart } from '../storage/displaySettingsSerialize'
 import * as Application from 'expo-application'
 import { formatVersionLabel } from '../appVersion'
@@ -61,6 +63,7 @@ export default function SettingsScreen() {
   const ui = useUi()
   const clearance = useTabBarClearance()
   const { preference, setPreference } = useThemeVariant()
+  const celebration = useCelebration()
   // 出欠状況の取得ぐあい（前回成功時刻・失敗理由）を診断行に出すため。
   const { attendanceStatsHealth, lastAttendanceStatsAt } = useSync()
   const { active: demo, enter: enterDemo } = useDemo()
@@ -232,6 +235,22 @@ export default function SettingsScreen() {
               UIと起動アニメーションが選んだテーマに合わせて切り替わります。「自動」は端末のダークモード設定に追従します。
             </Text>
           </SubSection>
+
+          {/* お祝いデザイン（期間内は全員／期限後は明示オンの人だけ）。テーマとは別のフラグ。 */}
+          {celebration.rowVisible ? (
+            <SubSection>
+              <Text style={[styles.subHead, { color: ui.labelColor }]}>{CELEBRATION_COPY.settingLabel}</Text>
+              <Segmented
+                options={[
+                  { key: 'on', label: 'オン' },
+                  { key: 'off', label: 'オフ' },
+                ]}
+                value={celebration.active ? 'on' : 'off'}
+                onChange={(k) => celebration.setEnabled(k === 'on')}
+              />
+              <Text style={[styles.note, { color: ui.labelColor }]}>{CELEBRATION_COPY.settingNote}</Text>
+            </SubSection>
+          ) : null}
 
           <SubSection>
             <Text style={[styles.subHead, { color: ui.labelColor }]}>時間割の表示</Text>

@@ -28,6 +28,7 @@ import { DemoBanner } from './src/demo/DemoBanner'
 import { ThemeProvider, useThemeVariant, COLORS, DARK } from './src/theme'
 import { statusBarStyleFor } from './src/theme.tokens'
 import { DisplaySettingsProvider } from './src/displaySettings'
+import { CelebrationProvider } from './src/celebration/CelebrationProvider'
 import {
   addNotificationResponseListener,
   clearConsumedNotificationResponse,
@@ -145,6 +146,7 @@ export default function App() {
             可視ログインのSSOフローと同一Cookie jarで並走してリレー先が混線し、ログイン後にLETUSへ
             着地して詰む実機バグがあった。ログイン完了後にのみ裏SSOを開始する。 */}
         <DisplaySettingsProvider>
+        <CelebrationProvider>
         <AssignmentsVersionProvider>
         <ClassEventsVersionProvider>
         <AttendanceVersionProvider>
@@ -168,6 +170,7 @@ export default function App() {
         </AttendanceVersionProvider>
         </ClassEventsVersionProvider>
         </AssignmentsVersionProvider>
+        </CelebrationProvider>
         </DisplaySettingsProvider>
         </BootGate>
       </ThemeProvider>

@@ -1,0 +1,53 @@
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { loadCelebrationChoice, saveCelebrationChoice } from '../storage/celebrationStore'
+import { celebrationState, type CelebrationChoice } from './celebration'
+
+type Ctx = {
+  /** 保存値の読み込みが済んだか。済むまでは「出さない」（オフの人に一瞬だけ出る、を避ける）。 */
+  ready: boolean
+  choice: CelebrationChoice
+  /** お祝いデザインを表示するか（ホームのカード・見出しの線）。 */
+  active: boolean
+  /** 設定に切替の行を出すか。 */
+  rowVisible: boolean
+  setEnabled: (on: boolean) => void
+}
+
+const DEFAULT: Ctx = { ready: false, choice: null, active: false, rowVisible: false, setEnabled: () => {} }
+
+const CelebrationContext = createContext<Ctx>(DEFAULT)
+
+/**
+ * お祝いデザインの選択をアプリ全体で共有・永続化する（displaySettings.tsx の DisplaySettingsProvider と同じ形）。
+ * 未選択は「期間内ならオン」（celebration.ts）。LoginGate はこの Provider の**内側**にいる。起動の最初の描画だけは
+ * Provider の読み込み（非同期）より先に要るので store を直接読み、Provider が ready になったらこちらの値に従う
+ * （設定の切替が、同じプロセスで再ログインの起動画面にも届く）。
+ */
+export function CelebrationProvider({ children }: { children: ReactNode }) {
+  const [choice, setChoice] = useState<CelebrationChoice>(null)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    loadCelebrationChoice()
+      .then(setChoice)
+      .catch(() => undefined)
+      .finally(() => setReady(true))
+  }, [])
+
+  function setEnabled(on: boolean) {
+    const next = on ? 'on' : 'off'
+    setChoice(next)
+    saveCelebrationChoice(next).catch(() => undefined)
+  }
+
+  const { active, rowVisible } = celebrationState(ready, choice, new Date())
+  return (
+    <CelebrationContext.Provider value={{ ready, choice, active, rowVisible, setEnabled }}>
+      {children}
+    </CelebrationContext.Provider>
+  )
+}
+
+export function useCelebration(): Ctx {
+  return useContext(CelebrationContext)
+}
