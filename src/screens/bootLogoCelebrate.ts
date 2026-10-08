@@ -15,8 +15,8 @@
  * 各 HTML を**文字列変換で派生**し、足すだけで既存を1文字も変えない（bootLogoCelebrate.test.ts が復元で確認）。
  *
  * 配置: ロゴの入れ物（144x144・boltRise で上昇する要素）の**子**で、**入れ物の真上**（bottom:100%＋余白）。
- * 上から 葉の弧（∩）→ 2行 → 葉の弧（∪）の順に積み、全体の高さは約 112px（ロゴの上端は画面の上から (画面の高さ−379)/2。
- * 360x640 の小さい端末では状態バーの高さ（24dp）にわずかに掛かるが、掛かる位置は画面中央＝時計・アイコンのある左右の端ではない）。
+ * 上から 葉の弧（∩）→ 2行 → 葉の弧（∪）の順に積み、全体の高さは 115px（画面の高さが700px以下なら段階的に詰める＝SIZE_TIERS）。
+ * ロゴの上端は画面の上から (画面の高さ−387)/2 なので、高さ592px以上の全画面で、ブロックの上端が状態バー（24dp）より下に収まる。
  * ロゴと一緒に動くので位置がずれず、ロゴ列の流れ（縦中央寄せ・boltRise の 121.2px は列の高さの実測値）を変えない。
  * ロゴの上は、フルイントロでも何も来ない空き（CLASS・LETUS はロゴの下に集まる）なので、飾りがロゴや文字に重ならない。
  * 本人の指示（2026-10-08）: 「飾りはアイコンの上。ロゴと被せたくない」。ロゴを**囲まない**。
@@ -38,14 +38,56 @@ const ARC_FIRST_DEG = 2.2
 const ARC_STEP_DEG = 2.2
 /** 葉の長軸を、円弧の接線から外向きに傾ける角度。隣の葉と重なり、点線ではなく葉の連なりに見える。 */
 const TILT_DEG = 22
+// viewBox の大きさ（図形の座標系）。表示の大きさは下の SIZE_TIERS で決める（画面が低いほど小さくする）。
 const SVG_W = 220
 const SVG_H = 25
 /** 葉の中心の上端（頂点の葉）の余白。 */
 const PAD_TOP = 7
-/** 文言と葉の弧との間（px）。 */
-const GAP_TEXT_TO_ORNAMENT = 6
-/** 下の葉の弧の下端とロゴの入れ物の上端との間（px）。 */
-const GAP_TO_LOGO = 14
+
+/** 文言の2行の高さ（14px×1.5 ＋ 12px×1.5）。 */
+const TEXT_HEIGHT = 21 + 18
+
+/**
+ * 画面の高さ（CSS px＝dp）ごとの寸法。ロゴの上は、画面の高さが低いほど空きが小さい
+ * （ロゴ列は縦中央寄せ＝ロゴの上端は 画面の高さ−LOGO_COLUMN_HEIGHT の半分）ので、**低い画面でだけ**詰める。
+ * 高い画面（本人が「もう少し間隔を」と指示した間隔）は変えない。
+ *  - normal: 既定（高さ700px超）。弧 220x25・文言と弧のあき6・弧とロゴのあき14 → 全体 115px
+ *  - compact: 高さ700px以下（360x640 など）。弧 176x20・あき3・あき8 → 全体 93px
+ *  - tight: 高さ620px以下。弧 140x16（縦横比は同じ）・あき2・あき6 → 全体 81px
+ *  - tiny: 高さ600px以下（3ボタンのナビゲーションバーを引いた 360x640 級＝約592px など）。弧 106x12・あき1・あき4 → 全体 69px
+ * 状態バー（24dp）に掛からないこと＝ロゴの上端 − 全体の高さ ≧ STATUS_BAR_DP（高さ592px以上の全画面）を、
+ * 下の関数と bootLogoCelebrate.test.ts が守る。ロゴの上端は 起動 HTML を Chrome で測った実測（2026-10-08・412x915〜500x592）と一致する。
+ */
+export const SIZE_TIERS = [
+  { name: 'normal', maxHeight: Infinity, arcW: 220, arcH: 25, gapText: 6, gapLogo: 14 },
+  { name: 'compact', maxHeight: 700, arcW: 176, arcH: 20, gapText: 3, gapLogo: 8 },
+  { name: 'tight', maxHeight: 620, arcW: 140, arcH: 16, gapText: 2, gapLogo: 6 },
+  { name: 'tiny', maxHeight: 600, arcW: 106, arcH: 12, gapText: 1, gapLogo: 4 },
+] as const
+
+/** ロゴ列（ロゴ144＋52＋LITUS 90＋52＋リタスとバー）の高さの実測値。起動 HTML は縦中央寄せなので、ロゴの上端は (画面の高さ−これ)/2。 */
+export const LOGO_COLUMN_HEIGHT = 387
+/** Android の状態バーの高さ（dp）。飾りの上端はこれより下に収める。 */
+export const STATUS_BAR_DP = 24
+
+/** その高さの画面で使う寸法の段階（高さの小さい方の条件を優先）。 */
+export function sizeTierForHeight(viewportHeight: number): (typeof SIZE_TIERS)[number] {
+  if (viewportHeight <= SIZE_TIERS[3].maxHeight) return SIZE_TIERS[3]
+  if (viewportHeight <= SIZE_TIERS[2].maxHeight) return SIZE_TIERS[2]
+  if (viewportHeight <= SIZE_TIERS[1].maxHeight) return SIZE_TIERS[1]
+  return SIZE_TIERS[0]
+}
+
+/** お祝いのブロック全体の高さ（弧2つ＋文言＋あき＋ロゴとのあき）。 */
+export function celebrateBlockHeight(viewportHeight: number): number {
+  const t = sizeTierForHeight(viewportHeight)
+  return t.arcH * 2 + t.gapText * 2 + TEXT_HEIGHT + t.gapLogo
+}
+
+/** その高さの画面で、お祝いのブロックの上端が画面の上から何 dp か（状態バーより大きいこと）。 */
+export function celebrateBlockTop(viewportHeight: number): number {
+  return (viewportHeight - LOGO_COLUMN_HEIGHT) / 2 - celebrateBlockHeight(viewportHeight)
+}
 
 const PALETTE: Record<CelebrateVariant, { leaves: [string, string]; dot: string }> = {
   // 白地: 翠の濃淡（象牙は白に溶けるので葉には使わない）
@@ -83,13 +125,8 @@ function ornamentSvg(variant: CelebrateVariant, dir: 'up' | 'down'): string {
   // ∪ は ∩ を上下に反転するだけ（葉の回転も、点の位置も一緒に鏡映される）。
   const body = parts.join('')
   const inner = dir === 'down' ? `<g transform="translate(0 ${SVG_H}) scale(1 -1)">${body}</g>` : body
-  const margin = dir === 'up' ? `margin-bottom:${GAP_TEXT_TO_ORNAMENT}px;` : `margin-top:${GAP_TEXT_TO_ORNAMENT}px;`
-  return (
-    `<svg viewBox="0 0 ${SVG_W} ${SVG_H}" aria-hidden="true" ` +
-    `style="display:block;width:${SVG_W}px;height:${SVG_H}px;${margin}">` +
-    inner +
-    '</svg>'
-  )
+  // 表示の大きさとあきは CSS の段階（SIZE_TIERS）が決める。上の弧は文言の上、下の弧は文言の下。
+  return `<svg class="${dir === 'up' ? 'celeb-up' : 'celeb-down'}" viewBox="0 0 ${SVG_W} ${SVG_H}" aria-hidden="true">` + inner + '</svg>'
 }
 
 function escapeHtml(s: string): string {
@@ -104,7 +141,7 @@ function celebrateBlock(variant: CelebrateVariant): string {
   const c = celebrationColors(variant)
   return (
     '<div class="celeb" lang="ja" ' +
-    `style="position:absolute;left:${BLOCK_LEFT}px;bottom:100%;width:${BLOCK_WIDTH}px;margin-bottom:${GAP_TO_LOGO}px;` +
+    `style="position:absolute;left:${BLOCK_LEFT}px;bottom:100%;width:${BLOCK_WIDTH}px;` +
     'display:flex;flex-direction:column;align-items:center;text-align:center;white-space:nowrap;pointer-events:none;' +
     'animation:celebIn 0.36s cubic-bezier(0.16,1,0.3,1) 0.75s both;">' +
     ornamentSvg(variant, 'up') +
@@ -115,8 +152,21 @@ function celebrateBlock(variant: CelebrateVariant): string {
   )
 }
 
+function tierCss(t: (typeof SIZE_TIERS)[number]): string {
+  return (
+    `.celeb{margin-bottom:${t.gapLogo}px}` +
+    `.celeb svg{display:block;width:${t.arcW}px;height:${t.arcH}px}` +
+    `.celeb .celeb-up{margin-bottom:${t.gapText}px}` +
+    `.celeb .celeb-down{margin-top:${t.gapText}px}`
+  )
+}
+
 const CELEB_CSS =
   '/*celeb-start*/' +
+  tierCss(SIZE_TIERS[0]) +
+  `@media (max-height:${SIZE_TIERS[1].maxHeight}px){${tierCss(SIZE_TIERS[1])}}` +
+  `@media (max-height:${SIZE_TIERS[2].maxHeight}px){${tierCss(SIZE_TIERS[2])}}` +
+  `@media (max-height:${SIZE_TIERS[3].maxHeight}px){${tierCss(SIZE_TIERS[3])}}` +
   '@keyframes celebIn{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}' +
   '@keyframes celebFade{0%{opacity:0}100%{opacity:1}}' +
   '@media (prefers-reduced-motion: reduce){.celeb{animation:celebFade 0.36s cubic-bezier(0.16,1,0.3,1) 0.75s both!important}}' +

@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { BOOT_LOGO_GREEN, BOOT_LOGO_WHITE } from './bootLogoHtml'
 import { BOOT_LOGO_DARK } from './bootLogoDark'
 import { WARM_BOOT_LOGO_DARK, WARM_BOOT_LOGO_GREEN, WARM_BOOT_LOGO_WHITE } from './bootLogoWarm'
-import { toCelebrateBootHtml, type CelebrateVariant } from './bootLogoCelebrate'
+import {
+  LOGO_COLUMN_HEIGHT,
+  SIZE_TIERS,
+  STATUS_BAR_DP,
+  celebrateBlockHeight,
+  celebrateBlockTop,
+  sizeTierForHeight,
+  toCelebrateBootHtml,
+  type CelebrateVariant,
+} from './bootLogoCelebrate'
 import { CELEBRATION_COPY } from '../celebration/celebration'
 import { celebrationColors } from '../theme.celebration'
 
@@ -60,8 +69,9 @@ describe('toCelebrateBootHtml: 6通り（3テーマ×full/warm）すべてに、
     const block = out.match(BLOCK)![0]
     expect(block).toContain('position:absolute')
     expect(block).toContain('pointer-events:none')
-    // ロゴの真上＝入れ物の上端（bottom:100%）に下端をつけ、余白を空ける。ロゴの中心基準（top:50%）で置かない＝ロゴに重ならない。
-    expect(block).toMatch(/bottom:100%;[^"]*margin-bottom:\d+px/)
+    // ロゴの真上＝入れ物の上端（bottom:100%）に下端をつけ、余白（margin-bottom）は CSS の段階が持つ。ロゴの中心基準（top:50%）で置かない＝ロゴに重ならない。
+    expect(block).toContain('bottom:100%;')
+    expect(toCelebrateBootHtml(base, variant)).toMatch(/\.celeb\{margin-bottom:14px\}/)
     const outer = block.slice(0, block.indexOf('>') + 1)
     expect(outer).not.toMatch(/(^|[^-])top:|margin-top/)
     // 入れ物（相対配置）の直後・ロゴ画像の前に入る＝ロゴと一緒に動く。
@@ -148,5 +158,58 @@ describe('toCelebrateBootHtml: 6通り（3テーマ×full/warm）すべてに、
     expect(iUp).toBeLessThan(iTitle)
     expect(iTitle).toBeLessThan(iName)
     expect(iName).toBeLessThan(iDown)
+  })
+})
+
+describe('小さい端末でも、お祝いのブロックが状態バーに掛からない（画面の高さごとの寸法の段階）', () => {
+  it('段階は高さの小さい順に厳しくなり（弧も余白も縮む）、通常は 弧 220x25・あき 6 と 14（本人指定の間隔）のまま', () => {
+    const [normal, compact, tight, tiny] = SIZE_TIERS
+    expect(normal).toMatchObject({ arcW: 220, arcH: 25, gapText: 6, gapLogo: 14 })
+    expect(compact.maxHeight).toBeLessThan(700.0001)
+    for (const [a, b] of [[normal, compact], [compact, tight], [tight, tiny]] as const) {
+      expect(b.arcH).toBeLessThan(a.arcH)
+      expect(b.gapText).toBeLessThanOrEqual(a.gapText)
+      expect(b.gapLogo).toBeLessThan(a.gapLogo)
+      expect(b.maxHeight).toBeLessThan(a.maxHeight)
+      // 縦横比は同じ（図形がつぶれない）
+      expect(Math.abs(b.arcW / b.arcH - 220 / 25)).toBeLessThan(0.7)
+    }
+  })
+
+  it('高さ592〜1000dp の全画面で、ブロックの上端が状態バー（24dp）より下（＝掛からない）', () => {
+    for (let h = 592; h <= 1000; h++) {
+      expect(celebrateBlockTop(h), `H=${h}`).toBeGreaterThanOrEqual(STATUS_BAR_DP)
+    }
+  })
+
+  it('実測（Chrome で起動 HTML を測った値・2026-10-08）と式が一致する: 高さ915/700/640/620/600/592 でのブロックの上端', () => {
+    const measured: Array<[number, number]> = [[915, 149], [700, 63.5], [640, 33.5], [620, 35.5], [600, 37.5], [592, 33.5]]
+    for (const [h, top] of measured) expect(celebrateBlockTop(h)).toBeCloseTo(top, 5)
+    expect((915 - LOGO_COLUMN_HEIGHT) / 2).toBe(264) // ロゴの上端の実測
+  })
+
+  it('段階の選び方: 境界の高さ（700・620・600）は小さい方の段階。CSS の @media（max-height）と同じ境界', () => {
+    expect(sizeTierForHeight(701).name).toBe('normal')
+    expect(sizeTierForHeight(700).name).toBe('compact')
+    expect(sizeTierForHeight(621).name).toBe('compact')
+    expect(sizeTierForHeight(620).name).toBe('tight')
+    expect(sizeTierForHeight(601).name).toBe('tight')
+    expect(sizeTierForHeight(600).name).toBe('tiny')
+    expect(celebrateBlockHeight(915)).toBe(115)
+    expect(celebrateBlockHeight(640)).toBe(93)
+  })
+
+  it.each(BASES)('%s: HTML の @media の境界と寸法が、SIZE_TIERS（検査した値）と同じ', (_n, variant, base) => {
+    const out = toCelebrateBootHtml(base, variant)
+    for (const t of SIZE_TIERS) {
+      const css =
+        `.celeb{margin-bottom:${t.gapLogo}px}.celeb svg{display:block;width:${t.arcW}px;height:${t.arcH}px}` +
+        `.celeb .celeb-up{margin-bottom:${t.gapText}px}.celeb .celeb-down{margin-top:${t.gapText}px}`
+      expect(out).toContain(t.maxHeight === Infinity ? css : `@media (max-height:${t.maxHeight}px){${css}}`)
+    }
+    // 小さい段階が後ろ（同じ強さの規則では後ろが勝つ）
+    const i = (n: number) => out.indexOf(`@media (max-height:${n}px)`)
+    expect(i(700)).toBeLessThan(i(620))
+    expect(i(620)).toBeLessThan(i(600))
   })
 })
