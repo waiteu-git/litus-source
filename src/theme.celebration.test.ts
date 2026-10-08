@@ -49,12 +49,12 @@ describe('celebrationColors: 全バリアントで、本文が読める（4.5:1 
     for (const val of Object.values(celebrationColors(v))) expect(val).toMatch(HEX)
   })
 
-  it('起動画面の2行: 白は白地、ダークは暗地、翠は上端付近のグラデ色の上で 4.5:1 以上', () => {
+  it('起動画面の2行（ロゴの真上）: 白は白地、ダークは暗地、翠はロゴの上あたりのグラデ色の上で 4.5:1 以上', () => {
     const bgs: Record<CelebrationVariant, string> = {
       white: '#ffffff',
       dark: DARK.bg,
-      // 文字は画面の上端近く（グラデ全体の約12%）。端の明るい側で測る＝いちばん厳しい側。
-      green: mix(COLORS.gradTop, COLORS.gradBottom, 0.12),
+      // 文字はロゴの真上＝画面の上から約6〜30%（小さい端末ほど上・高い端末ほど下）。濃い側（30%）で測る＝暗い文字にはいちばん厳しい側。
+      green: mix(COLORS.gradTop, COLORS.gradBottom, 0.3),
     }
     for (const v of VARIANTS) {
       const c = celebrationColors(v)

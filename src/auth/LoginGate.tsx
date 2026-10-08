@@ -38,7 +38,6 @@ import TermsConsentScreen from '../screens/TermsConsentScreen'
 import { TERMS_VERSION } from '../legal/termsVersion'
 import { loadAcceptedTermsVersion } from '../storage/termsConsentStore'
 import { BOOT_FADE_MS, bootChrome, bootLogoHtml, nativeSplashBg, needsBootFade } from './bootTheme'
-import { BootCelebration } from './BootCelebration'
 import { isCelebrationActive } from '../celebration/celebration'
 import { loadCelebrationChoice } from '../storage/celebrationStore'
 import { useCelebration } from '../celebration/CelebrationProvider'
@@ -717,9 +716,6 @@ export function LoginGate({ children }: { children: ReactNode }) {
                 />
               </View>
             ) : null}
-            {/* お祝いの2行（静止）。WebView の輪と同じ bootCelebrate・bootMode 決定後だけ。スプラッシュ色の被せより下＝
-                クロスフェードと一緒に現れる。 */}
-            {celebrateNow && bootMode != null ? <BootCelebration variant={variant} topInset={insets.top} /> : null}
             {/* フラッシュ抑制: ネイティブスプラッシュが出していた色を被せ、BOOT_FADE_MS で消す。
                 スプラッシュはOSスキーム固定なのでテーマと食い違うことがあり（例: テーマ=ダーク/OS=ライト）、
                 そのままだと白→暗が瞬間的に飛ぶ。色が一致していれば被せない（fadeNeeded=false）。

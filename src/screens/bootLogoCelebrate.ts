@@ -1,40 +1,48 @@
 /**
- * 起動画面（アプリ内の WebView）の「お祝いの飾り」＝ロゴを囲む月桂樹の輪。
- * 設計: docs/design/2026-10-08-celebration-mode.md（本人承認 2026-10-08）。
+ * 起動画面（アプリ内の WebView）の「お祝いの飾り」＝ロゴの**上**に置く、お祝いの2行と葉の飾り。
+ * 設計: docs/design/2026-10-08-celebration-mode.md（本人承認 2026-10-08・配置は 2026-10-08 に「ロゴの上・ロゴと被せない」へ変更）。
  *
- * 出所（ブランド資産の規約・docs/brand-mark.md）: **この図形はこのファイルの数値だけで決まる自前の幾何**。
+ * 出所（ブランド資産の規約・docs/brand-mark.md）: **葉の飾りはこのファイルの数値だけで決まる自前の幾何**。
  * 外部の画像・ロゴ・メダル・校章・写真・生成AIの出力は一切使っていない。葉＝楕円（rx=LEAF_RX, ry=LEAF_RY）を
- * 円周（中心 (100,100)・半径 RING_R）に沿って並べ、左右対称に置く。頂点に小さな点を1つ。
- *   - 葉は左右8枚ずつ。ロゴ側（真下）の角度 FIRST_DEG から STEP_DEG ずつ上へ（上端は開けておく＝輪は閉じない）。
- *   - viewBox は 200x200、表示は 204px（ロゴ 144px の入れ物の中心に置く。ロゴ半径 72px の外側に葉が回る）。
- * 「メダルや賞の絵」ではなく葉の輪だけ（祝いの定番の形）。形が似るものが無いかは実物で目視する（採用記録）。
+ * ロゴの上に浅い弧（∩・半径 ARC_R）を描くよう左右対称に並べ、頂点に小さな点を1つ置く。
+ *   - 葉は左右 LEAVES_PER_SIDE 枚ずつ。頂点側（点の隣）から ARC_FIRST_DEG・ARC_STEP_DEG ずつ離れる。
+ *   - 葉の長軸は円弧の接線から TILT_DEG だけ外へ開く（点線でなく葉の連なりに見える）。
+ *   - viewBox は 200x40、表示も 200x40px。
+ * 「メダルや賞の絵」ではなく葉だけ（祝いの定番の形）。形が似るものが無いかは実物で目視する（採用記録）。
  *
  * 作法（bootLogoDark / bootLogoWarm と同じ）: 原本 bootLogoHtml.ts は生成物で手編集しない。
  * 各 HTML を**文字列変換で派生**し、足すだけで既存を1文字も変えない（bootLogoCelebrate.test.ts が復元で確認）。
  *
- * 配置: ロゴの入れ物（144x144・boltRise で上昇する要素）の**子**にする。ロゴと一緒に動くので位置がずれず、
- * ロゴ列の流れ（縦中央寄せ・boltRise の 121.2px は列の高さの実測値）を変えない。
- * **中心をロゴの中心より 20px 上へずらす**（RING_UP）: full のイントロでは、ロゴの下 15.9px まで「CLASS」が
- * 寄ってくる（bootLogoHtml.ts のコメント）。輪を中心に置くと下端の葉がその間隔を食って文字に重なる
- * （独立レビューがヘッドレス Chrome で実測・約9px）。14px では下端と文字のすき間が約2pxしか残らなかったので 20px にした（実測で約8px）。
+ * 配置: ロゴの入れ物（144x144・boltRise で上昇する要素）の**子**で、**入れ物の真上**（bottom:100%＋余白）。
+ * ロゴと一緒に動くので位置がずれず、ロゴ列の流れ（縦中央寄せ・boltRise の 121.2px は列の高さの実測値）を変えない。
+ * ロゴの上は、フルイントロでも何も来ない空き（CLASS・LETUS はロゴの下に集まる）なので、飾りがロゴや文字に重ならない。
+ * 本人の指示（2026-10-08）: 「飾りはアイコンの上。ロゴと被せたくない」。ロゴを**囲まない**。
+ * 日本語は埋め込みフォントが漢字を持たないので端末の和文フォントになる（lang="ja"＝Android で中国語字形に倒れない）。
  * 現れ方: boltRise（0.15s + 0.9s）がほぼ落ち着く 0.75s から、**0.36s**（規約の祝福の上限 360ms）で淡く出す。静止後は動かない。
- * 視覚効果を減らす設定では、**動き（拡大）を外して透明度だけ**のフェードにする。最初から不透明にすると、
- * ロゴが OS のスプラッシュ位置（拡大・下寄り）にいる間に、ロゴより大きい輪が突然出る（レビューで実測）。
+ * 視覚効果を減らす設定では、**動き（拡大）を外して透明度だけ**のフェードにする。
  * ⚠warm 変換（animation を最終状態へ畳む）は先に済んだ HTML に足す。ここの animation は畳まれない。
  */
+import { CELEBRATION_COPY } from '../celebration/celebration'
+import { celebrationColors } from '../theme.celebration'
 
 export type CelebrateVariant = 'white' | 'green' | 'dark'
 
-const RING_R = 84
-const LEAF_RX = 17
-const LEAF_RY = 7
-const LEAVES_PER_SIDE = 8
-const FIRST_DEG = 10
-const STEP_DEG = 17
-/** 葉の長軸を、円周の接線から外向きに傾ける角度。隣の葉と重なり、点線ではなく葉の連なりに見える。 */
-const TILT_DEG = 24
-/** 輪の中心をロゴの中心から上へずらす量（px）。 */
-const RING_UP = 20
+const LEAF_RX = 12
+const LEAF_RY = 4.8
+const LEAVES_PER_SIDE = 5
+const ARC_R = 200
+const ARC_FIRST_DEG = 5
+const ARC_STEP_DEG = 5.2
+/** 葉の長軸を、円弧の接線から外向きに傾ける角度。隣の葉と重なり、点線ではなく葉の連なりに見える。 */
+const TILT_DEG = 22
+const SVG_W = 200
+const SVG_H = 40
+/** 葉の中心の上端（頂点の葉）の余白。 */
+const PAD_TOP = 9
+/** 文言の下・葉の飾りの上の余白（px）。 */
+const GAP_TEXT_TO_ORNAMENT = 6
+/** 葉の飾りの下端とロゴの入れ物の上端との間（px）。 */
+const GAP_TO_LOGO = 14
 
 const PALETTE: Record<CelebrateVariant, { leaves: [string, string]; dot: string }> = {
   // 白地: 翠の濃淡（象牙は白に溶けるので葉には使わない）
@@ -49,36 +57,58 @@ function round1(n: number): string {
   return (Math.round(n * 10) / 10).toString()
 }
 
-function wreathSvg(variant: CelebrateVariant): string {
+function ornamentSvg(variant: CelebrateVariant): string {
   const { leaves, dot } = PALETTE[variant]
+  const cy = PAD_TOP + ARC_R // 円弧の中心（頂点の葉の真下）
   const parts: string[] = []
   for (let k = 0; k < LEAVES_PER_SIDE; k++) {
-    const deg = FIRST_DEG + k * STEP_DEG
+    const deg = ARC_FIRST_DEG + k * ARC_STEP_DEG
     const phi = (deg * Math.PI) / 180
-    const x = 100 - RING_R * Math.sin(phi)
-    const y = 100 + RING_R * Math.cos(phi)
+    const x = 100 - ARC_R * Math.sin(phi)
+    const y = cy - ARC_R * Math.cos(phi)
     const fill = leaves[k % 2]
-    // 左: 円周の接線方向に葉の長軸を向ける（rotate = deg）。右はその鏡像。
+    // 左: 円弧の接線（頂点から離れる向き＝左下がり）に長軸を合わせ、外（上）へ TILT だけ開く。右はその鏡像。
     parts.push(
-      `<ellipse cx="${round1(x)}" cy="${round1(y)}" rx="${LEAF_RX}" ry="${LEAF_RY}" fill="${fill}" transform="rotate(${deg + TILT_DEG} ${round1(x)} ${round1(y)})"/>`,
+      `<ellipse cx="${round1(x)}" cy="${round1(y)}" rx="${LEAF_RX}" ry="${LEAF_RY}" fill="${fill}" transform="rotate(${round1(-deg + TILT_DEG)} ${round1(x)} ${round1(y)})"/>`,
     )
     parts.push(
-      `<ellipse cx="${round1(200 - x)}" cy="${round1(y)}" rx="${LEAF_RX}" ry="${LEAF_RY}" fill="${fill}" transform="rotate(${-(deg + TILT_DEG)} ${round1(200 - x)} ${round1(y)})"/>`,
+      `<ellipse cx="${round1(SVG_W - x)}" cy="${round1(y)}" rx="${LEAF_RX}" ry="${LEAF_RY}" fill="${fill}" transform="rotate(${round1(deg - TILT_DEG)} ${round1(SVG_W - x)} ${round1(y)})"/>`,
     )
   }
-  parts.push(`<circle cx="100" cy="${100 - RING_R}" r="5" fill="${dot}"/>`)
+  parts.push(`<circle cx="100" cy="${PAD_TOP - 5}" r="3.6" fill="${dot}"/>`)
   return (
-    '<svg class="celeb" viewBox="0 0 200 200" aria-hidden="true" ' +
-    'style="position:absolute;left:50%;top:50%;width:204px;height:204px;margin:-' + (102 + RING_UP) + 'px 0 0 -102px;pointer-events:none;' +
-    'animation:celebIn 0.36s cubic-bezier(0.16,1,0.3,1) 0.75s both;">' +
+    `<svg viewBox="0 0 ${SVG_W} ${SVG_H}" aria-hidden="true" ` +
+    `style="display:block;width:${SVG_W}px;height:${SVG_H}px;margin-top:${GAP_TEXT_TO_ORNAMENT}px;">` +
     parts.join('') +
     '</svg>'
   )
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+const BLOCK_WIDTH = 320
+/** ロゴの入れ物（144px）の中心に、幅 BLOCK_WIDTH のブロックを中央寄せするための左オフセット。 */
+const BLOCK_LEFT = (144 - BLOCK_WIDTH) / 2
+
+function celebrateBlock(variant: CelebrateVariant): string {
+  const c = celebrationColors(variant)
+  return (
+    '<div class="celeb" lang="ja" ' +
+    `style="position:absolute;left:${BLOCK_LEFT}px;bottom:100%;width:${BLOCK_WIDTH}px;margin-bottom:${GAP_TO_LOGO}px;` +
+    'display:flex;flex-direction:column;align-items:center;text-align:center;white-space:nowrap;pointer-events:none;' +
+    'animation:celebIn 0.36s cubic-bezier(0.16,1,0.3,1) 0.75s both;">' +
+    `<span style="font-family:system-ui,sans-serif;font-size:14px;font-weight:700;line-height:1.5;letter-spacing:0.04em;color:${c.bootTitle};">${escapeHtml(CELEBRATION_COPY.bootTitle)}</span>` +
+    `<span style="font-family:system-ui,sans-serif;font-size:12px;font-weight:500;line-height:1.5;letter-spacing:0.06em;color:${c.bootName};">${escapeHtml(CELEBRATION_COPY.bootName)}</span>` +
+    ornamentSvg(variant) +
+    '</div>'
+  )
+}
+
 const CELEB_CSS =
   '/*celeb-start*/' +
-  '@keyframes celebIn{0%{opacity:0;transform:scale(0.94)}100%{opacity:1;transform:scale(1)}}' +
+  '@keyframes celebIn{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}' +
   '@keyframes celebFade{0%{opacity:0}100%{opacity:1}}' +
   '@media (prefers-reduced-motion: reduce){.celeb{animation:celebFade 0.36s cubic-bezier(0.16,1,0.3,1) 0.75s both!important}}' +
   '/*celeb-end*/'
@@ -87,11 +117,11 @@ const LOGO_BOX_OPEN = '<div style="width:144px;height:144px;animation:boltRise'
 const LOGO_IMG = '"><img src="data:image/png'
 
 /**
- * 起動画面の HTML（原本・ダーク・warm のいずれも）にお祝いの輪を足す。
+ * 起動画面の HTML（原本・ダーク・warm のいずれも）にお祝いの飾りを足す。
  * 足す場所（ロゴの入れ物）が見つからない・すでに足してある場合は、そのまま返す（起動を壊さない）。
  */
 export function toCelebrateBootHtml(html: string, variant: CelebrateVariant): string {
-  if (html.includes('<svg class="celeb"')) return html
+  if (html.includes('<div class="celeb"')) return html
   const i = html.indexOf(LOGO_BOX_OPEN)
   if (i < 0) return html
   const j = html.indexOf(LOGO_IMG, i)
@@ -101,7 +131,7 @@ export function toCelebrateBootHtml(html: string, variant: CelebrateVariant): st
   const withBox =
     html.slice(0, i) + '<div style="position:relative;width:144px;height:144px;animation:boltRise' + styleRest + '">'
   const afterTag = html.slice(j + 2) // 先頭が '<img src="data:image/png...'
-  const out = withBox + wreathSvg(variant) + afterTag
+  const out = withBox + celebrateBlock(variant) + afterTag
   const k = out.indexOf('</style>')
   if (k < 0) return html
   return out.slice(0, k) + CELEB_CSS + out.slice(k)

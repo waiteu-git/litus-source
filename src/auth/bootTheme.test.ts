@@ -98,7 +98,7 @@ describe('app.jsonのsplash色との一致（フェード計算の前提）', ()
   })
 })
 
-describe('bootLogoHtml の第3引数（お祝い）: 既定は従来の6通りと1文字も変わらず、true の時だけ輪が付く', () => {
+describe('bootLogoHtml の第3引数（お祝い）: 既定は従来の6通りと1文字も変わらず、true の時だけお祝いの飾りが付く', () => {
   const cases: Array<['white' | 'green' | 'dark', 'full' | 'warm']> = [
     ['white', 'full'],
     ['green', 'full'],
@@ -108,17 +108,17 @@ describe('bootLogoHtml の第3引数（お祝い）: 既定は従来の6通り�
     ['dark', 'warm'],
   ]
 
-  it.each(cases)('%s/%s: 引数なし＝false 指定＝従来どおり（輪なし）', (variant, mode) => {
+  it.each(cases)('%s/%s: 引数なし＝false 指定＝従来どおり（飾りなし）', (variant, mode) => {
     const legacy = bootLogoHtml(variant, mode)
     expect(bootLogoHtml(variant, mode, false)).toBe(legacy)
-    expect(legacy).not.toContain('<svg class="celeb"')
+    expect(legacy).not.toContain('<div class="celeb"')
   })
 
-  it.each(cases)('%s/%s: true なら輪が1つ付き、輪以外は従来と同じ（足すだけ）', (variant, mode) => {
+  it.each(cases)('%s/%s: true なら飾りが1つ付き、飾り以外は従来と同じ（足すだけ）', (variant, mode) => {
     const base = bootLogoHtml(variant, mode)
     const out = bootLogoHtml(variant, mode, true)
     expect(out).not.toBe(base)
-    expect(out.split('<svg class="celeb"').length - 1).toBe(1)
+    expect(out.split('<div class="celeb"').length - 1).toBe(1)
     expect(out.length).toBeGreaterThan(base.length)
     // 2回目（キャッシュ）も同じ結果
     expect(bootLogoHtml(variant, mode, true)).toBe(out)

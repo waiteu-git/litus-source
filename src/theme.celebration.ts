@@ -22,7 +22,7 @@ export type CelebrationColors = {
   markStarStroke: string
   /** 画面の見出しの下の細い線。 */
   headerLine: string
-  /** 起動画面の2行（ロゴの上）。 */
+  /** 起動画面の2行（ロゴの真上）。 */
   bootTitle: string
   bootName: string
 }
@@ -34,9 +34,9 @@ const GREEN: CelebrationColors = {
   markStarFill: '#ecdca0',
   markStarStroke: '#5f5226',
   headerLine: '#f3ecd2',
-  // 翠の起動画面は上端が明るい翠＝白文字は読めない。深い翠を使う。
-  bootTitle: '#04322a',
-  bootName: '#04322a',
+  // 翠の起動画面は、文字のある高さ（ロゴの真上・画面の上から約6〜30%）が明るめの翠＝白文字は読めない。さらに深い翠を使う。
+  bootTitle: '#021f19',
+  bootName: '#021f19',
 }
 
 const WHITE: CelebrationColors = {

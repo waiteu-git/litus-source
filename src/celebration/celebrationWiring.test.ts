@@ -71,10 +71,9 @@ describe('起動画面（LoginGate）: お祝いは bootMode より先に確定�
     expect(src).not.toMatch(/bootLogoHtml\(variant, bootMode(, bootCelebrate)?\)/)
   })
 
-  it('2行は celebrateNow && bootMode != null の時だけ、スプラッシュ色の被せ（fadeNeeded）より下に描く', () => {
-    const iText = indexOrFail(src, '{celebrateNow && bootMode != null ? <BootCelebration variant={variant} topInset={insets.top} /> : null}')
-    const iFade = indexOrFail(src, '{fadeNeeded ? (')
-    expect(iText).toBeLessThan(iFade)
+  it('お祝いの文言と飾りは WebView の HTML の中（ロゴの真上）にだけ在る＝RN の被せ（ロゴと位置がずれる別レイヤー）を持たない', () => {
+    expect(src).not.toContain('BootCelebration')
+    expect(() => read('src/auth/BootCelebration.tsx')).toThrow()
   })
 
   it('celebrateNow は、Provider が ready ならその active、ready 前だけ起動時の直読み値（設定の切替が再ログインの起動画面にも届く）', () => {
@@ -148,10 +147,6 @@ describe('カードの絵（フラスコと星）: 画像ではなく react-nati
     const card = stripComments(read('src/home/CelebrationCard.tsx'))
     expect(card).toMatch(/<CelebrationMark\s+variant=\{variant\}\s+size=\{40\}\s*\/>/)
     expect(card).not.toContain('ribbon-outline')
-  })
-  it('起動画面の2行は文字だけ（輪と重なる飾りを足さない）', () => {
-    const boot = stripComments(read('src/auth/BootCelebration.tsx'))
-    expect(boot).not.toMatch(/Ionicons|<Svg|<Image/)
   })
 })
 
