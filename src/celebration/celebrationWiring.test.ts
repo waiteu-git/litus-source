@@ -103,8 +103,22 @@ describe('ホーム: 最上段（ScreenHint の直前）に1枚だけ。ホー�
 
 describe('カード: オフ/期限後/読み込み前は描かない・リンクは外部ブラウザ・非公式を明記・文言は台帳から', () => {
   const src = read('src/home/CelebrationCard.tsx')
-  it('active でなければ null', () => {
-    expect(src).toContain('if (!active) return null')
+  it('cardVisible（有効で、×で閉じていない）でなければ null', () => {
+    expect(src).toContain('const { cardVisible, dismissCard } = useCelebration()')
+    expect(src).toContain('if (!cardVisible) return null')
+  })
+  it('右上の×: ScreenHint と同じ形（PressableRow・約44x44の押せる範囲・role=button・読み上げ名は台帳）で、押すと dismissCard', () => {
+    const code = stripComments(src)
+    expect(code).toContain("import { PressableRow } from '../ui/Pressable'")
+    expect(code).toContain('onPress={dismissCard}')
+    expect(code).toContain('hitSlop={DISMISS_HIT_SLOP}')
+    expect(code).toContain('accessibilityRole="button"')
+    expect(code).toContain('accessibilityLabel={CELEBRATION_COPY.cardDismissA11y}')
+    expect(code).toMatch(/<Ionicons\s+name="close"\s+size=\{18\}\s+color=\{ui\.chevron\}\s*\/>/)
+    // ScreenHint の押せる範囲と同じ値
+    const hint = read('src/tutorial/ScreenHint.tsx')
+    const slop = (t: string) => t.match(/DISMISS_HIT_SLOP = (\{[^}]*\}) as const/)![1]
+    expect(slop(code)).toBe(slop(hint))
   })
   it('地・角丸・余白は標準のガラスカード（ui.card）に任せ、淡い黄みの地を自前で作らない（警告面と見分けがつかなくなる）', () => {
     const code = stripComments(src)
@@ -200,6 +214,12 @@ describe('アプリ: CelebrationProvider は DisplaySettingsProvider の内側�
 
 describe('Provider: 読み込み前は出さない（オフの人に一瞬だけ出ない）', () => {
   const src = read('src/celebration/CelebrationProvider.tsx')
+  it('×で閉じた記録: 読み込みは選択と一緒に（どちらも投げない load）。切替のたびに cardDismissedAfterToggle で残す/消すを決め、dismissCard は保存する', () => {
+    expect(src).toContain('Promise.all([loadCelebrationChoice(), loadCelebrationCardDismissed()])')
+    expect(src).toContain('cardDismissedAfterToggle(choice, on, cardDismissed)')
+    expect(src).toContain('const cardVisible = isCelebrationCardVisible(active, cardDismissed)')
+    expect(src).toContain('saveCelebrationCardDismissed(true)')
+  })
   it('active と rowVisible は、ready を前提にする純粋関数 celebrationState から取る（挙動は celebration.test.ts が守る）', () => {
     expect(src).toContain('celebrationState(ready, choice, new Date())')
   })

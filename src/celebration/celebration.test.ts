@@ -4,7 +4,9 @@ import {
   CELEBRATION_ENABLED,
   CELEBRATION_END_MS,
   CELEBRATION_LINK_URL,
+  cardDismissedAfterToggle,
   celebrationState,
+  isCelebrationCardVisible,
   isCelebrationActive,
   isCelebrationRowVisible,
   type CelebrationChoice,
@@ -140,5 +142,48 @@ describe('文言の台帳（権利と事実の取り決めを機械で守る）'
   it('受賞者は氏名と肩書（名誉教授）だけで、読み仮名・年齢・経歴を書かない', () => {
     expect(all).toContain('硤合憲三')
     expect(all).not.toMatch(/そあい|ソアイ|Soai|歳|才|生まれ|大学卒|博士/)
+  })
+})
+
+describe('ホームのカードの×: 閉じた記録はカードだけに効き、オフ→オンへ戻した時だけ消える', () => {
+  it('カードが出るのは、有効（active）で、閉じていない時だけ', () => {
+    expect(isCelebrationCardVisible(true, false)).toBe(true)
+    expect(isCelebrationCardVisible(true, true)).toBe(false)
+    expect(isCelebrationCardVisible(false, false)).toBe(false)
+    expect(isCelebrationCardVisible(false, true)).toBe(false)
+  })
+
+  it('閉じても、起動画面・見出しの線を決める active は変わらない（カードだけが消える）', () => {
+    const now = JST('2026-10-16T09:00:00')
+    const { active } = celebrationState(true, null, now)
+    expect(active).toBe(true)
+    expect(isCelebrationCardVisible(active, true)).toBe(false)
+    // 閉じた記録は celebrationState の結果（active・rowVisible）に混ざらない
+    expect(celebrationState(true, null, now)).toEqual({ active: true, rowVisible: true })
+  })
+
+  it('オフ→オンへ戻した時だけ、閉じた記録を消す（カードをもう一度見たい人の操作）', () => {
+    expect(cardDismissedAfterToggle('off', true, true)).toBe(false)
+  })
+
+  it('すでにオン（未選択・オン）で「オン」を押しただけでは、閉じた記録を消さない（閉じたカードが勝手に戻らない）', () => {
+    expect(cardDismissedAfterToggle(null, true, true)).toBe(true)
+    expect(cardDismissedAfterToggle('on', true, true)).toBe(true)
+  })
+
+  it('オフにしても、閉じた記録はそのまま（オフ→オンで初めて消える）', () => {
+    expect(cardDismissedAfterToggle(null, false, true)).toBe(true)
+    expect(cardDismissedAfterToggle('on', false, true)).toBe(true)
+    expect(cardDismissedAfterToggle('on', false, false)).toBe(false)
+  })
+
+  it('閉じていなければ、どの切替でも閉じたままにならない', () => {
+    for (const prev of [null, 'on', 'off'] as const) {
+      for (const on of [true, false]) expect(cardDismissedAfterToggle(prev, on, false)).toBe(false)
+    }
+  })
+
+  it('×の読み上げ名は台帳から（「閉じる」を含む）', () => {
+    expect(CELEBRATION_COPY.cardDismissA11y).toContain('閉じる')
   })
 })

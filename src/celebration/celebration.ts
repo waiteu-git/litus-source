@@ -64,6 +64,22 @@ export function celebrationState(
   }
 }
 
+/**
+ * ホームのカードを出すか。お祝いデザインが有効（active）で、×で閉じていない時だけ。
+ * ×で消すのは**カードだけ**（起動画面の飾り・見出しの線・設定の行は、設定のオン/オフに従う）。
+ */
+export function isCelebrationCardVisible(active: boolean, cardDismissed: boolean): boolean {
+  return active && !cardDismissed
+}
+
+/**
+ * 設定の切替のあと、「×で閉じた」記録を残すか。**オフからオンへ戻した時だけ消す**（もう一度見たい人の操作）。
+ * すでにオンの状態で「オン」を押しただけでは消さない（閉じたカードが勝手に戻らない）。
+ */
+export function cardDismissedAfterToggle(prevChoice: CelebrationChoice, nextOn: boolean, dismissed: boolean): boolean {
+  return nextOn && prevChoice === 'off' ? false : dismissed
+}
+
 /** 大学の公式発表ページ（2026-10-07）。外部ブラウザで開く（アプリ内 WebView は大学のログインの Cookie を共有するので使わない）。 */
 export const CELEBRATION_LINK_URL = 'https://www.tus.ac.jp/today/archive/20261007_3541.html'
 
@@ -77,6 +93,8 @@ export const CELEBRATION_COPY = {
   cardLinkLabel: '大学の発表ページを開く',
   cardLinkA11y: '大学の発表ページを開く。ブラウザで開きます',
   cardNote: 'リタスは東京理科大学の非公式アプリです',
+  /** カード右上の×の読み上げ名。 */
+  cardDismissA11y: 'お祝いのカードを閉じる',
   /** 設定 › 表示。機能名にノーベルや大学名を入れない。 */
   settingLabel: 'お祝いデザイン',
   settingNote:
