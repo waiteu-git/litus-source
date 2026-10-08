@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CELEBRATION_COPY,
+  CELEBRATION_ENABLED,
   CELEBRATION_END_MS,
   CELEBRATION_LINK_URL,
   celebrationState,
@@ -69,6 +70,26 @@ describe('celebrationState: 読み込み前は「出さない」（オフの人�
     }
     expect(celebrationState(true, null, now)).toEqual({ active: true, rowVisible: true })
     expect(celebrationState(true, 'off', now)).toEqual({ active: false, rowVisible: true })
+  })
+})
+
+describe('保険のスイッチ CELEBRATION_ENABLED: false にすると、お祝いデザインは全員・全画面で無効（1行で外せる）', () => {
+  const inPeriod = JST('2026-10-16T09:00:00')
+  it('出荷する値の型は boolean（1行で true/false を切り替えられる形）', () => {
+    expect(typeof CELEBRATION_ENABLED).toBe('boolean')
+  })
+  it('enabled=false: 選択（未選択・オン・オフ）と時点（期間内・期限後）のどれでも、表示も行も出ない', () => {
+    for (const c of [null, 'on', 'off'] as const) {
+      expect(isCelebrationActive(c, inPeriod, false)).toBe(false)
+      expect(isCelebrationActive(c, JST('2027-02-01T00:00:00'), false)).toBe(false)
+      expect(celebrationState(true, c, inPeriod, false)).toEqual({ active: false, rowVisible: false })
+    }
+    expect(isCelebrationRowVisible(inPeriod, false)).toBe(false)
+  })
+  it('enabled=true は従来どおり（期間内なら未選択はオン・行は出る）', () => {
+    expect(isCelebrationActive(null, inPeriod, true)).toBe(true)
+    expect(isCelebrationRowVisible(inPeriod, true)).toBe(true)
+    expect(celebrationState(true, null, inPeriod, true)).toEqual({ active: true, rowVisible: true })
   })
 })
 

@@ -26,18 +26,26 @@ export type CelebrationChoice = 'on' | 'off' | null
 /** この時刻（2027-01-01 00:00 JST＝2026-12-31 の終わり）を過ぎると、全員が通常に戻る。 */
 export const CELEBRATION_END_MS = Date.parse('2027-01-01T00:00:00+09:00')
 
-function withinPeriod(now: Date): boolean {
-  return now.getTime() < CELEBRATION_END_MS
+/**
+ * 🔴保険のスイッチ（1か所・1行）: **false にすると、お祝いデザインは全員・全画面で無効**（起動画面の輪と2行・
+ * ホームのカード・見出しの線・設定の行のすべて。表示の判定がこの関数群を通るので、他のコードは触らない）。
+ * 画像検索や実機確認で問題が出た時に、これを false にして 223 を焼く。
+ * 保存値（オン/オフ）は消えない＝true に戻せば元の挙動に戻る。テストも通る（値の型だけを固定している）。
+ */
+export const CELEBRATION_ENABLED = true
+
+function withinPeriod(now: Date, enabled: boolean): boolean {
+  return enabled && now.getTime() < CELEBRATION_END_MS
 }
 
-/** お祝いデザインを表示するか。期間内かつオフを選んでいない（未選択・オン）時だけ。期限後は全員 false。 */
-export function isCelebrationActive(choice: CelebrationChoice, now: Date): boolean {
-  return choice !== 'off' && withinPeriod(now)
+/** お祝いデザインを表示するか。期間内かつオフを選んでいない（未選択・オン）時だけ。期限後・スイッチ false は全員 false。 */
+export function isCelebrationActive(choice: CelebrationChoice, now: Date, enabled: boolean = CELEBRATION_ENABLED): boolean {
+  return choice !== 'off' && withinPeriod(now, enabled)
 }
 
-/** 設定に切替の行を出すか。期間内だけ（オフの人がオンへ戻せるように）。期限後は何も表示されないので行も出さない。 */
-export function isCelebrationRowVisible(now: Date): boolean {
-  return withinPeriod(now)
+/** 設定に切替の行を出すか。期間内だけ（オフの人がオンへ戻せるように）。期限後・スイッチ false は何も表示されないので行も出さない。 */
+export function isCelebrationRowVisible(now: Date, enabled: boolean = CELEBRATION_ENABLED): boolean {
+  return withinPeriod(now, enabled)
 }
 
 /**
@@ -48,10 +56,11 @@ export function celebrationState(
   ready: boolean,
   choice: CelebrationChoice,
   now: Date,
+  enabled: boolean = CELEBRATION_ENABLED,
 ): { active: boolean; rowVisible: boolean } {
   return {
-    active: ready && isCelebrationActive(choice, now),
-    rowVisible: ready && isCelebrationRowVisible(now),
+    active: ready && isCelebrationActive(choice, now, enabled),
+    rowVisible: ready && isCelebrationRowVisible(now, enabled),
   }
 }
 

@@ -214,6 +214,25 @@ describe('Provider: 読み込み前は出さない（オフの人に一瞬だけ
   })
 })
 
+describe('保険のスイッチ: 宣言は1か所・表示の判定は台帳の関数だけを通る（スイッチを false にすれば全画面で止まる）', () => {
+  it('CELEBRATION_ENABLED の宣言は celebration.ts の1か所だけ', () => {
+    const src = read('src/celebration/celebration.ts')
+    expect(src.match(/export const CELEBRATION_ENABLED = (true|false)$/m)).not.toBeNull()
+    expect(src.split('export const CELEBRATION_ENABLED').length - 1).toBe(1)
+  })
+  it('画面側（起動画面・Provider）は、表示の判定を台帳の関数（isCelebrationActive・celebrationState）で行い、期限や有効フラグを自前で比べない', () => {
+    for (const rel of ['src/auth/LoginGate.tsx', 'src/celebration/CelebrationProvider.tsx', 'src/home/CelebrationCard.tsx', 'src/screens/SettingsScreen.tsx', 'src/ui/screen.tsx']) {
+      const code = stripComments(read(rel))
+      expect(code).not.toMatch(/CELEBRATION_END_MS|CELEBRATION_ENABLED/)
+    }
+  })
+  it('起動画面の WebView と2行は、台帳の判定（isCelebrationActive）か Provider の active だけから決まる', () => {
+    const src = stripComments(read('src/auth/LoginGate.tsx'))
+    expect(src).toContain('isCelebrationActive(')
+    expect(src).toContain('celebration.active')
+  })
+})
+
 describe('文言は台帳（src/celebration/celebration.ts）の1か所だけ', () => {
   function walk(dir: string, out: string[] = []): string[] {
     for (const name of readdirSync(dir)) {
