@@ -4,16 +4,19 @@
  *
  * 出所（ブランド資産の規約・docs/brand-mark.md）: **葉の飾りはこのファイルの数値だけで決まる自前の幾何**。
  * 外部の画像・ロゴ・メダル・校章・写真・生成AIの出力は一切使っていない。葉＝楕円（rx=LEAF_RX, ry=LEAF_RY）を
- * ロゴの上に浅い弧（∩・半径 ARC_R）を描くよう左右対称に並べ、頂点に小さな点を1つ置く。
+ * 浅い弧（半径 ARC_R）に沿って左右対称に並べ、頂点に小さな点を1つ置く。**お祝いの2行を、この弧（∩）と、それを上下反転した弧（∪）で
+ * 上下から挟む**（本人の指示 2026-10-08「お祝いメッセージを上下から挟む感じに」）。
  *   - 葉は左右 LEAVES_PER_SIDE 枚ずつ。頂点側（点の隣）から ARC_FIRST_DEG・ARC_STEP_DEG ずつ離れる。
  *   - 葉の長軸は円弧の接線から TILT_DEG だけ外へ開く（点線でなく葉の連なりに見える）。
- *   - viewBox は 200x40、表示も 200x40px。
+ *   - viewBox は SVG_W x SVG_H、表示も同じ px。
  * 「メダルや賞の絵」ではなく葉だけ（祝いの定番の形）。形が似るものが無いかは実物で目視する（採用記録）。
  *
  * 作法（bootLogoDark / bootLogoWarm と同じ）: 原本 bootLogoHtml.ts は生成物で手編集しない。
  * 各 HTML を**文字列変換で派生**し、足すだけで既存を1文字も変えない（bootLogoCelebrate.test.ts が復元で確認）。
  *
  * 配置: ロゴの入れ物（144x144・boltRise で上昇する要素）の**子**で、**入れ物の真上**（bottom:100%＋余白）。
+ * 上から 葉の弧（∩）→ 2行 → 葉の弧（∪）の順に積み、全体の高さは約 96px（360x640 の小さい端末でもロゴの上端まで
+ * 状態バーの下に収まる＝ロゴの上端は画面の上から (画面の高さ−379)/2。実測は design doc）。
  * ロゴと一緒に動くので位置がずれず、ロゴ列の流れ（縦中央寄せ・boltRise の 121.2px は列の高さの実測値）を変えない。
  * ロゴの上は、フルイントロでも何も来ない空き（CLASS・LETUS はロゴの下に集まる）なので、飾りがロゴや文字に重ならない。
  * 本人の指示（2026-10-08）: 「飾りはアイコンの上。ロゴと被せたくない」。ロゴを**囲まない**。
@@ -27,22 +30,22 @@ import { celebrationColors } from '../theme.celebration'
 
 export type CelebrateVariant = 'white' | 'green' | 'dark'
 
-const LEAF_RX = 12
-const LEAF_RY = 4.8
-const LEAVES_PER_SIDE = 5
-const ARC_R = 200
-const ARC_FIRST_DEG = 5
-const ARC_STEP_DEG = 5.2
+const LEAF_RX = 11
+const LEAF_RY = 4.4
+const LEAVES_PER_SIDE = 6
+const ARC_R = 420
+const ARC_FIRST_DEG = 2.2
+const ARC_STEP_DEG = 2.2
 /** 葉の長軸を、円弧の接線から外向きに傾ける角度。隣の葉と重なり、点線ではなく葉の連なりに見える。 */
 const TILT_DEG = 22
-const SVG_W = 200
-const SVG_H = 40
+const SVG_W = 220
+const SVG_H = 25
 /** 葉の中心の上端（頂点の葉）の余白。 */
-const PAD_TOP = 9
-/** 文言の下・葉の飾りの上の余白（px）。 */
-const GAP_TEXT_TO_ORNAMENT = 6
-/** 葉の飾りの下端とロゴの入れ物の上端との間（px）。 */
-const GAP_TO_LOGO = 14
+const PAD_TOP = 7
+/** 文言と葉の弧との間（px）。 */
+const GAP_TEXT_TO_ORNAMENT = 1
+/** 下の葉の弧の下端とロゴの入れ物の上端との間（px）。 */
+const GAP_TO_LOGO = 10
 
 const PALETTE: Record<CelebrateVariant, { leaves: [string, string]; dot: string }> = {
   // 白地: 翠の濃淡（象牙は白に溶けるので葉には使わない）
@@ -57,14 +60,15 @@ function round1(n: number): string {
   return (Math.round(n * 10) / 10).toString()
 }
 
-function ornamentSvg(variant: CelebrateVariant): string {
+/** 葉の弧。up＝∩（頂点が上・文言の上に置く）／down＝∪（上下反転・文言の下に置く）。 */
+function ornamentSvg(variant: CelebrateVariant, dir: 'up' | 'down'): string {
   const { leaves, dot } = PALETTE[variant]
   const cy = PAD_TOP + ARC_R // 円弧の中心（頂点の葉の真下）
   const parts: string[] = []
   for (let k = 0; k < LEAVES_PER_SIDE; k++) {
     const deg = ARC_FIRST_DEG + k * ARC_STEP_DEG
     const phi = (deg * Math.PI) / 180
-    const x = 100 - ARC_R * Math.sin(phi)
+    const x = SVG_W / 2 - ARC_R * Math.sin(phi)
     const y = cy - ARC_R * Math.cos(phi)
     const fill = leaves[k % 2]
     // 左: 円弧の接線（頂点から離れる向き＝左下がり）に長軸を合わせ、外（上）へ TILT だけ開く。右はその鏡像。
@@ -75,11 +79,15 @@ function ornamentSvg(variant: CelebrateVariant): string {
       `<ellipse cx="${round1(SVG_W - x)}" cy="${round1(y)}" rx="${LEAF_RX}" ry="${LEAF_RY}" fill="${fill}" transform="rotate(${round1(deg - TILT_DEG)} ${round1(SVG_W - x)} ${round1(y)})"/>`,
     )
   }
-  parts.push(`<circle cx="100" cy="${PAD_TOP - 5}" r="3.6" fill="${dot}"/>`)
+  parts.push(`<circle cx="${SVG_W / 2}" cy="${PAD_TOP - 4}" r="3" fill="${dot}"/>`)
+  // ∪ は ∩ を上下に反転するだけ（葉の回転も、点の位置も一緒に鏡映される）。
+  const body = parts.join('')
+  const inner = dir === 'down' ? `<g transform="translate(0 ${SVG_H}) scale(1 -1)">${body}</g>` : body
+  const margin = dir === 'up' ? `margin-bottom:${GAP_TEXT_TO_ORNAMENT}px;` : `margin-top:${GAP_TEXT_TO_ORNAMENT}px;`
   return (
     `<svg viewBox="0 0 ${SVG_W} ${SVG_H}" aria-hidden="true" ` +
-    `style="display:block;width:${SVG_W}px;height:${SVG_H}px;margin-top:${GAP_TEXT_TO_ORNAMENT}px;">` +
-    parts.join('') +
+    `style="display:block;width:${SVG_W}px;height:${SVG_H}px;${margin}">` +
+    inner +
     '</svg>'
   )
 }
@@ -99,9 +107,10 @@ function celebrateBlock(variant: CelebrateVariant): string {
     `style="position:absolute;left:${BLOCK_LEFT}px;bottom:100%;width:${BLOCK_WIDTH}px;margin-bottom:${GAP_TO_LOGO}px;` +
     'display:flex;flex-direction:column;align-items:center;text-align:center;white-space:nowrap;pointer-events:none;' +
     'animation:celebIn 0.36s cubic-bezier(0.16,1,0.3,1) 0.75s both;">' +
-    `<span style="font-family:system-ui,sans-serif;font-size:14px;font-weight:700;line-height:1.5;letter-spacing:0.04em;color:${c.bootTitle};">${escapeHtml(CELEBRATION_COPY.bootTitle)}</span>` +
-    `<span style="font-family:system-ui,sans-serif;font-size:12px;font-weight:500;line-height:1.5;letter-spacing:0.06em;color:${c.bootName};">${escapeHtml(CELEBRATION_COPY.bootName)}</span>` +
-    ornamentSvg(variant) +
+    ornamentSvg(variant, 'up') +
+    `<span style="font-family:system-ui,sans-serif;font-size:14px;font-weight:700;line-height:1.4;letter-spacing:0.04em;color:${c.bootTitle};">${escapeHtml(CELEBRATION_COPY.bootTitle)}</span>` +
+    `<span style="font-family:system-ui,sans-serif;font-size:12px;font-weight:500;line-height:1.4;letter-spacing:0.06em;color:${c.bootName};">${escapeHtml(CELEBRATION_COPY.bootName)}</span>` +
+    ornamentSvg(variant, 'down') +
     '</div>'
   )
 }

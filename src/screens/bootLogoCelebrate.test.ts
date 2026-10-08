@@ -62,7 +62,7 @@ describe('toCelebrateBootHtml: 6通り（3テーマ×full/warm）すべてに、
     expect(block).toContain('pointer-events:none')
     // ロゴの真上＝入れ物の上端（bottom:100%）に下端をつけ、余白を空ける。ロゴの中心基準（top:50%）で置かない＝ロゴに重ならない。
     expect(block).toMatch(/bottom:100%;[^"]*margin-bottom:\d+px/)
-    const outer = block.slice(0, block.indexOf('<span'))
+    const outer = block.slice(0, block.indexOf('>') + 1)
     expect(outer).not.toMatch(/(^|[^-])top:|margin-top/)
     // 入れ物（相対配置）の直後・ロゴ画像の前に入る＝ロゴと一緒に動く。
     expect(out).toMatch(/position:relative;width:144px;height:144px;animation:boltRise[^"]*"><div class="celeb"[\s\S]*?<\/svg><\/div><img src="data:image\/png/)
@@ -123,11 +123,30 @@ describe('toCelebrateBootHtml: 6通り（3テーマ×full/warm）すべてに、
     expect(toCelebrateBootHtml(odd, 'white')).toBe(odd)
   })
 
-  it('葉の飾りは規約のとおり静止画像ではなく svg の図形のみ（楕円10枚＋点1つ・装飾なので読み上げない）', () => {
-    const svg = toCelebrateBootHtml(BOOT_LOGO_WHITE, 'white').match(/<svg[\s\S]*?<\/svg>/)![0]
-    expect(count(svg, '<ellipse')).toBe(10)
-    expect(count(svg, '<circle')).toBe(1)
-    expect(svg).toContain('aria-hidden="true"')
-    expect(svg).not.toMatch(/<image|<use|href=|<text|<path/)
+  it('葉の飾りは規約のとおり静止画像ではなく svg の図形のみ（上＝∩・下＝∪の2つ・楕円12枚＋点1つずつ・装飾なので読み上げない）', () => {
+    const block = toCelebrateBootHtml(BOOT_LOGO_WHITE, 'white').match(BLOCK)![0]
+    const svgs = block.match(/<svg[\s\S]*?<\/svg>/g)!
+    expect(svgs).toHaveLength(2)
+    for (const svg of svgs) {
+      expect(count(svg, '<ellipse')).toBe(12)
+      expect(count(svg, '<circle')).toBe(1)
+      expect(svg).toContain('aria-hidden="true"')
+      expect(svg).not.toMatch(/<image|<use|href=|<text|<path/)
+    }
+    // 下の弧は上の弧を上下反転しただけ（同じ図形）。
+    expect(svgs[1]).toContain('scale(1 -1)')
+    expect(svgs[0]).not.toContain('scale(1 -1)')
+  })
+
+  it('文言は2つの葉の弧に挟まれている（上の弧 → 題 → 名 → 下の弧）', () => {
+    const block = toCelebrateBootHtml(BOOT_LOGO_WHITE, 'white').match(BLOCK)![0]
+    const iUp = block.indexOf('<svg')
+    const iTitle = block.indexOf(CELEBRATION_COPY.bootTitle)
+    const iName = block.indexOf(CELEBRATION_COPY.bootName)
+    const iDown = block.lastIndexOf('<svg')
+    expect(iUp).toBeGreaterThan(-1)
+    expect(iUp).toBeLessThan(iTitle)
+    expect(iTitle).toBeLessThan(iName)
+    expect(iName).toBeLessThan(iDown)
   })
 })
