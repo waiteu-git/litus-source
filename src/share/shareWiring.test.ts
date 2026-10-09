@@ -38,11 +38,18 @@ const IMPORTS_SHARE = /import\s*(?:type\s+)?\{[^}]*\bShare\b[^}]*\}\s*from\s*['"
 const CALLS_SHARE = /\bShare\s*\.\s*share\s*\(/
 /** openShareSheet の読み込み（静的 import・動的 import()・require）。 */
 const IMPORTS_OPEN = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"][^'"]*openShareSheet['"]/
-/** 戻り値を取る形（代入・await・.then）。 */
+/** 括弧の中身（入れ子2段まで）。`.catch(() => undefined)` の `()` を含めて読み飛ばすため。 */
+const PAREN = String.raw`\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)`
+/**
+ * 戻り値を取る形（代入・await・return・.then）。
+ * .then は `.catch(...)` を挟んだ後ろに付く形も拾う（catch は値をそのまま流すので、後ろの then は共有先を受け取れる）。
+ * `.finally` は値を受け取らないので対象外。
+ */
 const TAKES_RESULT = [
   /=\s*(?:await\s+)?Share\s*\.\s*share\b/,
   /\bawait\s+Share\s*\.\s*share\b/,
-  /Share\s*\.\s*share\s*\((?:[^()]|\([^()]*\))*\)\s*\.then\b/,
+  /\breturn\s+Share\s*\.\s*share\b/,
+  new RegExp(String.raw`Share\s*\.\s*share\s*${PAREN}(?:\s*\.\s*(?:catch|finally)\s*${PAREN})*\s*\.\s*then\b`),
 ]
 
 const fileOf = (rel: string) => files.find((f) => f.rel === rel)
@@ -87,6 +94,16 @@ describe('共有シートの配線（ラチェット）', () => {
     for (const re of TAKES_RESULT) expect(t, String(re)).not.toMatch(re)
     expect(t).toMatch(CALLS_SHARE)
     expect(t).toMatch(/\.catch\s*\(/)
+  })
+
+  it('openShareSheet.ts は Share.share の前に canOpenShare で二重タップを止め、開いた時刻を記録する', () => {
+    const t = strip(fileOf(OPEN)!.text)
+    const guard = t.search(/if\s*\(\s*!\s*canOpenShare\s*\([^)]*\)\s*\)\s*return\b/)
+    const record = t.search(/\blastOpenedAt\s*=\s*now\b/)
+    const call = t.search(CALLS_SHARE)
+    expect(guard).toBeGreaterThan(-1)
+    expect(record).toBeGreaterThan(guard)
+    expect(call).toBeGreaterThan(record)
   })
 
   it('src/share/ に activityType の語が無い', () => {
@@ -143,7 +160,8 @@ describe('共有シートの配線（ラチェット）', () => {
     const t = strip(fileOf(SETTINGS)!.text)
     expect(t).not.toContain('事前登録・お知らせ')
     expect(t).toContain('紹介ページ ↗')
-    expect(t).toMatch(/onPress=\{openLitusSite\}/)
+    // 文言を包む Pressable 自体が openLitusSite で開く（別の場所の onPress と取り違えない）
+    expect(t).toMatch(/<Pressable\s+onPress=\{openLitusSite\}[^>]*>\s*<Text[^>]*>紹介ページ ↗<\/Text>\s*<\/Pressable>/)
   })
 })
 
@@ -188,6 +206,9 @@ describe('検出器の対照（実物にまだ無い違反の形を、確かに�
     'await Share.share({ message })',
     'Share.share(buildShareContent()).then((r) => log(r))',
     'Share.share({ message: m }).then(() => undefined)',
+    'Share.share(buildShareContent()).catch(() => undefined).then((r) => log(r))',
+    'Share.share({ message }).finally(() => undefined).then((r) => log(r))',
+    'return Share.share(buildShareContent())',
   ])('戻り値を取る形 陽性: %s', (src) => {
     expect(TAKES_RESULT.some((re) => re.test(strip(src)))).toBe(true)
   })
@@ -195,6 +216,9 @@ describe('検出器の対照（実物にまだ無い違反の形を、確かに�
   it.each([
     'Share.share(buildShareContent()).catch(() => undefined)',
     'void Share.share({ message })',
+    'Share.share(buildShareContent()).catch(() => undefined).finally(() => undefined)',
+    'Share.share({ message }).catch((e) => warn(e))',
+    'return void Share.share(buildShareContent())',
   ])('戻り値を取る形 陰性: %s', (src) => {
     expect(TAKES_RESULT.some((re) => re.test(strip(src)))).toBe(false)
   })
