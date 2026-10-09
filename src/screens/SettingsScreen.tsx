@@ -21,6 +21,8 @@ import type { LetusNewsNotifySettings } from '../notifications/letusNewsNotify'
 import { ScreenBg, ScreenHeader, Segmented, useUi, useTabBarClearance } from '../ui/screen'
 import { Accordion } from '../ui/Accordion'
 import { LinkRow } from '../ui/LinkRow'
+import { openLitusSite } from '../ui/openLitusSite'
+import { openShareSheet } from '../share/openShareSheet'
 import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
 import { TYPE, SPACE } from '../ui/scale'
 import { FONT_LICENSE_TITLE } from '../legal/fontLicense'
@@ -506,14 +508,23 @@ export default function SettingsScreen() {
           />
         </View>
 
+        <View style={{ marginTop: 12 }}>
+          <LinkRow
+            icon="share-social-outline"
+            title="友だちに教える"
+            sub="紹介ページのURLを送る"
+            onPress={openShareSheet}
+          />
+        </View>
+
         <Accordion title="アプリ情報" icon="information-circle-outline">
           <View style={ui.card}>
             <Text style={{ color: ui.valueColor, fontWeight: '500' }}>
               リタス {formatVersionLabel(Application.nativeApplicationVersion, Application.nativeBuildVersion, isPrerelease(RELEASE_STAGE))}
               {devBadgeSuffix(RELEASE_STAGE)}
             </Text>
-            <Pressable onPress={() => Linking.openURL('https://litus.waiteu.dev/')}>
-              <Text style={[styles.link, { color: ui.labelColor }]}>事前登録・お知らせ ↗</Text>
+            <Pressable onPress={openLitusSite} accessibilityRole="link">
+              <Text style={[styles.link, { color: ui.labelColor }]}>紹介ページ ↗</Text>
             </Pressable>
             {reviewUrl ? (
               <Pressable onPress={() => Linking.openURL(reviewUrl).catch(() => undefined)} accessibilityRole="link">
