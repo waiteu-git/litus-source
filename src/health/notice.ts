@@ -19,10 +19,8 @@ import { isAppKilled, type KillSwitchStatus } from './killSwitch'
  * 脱出経路が、壊れているかもしれない同じ配信路に依存してはいけない
  * （status.json が壊れて取得失敗になっても、固定URLなら必ず開ける）。
  * 内容の差し替えは Web 側（Cloudflare Pages＝数秒で反映）で行う、という層分け。
- * 値はビルド時の環境変数（`src/config/endpoints.ts`・`EXPO_PUBLIC_SITE_URL`）。status.json には依存しない。
- * 未設定（null）なら脱出リンク・紹介ページ・共有の入口を出さない。
  */
-export { LITUS_SITE_URL } from '../config/endpoints'
+export const LITUS_SITE_URL = 'https://litus.waiteu.dev/'
 
 export type Notice = {
   /** 表示する本文（前後の空白を落としたもの）。 */

@@ -12,7 +12,7 @@ import type { NetInfoState } from '@react-native-community/netinfo'
  * Android は ConnectivityReceiver.java が boolean を載せるので probe は走らない＝OS差だった。
  *
  * 規約（TermsConsentScreen の TERMS_BODY / docs/legal/terms-ja.md）は通信先を
- * LETUS / CLASS / 大学のログイン基盤 / 稼働状況の確認先 / 自前バックエンド に「限られます」と列挙している。
+ * LETUS / CLASS / 大学のログイン基盤 / waiteu.dev / api.waiteu.dev に「限られます」と列挙している。
  * この probe はその列挙外なので、規約を実態に寄せるのではなく probe 自体を止める。
  *
  * ネイティブモジュールを引く層なので netinfo は丸ごとモックし、
@@ -74,7 +74,7 @@ describe('connectivity: NetInfo の既定 probe を止める', () => {
 
   it('reachabilityUrl を第三者ホストへ向け直していない（自前バックエンドも叩かない）', async () => {
     await loadModule()
-    // 「提供者のサーバーへ向ける」案は 60秒ごとの自前バックエンド叩きになるため採らない。
+    // 「waiteu.dev へ向ける」案は 60秒ごとの自前バックエンド叩きになるため採らない。
     expect(lastConfig).not.toHaveProperty('reachabilityUrl')
   })
 })

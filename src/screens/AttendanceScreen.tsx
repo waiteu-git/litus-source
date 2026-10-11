@@ -15,7 +15,6 @@ import { submitFailureText, submitOutcome } from '../attendance/submitOutcome'
 import ScreenHint from '../tutorial/ScreenHint'
 import { PressableRow } from '../ui/Pressable'
 import FeedbackSheet from '../report/FeedbackSheet'
-import { FEEDBACK_AVAILABLE } from '../config/endpoints'
 import { COLORS } from '../theme'
 
 /**
@@ -402,12 +401,10 @@ export default function AttendanceScreen() {
                     <Text style={[styles.resultText, { color: ui.colors.danger }]}>{reactionSubmit.message}</Text>
                   </View>
                   {/* リアペの失敗も同じ「出席送信の記録」に残る＝同じ導線で報告できる。 */}
-                  {FEEDBACK_AVAILABLE ? (
-                    <Pressable style={styles.reportRow} onPress={() => setReportOpen(true)}>
-                      <Ionicons name="mail-outline" size={14} color={labelColor} />
-                      <Text style={[styles.reportText, { color: labelColor }]}>この不具合を開発者に送る</Text>
-                    </Pressable>
-                  ) : null}
+                  <Pressable style={styles.reportRow} onPress={() => setReportOpen(true)}>
+                    <Ionicons name="mail-outline" size={14} color={labelColor} />
+                    <Text style={[styles.reportText, { color: labelColor }]}>この不具合を開発者に送る</Text>
+                  </Pressable>
                 </>
               ) : null}
 
@@ -635,12 +632,10 @@ export default function AttendanceScreen() {
                   </View>
                   {/* 報告導線は失敗のその場に置く（設定の奥では誰も辿り着かない）。ただし
                       **出席を取り戻す方が優先**なので上の2つより弱い見た目にし、行を分ける。 */}
-                  {FEEDBACK_AVAILABLE ? (
-                    <Pressable style={styles.reportRow} onPress={() => setReportOpen(true)}>
-                      <Ionicons name="mail-outline" size={14} color={labelColor} />
-                      <Text style={[styles.reportText, { color: labelColor }]}>この不具合を開発者に送る</Text>
-                    </Pressable>
-                  ) : null}
+                  <Pressable style={styles.reportRow} onPress={() => setReportOpen(true)}>
+                    <Ionicons name="mail-outline" size={14} color={labelColor} />
+                    <Text style={[styles.reportText, { color: labelColor }]}>この不具合を開発者に送る</Text>
+                  </Pressable>
                 </View>
               ) : phase === 'submitting' || verifying ? (
                 // 送信タップ〜出席確定までの待機窓。スイープする不定進捗バーで「処理中」を明示する。
@@ -673,9 +668,7 @@ export default function AttendanceScreen() {
           )}
         </ScrollView>
       </ScreenBg>
-      {FEEDBACK_AVAILABLE ? (
-        <FeedbackSheet visible={reportOpen} onClose={() => setReportOpen(false)} initialKind="bug" initialTarget="attendance" />
-      ) : null}
+      <FeedbackSheet visible={reportOpen} onClose={() => setReportOpen(false)} initialKind="bug" initialTarget="attendance" />
     </View>
   )
 }

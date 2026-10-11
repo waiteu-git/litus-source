@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   DIAG_MAILTO_SAFE_LIMIT,
+  DIAG_REPORT_TO,
   buildMailtoUrl,
   formatAndroidDevice,
   formatDiagEnv,
@@ -69,25 +70,22 @@ describe('formatDiagEnv', () => {
   })
 })
 
-// 宛先の実値はビルド時の環境変数（EXPO_PUBLIC_CONTACT_EMAIL）。組み立ての検査は架空の宛先で行う。
-const TEST_TO = 'contact@example.com'
-
 describe('buildMailtoUrl', () => {
   it('宛先・件名・本文をmailtoに載せる', () => {
-    const url = buildMailtoUrl({ to: TEST_TO, subject: 'あ い', body: 'x\ny' })
-    expect(url.startsWith(`mailto:${TEST_TO}?`)).toBe(true)
+    const url = buildMailtoUrl({ to: DIAG_REPORT_TO, subject: 'あ い', body: 'x\ny' })
+    expect(url.startsWith('mailto:contact@waiteu.dev?')).toBe(true)
     expect(url).toContain('subject=%E3%81%82%20%E3%81%84')
     expect(url).toContain('body=x%0Ay')
   })
 
   it('空白を + にしない（本文に + がそのまま出る事故を避ける）', () => {
-    const url = buildMailtoUrl({ to: TEST_TO, subject: 's', body: 'a b' })
+    const url = buildMailtoUrl({ to: DIAG_REPORT_TO, subject: 's', body: 'a b' })
     expect(url).toContain('body=a%20b')
     expect(url).not.toContain('body=a+b')
   })
 
   it('& や = を含む本文でもクエリが壊れない', () => {
-    const url = buildMailtoUrl({ to: TEST_TO, subject: 's', body: 'status=200&ok=false' })
+    const url = buildMailtoUrl({ to: DIAG_REPORT_TO, subject: 's', body: 'status=200&ok=false' })
     expect(url).toContain('body=status%3D200%26ok%3Dfalse')
     expect(url.split('&').length).toBe(2)
   })
@@ -97,24 +95,5 @@ describe('mailtoMayTruncate', () => {
   it('目安を超えたら真', () => {
     expect(mailtoMayTruncate('mailto:a?body=' + 'x'.repeat(DIAG_MAILTO_SAFE_LIMIT))).toBe(true)
     expect(mailtoMayTruncate('mailto:a?body=x')).toBe(false)
-  })
-})
-
-describe('DIAG_REPORT_TO（連絡先メール）', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    vi.resetModules()
-  })
-
-  it('EXPO_PUBLIC_CONTACT_EMAIL の値そのもの（前後の空白は落とす）', async () => {
-    vi.resetModules()
-    vi.stubEnv('EXPO_PUBLIC_CONTACT_EMAIL', ' someone@example.com ')
-    expect((await import('./diagReport')).DIAG_REPORT_TO).toBe('someone@example.com')
-  })
-
-  it('未設定（空）なら null＝mailto と宛先の文言を出さない', async () => {
-    vi.resetModules()
-    vi.stubEnv('EXPO_PUBLIC_CONTACT_EMAIL', '')
-    expect((await import('./diagReport')).DIAG_REPORT_TO).toBeNull()
   })
 })

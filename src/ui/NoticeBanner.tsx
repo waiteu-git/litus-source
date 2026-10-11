@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text } from './Text'
 import { COLORS } from '../theme'
 import { openLitusSite } from './openLitusSite'
-import { LITUS_SITE_URL } from '../health/notice'
 
 /**
  * 運用お知らせ帯。KillSwitchProvider（LoginGate の外側）が描画する。
@@ -19,31 +18,23 @@ import { LITUS_SITE_URL } from '../health/notice'
  * 以上、帯自身が上端まで塗り切るのが唯一破綻しない形。
  *
  * 色だけに頼らずアイコンと文言を併用する（デザイン規約: 色単独禁止）。
- *
- * 紹介ページが未設定のビルド（LITUS_SITE_URL が null）では、帯は押せない（「詳しく」も出さない）。
  */
 export function NoticeBanner({ text, onDismiss }: { text: string; onDismiss: () => void }) {
   const insets = useSafeAreaInsets()
-  const hasSite = LITUS_SITE_URL !== null
   return (
     <View style={[styles.bar, { paddingTop: insets.top + 10 }]}>
       <Pressable
         style={styles.row}
-        onPress={hasSite ? openLitusSite : undefined}
-        disabled={!hasSite}
-        accessibilityRole={hasSite ? 'link' : 'text'}
+        onPress={openLitusSite}
+        accessibilityRole="link"
         accessibilityLabel={`お知らせ: ${text}`}
-        accessibilityHint={hasSite ? 'リタスのサイトを開きます' : undefined}
+        accessibilityHint="リタスのサイトを開きます"
       >
         <Ionicons name="megaphone-outline" size={16} color={COLORS.white} />
         <Text style={styles.text}>{text}</Text>
         {/* タップで開けることの手がかり（帯全体が押せるので独立した Pressable にはしない）。 */}
-        {hasSite ? (
-          <>
-            <Text style={styles.more}>詳しく</Text>
-            <Ionicons name="chevron-forward" size={14} color={COLORS.white} />
-          </>
-        ) : null}
+        <Text style={styles.more}>詳しく</Text>
+        <Ionicons name="chevron-forward" size={14} color={COLORS.white} />
       </Pressable>
       <Pressable
         onPress={onDismiss}

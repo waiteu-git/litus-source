@@ -1,6 +1,5 @@
 import { formatVersionLabel } from '../appVersion'
 import { devBadgeSuffix, type ReleaseStage } from '../releaseStage'
-import { CONTACT_EMAIL } from '../config/endpoints'
 
 /**
  * 不具合報告のフォールバック（mailto下書き・本文コピー）の組み立て（純粋・RN非依存・vitest対象）。
@@ -14,11 +13,8 @@ import { CONTACT_EMAIL } from '../config/endpoints'
  * 参照される共通部分としてここに残す。
  */
 
-/**
- * フォールバック（mailto）の宛先。値は環境変数 `EXPO_PUBLIC_CONTACT_EMAIL`（`src/config/endpoints.ts`）。
- * 未設定（null）なら mailto と、文言の中の宛先を出さない。
- */
-export const DIAG_REPORT_TO: string | null = CONTACT_EMAIL
+/** フォールバック（mailto）の宛先。キャッチオール転送で稼働中。 */
+export const DIAG_REPORT_TO = 'contact@waiteu.dev'
 
 export type DiagEnv = {
   /** versionName（`Application.nativeApplicationVersion`）。 */

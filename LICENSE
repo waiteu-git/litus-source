@@ -1,202 +1,250 @@
+リタス (Litus) — Source-Available License
+Copyright (c) 2026 waiteu. All rights reserved.
+本ライセンス適用日 / License effective date: 2026-07-06 (JST)
+改定日: 2026-09-10 (JST) — fork の扱いを GitHub 利用規約 D.5 に合わせて明確化
+Revised: 2026-09-10 (JST) — forking clarified per GitHub Terms of Service D.5
 
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
+本ソフトウェアのコードは、東京理科大学のLMS「LETUS」向けブラウザ拡張機能
+「LETUS Task Watcher」リポジトリから分離（git subtree split で履歴保持）した
+派生物です。分離元「LETUS Task Watcher」も、他のソフトウェアへの組み込み・転用・
+再配布を禁止する同種の source-available ライセンスの下にあります。
+This software's code was split (via git subtree split, preserving history) from
+the "LETUS Task Watcher" browser-extension repository, which is under a similar
+source-available license that prohibits incorporation into other software,
+repurposing, and redistribution.
 
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+【日本語】
 
-   1. Definitions.
+本ソフトウェア「リタス（Litus）」は、東京理科大学のLMS「LETUS」および履修
+システム「CLASS」の情報をスマートフォンで管理するための、iOS / Android 向け
+モバイルアプリです。本ソフトウェアのソースコードは、アプリの動作（収集する
+データの内容や送信先など）を自ら検証できるようにする透明性の確保を目的として
+公開されています。本ソフトウェアはオープンソースソフトウェアではありません。
 
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
+■ 許可される行為
+1. 本リポジトリのソースコードを閲覧・検証・監査すること
+2. 本ソフトウェアの動作確認・安全性検証を目的として、自身の環境で
+   ビルド・実行すること
 
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
+■ 禁止される行為（著作権者の書面による事前の許可がない限り）
+1. ソースコードの全部または一部を複製し、他のソフトウェアに組み込むこと
+2. 本ソフトウェアまたはその派生物を頒布・再配布・公開すること
+   （アプリストア、拡張機能ストア等への公開を含む）
+3. 本ソフトウェアの全部または一部を商用利用すること
+4. 上記の許可される行為の範囲を超えて本ソフトウェアを利用すること
 
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
+本ソフトウェアは現状有姿で提供され、著作権者はいかなる保証も行わず、
+本ソフトウェアの使用に起因する損害について一切の責任を負いません。
 
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
+■ GitHub 上での fork について
+本ソフトウェアのソースコードは、公開ミラー（litus-source）として GitHub 上で
+公開している。
+GitHub の利用者が GitHub 利用規約 D.5（2026年9月時点の条番号による。その後の
+改番・改定があった場合は、改定後のこれに相当する条項を指す）に基づいて行う
+ことができる行為（公開ミラーおよびその fork を fork すること、これらを
+GitHub 上で閲覧・表示することを含む。以下「D.5 の行為」という）は、
+本ライセンスによる許諾の有無にかかわらず同規約に基づいて行うことができ、
+本ライセンスは、下記「■ 利用制限」を除き、これを制限しない。D.5 の行為
+（fork したリポジトリが GitHub 上で公開状態になることを含む）は、上記
+「禁止される行為」のいずれにもあたらない。また、fork すること、GitHub 上で
+閲覧・表示すること、および fork したリポジトリが公開状態になることは、
+それ自体では下記「■ 利用制限」にもあたらない。
+上記の括弧書きは例示であり、自ら加えた改変およびその公開（fork した
+リポジトリにおけるもの、GitHub の Pages 等によるものを含む）を D.5 の行為に
+含めるものではない。
+D.5 の行為（下記「■ 利用制限」は適用される）を除き、本ソフトウェア
+（fork によって得たソースコードを含む）の利用には、GitHub 上で行うか否かを
+問わず本ライセンスが適用される。たとえば、fork したリポジトリに自ら改変を
+加えること（コミット・push 等）、fork 以外の方法で複製したソースコードを、
+公開ミラーの fork でないリポジトリ（GitHub 上のものを含む）、Gist、
+Web サイト等に公開・掲載すること、GitHub の Releases・Pages 等を用いた配布、
+他のソフトウェアへの組み込み、アプリストア・拡張機能ストア等への公開、
+商用利用は、本ライセンスの禁止条項の対象となる（上記「許可される行為」の
+ために自身の環境へ複製することは妨げない。改変とその公開は、下記「■ 貢献」の
+貢献目的の例外に該当する場合に限り許される）。
+fork したリポジトリ（その Releases 等を含む）を、ビルド済みアプリ・APK 等の
+成果物を配布する手段として利用することはできない。
+本節の他の定めが D.5 の行為に及ぶ場合は、その限りで、本節の D.5 の行為に
+関する定めが優先する。
 
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
+■ 利用制限（Acceptable Use）
+本ソフトウェアのコードまたは技術を用いて（D.5 の行為として行う場合を含む）、
+次の行為を行うことを禁止する。
+1. CLASS / LETUS / 東京理科大学のシステムへの過度な負荷。
+2. 出席コードの自動連投・総当たり、スクレイピングの乱用等、システムの正常な
+   運用を妨げる行為。
+3. 代理出席・なりすまし等の不正な出席登録。
+4. 大学の規程・利用規約・法令に違反する利用。
 
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
+■ 利用者の責任
+本ソフトウェアの利用に関する一切の責任は利用者が負い、大学の規程・法令の遵守は
+利用者の責任とする。
 
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
+■ 免責の強化
+上記の「現状有姿」・無保証に加え、第三者による複製・改変・悪用、および間接・付随・
+特別・派生的損害を含む一切の損害について、著作権者は責任を負わない。
 
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
+■ 違反時の自動終了
+利用者が本ライセンスの禁止事項または上記の利用制限に違反した時点で、本ライセンスに
+基づく許諾は自動的に終了する。
 
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
+■ 準拠法・裁判管轄
+本ライセンスは日本法に準拠し、これに関する紛争については東京地方裁判所を第一審の
+専属的合意管轄裁判所とする。
 
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
+■ 個別許諾
+本ライセンスの複製・改変・再配布の禁止条項にかかわらず、GitHub ユーザー
+haya9924 氏が開発するアプリ「cabetus」（github.com/haya9924/cabetus）に
+限り、複製・改変・再配布を許諾する。**本許諾は LETUS 関連のコードに限る。CLASS
+および出席関連のコードは本許諾の対象に含まない。** 本許諾は上記の個人・アプリに
+対する個別の例外であり、本ライセンスの他の条項を変更するものではない。
+（許諾日: 2026-07-08 ／ LETUS 限定への改定: 2026-07-10）
 
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
+■ 貢献
+本プロジェクトへの貢献（バグ報告・改善提案・Pull Request 等）を歓迎する。
+貢献の窓口は公開ミラー（github.com/waiteu-git/litus-source）とする。
+貢献の提出をもって、貢献者は CONTRIBUTING.md に定める権利許諾条項
+（原著作性の保証、著作権者への利用・改変・頒布・再ライセンス等の許諾、
+著作者人格権の不行使を含む）に同意したものとみなす。受け入れられた貢献は
+本ライセンスの下で公開される。
 
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
+本プロジェクトへの貢献を準備・提出する目的に限り、上記「禁止される行為」に
+かかわらず、次の行為を許可する（貢献目的の例外）:
+1. 貢献の作成に必要な範囲でソースコードを複製（自身の環境へのクローンを
+   含む）し、改変すること
+2. 当該改変を、公開ミラー（またはその fork）の fork リポジトリ、および
+   公開ミラー宛ての Pull Request として GitHub 上で公開すること（提出後も
+   公開したままにしておくことを含む）
+この例外は貢献の準備・提出以外の利用を許可するものではない。また、この例外は、
+貢献の目的であっても、fork リポジトリを、2 の公開を超えて本ソフトウェアまたは
+その派生物の配布・提供の手段として利用すること（GitHub の Releases・Pages 等を
+用いた配布・公開・提供を含む）、および手段を問わずビルド済みアプリ・APK 等の
+成果物を配布することを許可するものではない。
+（貢献受け入れ開始日: 2026-07-23）
+（fork すること自体をこの例外から外した: 2026-09-10）
 
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
+【English】
 
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
+"リタス (Litus)" is an iOS / Android mobile application for managing information
+from Tokyo University of Science's LMS "LETUS" and course system "CLASS" on a
+smartphone. The source code of this software is made publicly viewable for
+transparency, so that users can verify for themselves how the app behaves (e.g.
+what data it collects and where it is sent). This software is NOT open source.
 
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
+PERMITTED:
+1. Viewing, inspecting, and auditing the source code in this repository.
+2. Building and running the software in your own environment for the sole
+   purpose of verifying its behavior and safety.
 
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
+PROHIBITED (without prior written permission from the copyright holder):
+1. Copying the source code, in whole or in part, into other software.
+2. Distributing, redistributing, or publishing this software or any
+   derivative work (including publishing to any app or extension store).
+3. Any commercial use of this software, in whole or in part.
+4. Any use of this software beyond the permissions granted above.
 
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. IN NO EVENT
+SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
 
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
+FORKING ON GITHUB:
+The source code of this software is published on GitHub as the public mirror
+(litus-source).
+Acts that users of GitHub may perform under Section D.5 of the GitHub Terms of
+Service (numbered as of September 2026; if later renumbered or amended, this
+refers to the corresponding section as amended) (including forking the public
+mirror and its forks, and viewing and displaying them on GitHub; hereinafter
+"D.5 Acts") may be performed under the GitHub Terms of Service regardless of
+whether this license permits them, and, except for ACCEPTABLE USE below, this
+license does not restrict them. D.5 Acts (including a forked repository being
+publicly visible on GitHub) do not constitute a violation of any of
+items 1 to 4 under PROHIBITED above; and forking, viewing or displaying on
+GitHub, and a forked repository being publicly visible, do not in themselves
+constitute a violation of ACCEPTABLE USE below.
+The parentheticals above are illustrative and do not bring within D.5 Acts your
+own modifications or their publication (including in a forked repository or
+through GitHub Pages or similar features).
+Except for D.5 Acts (which remain subject to ACCEPTABLE USE below), this
+license applies to any use of this software (including source code obtained by
+forking), whether on or off GitHub. For example, the following are subject to
+the prohibitions of this license: making your own modifications to a forked
+repository (e.g., by committing or pushing); posting or publishing, in
+repositories that are not forks of the public mirror (including ones on
+GitHub), Gists, websites or the like, copies of the source code made by means
+other than forking; distributing this software through GitHub Releases, Pages
+or similar features; incorporating it into other software; publishing it to any
+app or extension store; and commercial use. This does not prevent copying to
+your own environment for the PERMITTED acts above. Modifications and their
+publication are permitted only as provided in the contribution-purpose
+exception under CONTRIBUTIONS below.
+A forked repository (including its Releases and similar features) may not be
+used as a means of distributing built artifacts such as apps or APKs.
+To the extent any other provision of this section would apply to a D.5 Act, the
+provisions of this section on D.5 Acts prevail.
 
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
+ACCEPTABLE USE:
+Using (including when done as a D.5 Act) this software's code or techniques for
+any of the following is prohibited:
+1. Placing excessive load on CLASS / LETUS / Tokyo University of Science systems.
+2. Automated repeated submission or brute-forcing of attendance codes, or abusive
+   scraping that interferes with the normal operation of these systems.
+3. Fraudulent attendance registration such as proxy attendance or impersonation.
+4. Any use that violates university regulations, terms of use, or applicable law.
 
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
+USER RESPONSIBILITY:
+The user bears all responsibility for the use of this software; compliance with
+university regulations and applicable law is the user's responsibility.
 
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
+ENHANCED DISCLAIMER:
+In addition to the "AS IS" disclaimer above, the copyright holder shall not be
+liable for any copying, modification, or misuse by third parties, nor for any
+indirect, incidental, special, or consequential damages.
 
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
+AUTOMATIC TERMINATION:
+Any violation of the prohibitions or the acceptable-use restrictions set forth
+herein automatically terminates the permissions granted under this license.
 
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
+GOVERNING LAW / JURISDICTION:
+This license is governed by the laws of Japan. The Tokyo District Court shall have
+exclusive jurisdiction as the court of first instance for any dispute arising from it.
 
-   END OF TERMS AND CONDITIONS
+INDIVIDUAL GRANT:
+Notwithstanding the restrictions on reproduction, modification, and
+redistribution set forth above, reproduction, modification, and
+redistribution are permitted solely for the application "cabetus"
+(github.com/haya9924/cabetus) developed by the GitHub user haya9924.
+This grant is LIMITED TO LETUS-RELATED CODE; CLASS- and attendance-related
+code is NOT included in this grant. This grant is an individual exception
+applying only to the person and application named above, and does not modify
+any other terms of this license. (Granted: 2026-07-08 / limited to LETUS: 2026-07-10)
 
-   APPENDIX: How to apply the Apache License to your work.
+CONTRIBUTIONS:
+Contributions to this project (bug reports, suggestions, pull requests,
+etc.) are welcome. Contributions are accepted via the public mirror
+(github.com/waiteu-git/litus-source). By submitting a contribution, the
+contributor is deemed to have agreed to the contribution license terms set
+forth in CONTRIBUTING.md, including the certification of originality, the
+grant to the copyright holder of rights to use, modify, distribute, and
+relicense the contribution, and the waiver of assertion of moral rights.
+Accepted contributions are published under this license.
 
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
+Solely for the purpose of preparing and submitting a contribution to this
+project, and notwithstanding items 1 to 4 under PROHIBITED above, the following
+are permitted (contribution-purpose exception):
+1. Copying (including cloning to your own environment) and modifying the
+   source code to the extent necessary to create the contribution; and
+2. Publishing such modifications on GitHub as a fork of the public mirror (or
+   of its forks) and as a pull request to the public mirror (including keeping
+   them published after submission).
+This exception does not permit any use other than preparing and submitting a
+contribution. Nor does this exception permit, even for that purpose, using a
+forked repository, beyond the publication under item 2 above, as a means of
+distributing or providing this software or any derivative work (including
+distributing, publishing or providing it through GitHub Releases, Pages or
+similar features), or distributing built artifacts such as apps or APKs by any
+means.
+(Contributions accepted from: 2026-07-23)
+(Forking itself removed from this exception: 2026-09-10)
 
-   Copyright [yyyy] [name of copyright owner]
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+In case of any discrepancy between the Japanese and English texts, the
+Japanese text shall prevail.

@@ -26,11 +26,3 @@ minimumReleaseAgeExclude:
   - expo-splash-screen@57.0.5
 patchedDependencies:
   react-native-webview@13.16.1: patches/react-native-webview@13.16.1.patch
-# Dependabot（2026-10-15 棚卸し）：どれもビルド時の道具の推移依存で、アプリの中身には入らない（本番バンドルを grep して不在を確認）。
-# 親の許す範囲のまま修正版へ寄せて、警告の数を減らすためだけの指定。修正版の無い3件（braces・http-cache-semantics・node-forge）と、
-# vitest 3 が 1.x を要する tinypool は、ここでは扱わない。
-overrides:
-  shell-quote@<1.11.0: ^1.11.0
-  brace-expansion@>=4.0.0 <5.0.12: ^5.0.12
-  compression@<1.8.2: ^1.8.2
-  source-map-js@<1.2.2: ^1.2.2
