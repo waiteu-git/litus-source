@@ -88,9 +88,13 @@ describe('評価依頼の配線（ラチェット）', () => {
   })
 
   it('設定の常設リンクは通常の URL（action=write-review・https）で、依頼 API に届かない', () => {
+    // 行き先の実値は環境変数（src/config/endpoints.ts）。形（https・action=write-review・market:// でない）は
+    // 焼く前の検査 scripts/check-release-env.mjs が止める（src/config/releaseEnv.test.ts が挙動を固定）。
     const link = files.find((f) => f.rel === 'review/storeReviewLink.ts')!.text
-    expect(link).toContain('action=write-review')
     expect(link).not.toContain('market://')
+    const check = readFileSync(join(__dirname, '..', '..', 'scripts', 'check-release-env.mjs'), 'utf8')
+    expect(check).toContain("'action=write-review'")
+    expect(check).toContain("startsWith('https://')")
     const settings = strip(files.find((f) => f.rel === 'screens/SettingsScreen.tsx')!.text)
     expect(settings).toContain('showStoreReviewLink(')
     expect(settings).toContain('storeReviewUrl(')

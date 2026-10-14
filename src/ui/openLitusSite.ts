@@ -7,5 +7,7 @@ import { LITUS_SITE_URL } from '../health/notice'
  * さらにクラッシュする。開けない端末では何も起きないに留める。
  */
 export function openLitusSite(): void {
+  // 未設定のビルドでは入口自体を出さない（呼び出し側が LITUS_SITE_URL で分岐）。ここは念のための塞ぎ。
+  if (LITUS_SITE_URL === null) return
   Linking.openURL(LITUS_SITE_URL).catch(() => undefined)
 }

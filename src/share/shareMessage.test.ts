@@ -1,6 +1,22 @@
-import { describe, it, expect } from 'vitest'
-import { buildShareContent, SHARE_LINE } from './shareMessage'
+import { afterAll, afterEach, describe, it, expect, vi } from 'vitest'
+
+// 紹介ページはビルド時の環境変数（src/config/endpoints.ts）。「設定あり」の値を import より先に入れる。
+vi.hoisted(() => {
+  process.env.EXPO_PUBLIC_SITE_URL = 'https://site.example.com/'
+})
+afterAll(() => {
+  delete process.env.EXPO_PUBLIC_SITE_URL
+})
+
+import { buildShareContent, SHARE_AVAILABLE, SHARE_LINE } from './shareMessage'
 import { LITUS_SITE_URL } from '../health/notice'
+
+/** 設定ありのビルドでの共有の中身（null なら検査の前提が崩れている）。 */
+const content = (): { message: string } => {
+  const c = buildShareContent()
+  if (c === null) throw new Error('EXPO_PUBLIC_SITE_URL が入っていない')
+  return c
+}
 
 /**
  * 設定「友だちに教える」で OS の共有シートに渡す中身のラチェット。
@@ -9,7 +25,7 @@ import { LITUS_SITE_URL } from '../health/notice'
  * 検査対象は OS に渡す**全文字列**。options（件名・見出し）は渡さない裁定（2026-10-09 本人）なので、
  * 現状は content の値だけ。options を渡すと決めたら、その値もここへ足す。
  */
-const allStrings = (): string[] => Object.values(buildShareContent()).filter((v): v is string => typeof v === 'string')
+const allStrings = (): string[] => Object.values(content()).filter((v): v is string => typeof v === 'string')
 
 const URL_RE = /https?:\/\/[^\s]+/g
 
@@ -40,7 +56,7 @@ function findForbidden(s: string): string[] {
 
 describe('共有の中身（buildShareContent）', () => {
   it('content は message だけ（title・url のキーを持たない）', () => {
-    const c = buildShareContent()
+    const c = content()
     expect(Object.keys(c)).toEqual(['message'])
     expect(c).not.toHaveProperty('title')
     expect(c).not.toHaveProperty('url')
@@ -48,7 +64,7 @@ describe('共有の中身（buildShareContent）', () => {
 
   it('本人の確定文言そのまま（一文＋改行＋LP の URL）', () => {
     expect(SHARE_LINE).toBe('LETUSの課題もCLASSの時間割も、まとめて見られる非公式アプリ、リタス')
-    expect(buildShareContent().message).toBe(`${SHARE_LINE}\n${LITUS_SITE_URL}`)
+    expect(content().message).toBe(`${SHARE_LINE}\n${LITUS_SITE_URL}`)
   })
 
   it('全文字列を通じて URL は LITUS_SITE_URL ただ1つ', () => {
@@ -69,11 +85,11 @@ describe('共有の中身（buildShareContent）', () => {
   })
 
   it('message に「非公式」を含む（必須の裁定）', () => {
-    expect(buildShareContent().message).toContain('非公式')
+    expect(content().message).toContain('非公式')
   })
 
   it('呼ぶたびに同じ値（ユーザーのデータや時刻を差し込まない）', () => {
-    expect(buildShareContent()).toEqual(buildShareContent())
+    expect(content()).toEqual(content())
   })
 })
 
@@ -100,14 +116,37 @@ describe('禁止語の検出器の対照', () => {
   it.each([
     '非公式アプリ',
     'LETUSの課題もCLASSの時間割も',
-    'https://litus.waiteu.dev/v1/2.0?x=1',
+    'https://example.com/v1/2.0?x=1',
   ])('陰性: %s', (s) => {
     expect(findForbidden(s)).toEqual([])
   })
 
   it('URL 検出器は計測の印つき URL を拾う（陽性）', () => {
-    const u = 'https://litus.waiteu.dev/?utm_source=app'.match(URL_RE) ?? []
+    const u = 'https://example.com/?utm_source=app'.match(URL_RE) ?? []
     expect(u).toHaveLength(1)
     expect(u[0]).toMatch(/[?#]|utm_/i)
+  })
+})
+
+describe('紹介ページが未設定のビルド', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('設定ありでは共有の入口を出す', () => {
+    expect(SHARE_AVAILABLE).toBe(true)
+  })
+
+  it('引数で null を渡すと null（共有しない）', () => {
+    expect(buildShareContent(null)).toBeNull()
+  })
+
+  it('EXPO_PUBLIC_SITE_URL が空なら、入口を出さず（SHARE_AVAILABLE false）中身も null', async () => {
+    vi.resetModules()
+    vi.stubEnv('EXPO_PUBLIC_SITE_URL', '')
+    const mod = await import('./shareMessage')
+    expect(mod.SHARE_AVAILABLE).toBe(false)
+    expect(mod.buildShareContent()).toBeNull()
   })
 })

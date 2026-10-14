@@ -16,8 +16,8 @@ import { APP_BUILD } from './appBuild'
 // 購読が生き残って解除後に貼り直せる（内側へ移すと解除しても二度と貼り直されない）。
 import { refreshAllNotifications } from '../notifications/notificationRefresh'
 import { isKillSwitchReleased } from '../notifications/notificationSuppress'
-import { fetchKillSwitchStatus } from './killSwitchFetch'
-import { resolveNotice } from './notice'
+import { KILL_SWITCH_ENABLED, fetchKillSwitchStatus } from './killSwitchFetch'
+import { LITUS_SITE_URL, resolveNotice } from './notice'
 import { loadKillSwitchCache, saveKillSwitchCache } from '../storage/killSwitchStore'
 import { loadDismissedNoticeHash, saveDismissedNoticeHash } from '../storage/noticeStore'
 import { subscribeForeground } from '../app/foregroundOrchestrator'
@@ -57,6 +57,9 @@ export function KillSwitchGate({ feature, children }: { feature: KillSwitchFeatu
  *   コールドスタートで確実に反映する（手順書「起動時に必ず確認」と一致）。
  * - フォアグラウンド復帰: killSwitchスロット（即時）で staleなら取得（15分スロットルで乱打防止）
  * - 取得失敗は直近キャッシュ維持・キャッシュ無しは通常動作（fail-open）
+ * - 宛先が未設定のビルド（`EXPO_PUBLIC_KILLSWITCH_URL` 無し＝KILL_SWITCH_ENABLED が false）は
+ *   「キルスイッチが無い」扱い: 取得もキャッシュの読込もせず、status は常に null（停止画面もお知らせ帯も出ない）。
+ *   失敗時の「直近キャッシュ維持」とは別物（キャッシュを読むと、過去に別の設定で焼いた停止が残りうる）。
  * 設計: docs/2026-07-12-remote-kill-switch-design.md
  */
 export function KillSwitchProvider({ children }: { children: ReactNode }) {
@@ -79,6 +82,7 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback((force: boolean) => {
     // デモ中は稼働状況の照会もしない（デモ中はネットワークに一切出ない）。
     if (demoRef.current) return
+    if (!KILL_SWITCH_ENABLED) return
     if (!force && !isKillSwitchStale(fetchedAtRef.current, Date.now())) return
     if (inFlightRef.current) return
     inFlightRef.current = true
@@ -104,6 +108,11 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (!KILL_SWITCH_ENABLED) {
+      // キルスイッチが無いビルド: キャッシュは読まず（適用もしない）、すぐ入場させる。
+      setCacheLoaded(true)
+      return
+    }
     let active = true
     loadKillSwitchCache()
       .then((cache) => {
@@ -170,9 +179,11 @@ export function KillSwitchProvider({ children }: { children: ReactNode }) {
               status.json が壊れて取得失敗でも必ず開ける。
               文言は中立表現で短く保つ（キルスイッチランブックの「復旧時期を約束しない」と整合。
               「復旧情報を見る」は復旧を前提にするため不可。URL併記もしない＝行き先はタップで分かる）。 */}
-          <Pressable style={styles.secondary} onPress={openLitusSite} accessibilityRole="link">
-            <Text style={styles.secondaryText}>最新情報を見る</Text>
-          </Pressable>
+          {LITUS_SITE_URL ? (
+            <Pressable style={styles.secondary} onPress={openLitusSite} accessibilityRole="link">
+              <Text style={styles.secondaryText}>最新情報を見る</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     )

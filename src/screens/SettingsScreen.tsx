@@ -23,6 +23,8 @@ import { Accordion } from '../ui/Accordion'
 import { LinkRow } from '../ui/LinkRow'
 import { openLitusSite } from '../ui/openLitusSite'
 import { openShareSheet } from '../share/openShareSheet'
+import { SHARE_AVAILABLE } from '../share/shareMessage'
+import { FEEDBACK_AVAILABLE, LITUS_SITE_URL } from '../config/endpoints'
 import { COLORS, useThemeVariant, type ThemePreference } from '../theme'
 import { TYPE, SPACE } from '../ui/scale'
 import { FONT_LICENSE_TITLE } from '../legal/fontLicense'
@@ -499,23 +501,29 @@ export default function SettingsScreen() {
           ) : null}
         </Accordion>
 
-        <View style={{ marginTop: 12 }}>
-          <LinkRow
-            icon="chatbubble-ellipses-outline"
-            title="フィードバックを送る"
-            sub="不具合の報告・ご要望"
-            onPress={() => setReportOpen(true)}
-          />
-        </View>
+        {/* 送り先（送信先・連絡先メール）が1つも設定されていないビルドでは入口を出さない（src/config/endpoints.ts）。 */}
+        {FEEDBACK_AVAILABLE ? (
+          <View style={{ marginTop: 12 }}>
+            <LinkRow
+              icon="chatbubble-ellipses-outline"
+              title="フィードバックを送る"
+              sub="不具合の報告・ご要望"
+              onPress={() => setReportOpen(true)}
+            />
+          </View>
+        ) : null}
 
-        <View style={{ marginTop: 12 }}>
-          <LinkRow
-            icon="share-social-outline"
-            title="友だちに教える"
-            sub="紹介ページのURLを送る"
-            onPress={openShareSheet}
-          />
-        </View>
+        {/* 紹介ページが未設定のビルドでは共有する URL が無いので出さない。 */}
+        {SHARE_AVAILABLE ? (
+          <View style={{ marginTop: 12 }}>
+            <LinkRow
+              icon="share-social-outline"
+              title="友だちに教える"
+              sub="紹介ページのURLを送る"
+              onPress={openShareSheet}
+            />
+          </View>
+        ) : null}
 
         <Accordion title="アプリ情報" icon="information-circle-outline">
           <View style={ui.card}>
@@ -523,9 +531,11 @@ export default function SettingsScreen() {
               リタス {formatVersionLabel(Application.nativeApplicationVersion, Application.nativeBuildVersion, isPrerelease(RELEASE_STAGE))}
               {devBadgeSuffix(RELEASE_STAGE)}
             </Text>
-            <Pressable onPress={openLitusSite} accessibilityRole="link">
-              <Text style={[styles.link, { color: ui.labelColor }]}>紹介ページ ↗</Text>
-            </Pressable>
+            {LITUS_SITE_URL ? (
+              <Pressable onPress={openLitusSite} accessibilityRole="link">
+                <Text style={[styles.link, { color: ui.labelColor }]}>紹介ページ ↗</Text>
+              </Pressable>
+            ) : null}
             {reviewUrl ? (
               <Pressable onPress={() => Linking.openURL(reviewUrl).catch(() => undefined)} accessibilityRole="link">
                 <Text style={[styles.link, { color: ui.labelColor }]}>ストアで評価する ↗</Text>
@@ -564,7 +574,7 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
       <ChangelogModal visible={changelogOpen} entries={CHANGELOG} onClose={() => setChangelogOpen(false)} />
-      <FeedbackSheet visible={reportOpen} onClose={() => setReportOpen(false)} />
+      {FEEDBACK_AVAILABLE ? <FeedbackSheet visible={reportOpen} onClose={() => setReportOpen(false)} /> : null}
     </ScreenBg>
   )
 }

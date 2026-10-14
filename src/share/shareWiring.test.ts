@@ -140,8 +140,8 @@ describe('共有シートの配線（ラチェット）', () => {
     expect(hits).toEqual([])
   })
 
-  it('設定画面に LP の URL の直書きが無い（LITUS_SITE_URL に一本化）', () => {
-    expect(strip(fileOf(SETTINGS)!.text)).not.toContain('https://litus.waiteu.dev')
+  it('設定画面に URL の直書きが無い（紹介ページは LITUS_SITE_URL＝環境変数に一本化）', () => {
+    expect(strip(fileOf(SETTINGS)!.text)).not.toMatch(/https?:\/\//)
   })
 
   it('設定画面: 行「友だちに教える」は「フィードバックを送る」と「アプリ情報」の間', () => {
