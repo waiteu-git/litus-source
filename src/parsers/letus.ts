@@ -84,17 +84,33 @@ export function extractDeadlineText(plainText: string): string {
     'Open date', 'Opened', 'Available from',
   ]
   const lowerText = text.toLowerCase()
-  let bestIndex = -1
 
+  // 締切キーワードの出現を全部集める（同じ位置は長いキーワードが先＝「提出期限」の中の「期限」を別扱いしない）。
+  const hits: { index: number; end: number }[] = []
   for (const keyword of deadlineKeywords) {
-    const index = lowerText.indexOf(keyword.toLowerCase())
-    if (index >= 0 && (bestIndex === -1 || index < bestIndex)) {
-      bestIndex = index
+    const k = keyword.toLowerCase()
+    for (let i = lowerText.indexOf(k); i >= 0; i = lowerText.indexOf(k, i + 1)) {
+      if (!hits.some((h) => i >= h.index && i < h.end)) hits.push({ index: i, end: i + k.length })
     }
   }
+  hits.sort((x, y) => x.index - y.index)
 
-  if (bestIndex >= 0) {
-    return text.slice(bestIndex, Math.min(text.length, bestIndex + 320))
+  // 切り出しは次の開始キーワードの手前で止める。題名の「（提出期限：10月26日 8:50）」の直後に
+  // 日程欄の「開始: 2026年10月11日」が続くと、年つきの開始日を締切と読んでいた（2026-10-14 実機）。
+  const sliceAt = (h: { index: number; end: number }): string => {
+    let stop = Math.min(text.length, h.index + 320)
+    for (const keyword of startKeywords) {
+      const j = lowerText.indexOf(keyword.toLowerCase(), h.end)
+      if (j >= 0 && j < stop) stop = j
+    }
+    return text.slice(h.index, stop)
+  }
+
+  if (hits.length > 0) {
+    // 年つきの日付をすぐ後ろに持つ出現を優先する（Moodle の日程欄「期限: 2026年…」）。
+    // 題名などの年なしの日付は、年を当年で補うので年またぎで誤りうる。
+    const withYear = hits.find((h) => /20\d{2}\s*年/.test(sliceAt(h).slice(0, 60)))
+    return sliceAt(withYear ?? hits[0])
   }
 
   const hasStartOnlyKeyword = startKeywords.some((keyword) =>

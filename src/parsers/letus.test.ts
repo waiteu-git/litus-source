@@ -17,6 +17,7 @@ import {
   QUIZ_FINISHED,
   QUIZ_NOT_ATTEMPTED,
   HTML_NOISE,
+  ASSIGN_TITLE_DEADLINE_WITH_START,
 } from './letus.fixtures'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -204,6 +205,13 @@ describe('parseAssignmentPage', () => {
     expect(r.lifecycleStatus).toBe('active')
     expect(r.deadline).not.toBeNull()
     expect(new Date(r.deadline!).getFullYear()).toBe(2026)
+  })
+
+  it('題名の締切（年なし）の直後にある「開始:」の日付を締切と取り違えない（2026-10-14 実機）', () => {
+    vi.setSystemTime(new Date(2026, 9, 14, 15, 32, 0)) // 実機の画面の時刻（開始後・期限前）
+    const r = parseAssignmentPage(ASSIGN_TITLE_DEADLINE_WITH_START, ASSIGN_URL)
+    expect(r.deadline).toBe(new Date(2026, 9, 26, 8, 50, 0).toISOString())
+    expect(r.lifecycleStatus).toBe('active')
   })
 
   it('過去締切・未提出は passed', () => {

@@ -78,3 +78,18 @@ export const QUIZ_NOT_ATTEMPTED = `
 
 /** htmlToPlainText 検証用: script除去・エンティティ復号・br/pの改行化 */
 export const HTML_NOISE = `<p>A&amp;B</p><br><script>evil("&lt;x&gt;")</script><span>C</span>`
+
+/**
+ * 課題（assign）・題名に締切（年なし）＋Moodle 4.5 の日程欄「開始:」「期限:」（2026-10-14 実機の画面から再構成）。
+ * 題名の「提出期限」が最初に当たり、その後ろの「開始:」の年つき日付を締切と誤読していた。
+ */
+export const ASSIGN_TITLE_DEADLINE_WITH_START = `<div id="region-main">
+  <h2>課題第１回（提出期限：10月26日 8:50）</h2>
+  <div class="activity-dates">
+    <div><strong>開始:</strong> 2026年 10月 11日(日曜日) 00:00</div>
+    <div><strong>期限:</strong> 2026年 10月 26日(月曜日) 08:50</div>
+  </div>
+  <table><tbody>
+    <tr><th>提出ステータス</th><td>まだ提出されていません。</td></tr>
+  </tbody></table>
+</div>`
