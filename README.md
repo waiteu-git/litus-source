@@ -25,7 +25,7 @@ pnpm typecheck    # tsc --noEmit
 
 ## ライセンス
 
-ソースコードは [Apache License 2.0](LICENSE) で使えます（2026-10-16 から。それより前のコミットは、当時の source-available ライセンスのままです）。
+ソースコードは [Apache License 2.0](LICENSE) で使えます（2026-10-15 から。それより前のコミットは、当時の source-available ライセンスのままです）。
 
 - 「リタス」「Litus」の名前とアイコンは、このライセンスに含みません。改変したアプリを配る場合は [TRADEMARKS.md](TRADEMARKS.md) を読んでください。
 - 出席の送信とリアクションペーパーの提出の本体は、このリポジトリに入れていません。
