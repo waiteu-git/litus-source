@@ -21,7 +21,7 @@ const listeners = new Set<() => void>()
 // （2026-07-29 実測: iOS シミュレータで 61秒間隔・同一サイズの送信を確認）
 //
 // 規約（TermsConsentScreen の TERMS_BODY / docs/legal/terms-ja.md）は通信先を
-// LETUS / CLASS / 大学のログイン基盤 / waiteu.dev / api.waiteu.dev に「限られます」と
+// LETUS / CLASS / 大学のログイン基盤 / 稼働状況の確認先 / 自前バックエンド に「限られます」と
 // 列挙している。この probe はその外なので止める。reachabilityUrl を自前バックエンドへ
 // 向け直す案は、全端末が60秒ごとに api を叩くことになるため採らない。
 NetInfo.configure({ reachabilityShouldRun: () => false })

@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest'
-import { KILL_SWITCH_URL, fetchKillSwitchStatus } from './killSwitchFetch'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
+
+// 宛先はビルド時の環境変数（src/config/endpoints.ts）。「設定あり」の値を import より先に入れる。
+const TEST_URL = vi.hoisted(() => {
+  const url = 'https://killswitch.example.com/status.json'
+  process.env.EXPO_PUBLIC_KILLSWITCH_URL = url
+  return url
+})
+afterAll(() => {
+  delete process.env.EXPO_PUBLIC_KILLSWITCH_URL
+})
+
+import { KILL_SWITCH_ENABLED, KILL_SWITCH_URL, fetchKillSwitchStatus } from './killSwitchFetch'
 
 const BUILD = 78
 
@@ -29,6 +40,14 @@ describe('fetchKillSwitchStatus', () => {
     }
     await fetchKillSwitchStatus(BUILD, fetchImpl as typeof fetch)
     expect(requested).toBe(KILL_SWITCH_URL)
+    expect(KILL_SWITCH_URL).toBe(TEST_URL)
+    expect(KILL_SWITCH_ENABLED).toBe(true)
+  })
+
+  it('宛先が null（未設定）なら通信せず null', async () => {
+    const fetchImpl = vi.fn(async () => okResponse({ disabled: ['all'] }))
+    expect(await fetchKillSwitchStatus(BUILD, fetchImpl as unknown as typeof fetch, 20, null)).toBeNull()
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 
   it('非2xxはnull（呼び出し側がキャッシュ維持）', async () => {
@@ -54,5 +73,23 @@ describe('fetchKillSwitchStatus', () => {
         init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
       })
     expect(await fetchKillSwitchStatus(BUILD, fetchImpl as typeof fetch, 20)).toBeNull()
+  })
+})
+
+describe('EXPO_PUBLIC_KILLSWITCH_URL が未設定のビルド', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it.each([[''], ['   ']])('未設定・空白（%j）は「キルスイッチが無い」＝URL null・ENABLED false・既定引数でも fetch しない', async (raw) => {
+    vi.resetModules()
+    vi.stubEnv('EXPO_PUBLIC_KILLSWITCH_URL', raw)
+    const mod = await import('./killSwitchFetch')
+    expect(mod.KILL_SWITCH_URL).toBeNull()
+    expect(mod.KILL_SWITCH_ENABLED).toBe(false)
+    const fetchImpl = vi.fn(async () => okResponse({ disabled: ['all'] }))
+    expect(await mod.fetchKillSwitchStatus(BUILD, fetchImpl as unknown as typeof fetch)).toBeNull()
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 })

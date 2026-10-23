@@ -1,4 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
+
+// 紹介ページはビルド時の環境変数（src/config/endpoints.ts）。「設定あり」の値を import より先に入れる。
+const TEST_SITE = vi.hoisted(() => {
+  const url = 'https://site.example.com/'
+  process.env.EXPO_PUBLIC_SITE_URL = url
+  return url
+})
+afterAll(() => {
+  delete process.env.EXPO_PUBLIC_SITE_URL
+})
+
 import { LITUS_SITE_URL, noticeHash, resolveNotice } from './notice'
 import type { KillSwitchStatus } from './killSwitch'
 
@@ -107,7 +118,21 @@ describe('noticeHash', () => {
 describe('LITUS_SITE_URL', () => {
   // 脱出経路は status.json に依存させない（壊れているかもしれない同じ配信路に乗せない）。
   // このURLは常にコード側の固定値であること。
-  it('litus.waiteu.dev への https 固定URL', () => {
-    expect(LITUS_SITE_URL).toBe('https://litus.waiteu.dev/')
+  // 値は status.json ではなくビルド時の環境変数（EXPO_PUBLIC_SITE_URL）から来る。
+  it('ビルド時の環境変数の値そのもの（status.json に依存しない）', () => {
+    expect(LITUS_SITE_URL).toBe(TEST_SITE)
+  })
+
+  describe('未設定のビルド', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs()
+      vi.resetModules()
+    })
+
+    it('EXPO_PUBLIC_SITE_URL が空なら null（脱出リンク・紹介ページ・共有の入口を出さない）', async () => {
+      vi.resetModules()
+      vi.stubEnv('EXPO_PUBLIC_SITE_URL', '')
+      expect((await import('./notice')).LITUS_SITE_URL).toBeNull()
+    })
   })
 })

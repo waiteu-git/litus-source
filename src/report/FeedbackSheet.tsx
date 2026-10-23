@@ -26,7 +26,16 @@ import {
   type FeedbackKind,
   type FeedbackTarget,
 } from './feedback'
-import { submitFeedback } from './feedbackApi'
+import { FEEDBACK_ENDPOINT, submitFeedback } from './feedbackApi'
+
+/**
+ * 宛先の有無（ビルド時の環境変数・src/config/endpoints.ts）。どちらも無いビルドでは呼び出し側が
+ * このシートの入口自体を出さない（FEEDBACK_AVAILABLE）。
+ * - 送信先が無い: 「送信」を出さず、確認画面からメール／コピーのフォールバックへ直行する（通信しない）。
+ * - 連絡先メールが無い: mailto（「メールで送る」）と、文言の中の宛先を出さない。
+ */
+const CAN_SUBMIT = FEEDBACK_ENDPOINT !== null
+const CAN_MAIL = DIAG_REPORT_TO !== null
 
 const KIND_OPTIONS: { key: FeedbackKind; label: string }[] = [
   { key: 'bug', label: '不具合' },
@@ -163,7 +172,7 @@ export default function FeedbackSheet({
   }, [stage, envelope])
 
   const fallbackUrl = useMemo(() => {
-    if (stage !== 'preview' || !envelope) return null
+    if (stage !== 'preview' || !envelope || DIAG_REPORT_TO === null) return null
     return buildMailtoUrl({ to: DIAG_REPORT_TO, subject: buildFeedbackSubject(kind, envelope.env), body: previewText })
   }, [stage, envelope, kind, previewText])
 
@@ -179,8 +188,11 @@ export default function FeedbackSheet({
     setSubmitFailed(false)
   }
 
+  // 送信に失敗した時、または送信先が無いビルドでは、確認画面の下をフォールバック（コピー・メール）にする。
+  const showFallback = submitFailed || !CAN_SUBMIT
+
   const onSubmit = async () => {
-    if (!envelope) return
+    if (!envelope || !CAN_SUBMIT) return
     setSubmitting(true)
     const result = await submitFeedback(envelope)
     setSubmitting(false)
@@ -194,9 +206,17 @@ export default function FeedbackSheet({
   const onCopy = () => {
     try {
       Clipboard.setString(previewText)
-      Alert.alert('コピーしました', `メールやDMに貼り付けて ${DIAG_REPORT_TO} へお送りください。`)
+      Alert.alert(
+        'コピーしました',
+        DIAG_REPORT_TO !== null ? `メールやDMに貼り付けて ${DIAG_REPORT_TO} へお送りください。` : undefined,
+      )
     } catch {
-      Alert.alert('コピーできませんでした', `本文を長押しして選択し、手でコピーしてから ${DIAG_REPORT_TO} へお送りください。`)
+      Alert.alert(
+        'コピーできませんでした',
+        DIAG_REPORT_TO !== null
+          ? `本文を長押しして選択し、手でコピーしてから ${DIAG_REPORT_TO} へお送りください。`
+          : '本文を長押しして選択し、手でコピーしてください。',
+      )
     }
   }
 
@@ -302,7 +322,9 @@ export default function FeedbackSheet({
                 <View style={[styles.notice, { backgroundColor: ui.colors.softBoxBg, marginTop: 14 }]}>
                   <Ionicons name="alert-circle-outline" size={16} color={ui.labelColor} />
                   <Text style={[styles.noticeText, { color: ui.labelColor }]}>
-                    送信できませんでした。かわりにメールで送るか、本文をコピーしてください。
+                    {CAN_MAIL
+                      ? '送信できませんでした。かわりにメールで送るか、本文をコピーしてください。'
+                      : '送信できませんでした。時間をおいてもう一度お試しいただくか、本文をコピーしてください。'}
                   </Text>
                 </View>
               ) : null}
@@ -320,7 +342,7 @@ export default function FeedbackSheet({
           >
             <Text style={styles.ctaText}>確認する</Text>
           </Pressable>
-        ) : submitFailed ? (
+        ) : showFallback ? (
           <>
             {copyPrimary ? (
               <>
@@ -332,16 +354,18 @@ export default function FeedbackSheet({
                 >
                   <Text style={styles.ctaText}>本文をコピー</Text>
                 </Pressable>
-                <Pressable
-                  style={[styles.ghost, { backgroundColor: ui.inputBg, borderColor: ui.inputBorder }]}
-                  onPress={onMail}
-                  accessibilityRole="button"
-                  accessibilityLabel="メールで送る"
-                >
-                  <Text style={[styles.ghostText, { color: ui.dark ? COLORS.emeraldLight : COLORS.emeraldDark }]}>
-                    メールで送る
-                  </Text>
-                </Pressable>
+                {CAN_MAIL ? (
+                  <Pressable
+                    style={[styles.ghost, { backgroundColor: ui.inputBg, borderColor: ui.inputBorder }]}
+                    onPress={onMail}
+                    accessibilityRole="button"
+                    accessibilityLabel="メールで送る"
+                  >
+                    <Text style={[styles.ghostText, { color: ui.dark ? COLORS.emeraldLight : COLORS.emeraldDark }]}>
+                      メールで送る
+                    </Text>
+                  </Pressable>
+                ) : null}
               </>
             ) : (
               <>

@@ -1,6 +1,6 @@
 /**
  * リモートkill switchの判定・パース（純粋・RN非依存）。
- * waiteu.dev配信の status.json（v1: { schemaVersion, disabled[], message, title, versionRules[] }）を
+ * 提供者のサーバー配信の status.json（v1: { schemaVersion, disabled[], message, title, versionRules[] }）を
  * 正規化し、機能単位（attendance/bulletin/letus）と全体（all）の停止可否を1箇所で判定する。
  * 大学要請時24h以内停止の技術的前提（層1: 一方向配信・アップロード無し）。
  *
@@ -45,7 +45,7 @@ export function parseBuildNumber(raw: string | number | null | undefined): numbe
 }
 
 /**
- * 停止画面に出す文言の上限。status.json は waiteu.dev 配信＝配信元を取られた場合、
+ * 停止画面に出す文言の上限。status.json は提供者のサーバー配信＝配信元を取られた場合、
  * ここが端末に任意テキストを表示できる唯一の面になる（URLもコードも持てず `<Text>` 描画なので
  * 実行はないが、長文で画面を埋める余地は残る）。実用の文言は数行で足りるので上限で切る（監査L-2）。
  */

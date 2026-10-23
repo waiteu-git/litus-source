@@ -13,11 +13,13 @@ let lastOpenedAt: number | null = null
  * 失敗は握りつぶす（openLitusSite と同じ流儀＝外へ出る導線の失敗で画面を止めない。成功表示も出さない）。
  */
 export function openShareSheet(): void {
+  const content = buildShareContent()
+  if (content === null) return // 紹介ページが未設定（入口も出していない）
   const now = Date.now()
   if (!canOpenShare(now, lastOpenedAt)) return
   lastOpenedAt = now
   try {
-    Share.share(buildShareContent()).catch(() => undefined)
+    Share.share(content).catch(() => undefined)
   } catch {
     // 同期で投げる実装でも画面を止めない
   }

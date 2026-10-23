@@ -12,3 +12,7 @@ dist/
 *(standalone).html
 # macOS がフォルダを開くたび作る。untracked に常駐すると git add -A で紛れ込む
 .DS_Store
+# 外部の宛先（src/config/endpoints.ts）の実値。コミットしない。キー名の一覧は .env.example
+.env
+.env.*
+!.env.example

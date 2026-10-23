@@ -12,6 +12,11 @@ import { LITUS_SITE_URL } from '../health/notice'
  */
 export const SHARE_LINE = 'LETUSの課題もCLASSの時間割も、まとめて見られる非公式アプリ、リタス'
 
-export function buildShareContent(): { message: string } {
-  return { message: `${SHARE_LINE}\n${LITUS_SITE_URL}` }
+/** 共有の入口（設定「友だちに教える」）を出すか。紹介ページが未設定のビルドでは出さない。 */
+export const SHARE_AVAILABLE: boolean = LITUS_SITE_URL !== null
+
+/** 紹介ページが未設定なら null（共有しない）。 */
+export function buildShareContent(siteUrl: string | null = LITUS_SITE_URL): { message: string } | null {
+  if (siteUrl === null) return null
+  return { message: `${SHARE_LINE}\n${siteUrl}` }
 }
